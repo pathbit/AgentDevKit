@@ -47,3 +47,5 @@ Os aceites detalhados ficam na [spec](specs/v0.0.1/SPEC.md).
 Escopo autorizado pela solicitação explícita de criação do AgentDevKit.
 Este estado registra requisitos aceitos; testes e publicação têm validação
 própria e não são considerados concluídos por esta aprovação.
+
+[Wiki](README.md) · [Design](design.md) · [Fluxo de uso](workflow.md)

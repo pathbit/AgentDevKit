@@ -53,3 +53,5 @@ usuário cujo conteúdo deve permanecer idêntico após instalar e atualizar.
 README PT/EN/ES, instalação, produto e guias compartilhados acompanham a CLI.
 Escopo autorizado pela solicitação atual de criação do AgentDevKit.
 Critérios mantidos exigem prova aprovada na revisão antes de concluir a release.
+
+[Todas as specs](../README.md) · [Wiki](../../README.md)

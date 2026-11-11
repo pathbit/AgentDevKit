@@ -1,0 +1,125 @@
+---
+description: Diagnóstico, conflitos, backups e recuperação do AgentDevKit 0.0.1.
+---
+
+# Solução de problemas
+
+Comece pelo erro completo e pelo diretório usado. Os exemplos usam o atalho
+opcional `adk` definido na [referência da CLI][atalho].
+Ele pode ser substituído pelo prefixo npx da [instalação](installation.md).
+
+## Diagnóstico rápido
+
+```sh
+adk --version
+adk doctor --target "./meu projeto" --json
+adk sync --check --target "./meu projeto" --json
+```
+
+`doctor` verifica a instalação do kit. Para as ferramentas, use
+`adk tools check all`; para o aplicativo, execute os testes do próprio projeto.
+Antes de compartilhar uma saída, remova dados privados e caminhos pessoais.
+
+| Sintoma ou código | Próxima ação |
+| --- | --- |
+| `node` ou `npx` não encontrado | Siga [sem Node/npm][runtime]. |
+| `E_ARGS` | Confira comando, opção e aspas com `adk --help`. |
+| `E_MISSING` | Confirme `--target`; inicialize o projeto correto. |
+| `E_TARGET`, `E_SYMLINK` | Use a pasta real, fora dos diretórios reservados. |
+| `E_CONFLICT` ou lista `conflicts` | Revise o plano e os arquivos afetados. |
+| `E_STATE`, `E_BLOCK`, `E_TEMPLATE` | Restaure o arquivo; não invente hashes. |
+| `E_CHANGED` | Um arquivo mudou durante a operação; gere outro plano. |
+
+## Conflitos e backups
+
+Simule antes de substituir uma alteração própria:
+
+```sh
+adk update --target "./meu projeto" --dry-run --json
+```
+
+Compare cada `conflicts` com o que deseja manter. Edite a origem em
+`.pbai4devs/`, não os apontamentos gerados, quando estiver personalizando um
+recurso. Use `sync` para atualizar suas derivações. `update` reaplica os
+recursos do pacote invocado e pode conflitar com essa personalização.
+
+Quando a substituição for intencional, repita com `--force`. Arquivos
+existentes afetados recebem backup antes da escrita, inclusive em operações
+normais. O campo `backup` informa uma pasta relativa ao projeto:
+
+```text
+.agent-tests/agentdevkit/backups/<identificador>/
+```
+
+O layout interno repete os caminhos originais. Para recuperar:
+
+1. Pare as edições e faça uma cópia do projeto ou um checkpoint no Git.
+2. Compare os arquivos do backup com os atuais no editor.
+3. Restaure somente os arquivos desejados, preservando edições posteriores.
+4. Execute `doctor` e revise o novo plano antes de aplicar qualquer correção.
+
+Não existe comando `undo`. Copiar o backup inteiro não remove arquivos que a
+operação criou; um rollback completo exige conferir o plano e o diff do Git.
+Os backups são locais e ignorados; não substituem o controle de versão.
+
+## Estado ou apontamentos inconsistentes
+
+`missing`, `modified` e `outdated` em `issues` indicam arquivo ausente,
+conteúdo alterado ou derivação pendente. Use `sync --check` para inspecionar;
+se as alterações da origem forem intencionais, execute `sync` e confira de novo.
+
+Se `.pbai4devs/estado/agentdevkit.json` estiver inválido, recupere sua cópia
+coerente do Git/backup junto aos arquivos correspondentes. Não apague o estado
+para esconder conflitos nem edite hashes para fazer o diagnóstico passar.
+Se necessário, peça ao agente para comparar os arquivos e planejar o reparo.
+
+Preserve os marcadores dos blocos gerenciados em `AGENTS.md`, `CLAUDE.md`,
+`GEMINI.md` e `.gitignore`. Instruções próprias podem ficar fora dos blocos.
+Não transforme diretórios de agentes ou o hub em links simbólicos.
+Destinos dentro de `.git`, `node_modules` ou `.pbai4devs` são recusados,
+inclusive com variações de maiúsculas/minúsculas.
+
+Na CLI, `adk sync --force` substitui conflitos identificados, com backup, e
+preserva arquivos nativos próprios que não são do kit. O script compartilhado
+`sincronizar-agentes` tem um modo `--force` mais amplo: pode limpar conteúdo
+extra nas áreas de skills, agents, commands e rules. Prefira a CLI para manter
+a instalação; não trate esses dois comandos como equivalentes.
+
+## Download, plataforma ou ferramenta falhando
+
+Confira acesso ao GitHub, ao registro npm e a `nodejs.org`, conforme a etapa.
+Mantenha a verificação de certificados e hashes; resolva proxy, rede ou
+dependências do SO e repita. Não troque por um binário de outra arquitetura.
+O kit usa Node.js 24+; Bun e Python não substituem seu runtime.
+
+`tools setup` reutiliza instalações saudáveis e verifica as compatíveis.
+Não aplicável em uma seleção geral não significa “instalado”. Esse preparo
+também não baixa browsers, concede permissões desktop ou inicia aplicativos.
+Veja [ferramentas][tools] para requisitos adicionais da tarefa.
+
+Um lock indica instalação em andamento ou interrompida. Aguarde a operação
+ativa. Se o processo terminou, tente `adk tools unlock <nome>`; só um lock
+local com PID comprovadamente morto é removido. Não apague locks ativos ou
+indeterminados para forçar duas instalações ao mesmo tempo.
+
+## Sessões, loops ou calculadora abrindo
+
+O AgentDevKit não agenda sessões, abre a calculadora nem inicia loops por
+conta própria. Uma execução explícita de ferramenta pode abrir o aplicativo
+solicitado. Se algo continua executando, identifique a sessão, tarefa do
+editor, extensão ou processo que o iniciou e pare-o pela interface responsável.
+Apagar apenas os logs não interrompe um processo que continua gravando.
+
+Diretórios como `.opencode/opencode-loop`, `.playwright*`, caches e relatórios
+não devem ser versionados. Verifique com `git status` e `git check-ignore -v
+<caminho>`. Se um arquivo já estava rastreado, acrescentar um ignore não o
+retira automaticamente do Git; revise a remoção do índice sem apagar dados.
+
+Para pedir ajuda, inclua SO/arquitetura, versões de Node/npm/AgentDevKit,
+comando executado, código de saída e trecho relevante do JSON, sem segredos.
+Use as [issues do projeto][issues] ou volte ao [índice](README.md).
+
+[atalho]: cli.md#atalho-opcional-para-os-exemplos
+[runtime]: installation.md#sem-node-ou-npm
+[tools]: ../.pbai4devs/scripts/preparar-ferramentas/README.md
+[issues]: https://github.com/pathbit/AgentDevKit/issues

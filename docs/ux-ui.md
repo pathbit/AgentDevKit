@@ -20,5 +20,17 @@ PT é padrão. EN e ES alteram a interface e os próximos passos, mantendo nomes
 de comandos e caminhos. O idioma salvo é reutilizado nas próximas execuções.
 Mensagens distinguem confirmação, aviso e falha sem afirmar testes não feitos.
 
+O primeiro uso interativo permite escolher o idioma. Quem automatiza pode
+fornecer `--lang` e ler `--json`; o resultado inclui a próxima ação. Instalação
+normal resume mudanças; simulação lista uma amostra e o JSON fornece o plano.
+
+`doctor` responde sobre a instalação do kit, enquanto `next` orienta o trabalho
+do projeto. Essa distinção evita tratar um diagnóstico saudável como prova
+de que a aplicação está pronta. Conflitos devem levar à comparação de arquivos
+antes de qualquer substituição. Veja [CLI](cli.md) e
+[recuperação](troubleshooting.md) para o comportamento observável.
+
 Escopo autorizado junto ao [PRD](prd.md). Testes verificam as jornadas reais;
 a aprovação do desenho não substitui as evidências de funcionamento.
+
+[Wiki](README.md) · [Fluxo de uso](workflow.md)

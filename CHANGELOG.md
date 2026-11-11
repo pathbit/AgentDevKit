@@ -4,6 +4,11 @@ description: Alterações verificáveis por versão do AgentDevKit.
 
 # Changelog
 
+## Ainda não lançado
+
+- Wiki organizada por tarefa: instalação, CLI, fluxo, recursos e recuperação.
+- Guias de ferramentas, testes, arquitetura, contribuição e releases.
+
 ## 0.0.1 — 2026-11-11
 
 - Extração das fontes compartilhadas para o repositório AgentDevKit.

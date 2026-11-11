@@ -7,24 +7,13 @@ language: es
 
 [Português](README.md) · [English](README.en.md)
 
-Instala skills, reglas, comandos y perfiles de agentes desde una sola fuente:
-`.pbai4devs`. Sirve para proyectos nuevos o existentes e indica los próximos
-pasos según el estado actual del proyecto.
+Organiza el trabajo con agentes de código, desde la planificación hasta la
+verificación. Mantén skills, reglas, comandos y perfiles en `.pbai4devs`;
+el kit genera las referencias de cada [cliente compatible][clients].
 
-## Empezar
+## Empezar en tu proyecto
 
-Requiere Node.js 24+. Desde este checkout:
-
-```sh
-node bin/agentdevkit.mjs init --target ../mi-proyecto --lang es
-node bin/agentdevkit.mjs next --target ../mi-proyecto
-```
-
-Sin Node, pida al agente preparar el runtime con el
-[bootstrap del checkout](.pbai4devs/scripts/preparar-ferramentas/BOOTSTRAP.md)
-y continuar la instalación. `npx` también requiere Node/npm.
-
-Use la distribución `v0.0.1` sin una instalación global:
+Con Node.js 24+ y npm, abre una terminal en tu proyecto (macOS/Linux):
 
 ```sh
 RELEASE=https://github.com/pathbit/AgentDevKit/releases/download/v0.0.1
@@ -32,30 +21,37 @@ npx --yes --ignore-scripts \
   --package="$RELEASE/agentdevkit-0.0.1.tgz" agentdevkit init --lang es
 ```
 
-Consulte [instalación y actualización](docs/installation.md). La CLI admite
-`pt`, `en` y `es` y guarda el idioma en el proyecto. Use `--dry-run` para revisar
-los cambios y `--json` para automatizaciones.
+Después, abre el proyecto en tu agente y pide:
 
-## Flujo
+> Lee AGENTS.md y usa la skill proximos-passos para orientar mi trabajo.
 
-Preparación → PRD → UX/diseño → configuración → specs → implementación → revisión.
-Los proyectos existentes mantienen su trabajo. Instalar instrucciones no crea
-documentos de producto ni instala herramientas. El descubrimiento depende del
-cliente; una referencia no demuestra que el agente la haya cargado.
+La [guía de instalación](docs/installation.md) incluye Windows, Node ausente,
+simulación y actualización. La [release v0.0.1][release] no requiere una
+instalación global. La CLI guarda el idioma `pt`, `en` o `es` por proyecto.
 
-## Desarrollar
+## Explorar
 
-```sh
-npm test
-npm run test:infra
-npm run check
-```
+| Quiero… | Leer |
+| --- | --- |
+| Entender el kit | [Wiki](docs/README.md) |
+| Planificar o retomar un proyecto | [Flujo](docs/workflow.md) |
+| Crear una skill o comando | [Recursos](docs/resources.md) |
+| Instalar herramientas y verificar | [Herramientas y pruebas][tests] |
+| Consultar opciones o resolver un error | [CLI][cli] · [Soluciones][help] |
+| Mejorar el kit | [Contribuir](CONTRIBUTING.md) |
 
-[Documentación](docs/README.md) · [Requisitos](docs/prd.md) ·
-[Diseño](docs/design.md) · [Roadmap](docs/roadmap.md) · [Licencia MIT](LICENSE)
+Las guías detalladas están en portugués. Instalar el kit prepara instrucciones;
+las herramientas se instalan por separado. Los documentos de producto siguen
+las decisiones de planificación. Los proyectos existentes conservan su código.
+Una referencia no demuestra que un cliente haya cargado la skill.
 
-**[ Próximo paso ]** Instale en su proyecto:
+[Changelog](CHANGELOG.md) · [Roadmap](docs/roadmap.md) · [Licencia MIT](LICENSE)
 
-```sh
-node bin/agentdevkit.mjs init --target ../mi-proyecto --lang es
-```
+**[ Próximo paso ]** Sigue la [instalación](docs/installation.md) y pide al
+agente que lea `AGENTS.md`.
+
+[clients]: .pbai4devs/COMPATIBILIDADE.md
+[release]: https://github.com/pathbit/AgentDevKit/releases/tag/v0.0.1
+[tests]: docs/tools-and-testing.md
+[cli]: docs/cli.md
+[help]: docs/troubleshooting.md

@@ -1,46 +1,100 @@
 ---
-description: Arquitetura da distribuição e instalação do AgentDevKit.
+description: Arquitetura, estado e preservação de arquivos do AgentDevKit.
 status: aprovado
 ---
 
 # Design técnico
 
-Referências: [PRD](prd.md), [UX](ux-ui.md) e [spec](specs/v0.0.1/SPEC.md).
+O kit separa três responsabilidades: instruções compartilhadas, formatos dos
+clientes e instalação no projeto. O [PRD](prd.md) define o problema; a
+[spec v0.0.1](specs/v0.0.1/SPEC.md) define os critérios da primeira entrega.
 
-## Estrutura
+## Da origem ao cliente
+
+```text
+.pbai4devs/                  src/adapters/
+recursos compartilhados  +   política de cada cliente
+                         |
+                         v
+               planejamento da instalação
+                         |
+                         v
+             projeto que recebe o AgentDevKit
+             ├── .pbai4devs/   origem e estado
+             ├── .claude/     apontamentos nativos
+             ├── .github/     skills, regras, prompts, agentes
+             ├── outros clientes...
+             └── AGENTS.md    entrada comum
+```
+
+As entradas usam Markdown, metadados ou configurações nativas conforme o
+[cliente](../.pbai4devs/COMPATIBILIDADE.md). São arquivos regulares, sem
+symlinks. Templates, ferramentas, scripts e downloads ficam no hub.
+
+## Onde cada responsabilidade fica
 
 | Componente | Responsabilidade |
 | --- | --- |
-| `bin/agentdevkit.mjs` | Entrada executável do pacote. |
-| `src/` | CLI, instalação, idiomas, diagnóstico e próximos passos. |
-| `src/adapters/` | Formatos de descoberta e integração por cliente. |
-| `.pbai4devs/` | Origem dos recursos, modelos, scripts e definições de tools. |
-| `.pbai4devs/templates/entrypoints/` | Entradas raiz dos clientes. |
-| `tests/` | Testes do produto e do pacote distribuído. |
+| [bin/agentdevkit.mjs](../bin/agentdevkit.mjs) | Entrada e runtime. |
+| [src/cli.mjs](../src/cli.mjs) | Argumentos, comandos e saída. |
+| [src/install.mjs](../src/install.mjs) | Plano, conflitos e backup. |
+| [src/next.mjs](../src/next.mjs) | Próxima ação conforme o projeto. |
+| [src/i18n.mjs](../src/i18n.mjs) | Mensagens em PT, EN e ES. |
+| [src/adapters/](../src/adapters/) | Política de destinos e formatos. |
+| [.pbai4devs/](../.pbai4devs/README.md) | Recursos que o projeto recebe. |
+| [tests/][product-tests] | Testes do produto e da distribuição. |
 
-Node.js 24+ e módulos ESM evitam uma etapa de compilação para executar a CLI.
-Os clientes consomem referências e formatos nativos derivados da origem;
-a representação depende das capacidades confirmadas de cada cliente.
+Node.js 24+ executa os módulos ESM diretamente, sem compilação ou dependências
+de runtime do pacote. Ferramentas opcionais têm instalações próprias.
 
-## Instalação e atualização
+## O que acontece na instalação
 
-A CLI resolve o projeto-alvo, planeja mudanças e aplica apenas arquivos sob
-sua responsabilidade. `--dry-run` não altera o alvo. Entradas próprias e
-configurações existentes são preservadas; conflitos ficam explícitos.
-Dados locais, caches e downloads não entram no pacote nem são sobrescritos
-por uma atualização de instruções. Links simbólicos não autorizam escapes.
+1. Resolve o alvo e recusa caminhos reservados ou symlinks perigosos.
+2. Prepara os recursos em uma pasta temporária e gera os apontamentos.
+3. Compara conteúdo e hashes registrados; apresenta mudanças e conflitos.
+4. Com `--dry-run`, encerra sem alterar o alvo.
+5. Ao aplicar, confere novamente os arquivos, salva os anteriores e grava
+   as mudanças. Em erro durante a aplicação, tenta restaurar o que alterou.
 
-O idioma fica em `.pbai4devs/estado/agentdevkit.json`. Catálogos e apontamentos
-são regeneráveis; são diferentes dos registros locais das ferramentas.
+O backup fica em `.agent-tests/agentdevkit/backups/` dentro do alvo. É uma
+proteção local: não substitui Git nem um backup externo.
 
-## Verificação e limites
+## Estado e propriedade
 
-Testes reais da CLI cobrem diretórios novos/existentes, idiomas, idempotência,
-atualização e o tarball do npm. Testes das automações e oito cenários de
-maturidade complementam a prova. Resultados ficam em `.agent-tests/` ou `tmp/`.
+`.pbai4devs/estado/agentdevkit.json` registra versão instalada, idioma e hashes
+de arquivos ou blocos gerenciados. É configuração versionável do projeto;
+não é cache nem guarda credenciais. Não edite seus hashes manualmente.
 
-Não há credenciais remotas, backend nem serviços permanentes obrigatórios.
-Publicação no npm/GitHub e descoberta real em cada aplicativo exigem suas
-próprias verificações; arquivos corretos não demonstram execução pelo cliente.
+`AGENTS.md`, `CLAUDE.md`, `GEMINI.md` e `.gitignore` recebem blocos delimitados.
+O conteúdo próprio fora deles permanece. Um README existente é preservado;
+quando não existe, a instalação cria uma entrada mínima.
 
-Arquitetura autorizada para a primeira entrega; provas ficam na revisão.
+Arquivos próprios fora da gestão do kit são preservados. Alterações locais
+em arquivos gerenciados podem gerar conflitos no próximo `update`.
+`--force` permite substituir esses conflitos e guarda backup. Recursos novos
+com nomes próprios podem coexistir com o kit. Veja [personalização][resources]
+e [recuperação](troubleshooting.md).
+
+Catálogos e apontamentos são derivados; o [sincronizador][sync] os reconstrói.
+A CLI usa a política distribuída em `src/adapters/`; no projeto instalado,
+`espelhos.conf` permite sincronizar com o script local e Node.
+
+## Dados locais e limites
+
+Cada pasta de cliente e o hub têm seu `.gitignore`. O ignore da raiz cobre
+resultados e temporários gerais. O pacote possui filtros próprios para excluir
+downloads, caches e saídas de testes; ignorar no Git não basta para o npm pack.
+
+A instalação não exige backend, credenciais remotas ou serviço permanente.
+Não há agendamento de agentes ou loop de execução criado pelo kit.
+Instalar ferramentas e executar testes são ações explícitas.
+
+Os testes comprovam arquivos e operações. Carregamento de skills em um
+aplicativo, permissões de desktop e comportamento de ferramentas externas
+dependem de verificação no ambiente correspondente.
+
+[Wiki](README.md) · [Manutenção](maintenance.md)
+
+[resources]: resources.md
+[sync]: ../.pbai4devs/scripts/sincronizar-agentes/README.md
+[product-tests]: https://github.com/pathbit/AgentDevKit/tree/master/tests

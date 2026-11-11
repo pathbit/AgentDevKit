@@ -1,5 +1,5 @@
 ---
-description: Kit portátil de instruções e ferramentas para agentes de desenvolvimento.
+description: Instruções compartilhadas e fluxo de trabalho para agentes de código.
 language: pt
 ---
 
@@ -7,57 +7,54 @@ language: pt
 
 [English](README.en.md) · [Español](README.es.md)
 
-Instala skills, regras, comandos e perfis de agentes a partir de uma única
-origem: `.pbai4devs`. Funciona em projetos novos ou existentes e indica os
-próximos passos conforme o estado do projeto.
+Uma forma de organizar o trabalho com agentes de código, do planejamento à
+verificação. Você mantém skills, regras, comandos e perfis em `.pbai4devs`;
+o kit gera os apontamentos que cada cliente sabe encontrar.
 
-## Começar
+Use com Codex, Claude, Cursor, Copilot, OpenCode e outros
+[clientes compatíveis](.pbai4devs/COMPATIBILIDADE.md). O conteúdo tem uma origem;
+cada cliente conserva seu formato de descoberta.
 
-Requer Node.js 24+. Neste checkout:
+## Começar em um projeto
 
-```sh
-node bin/agentdevkit.mjs init --target ../meu-projeto --lang pt
-node bin/agentdevkit.mjs next --target ../meu-projeto
-```
-
-Sem Node instalado, peça ao agente preparar o runtime pelo
-[bootstrap do checkout](.pbai4devs/scripts/preparar-ferramentas/BOOTSTRAP.md)
-e continuar a instalação. `npx` também precisa de Node/npm.
-
-Use a distribuição `v0.0.1` sem instalação global:
+Com Node.js 24+ e npm, abra o terminal na pasta do seu projeto e execute
+(macOS/Linux):
 
 ```sh
 RELEASE=https://github.com/pathbit/AgentDevKit/releases/download/v0.0.1
 npx --yes --ignore-scripts \
-  --package="$RELEASE/agentdevkit-0.0.1.tgz" agentdevkit init
+  --package="$RELEASE/agentdevkit-0.0.1.tgz" agentdevkit init --lang pt
 ```
 
-Veja [instalação e atualização](docs/installation.md). A CLI aceita `pt`, `en`
-e `es`; o idioma escolhido é salvo no projeto. Use `--dry-run` para conferir
-mudanças e `--json` para automações.
+Depois, abra o projeto no seu agente e peça:
 
-## Fluxo
+> Leia AGENTS.md e use a skill proximos-passos para orientar meu trabalho.
 
-Preparação → PRD → UX/design → configuração → specs → implementação → revisão.
-Em um projeto existente, o kit reconhece o estado atual e orienta a continuidade.
-Instalar instruções não cria documentos de produto nem instala ferramentas.
-Cada cliente tem seu formato de descoberta; um apontamento não comprova sua
-execução automática pelo agente.
+Windows, instalação sem Node, simulação e atualização estão no
+[guia de instalação](docs/installation.md). A distribuição usa a
+[release v0.0.1](https://github.com/pathbit/AgentDevKit/releases/tag/v0.0.1),
+sem instalação global. O idioma da CLI pode ser `pt`, `en` ou `es`.
 
-## Desenvolver o kit
+## Encontre o que precisa
 
-```sh
-npm test
-npm run test:infra
-npm run check
-```
+| Quero… | Ler |
+| --- | --- |
+| Entender e começar | [Wiki](docs/README.md) |
+| Planejar ou retomar um projeto | [Fluxo de trabalho](docs/workflow.md) |
+| Criar uma skill ou comando | [Recursos](docs/resources.md) |
+| Instalar ferramentas e comprovar uma entrega | [Ferramentas e testes][tests] |
+| Consultar opções ou resolver um erro | [CLI][cli] · [Soluções][help] |
+| Melhorar o próprio kit | [Contribuir](CONTRIBUTING.md) |
 
-[Documentação](docs/README.md) · [Requisitos](docs/prd.md) ·
-[Design](docs/design.md) · [Roadmap](docs/roadmap.md) ·
-[Contribuir](CONTRIBUTING.md) · [Changelog](CHANGELOG.md) · [Licença MIT](LICENSE)
+Instalar o kit prepara instruções. As ferramentas são instaladas por uma ação
+separada; PRD, design e specs surgem quando você inicia o planejamento.
+Projetos existentes preservam seu código e suas decisões.
 
-**[ Próximo passo ]** Instale no seu projeto:
+[Changelog](CHANGELOG.md) · [Roadmap](docs/roadmap.md) · [Licença MIT](LICENSE)
 
-```sh
-node bin/agentdevkit.mjs init --target ../meu-projeto --lang pt
-```
+**[ Próximo passo ]** Siga a [instalação](docs/installation.md) e peça ao seu
+agente para ler `AGENTS.md`.
+
+[tests]: docs/tools-and-testing.md
+[cli]: docs/cli.md
+[help]: docs/troubleshooting.md
