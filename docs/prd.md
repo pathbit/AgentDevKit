@@ -34,6 +34,7 @@ extraído do projeto de origem como produto independente.
 | FR-012 | Gerar layouts nativos a partir de configurações e templates. |
 | FR-013 | Usar JavaScript/Node nas automações e manter distribuição via npx. |
 | FR-014 | Reutilizar no release o pacote verificado, sem duplicar o CI. |
+| FR-015 | Publicar um pacote npm no GitHub Packages, instalável via npx. |
 
 Execuções repetidas devem ser idempotentes; a CLI oferece simulação e JSON.
 As instruções permanecem concisas, com detalhes opcionais em referências.

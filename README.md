@@ -19,10 +19,11 @@ e não entram no versionamento.
 
 ## Começar em um projeto
 
-Com Node.js 18+ e npm, abra o terminal na pasta do seu projeto e execute:
+Com Node.js 18+ e npm, faça o [login no GitHub Packages][packages].
+Na pasta do seu projeto, execute:
 
 ```console
-npx --yes --ignore-scripts https://github.com/pathbit/AgentDevKit/releases/download/v0.0.3/agentdevkit-0.0.3.tgz
+npx -y --registry=https://npm.pkg.github.com @pathbit/agentdevkit@0.0.3 init
 ```
 
 Escolha os agentes na pergunta inicial ou informe `--agents codex,claude`.
@@ -35,8 +36,9 @@ Depois, abra o projeto no seu agente e peça:
 
 Windows, instalação sem Node, simulação e atualização estão no
 [guia de instalação](docs/installation.md). A distribuição usa a
-[release v0.0.3](https://github.com/pathbit/AgentDevKit/releases/tag/v0.0.3),
-sem instalação global. O idioma da CLI pode ser `pt`, `en` ou `es`.
+mesma versão no GitHub Packages e na [release v0.0.3][release],
+sem instalação global. O tarball da release também permite instalar sem login
+no registro. O idioma da CLI pode ser `pt`, `en` ou `es`.
 
 ## Encontre o que precisa
 
@@ -65,3 +67,5 @@ agente para ler `AGENTS.md`.
 [cli]: docs/cli.md
 [help]: docs/troubleshooting.md
 [issues]: https://github.com/pathbit/AgentDevKit/issues/new/choose
+[packages]: docs/packages.md
+[release]: https://github.com/pathbit/AgentDevKit/releases/tag/v0.0.3

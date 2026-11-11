@@ -9,6 +9,13 @@ const branches = new Set(['master', 'main']);
 const pause = milliseconds => new Promise(done => setTimeout(done, milliseconds));
 const invalid = message => { throw new Error(message); };
 
+export function releaseTag(environment = process.env) {
+  const override = environment.GITHUB_EVENT_NAME === 'workflow_dispatch' ? environment.AGENTDEVKIT_RELEASE_TAG : undefined;
+  const tag = override || (environment.GITHUB_REF_TYPE === 'tag' ? environment.GITHUB_REF_NAME : undefined);
+  if (!/^v\d+\.\d+\.\d+$/.test(tag || '')) invalid('Informe uma tag de release vX.Y.Z.');
+  return tag;
+}
+
 export function githubRequest({ token, fetchImpl = fetch } = {}) {
   if (!token) invalid('Token do GitHub ausente.');
   return async (method, resource, body, contentType) => {
@@ -96,13 +103,18 @@ export function verifyDistribution(directory, resolution) {
   return { manifest, archive, checksum, notes: regularFile(directory, 'NOTES.txt').toString('utf8') };
 }
 
-export async function publishVerifiedPackage({ directory, resolution, request }) {
-  const verified = verifyDistribution(directory, resolution);
+export async function assertApprovedSource(resolution, request) {
   const prefix = `/repos/${resolution.repository}`;
   const run = await request('GET', `${prefix}/actions/runs/${resolution.runId}`);
   if (!run || !trustedRun(run, resolution.repository, resolution.sourceCommit)
     || run.status !== 'completed' || run.conclusion !== 'success' || run.run_attempt !== resolution.runAttempt) invalid('A execução de origem não está aprovada.');
   if (await tagCommit(resolution.repository, resolution.tag, request) !== resolution.sourceCommit) invalid('A tag mudou depois da seleção do pacote.');
+}
+
+export async function publishVerifiedPackage({ directory, resolution, request }) {
+  const verified = verifyDistribution(directory, resolution);
+  await assertApprovedSource(resolution, request);
+  const prefix = `/repos/${resolution.repository}`;
   if (await request('GET', `${prefix}/releases/tags/${resolution.tag}`)) invalid('A release já existe; ela não será sobrescrita.');
   const release = await request('POST', `${prefix}/releases`, { tag_name: resolution.tag, target_commitish: resolution.sourceCommit, name: `AgentDevKit ${resolution.tag}`, body: verified.notes, draft: true, prerelease: false });
   if (!Number.isSafeInteger(release?.id)) invalid('Resposta de criação da release inválida.');
@@ -116,13 +128,10 @@ export async function publishVerifiedPackage({ directory, resolution, request })
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     if (Number(process.versions.node.split('.')[0]) < 24) invalid('Use Node.js 24+.');
-    if (process.env.GITHUB_REF_TYPE !== 'tag') invalid('A publicação exige uma tag vX.Y.Z.');
     const stateFile = join(releaseRoot, '.agent-tests/release-resolution.json');
     const request = githubRequest({ token: process.env.GH_TOKEN || process.env.GITHUB_TOKEN });
     if (process.argv[2] === 'resolve') {
-      const result = await resolveVerifiedPackage({ repository: process.env.GITHUB_REPOSITORY, tag: process.env.GITHUB_REF_NAME, request });
-      const pkg = JSON.parse(readFileSync(join(releaseRoot, 'package.json'), 'utf8'));
-      if (result.version !== pkg.version) invalid('A versão da tag difere do package.json.');
+      const result = await resolveVerifiedPackage({ repository: process.env.GITHUB_REPOSITORY, tag: releaseTag(), request });
       mkdirSync(join(releaseRoot, '.agent-tests'), { recursive: true });
       writeFileSync(stateFile, JSON.stringify(result, null, 2) + '\n');
       if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `artifact-id=${result.artifactId}\nrun-id=${result.runId}\nresolution=${JSON.stringify(result)}\n`);

@@ -13,6 +13,7 @@ status: vigente
 | Release v0.0.1 | Aceites e revisão | Pacote versionado e changelog. |
 | Seleção de agentes v0.0.2 | CLI e adaptadores | [Spec][selection]. |
 | Fontes e geração local v0.0.3 | Seleção e distribuição | [Spec][source]. |
+| Pacote npm no GitHub Packages | Artefato aprovado da release | [Spec][packages]. |
 
 A primeira entrega segue a [spec v0.0.1](specs/v0.0.1/SPEC.md) e está disponível
 na [release v0.0.1][release]. Os detalhes de mudanças estão no
@@ -28,3 +29,4 @@ comportamento existente, sem alterar a versão de uma release já publicada.
 [release]: https://github.com/pathbit/AgentDevKit/releases/tag/v0.0.1
 [selection]: specs/v0.0.2/SPEC.md
 [source]: specs/v0.0.3/SPEC.md
+[packages]: specs/github-packages/SPEC.md

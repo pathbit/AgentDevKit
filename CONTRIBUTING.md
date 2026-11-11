@@ -57,6 +57,8 @@ Atualize a documentação e use a [revisão de entrega][review] para reunir
 critérios, evidências e revisão independente. O PR deve explicar problema,
 solução e validação. Siga as [regras Git][git]. A [publicação][release] reutiliza
 o artifact aprovado do CI; não cria um pacote diferente na hora de publicar.
+O mesmo artifact segue para [GitHub Packages](docs/packages.md), usando a
+autenticação do workflow. Nunca inclua tokens no código ou no `.npmrc` versionado.
 
 [Wiki](docs/README.md) · [Licença MIT](LICENSE)
 

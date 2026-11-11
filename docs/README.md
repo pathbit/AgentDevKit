@@ -20,6 +20,7 @@ pode trocar de agente sem manter várias cópias das mesmas instruções.
 | Corrigir uma dificuldade | [Soluções e recuperação](troubleshooting.md) |
 | Contribuir com o kit | [Contribuir][contrib] → [design](design.md) |
 | Preparar uma versão | [Manutenção e releases](maintenance.md) |
+| Publicar ou instalar o pacote npm | [GitHub Packages](packages.md) |
 | Relatar um bug ou propor melhoria | [Participar](community.md) |
 
 ## Entenda os termos
@@ -60,7 +61,7 @@ CLI orienta a comunicação dos agentes, sem traduzir documentos existentes.
 
 [Voltar ao projeto](../README.md)
 
-[install]: installation.md#projeto-novo-ou-existente
+[install]: installation.md#instalar
 [flow]: workflow.md
 [clients]: ../.pbai4devs/COMPATIBILIDADE.md
 [tests]: tools-and-testing.md

@@ -6,7 +6,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { npmExecutable, sha256 } from '../release/assets.mjs';
 import { guardSourceOnlyGit, markVerified, runPipeline } from '../release/pipeline.mjs';
-import { githubRequest, publishVerifiedPackage, resolveVerifiedPackage, verifyDistribution } from '../release/publish.mjs';
+import { assertApprovedSource, githubRequest, publishVerifiedPackage, releaseTag, resolveVerifiedPackage, verifyDistribution } from '../release/publish.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const repository = 'pathbit/AgentDevKit', commit = 'a'.repeat(40), version = '1.2.3';
@@ -26,6 +26,15 @@ function fixture(t) {
 }
 
 const reference = { object: { type: 'commit', sha: commit } };
+
+test('tag manual permite backfill sem alterar a seleção dos eventos push', () => {
+  const push = { GITHUB_EVENT_NAME: 'push', GITHUB_REF_TYPE: 'tag', GITHUB_REF_NAME: 'v0.0.3', AGENTDEVKIT_RELEASE_TAG: 'v9.9.9' };
+  assert.equal(releaseTag(push), 'v0.0.3');
+  assert.equal(releaseTag({ ...push, GITHUB_EVENT_NAME: 'workflow_dispatch', GITHUB_REF_TYPE: 'branch', GITHUB_REF_NAME: 'master', AGENTDEVKIT_RELEASE_TAG: 'v0.0.3' }), 'v0.0.3');
+  assert.equal(releaseTag({ ...push, GITHUB_EVENT_NAME: 'workflow_dispatch', AGENTDEVKIT_RELEASE_TAG: '' }), 'v0.0.3');
+  for (const tag of ['latest', 'v0.0.3-rc.1', 'v0.0.3\n', '../v0.0.3']) assert.throws(() => releaseTag({ GITHUB_EVENT_NAME: 'workflow_dispatch', GITHUB_REF_TYPE: 'branch', AGENTDEVKIT_RELEASE_TAG: tag }), /vX.Y.Z/);
+  assert.throws(() => releaseTag({ GITHUB_EVENT_NAME: 'push', GITHUB_REF_TYPE: 'branch', GITHUB_REF_NAME: 'master', AGENTDEVKIT_RELEASE_TAG: 'v0.0.3' }), /vX.Y.Z/);
+});
 
 test('npm é localizado por Path quando Node não inclui npm, sem chamar wrappers', t => {
   const directory = fixture(t), bin = join(directory, 'npm-prefix');
@@ -146,6 +155,24 @@ test('CI reprovado, tag movida e release existente bloqueiam qualquer escrita', 
     };
     await assert.rejects(publishVerifiedPackage({ directory, resolution, request }));
   }
+});
+
+test('origem aprovada pode ser revalidada sem criar uma release', async () => {
+  const calls = [];
+  const request = async (method, path) => {
+    calls.push([method, path]);
+    assert.equal(method, 'GET');
+    return path.endsWith('/actions/runs/42') ? run : reference;
+  };
+  assert.equal(await assertApprovedSource(resolution, request), undefined);
+  assert.equal(calls.length, 2);
+  for (const state of [
+    { ...run, status: 'in_progress' },
+    { ...run, run_attempt: 3 },
+    { ...run, head_sha: 'b'.repeat(40) },
+    { ...run, event: 'pull_request' },
+  ]) await assert.rejects(assertApprovedSource(resolution, async () => state), /não está aprovada/);
+  await assert.rejects(assertApprovedSource(resolution, async (_method, path) => path.endsWith('/actions/runs/42') ? run : { object: { type: 'commit', sha: 'b'.repeat(40) } }), /tag mudou/);
 });
 
 test('falha no upload mantém draft e não publica parcialmente', async t => {

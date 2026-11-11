@@ -71,6 +71,13 @@ O CI separa a suíte completa dos testes de portabilidade. A publicação usa um
 artifact aprovado do mesmo commit e verifica versão, origem e checksum.
 Não há novo empacotamento entre teste e publicação.
 
+O GitHub Packages recebe o mesmo tarball da release, como
+`@pathbit/agentdevkit`. O workflow autentica com `GITHUB_TOKEN`; confirma a
+integridade da versão no registro e testa a CLI instalada via `npm exec`.
+O modo manual de pacote permite publicar uma tag existente sem alterar sua
+release. O uso local do registro exige autenticação, conforme
+[GitHub Packages](packages.md).
+
 Testes comprovam arquivos e operações executadas. O carregamento em um
 aplicativo específico depende das capacidades desse cliente; gerar uma
 referência não comprova a execução da skill.

@@ -15,10 +15,11 @@ generadas son locales y no se versionan.
 
 ## Empezar en tu proyecto
 
-Con Node.js 18+ y npm, abre una terminal en tu proyecto y ejecuta:
+Con Node.js 18+ y npm, [inicia sesión en GitHub Packages][packages].
+Después abre una terminal en tu proyecto y ejecuta:
 
 ```console
-npx --yes --ignore-scripts https://github.com/pathbit/AgentDevKit/releases/download/v0.0.3/agentdevkit-0.0.3.tgz
+npx -y --registry=https://npm.pkg.github.com @pathbit/agentdevkit@0.0.3 init
 ```
 
 Elige tus agentes en la pregunta inicial o usa `--agents codex,claude`.
@@ -30,8 +31,10 @@ Después, abre el proyecto en tu agente y pide:
 > Lee AGENTS.md y usa la skill proximos-passos para orientar mi trabajo.
 
 La [guía de instalación](docs/installation.md) incluye Windows, Node ausente,
-simulación y actualización. La [release v0.0.3][release] no requiere una
-instalación global. La CLI guarda el idioma `pt`, `en` o `es` por proyecto.
+simulación y actualización. GitHub Packages exige autenticación incluso para
+paquetes npm públicos. La [release v0.0.3][release] también ofrece el tarball
+sin iniciar sesión en el registro. Ningún método requiere instalación global.
+La CLI guarda el idioma `pt`, `en` o `es` por proyecto.
 
 ## Explorar
 
@@ -63,3 +66,4 @@ agente que lea `AGENTS.md`.
 [cli]: docs/cli.md
 [help]: docs/troubleshooting.md
 [issues]: https://github.com/pathbit/AgentDevKit/issues/new/choose
+[packages]: docs/packages.md

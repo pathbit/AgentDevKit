@@ -15,10 +15,11 @@ See the [supported clients][clients].
 
 ## Start in your project
 
-With Node.js 18+ and npm, open a terminal in your project and run:
+With Node.js 18+ and npm, [sign in to GitHub Packages][packages].
+Then open a terminal in your project and run:
 
 ```console
-npx --yes --ignore-scripts https://github.com/pathbit/AgentDevKit/releases/download/v0.0.3/agentdevkit-0.0.3.tgz
+npx -y --registry=https://npm.pkg.github.com @pathbit/agentdevkit@0.0.3 init
 ```
 
 Choose your coding agents when prompted, or pass `--agents codex,claude`.
@@ -30,7 +31,9 @@ Then open the project in your coding agent and ask:
 > Read AGENTS.md and use the proximos-passos skill to guide my next steps.
 
 See [installation](docs/installation.md) for Windows, missing Node, previews
-and updates. The [v0.0.3 release][release] runs without a global installation.
+and updates. GitHub Packages requires authentication, including public npm
+packages. The [v0.0.3 release][release] also offers a tarball without registry
+login. Neither method requires a global installation.
 The CLI supports `pt`, `en` and `es`; it saves your selection per project.
 
 ## Explore
@@ -63,3 +66,4 @@ agent to read `AGENTS.md`.
 [cli]: docs/cli.md
 [help]: docs/troubleshooting.md
 [issues]: https://github.com/pathbit/AgentDevKit/issues/new/choose
+[packages]: docs/packages.md

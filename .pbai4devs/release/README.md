@@ -15,5 +15,9 @@ exato uma vez. `portable` cobre CLI, arquivos e runtime em Windows/macOS;
 `publish` confere procedência e hashes, e publica os mesmos bytes. Ausência de
 artefato válido exige executar o CI; a publicação não gera outro pacote.
 
+`packages.mjs` publica esse mesmo tarball no GitHub Packages e verifica a CLI
+instalada pelo registro. O modo manual `package_only` atende tags já publicadas
+sem recriar a release. Veja [GitHub Packages](../../docs/packages.md).
+
 O workflow fornece token e contexto do GitHub. Nenhum segredo ou resultado é
 versionado. Veja [manutenção](../../docs/maintenance.md) para o fluxo completo.

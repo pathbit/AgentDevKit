@@ -4,6 +4,12 @@ description: Alterações verificáveis por versão do AgentDevKit.
 
 # Changelog
 
+## Distribuição no GitHub Packages
+
+- Pacote único `@pathbit/agentdevkit` instalável pelo registro com npx.
+- Publicação do artefato verificado e retomada para tags existentes.
+- Documentação de autenticação e acesso aos pacotes.
+
 ## 0.0.3 — 2026-11-11
 
 - Fontes do produto, testes e automações concentrados em `.pbai4devs`.

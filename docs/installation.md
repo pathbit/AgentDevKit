@@ -19,6 +19,16 @@ O [guia de preparo][bootstrap] explica as duas situações.
 
 ## Instalar
 
+O pacote `@pathbit/agentdevkit` é publicado no GitHub Packages. Após o
+[login no registro](packages.md#instalar-no-projeto), execute na pasta do projeto:
+
+```console
+npx -y --registry=https://npm.pkg.github.com @pathbit/agentdevkit@0.0.3 init
+```
+
+## Instalar pelo tarball público
+
+O mesmo pacote também fica disponível na release, sem login no registro.
 Abra um terminal na pasta do projeto e execute:
 
 ```console
