@@ -122,9 +122,6 @@ dist
 # TernJS port file
 .tern-port
 
-# Stores Visual Studio Code versions used for testing Visual Studio Code extensions
-.vscode-test
-
 # pnpm
 .pnpm-store
 
@@ -147,3 +144,22 @@ vite.config.ts.timestamp-*
 
 # Turbo Repo
 .turbo
+
+# ---------------------------
+# CUSTOM IGNORE
+# ---------------------------
+
+## Testes e artefatos locais de agentes
+/.[Aa][Gg][Ee][Nn][Tt]-[Tt][Ee][Ss][Tt][Ss]/
+
+## Resultados e relatórios de testes
+[Tt][Ee][Ss][Tt][Rr][Ee][Ss][Uu][Ll][Tt][Ss]/
+[Tt][Ee][Ss][Tt]-[Rr][Ee][Ss][Uu][Ll][Tt][Ss]/
+.[Pp][Ll][Aa][Yy][Ww][Rr][Ii][Gg][Hh][Tt]*
+[Pp][Ll][Aa][Yy][Ww][Rr][Ii][Gg][Hh][Tt]*/
+[Bb][Ll][Oo][Bb]-[Rr][Ee][Pp][Oo][Rr][Tt]/
+.[Vv][Ss][Cc][Oo][Dd][Ee]-[Tt][Ee][Ss][Tt]/
+
+## Temporary folder and files
+**/[Tt][Mm][Pp]
+**/[Tt][Ee][Mm][Pp]

@@ -1,0 +1,3 @@
+# gerado: sincronizar-agentes
+description = "Mostra a próxima ação útil conforme o estado e as pendências do projeto."
+prompt = "@{.pbai4devs/commands/proximos-passos/COMMAND.md}\n\n{{args}}"

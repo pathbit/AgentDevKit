@@ -1,0 +1,3 @@
+# gerado: sincronizar-agentes
+description = "Verifica um fluxo web real com ferramentas de navegador disponíveis."
+prompt = "@{.pbai4devs/commands/testar-navegador/COMMAND.md}\n\n{{args}}"

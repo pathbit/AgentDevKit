@@ -1,0 +1,33 @@
+{
+  "name": "agent-browser",
+  "description": "Automacao e verificacao em navegador real.",
+  "group": "base",
+  "source": "https://agent-browser.dev/installation",
+  "download": {
+    "provider": "npm",
+    "package": "agent-browser",
+    "registry": "https://registry.npmjs.org/",
+    "repository": "vercel-labs/agent-browser",
+    "channel": "latest"
+  },
+  "platforms": [
+    "darwin-arm64",
+    "darwin-x64",
+    "linux-arm64",
+    "linux-x64",
+    "win32-arm64",
+    "win32-x64"
+  ],
+  "executables": {
+    "darwin-arm64": ["bin/agent-browser-darwin-arm64"],
+    "darwin-x64": ["bin/agent-browser-darwin-x64"],
+    "linux-arm64": ["bin/agent-browser-linux-arm64", "bin/agent-browser-linux-musl-arm64"],
+    "linux-x64": ["bin/agent-browser-linux-x64", "bin/agent-browser-linux-musl-x64"]
+  },
+  "scripts": {
+    "entry": "SCRIPT.mjs"
+  },
+  "probe": [
+    "--version"
+  ]
+}

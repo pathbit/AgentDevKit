@@ -1,0 +1,7 @@
+---
+description: Revisa alterações e critérios de aceite em modo de leitura.
+mode: subagent
+permission:
+  edit: deny
+  bash: deny
+---

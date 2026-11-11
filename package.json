@@ -1,0 +1,39 @@
+{
+  "name": "@pathbit/agentdevkit",
+  "version": "0.0.1",
+  "description": "PathBit AgentDevKit: specs, skills and workflows for coding agents.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pathbit/AgentDevKit.git"
+  },
+  "homepage": "https://github.com/pathbit/AgentDevKit#readme",
+  "bugs": {
+    "url": "https://github.com/pathbit/AgentDevKit/issues"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "bin": {
+    "agentdevkit": "bin/agentdevkit.mjs"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    ".pbai4devs/",
+    "docs/",
+    "README.md",
+    "README.en.md",
+    "README.es.md",
+    "CONTRIBUTING.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "pack:release": "node scripts/release-assets.mjs",
+    "test:infra": "node .pbai4devs/scripts/testar-infraestrutura/SCRIPT.mjs",
+    "check": "node .pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs --check && node .pbai4devs/scripts/verificar-recursos/SCRIPT.mjs"
+  }
+}

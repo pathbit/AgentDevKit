@@ -1,0 +1,3 @@
+# gerado: sincronizar-agentes
+description = "Atualiza as ferramentas locais dos agentes para a plataforma atual."
+prompt = "@{.pbai4devs/commands/atualizar-ferramentas/COMMAND.md}\n\n{{args}}"

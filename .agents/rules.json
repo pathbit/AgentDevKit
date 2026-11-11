@@ -1,0 +1,22 @@
+{
+  "entries": [
+    {
+      "path": ".agents/rules/ambiente-local/RULE.md"
+    },
+    {
+      "path": ".agents/rules/documentacao/RULE.md"
+    },
+    {
+      "path": ".agents/rules/estrutura/RULE.md"
+    },
+    {
+      "path": ".agents/rules/git/RULE.md"
+    },
+    {
+      "path": ".agents/rules/proximos-passos/RULE.md"
+    },
+    {
+      "path": ".agents/rules/qualidade/RULE.md"
+    }
+  ]
+}

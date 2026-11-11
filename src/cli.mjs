@@ -1,0 +1,130 @@
+import { existsSync } from 'node:fs';
+import { resolve, join } from 'node:path';
+import { createInterface } from 'node:readline/promises';
+import { spawnSync } from 'node:child_process';
+import { packageInfo } from './config.mjs';
+import { text, normalizeLanguage, explainError } from './i18n.mjs';
+import { resolveTarget, loadState, planInstallation, applyPlan, inspect } from './install.mjs';
+import { getNextSteps } from './next.mjs';
+
+function usage(message) { throw Object.assign(new Error(message), { code: 'E_ARGS', exitCode: 2 }); }
+
+export function parseArgs(argv) {
+  const options = { command: null, positionals: [], toolArgs: [], target: null, language: null, yes: false, json: false, dryRun: false, force: false, check: false };
+  for (let index = 0; index < argv.length; index++) {
+    const arg = argv[index];
+    if (arg === '--target' || arg === '--lang') {
+      const value = argv[++index]; if (!value || value.startsWith('-')) usage(`Missing value: ${arg}`);
+      if (arg === '--target') options.target = value;
+      else { options.language = normalizeLanguage(value); if (!options.language) usage('Use --lang pt, en or es.'); }
+    } else if (arg === '--json') options.json = true;
+    else if (arg === '--yes' || arg === '-y') options.yes = true;
+    else if (arg === '--dry-run') options.dryRun = true;
+    else if (arg === '--force') options.force = true;
+    else if (arg === '--check' && options.command !== 'tools') options.check = true;
+    else if (options.command === 'tools') options.toolArgs.push(arg);
+    else if (arg === '--help' || arg === '-h') options.help = true;
+    else if (arg === '--version' || arg === '-v') options.version = true;
+    else if (arg.startsWith('-')) usage(`Unknown option: ${arg}`);
+    else if (!options.command) options.command = arg;
+    else options.positionals.push(arg);
+  }
+  if (!options.command) options.command = options.version ? 'version' : options.help ? 'help' : 'init';
+  if (options.command === 'language') options.command = 'lang';
+  if (!['init', 'update', 'doctor', 'sync', 'lang', 'next', 'tools', 'help', 'version'].includes(options.command)) usage(`Unknown command: ${options.command}`);
+  if (options.help) options.command = 'help';
+  if (options.version) options.command = 'version';
+  if (options.positionals.length > 1 || (options.positionals.length && !['init', 'lang'].includes(options.command))) usage('Unexpected positional arguments.');
+  if (options.command === 'init' && options.target && options.positionals.length) usage('Use a directory or --target, not both.');
+  if (options.check && options.command !== 'sync') usage('--check requires sync.');
+  if (options.dryRun && !['init', 'update', 'sync', 'lang'].includes(options.command)) usage('--dry-run is not valid for this command.');
+  return options;
+}
+
+function print(result, options, output) {
+  if (options.json) { output.write(`${JSON.stringify(result)}\n`); return; }
+  output.write(`${result.message}\n`);
+  if (result.toolOutput) output.write(`${result.toolOutput.trimEnd()}\n`);
+  if (result.plan?.length) {
+    const names = { pt: { create: 'criar', update: 'atualizar', remove: 'remover' }, en: { create: 'create', update: 'update', remove: 'remove' }, es: { create: 'crear', update: 'actualizar', remove: 'eliminar' } };
+    const labels = {
+      pt: { files: 'Arquivos', conflicts: 'Conflitos', more: 'caminhos adicionais; use --json para o plano completo.' },
+      en: { files: 'Files', conflicts: 'Conflicts', more: 'additional paths; use --json for the complete plan.' },
+      es: { files: 'Archivos', conflicts: 'Conflictos', more: 'rutas adicionales; use --json para el plan completo.' },
+    }[result.language];
+    output.write(`${labels.files}: ${['create', 'update', 'remove'].map(action => `${result.plan.filter(item => item.action === action).length} ${names[result.language][action]}`).join(', ')}.\n`);
+    if (result.conflicts?.length) output.write(`${labels.conflicts}: ${result.conflicts.length}.\n`);
+    if (options.dryRun) {
+      const limit = 12;
+      for (const item of result.plan.slice(0, limit)) output.write(`  ${names[result.language][item.action]} ${item.path}${item.conflict ? ' [!]' : ''}\n`);
+      if (result.plan.length > limit) output.write(`  +${result.plan.length - limit} ${labels.more}\n`);
+    }
+  }
+  if (result.issues?.length) for (const item of result.issues) output.write(`  ${item.code}: ${item.path}\n`);
+  output.write(`\n[ ${text(result.language, 'next')} ]\n`);
+  for (const step of result.next) {
+    output.write(`  ${step.label}\n`);
+    if (step.skill) output.write(`  ${step.skill}\n`);
+    if (step.instruction) output.write(`  ${step.instruction}\n`);
+    if (step.command) output.write(`  > ${step.command}\n`);
+  }
+}
+
+export async function main(argv = process.argv.slice(2), context = {}) {
+  const output = context.stdout || process.stdout, input = context.stdin || process.stdin, errorOutput = context.stderr || process.stderr;
+  let options = { json: argv.includes('--json') }, language = normalizeLanguage(argv[argv.indexOf('--lang') + 1]) || 'pt', target = resolve(context.cwd || process.cwd());
+  try {
+    options = parseArgs(argv);
+    target = resolveTarget(options.target || (options.command === 'init' ? options.positionals[0] : '.'), context.cwd || process.cwd());
+    const previous = ['help', 'version'].includes(options.command) ? null : loadState(target);
+    language = options.language || previous?.language || 'pt';
+    if (options.command === 'init' && !previous && !options.language && !options.yes && !options.json && input.isTTY && output.isTTY) {
+      const prompt = createInterface({ input, output: errorOutput });
+      try { language = normalizeLanguage((await prompt.question(text(language, 'select'))).trim() || 'pt') || 'pt'; } finally { prompt.close(); }
+    }
+    const result = { ok: true, command: options.command, version: packageInfo.version, language, target, message: '', next: getNextSteps({ command: options.command, language, target, installed: Boolean(previous) }) };
+    let exitCode = 0;
+    if (options.command === 'help') result.message = text(language, 'help');
+    else if (options.command === 'version') result.message = `AgentDevKit ${packageInfo.version}`;
+    else if (options.command === 'lang' && !options.positionals.length && !options.language) result.message = `${text(language, 'language')}: ${language}`;
+    else if (options.command === 'doctor') {
+      const found = inspect(target);
+      if (found.installed && !found.issues.length) {
+        const plan = planInstallation({ target, language, mode: 'sync' });
+        found.issues.push(...plan.changes.map(change => ({ code: 'outdated', path: change.path })));
+      }
+      result.issues = found.issues; result.ok = found.installed && found.issues.length === 0;
+      result.message = text(language, result.ok ? 'healthy' : found.installed ? 'unhealthy' : 'missing'); exitCode = result.ok ? 0 : 1;
+    } else if (options.command === 'next') {
+      result.message = previous ? text(language, 'workflow') : text(language, 'missing');
+    } else if (options.command === 'tools') {
+      if (!previous) throw Object.assign(new Error(text(language, 'missing')), { code: 'E_MISSING' });
+      const script = join(target, '.pbai4devs/scripts/preparar-ferramentas/SCRIPT.mjs');
+      const child = spawnSync(process.execPath, [script, ...options.toolArgs], { cwd: target, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 });
+      result.ok = !child.error && child.status === 0; result.message = text(language, 'tools');
+      result.toolOutput = [child.stdout, child.stderr, child.error?.message].filter(Boolean).join('\n'); exitCode = result.ok ? 0 : child.status || 1;
+    } else {
+      if (options.command === 'lang') {
+        const selected = options.positionals[0] || options.language; language = normalizeLanguage(selected);
+        if (!language) usage('Use lang pt, en or es.'); result.language = language;
+        result.next = getNextSteps({ command: options.command, language, target, installed: Boolean(previous) });
+      }
+      const plan = planInstallation({ target, language, mode: options.command, force: options.force });
+      result.plan = plan.changes.map(({ path, action }) => ({ path, action, conflict: plan.conflicts.includes(path) }));
+      result.conflicts = plan.conflicts;
+      const preview = options.dryRun || (options.command === 'sync' && options.check);
+      if (!plan.canApply || preview) {
+        result.ok = plan.canApply && (!options.check || plan.changes.length === 0);
+        result.message = text(language, plan.canApply ? 'plan' : 'conflict'); exitCode = result.ok ? 0 : 1;
+      } else {
+        Object.assign(result, applyPlan(plan)); result.message = text(language, result.changed ? options.command : 'unchanged');
+        result.next = getNextSteps({ command: options.command, language, target, installed: true });
+      }
+    }
+    print(result, options, output); return exitCode;
+  } catch (error) {
+    const result = { ok: false, command: options.command || 'help', version: packageInfo.version, language, target, message: explainError(language, error.code), error: { code: error.code || 'E_OPERATION', detail: error.message }, next: getNextSteps({ command: 'error', language, target, installed: existsSync(join(target, '.pbai4devs/estado/agentdevkit.json')) }) };
+    if (!options.json) result.message += ` (${error.code || 'E_OPERATION'})`;
+    print(result, options, output); return error.exitCode || 1;
+  }
+}
