@@ -52,9 +52,13 @@ Projetos existentes preservam seu código e suas decisões.
 
 [Changelog](CHANGELOG.md) · [Roadmap](docs/roadmap.md) · [Licença MIT](LICENSE)
 
+Encontrou um problema ou tem uma ideia? [Abra uma issue][issues] pelos
+[formulários de contribuição](docs/community.md).
+
 **[ Próximo passo ]** Siga a [instalação](docs/installation.md) e peça ao seu
 agente para ler `AGENTS.md`.
 
 [tests]: docs/tools-and-testing.md
 [cli]: docs/cli.md
 [help]: docs/troubleshooting.md
+[issues]: https://github.com/pathbit/AgentDevKit/issues/new/choose

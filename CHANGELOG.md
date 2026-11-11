@@ -6,6 +6,9 @@ description: Alterações verificáveis por versão do AgentDevKit.
 
 ## Ainda não lançado
 
+- Pacotes verificados como artifacts do CI e geração manual pelo Actions.
+- Releases reutilizam o pacote testado, com verificação de checksum.
+- Formulários de bugs e melhorias e modelo de pull request.
 - Wiki organizada por tarefa: instalação, CLI, fluxo, recursos e recuperação.
 - Guias de ferramentas, testes, arquitetura, contribuição e releases.
 

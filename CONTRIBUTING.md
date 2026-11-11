@@ -9,6 +9,9 @@ problemas ou propostas. Em uma correção, descreva o comando, o comportamento
 esperado e o observado, o sistema operacional e a versão do kit. Remova
 credenciais e dados privados dos exemplos.
 
+Os formulários de [bug][bug] e [melhoria][feature] ajudam a reunir esse contexto.
+Veja como [participar da evolução](docs/community.md) e acompanhar propostas.
+
 ## Preparar o checkout
 
 Use Git, Node.js 24+ e npm:
@@ -50,6 +53,7 @@ Os níveis adicionais dependem da mudança. Distribuição exige testar o tarbal
 sincronização e instalação exigem projetos isolados, incluindo um existente;
 interfaces exigem seu fluxo real. Veja [ferramentas e testes][tests].
 O [CI][ci] roda em Linux, macOS e Windows, com Node 24 e 26.
+Depois dos testes, gera e verifica um pacote disponível nos artifacts.
 
 Versione testes e fixtures; salve relatórios, tarballs e capturas somente em
 destinos ignorados. Use `.agent-tests/` para evidências locais.
@@ -71,3 +75,5 @@ Publicação tem um fluxo separado em [manutenção](docs/maintenance.md).
 [review]: .pbai4devs/commands/revisar-entrega/COMMAND.md
 [git]: .pbai4devs/rules/git/RULE.md
 [ci]: https://github.com/pathbit/AgentDevKit/blob/master/.github/workflows/ci.yml
+[bug]: https://github.com/pathbit/AgentDevKit/issues/new?template=bug_report.yml
+[feature]: https://github.com/pathbit/AgentDevKit/issues/new?template=feature_request.yml

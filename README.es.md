@@ -47,6 +47,9 @@ Una referencia no demuestra que un cliente haya cargado la skill.
 
 [Changelog](CHANGELOG.md) · [Roadmap](docs/roadmap.md) · [Licencia MIT](LICENSE)
 
+¿Encontraste un problema o tienes una idea? [Abre una issue][issues] con los
+formularios. Consulta [cómo participar](docs/community.md).
+
 **[ Próximo paso ]** Sigue la [instalación](docs/installation.md) y pide al
 agente que lea `AGENTS.md`.
 
@@ -55,3 +58,4 @@ agente que lea `AGENTS.md`.
 [tests]: docs/tools-and-testing.md
 [cli]: docs/cli.md
 [help]: docs/troubleshooting.md
+[issues]: https://github.com/pathbit/AgentDevKit/issues/new/choose

@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentação do AgentDevKit
+    url: https://github.com/pathbit/AgentDevKit/blob/master/docs/README.md
+    about: Consulte instalação, fluxo de trabalho e manutenção do kit.

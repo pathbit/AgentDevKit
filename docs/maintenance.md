@@ -31,32 +31,62 @@ de comportamento esperado; não publique saídas locais como prova permanente.
    que dependem dela. Registre escopo e critérios da entrega.
 2. Execute os testes de [contribuição](../CONTRIBUTING.md), a matriz funcional
    quando aplicável e a revisão independente da entrega.
-3. Prepare o pacote local e teste exatamente o arquivo produzido:
+3. Envie o commit revisado. O [CI][ci] testa seis combinações de sistema/Node,
+   gera o pacote, testa o tarball exato e guarda quatro arquivos no artifact:
+   `.tgz`, `SHA256SUMS`, `NOTES.txt` e `package-manifest.json`.
+4. Para uma **nova versão aprovada**, crie e envie sua tag `v<versao>`.
+   A tag deve corresponder ao `package.json` e ao lockfile. Não mova uma tag
+   já publicada. Publicar exige permissão no repositório.
 
-   ```sh
-   npm run pack:release
-   ```
+O [workflow de release][release] executa o CI e baixa o artifact pelo seu ID.
+Confere o SHA-256 contra o valor do job que o testou e contra `SHA256SUMS`;
+publica esse mesmo arquivo e o checksum. Não reempacota entre teste e publicação.
+Uma falha bloqueia a publicação; uma release existente não é sobrescrita.
+Somente o job de publicação tem permissão para escrever no repositório.
 
-   O diretório `.agent-tests/release/<versao>/` recebe o tarball renomeado,
-   `SHA256SUMS`, notas e manifesto. Para a versão atual:
+## Gerar ou publicar pelo Actions
 
-   ```sh
-   ADK_BUILD="$PWD/.agent-tests/release/0.0.1"
-   export AGENTDEVKIT_TARBALL="$ADK_BUILD/agentdevkit-0.0.1.tgz"
-   node --test tests/distribution.test.mjs
-   ```
+Para **gerar um pacote sem publicar uma release**, abra
+[Actions → CI][ci-page], selecione **Run workflow** e escolha a branch.
+Ao terminar, baixe `agentdevkit-<commit>-<tentativa>` na seção **Artifacts**.
+O pacote também é gerado nos pushes e PRs aprovados pelo CI.
 
-   No PowerShell, atribua o caminho absoluto a `$env:AGENTDEVKIT_TARBALL`.
-   Essa variável faz o teste usar o pacote existente, sem substituí-lo por
-   outro empacotamento. Não execute uma publicação para testar a documentação.
-4. Revise o diff, as identidades Git e as evidências antes de enviar o commit.
-   A tag de versão deve apontar para esse commit revisado.
-5. Somente para uma **nova versão aprovada**, envie sua tag `v<versao>`.
-   Não mova uma tag já publicada. Publicar exige permissão no repositório.
+Esses artifacts duram 14 dias e seu download exige login no GitHub. Releases
+são o canal público para instalação; um artifact de branch não é uma versão
+publicada. Nenhum tarball ou relatório é commitado no repositório.
 
-O [workflow de release][release] roda primeiro o CI, empacota, testa o tarball
-exato e publica esse arquivo com seu checksum. `npm pack` sozinho não publica
-no GitHub nem no registro npm. A distribuição atual usa assets do GitHub.
+O envio de uma nova tag inicia a release automaticamente. Para repetir uma
+publicação que falhou, corrija a causa e use **Re-run failed jobs**. Também é
+possível iniciar o workflow para uma tag existente com GitHub CLI autenticada:
+
+```sh
+gh workflow run release.yml --ref vX.Y.Z
+```
+
+Substitua pela tag real, que deve conter o workflow atualizado. Executar
+Release em uma branch é recusado; uma tag já publicada continua preservada.
+O workflow usa `GITHUB_TOKEN`, sem exigir token pessoal salvo nos secrets.
+
+## Conferir o pacote localmente
+
+Para investigar o empacotamento antes de enviar mudanças:
+
+```sh
+npm run pack:release
+```
+
+O diretório `.agent-tests/release/<versao>/` recebe os mesmos quatro arquivos.
+Para testar o pacote da versão atual:
+
+```sh
+ADK_BUILD="$PWD/.agent-tests/release/0.0.1"
+export AGENTDEVKIT_TARBALL="$ADK_BUILD/agentdevkit-0.0.1.tgz"
+npm run test:distribution
+```
+
+No PowerShell, atribua o caminho absoluto a `$env:AGENTDEVKIT_TARBALL`.
+Essa variável seleciona o pacote existente, sem reempacotá-lo. `npm pack`
+sozinho não publica no GitHub nem no registro npm.
 
 ## Conferir após publicar
 
@@ -73,6 +103,8 @@ permanece ligado à versão publicada.
 O [CI][ci] tem seis combinações: três sistemas operacionais com Node 24 e 26.
 Ele executa testes do produto, testes da infraestrutura e verificações dos
 recursos. O lint Markdown é instalado no job Linux/Node 24.
+Depois das seis combinações, o job **Verified package** testa a distribuição
+e disponibiliza o artifact. Ele também precisa passar para concluir o CI.
 
 A matriz funcional de oito projetos é uma execução separada de
 `testar-maturidade run`; não confunda seus cenários com os seis jobs do CI.
@@ -85,3 +117,4 @@ devem acompanhar a revisão, sem prometer validação de clientes não executado
 [ci]: https://github.com/pathbit/AgentDevKit/blob/master/.github/workflows/ci.yml
 [release]: https://github.com/pathbit/AgentDevKit/blob/master/.github/workflows/release.yml
 [v1]: https://github.com/pathbit/AgentDevKit/releases/tag/v0.0.1
+[ci-page]: https://github.com/pathbit/AgentDevKit/actions/workflows/ci.yml

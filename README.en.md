@@ -47,6 +47,9 @@ depends on the client; references alone do not prove a skill was loaded.
 
 [Changelog](CHANGELOG.md) · [Roadmap](docs/roadmap.md) · [MIT license](LICENSE)
 
+Found a bug or have an idea? [Open an issue][issues] using the contribution
+forms. See [how to participate](docs/community.md).
+
 **[ Next step ]** Follow [installation](docs/installation.md), then ask your
 agent to read `AGENTS.md`.
 
@@ -55,3 +58,4 @@ agent to read `AGENTS.md`.
 [tests]: docs/tools-and-testing.md
 [cli]: docs/cli.md
 [help]: docs/troubleshooting.md
+[issues]: https://github.com/pathbit/AgentDevKit/issues/new/choose

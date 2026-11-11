@@ -20,6 +20,7 @@ pode trocar de agente sem manter várias cópias das mesmas instruções.
 | Corrigir uma dificuldade | [Soluções e recuperação](troubleshooting.md) |
 | Contribuir com o kit | [Contribuir][contrib] → [design](design.md) |
 | Preparar uma versão | [Manutenção e releases](maintenance.md) |
+| Relatar um bug ou propor melhoria | [Participar](community.md) |
 
 ## Entenda os termos
 

@@ -10,6 +10,8 @@ try {
   const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
   if (!/^\d+\.\d+\.\d+$/.test(pkg.version)) throw new Error('A release exige uma versão estável SemVer.');
   if (process.env.GITHUB_REF_TYPE === 'tag' && process.env.GITHUB_REF_NAME !== `v${pkg.version}`) throw new Error('A tag difere da versão do pacote.');
+  const lock = JSON.parse(readFileSync(join(root, 'package-lock.json'), 'utf8'));
+  if (lock.version !== pkg.version || lock.packages?.['']?.version !== pkg.version) throw new Error('A versão do lockfile difere da versão do pacote.');
   if (!process.env.npm_execpath) throw new Error('Execute npm run pack:release.');
   const output = join(root, '.agent-tests', 'release', pkg.version);
   mkdirSync(output, { recursive: true });

@@ -1,0 +1,77 @@
+name: Relatar um problema
+description: Informe uma falha com passos para reproduzi-la.
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Consulte a [documentação][doc] e procure issues semelhantes.
+        Remova tokens, senhas, dados privados e caminhos pessoais dos exemplos.
+
+        [doc]: https://github.com/pathbit/AgentDevKit/blob/master/docs/README.md
+  - type: input
+    id: version
+    attributes:
+      label: Versão do AgentDevKit
+      description: Inclua também as versões do Node.js e npm, se disponíveis.
+      placeholder: "AgentDevKit 0.0.1; Node.js 24.x; npm 11.x"
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: Sistema operacional
+      description: Informe a versão e a arquitetura, se souber.
+      placeholder: "Windows 11 x64, macOS arm64 ou Ubuntu 24.04 x64"
+    validations:
+      required: true
+  - type: input
+    id: agent
+    attributes:
+      label: Agente ou editor utilizado
+      description: Inclua a versão ou escreva "CLI sem agente".
+      placeholder: "Codex, Claude Code, Cursor, VS Code/Copilot, OpenCode..."
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Comando ou ação que falhou
+      description: Cole o comando completo ou descreva a ação no agente/editor.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Passos para reproduzir
+      description: Inclua se o projeto era novo ou existente.
+      placeholder: |
+        1. Em um projeto...
+        2. Executei...
+        3. O problema ocorreu quando...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Resultado esperado
+      description: Descreva o que deveria acontecer.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Resultado observado
+      description: Descreva a falha e seu impacto.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs ou evidências
+      description: |
+        Opcional. Cole o trecho relevante, sem segredos ou dados privados.
+        Revise também capturas e arquivos antes de anexá-los.
+      render: text

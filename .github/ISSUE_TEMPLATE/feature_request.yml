@@ -1,0 +1,51 @@
+name: Sugerir uma melhoria
+description: Proponha uma evolução do kit ou da documentação.
+title: "[Melhoria]: "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Consulte a [documentação][doc] e procure propostas semelhantes.
+        Use exemplos sem credenciais ou dados privados.
+
+        [doc]: https://github.com/pathbit/AgentDevKit/blob/master/docs/README.md
+  - type: dropdown
+    id: area
+    attributes:
+      label: Área da melhoria
+      options:
+        - Instalação ou atualização
+        - Skills, regras, comandos ou agentes
+        - Integração com agentes e editores
+        - Ferramentas e testes
+        - Documentação
+        - Outra área
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Qual problema você quer resolver?
+      description: Descreva a situação atual e quem é afetado.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Qual mudança você propõe?
+      description: Inclua um exemplo de uso ou o comportamento desejado.
+    validations:
+      required: true
+  - type: textarea
+    id: value
+    attributes:
+      label: Qual seria o benefício?
+      description: Explique como saberíamos que a melhoria resolveu o problema.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternativas e contexto
+      description: Opcional. Inclua soluções já tentadas e referências úteis.
