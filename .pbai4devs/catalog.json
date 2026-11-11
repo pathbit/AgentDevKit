@@ -102,7 +102,7 @@
     {
       "id": "projeto/configurar-projeto",
       "name": "configurar-projeto",
-      "description": "Prepara um projeto novo e configura sua estrutura técnica após as decisões de produto.",
+      "description": "Prepara um projeto e configura a tecnologia após decidir o produto.",
       "path": ".pbai4devs/skills/projeto/configurar-projeto/SKILL.md",
       "assets": []
     },
@@ -151,7 +151,7 @@
     {
       "id": "projeto/preparar-dev",
       "name": "preparar-dev",
-      "description": "Prepara ou repara o ambiente local de um projeto existente para começar a desenvolver.",
+      "description": "Prepara ou repara o ambiente local de um projeto existente.",
       "path": ".pbai4devs/skills/projeto/preparar-dev/SKILL.md",
       "assets": []
     },
@@ -172,7 +172,7 @@
     {
       "id": "projeto/sincronizar-agentes",
       "name": "sincronizar-agentes",
-      "description": "Atualiza catálogos gerados e apontamentos dos recursos compartilhados.",
+      "description": "Atualiza catálogos e apontamentos dos recursos compartilhados.",
       "path": ".pbai4devs/skills/projeto/sincronizar-agentes/SKILL.md",
       "assets": []
     },

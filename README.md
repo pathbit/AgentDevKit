@@ -1,5 +1,5 @@
 ---
-description: Instruções compartilhadas e fluxo de trabalho para agentes de código.
+description: Instruções e fluxo de trabalho para agentes de código.
 language: pt
 ---
 
@@ -12,7 +12,7 @@ verificação. Você mantém skills, regras, comandos e perfis em `.pbai4devs`;
 o kit gera os apontamentos que cada cliente sabe encontrar.
 
 Use com Codex, Claude, Cursor, Copilot, OpenCode e outros
-[clientes compatíveis](.pbai4devs/COMPATIBILIDADE.md). O conteúdo tem uma origem;
+[clientes compatíveis](.pbai4devs/COMPATIBILIDADE.md). Há uma origem;
 cada cliente conserva seu formato de descoberta.
 
 ## Começar em um projeto
@@ -21,10 +21,14 @@ Com Node.js 24+ e npm, abra o terminal na pasta do seu projeto e execute
 (macOS/Linux):
 
 ```sh
-RELEASE=https://github.com/pathbit/AgentDevKit/releases/download/v0.0.1
+RELEASE=https://github.com/pathbit/AgentDevKit/releases/download/v0.0.2
 npx --yes --ignore-scripts \
-  --package="$RELEASE/agentdevkit-0.0.1.tgz" agentdevkit init --lang pt
+  --package="$RELEASE/agentdevkit-0.0.2.tgz" agentdevkit init --lang pt
 ```
+
+Escolha os agentes na pergunta inicial ou informe `--agents codex,claude`.
+A escolha fica salva no projeto; `agents` permite consultá-la ou alterá-la.
+Sem interação ou escolha anterior, o padrão é `all` (todos os clientes).
 
 Depois, abra o projeto no seu agente e peça:
 
@@ -32,7 +36,7 @@ Depois, abra o projeto no seu agente e peça:
 
 Windows, instalação sem Node, simulação e atualização estão no
 [guia de instalação](docs/installation.md). A distribuição usa a
-[release v0.0.1](https://github.com/pathbit/AgentDevKit/releases/tag/v0.0.1),
+[release v0.0.2](https://github.com/pathbit/AgentDevKit/releases/tag/v0.0.2),
 sem instalação global. O idioma da CLI pode ser `pt`, `en` ou `es`.
 
 ## Encontre o que precisa

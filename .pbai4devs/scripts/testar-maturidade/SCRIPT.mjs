@@ -41,7 +41,7 @@ export const SCENARIOS = [
 
 export function registeredRoots(root) {
   const names = readFileSync(join(root, '.pbai4devs/espelhos.conf'), 'utf8').split(/\r?\n/)
-    .filter(line => line.startsWith('agente|')).map(line => line.split('|')[1]);
+    .filter(line => /^(?:agente|gitignore)\|/.test(line)).map(line => line.split('|')[1]);
   for (const name of names) if (!/^\.[a-z0-9][a-z0-9.-]*$/i.test(name) || ['.git', '.pbai4devs', '.agent-tests'].includes(name.toLowerCase())) fail(`Raiz de agente inválida: ${name}`);
   return [...new Set(names)];
 }
@@ -78,7 +78,22 @@ function copyAllowed(relativePath, directory = false) {
 }
 
 export function copyAgentStructure(sourceRoot, destination) {
-  const roots = [...new Set(['.pbai4devs', ...registeredRoots(sourceRoot), '.vscode'])];
+  const roots = ['.pbai4devs', ...registeredRoots(sourceRoot)];
+  const stateFile = join(sourceRoot, '.pbai4devs/estado/agentdevkit.json');
+  const stateInfo = stat(stateFile);
+  if (stateInfo && (!stateInfo.isFile() || stateInfo.isSymbolicLink())) fail('Estado da instalação deve ser arquivo regular.');
+  const installation = stateInfo ? json(stateFile) : null;
+  if (stateInfo && (!installation || !installation.blocks || typeof installation.blocks !== 'object' || Array.isArray(installation.blocks))) fail('Estado da instalação deve registrar os blocos gerenciados.');
+  function managedEntry(name) {
+    if (!installation) return true;
+    const expected = installation.blocks[name];
+    if (typeof expected !== 'string') return false;
+    const content = readFileSync(join(sourceRoot, name), 'utf8');
+    const begin = '<!-- BEGIN AGENTDEVKIT -->', end = '<!-- END AGENTDEVKIT -->';
+    if (content.split(begin).length !== 2 || content.split(end).length !== 2) return false;
+    const start = content.indexOf(begin), finish = content.indexOf(end);
+    return finish > start && digest(content.slice(start, finish + end.length)) === expected;
+  }
   const files = []; const entrypoints = {}; let skipped = 0;
   function copy(file, targetFile = file) {
     const source = join(sourceRoot, file);
@@ -94,8 +109,11 @@ export function copyAgentStructure(sourceRoot, destination) {
   }
   for (const file of [...roots, 'README.md', '.gitignore', '.gitattributes', '.editorconfig', '.dockerignore', '.env.example', '.env.sample', '.env.template', 'Makefile']) copy(file);
   for (const name of ['AGENTS.md', 'CLAUDE.md', 'GEMINI.md']) {
+    const installed = stat(join(sourceRoot, name));
+    if (!installed) continue;
+    if (!installed.isFile() || installed.isSymbolicLink()) fail(`Entrada de agente deve ser arquivo regular: ${name}`);
     const template = `.pbai4devs/templates/entrypoints/${name}`;
-    const selected = stat(join(sourceRoot, template)) ? template : name;
+    const selected = managedEntry(name) && stat(join(sourceRoot, template)) ? template : name;
     const info = stat(join(sourceRoot, selected));
     if (info && !info.isFile()) fail(`Entrada de agente deve ser arquivo regular: ${selected}`);
     copy(selected, name);

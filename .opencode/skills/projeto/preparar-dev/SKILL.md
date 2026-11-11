@@ -1,6 +1,6 @@
 ---
 name: preparar-dev
-description: Prepara ou repara o ambiente local de um projeto existente para começar a desenvolver.
+description: Prepara ou repara o ambiente local de um projeto existente.
 ---
 
 # Preparar desenvolvimento

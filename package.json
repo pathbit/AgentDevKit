@@ -1,6 +1,6 @@
 {
   "name": "@pathbit/agentdevkit",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "PathBit AgentDevKit: specs, skills and workflows for coding agents.",
   "type": "module",
   "license": "MIT",

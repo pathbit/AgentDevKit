@@ -26,3 +26,5 @@ Veja os motivos e limites em [Compatibilidade](../../COMPATIBILIDADE.md).
 
 O instalador gera esse manifesto a partir de `src/adapters`. Após a instalação,
 o sincronizador depende somente de Node e do hub local, sem o pacote npm.
+Ele respeita os clientes escolhidos, sem recriar os desmarcados. Para trocar
+a seleção, use `agentdevkit agents <lista>`; não edite o manifesto gerado.

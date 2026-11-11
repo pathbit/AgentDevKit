@@ -1,5 +1,5 @@
 ---
-description: Diagnóstico, conflitos, backups e recuperação do AgentDevKit 0.0.1.
+description: Diagnóstico, conflitos, backups e recuperação do AgentDevKit.
 ---
 
 # Solução de problemas
@@ -19,6 +19,12 @@ adk sync --check --target "./meu projeto" --json
 `doctor` verifica a instalação do kit. Para as ferramentas, use
 `adk tools check all`; para o aplicativo, execute os testes do próprio projeto.
 Antes de compartilhar uma saída, remova dados privados e caminhos pessoais.
+
+Se um agente não encontrar recursos, confira a seleção com `adk agents`.
+Para incluir um cliente, use `adk agents codex,claude` com a lista completa
+desejada, ou `adk agents all` para todos. Reabra a sessão do cliente quando ele
+exigir recarregar as skills. Pastas compartilhadas podem atender mais de um
+agente; arquivos próprios também podem manter uma pasta após a desmarcação.
 
 | Sintoma ou código | Próxima ação |
 | --- | --- |

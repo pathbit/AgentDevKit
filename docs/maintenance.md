@@ -79,8 +79,8 @@ O diretório `.agent-tests/release/<versao>/` recebe os mesmos quatro arquivos.
 Para testar o pacote da versão atual:
 
 ```sh
-ADK_BUILD="$PWD/.agent-tests/release/0.0.1"
-export AGENTDEVKIT_TARBALL="$ADK_BUILD/agentdevkit-0.0.1.tgz"
+ADK_BUILD="$PWD/.agent-tests/release/0.0.2"
+export AGENTDEVKIT_TARBALL="$ADK_BUILD/agentdevkit-0.0.2.tgz"
 npm run test:distribution
 ```
 

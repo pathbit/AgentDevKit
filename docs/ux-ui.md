@@ -20,8 +20,10 @@ PT é padrão. EN e ES alteram a interface e os próximos passos, mantendo nomes
 de comandos e caminhos. O idioma salvo é reutilizado nas próximas execuções.
 Mensagens distinguem confirmação, aviso e falha sem afirmar testes não feitos.
 
-O primeiro uso interativo permite escolher o idioma. Quem automatiza pode
-fornecer `--lang` e ler `--json`; o resultado inclui a próxima ação. Instalação
+O primeiro uso interativo permite escolher idioma e agentes de código.
+Quem automatiza pode fornecer `--lang`, `--agents` e ler `--json`; o resultado
+inclui a próxima ação. Agentes em aplicativos podem reunir a escolha pelo
+chat e passá-la à CLI, sem depender de um terminal interativo. Instalação
 normal resume mudanças; simulação lista uma amostra e o JSON fornece o plano.
 
 `doctor` responde sobre a instalação do kit, enquanto `next` orienta o trabalho
@@ -29,6 +31,10 @@ do projeto. Essa distinção evita tratar um diagnóstico saudável como prova
 de que a aplicação está pronta. Conflitos devem levar à comparação de arquivos
 antes de qualquer substituição. Veja [CLI](cli.md) e
 [recuperação](troubleshooting.md) para o comportamento observável.
+
+O comando `agents` consulta a seleção sem escrever arquivos. Sua alteração
+permite simular o plano antes de remover apontamentos gerados. Pastas próprias
+não são apagadas para aparentar uma instalação menor.
 
 Escopo autorizado junto ao [PRD](prd.md). Testes verificam as jornadas reais;
 a aprovação do desenho não substitui as evidências de funcionamento.

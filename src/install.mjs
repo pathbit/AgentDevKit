@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { synchronize, isReference } from '../.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs';
 import { isGeneratedOutput } from '../.pbai4devs/scripts/lib/gitignore.mjs';
-import { writeAdapterManifest, adapterRoots } from './adapters/index.mjs';
+import { writeAdapterManifest, adapterRoots, normalizeClients, resolveAdapters } from './adapters/index.mjs';
 import { packageRoot, packageInfo, statePath, entryNames, begin, end } from './config.mjs';
 import { normalizeLanguage, text } from './i18n.mjs';
 
@@ -95,6 +95,10 @@ export function loadState(root) {
   const content = read(root, statePath); if (content === null) return null;
   let state; try { state = JSON.parse(content); } catch { fail('E_STATE', 'Invalid AgentDevKit state JSON.'); }
   if (state?.schemaVersion !== 1 || !normalizeLanguage(state.language) || typeof state.version !== 'string' || !state.files || typeof state.files !== 'object' || Array.isArray(state.files) || !state.blocks || typeof state.blocks !== 'object' || Array.isArray(state.blocks)) fail('E_STATE', 'Invalid AgentDevKit state.');
+  if (state.clients !== undefined) {
+    if (!Array.isArray(state.clients)) fail('E_STATE', 'Invalid client selection in AgentDevKit state.');
+    try { state.clients = normalizeClients(state.clients); } catch { fail('E_STATE', 'Invalid client selection in AgentDevKit state.'); }
+  }
   for (const [path, digest] of [...Object.entries(state.files), ...Object.entries(state.blocks)]) {
     safePath(root, path);
     if (!allowedManaged(path) || !/^[a-f0-9]{64}$/.test(digest)) fail('E_STATE', `Invalid managed state entry: ${path}`);
@@ -133,9 +137,12 @@ function copyResources(source, destination) {
   return files;
 }
 
-export function planInstallation({ target, language = 'pt', mode = 'init', force = false }) {
+export function planInstallation({ target, language = 'pt', mode = 'init', force = false, clients }) {
   const previous = loadState(target);
   if (mode !== 'init' && !previous) fail('E_MISSING', text(language, 'missing'));
+  const selected = normalizeClients(clients ?? previous?.clients ?? ['all']);
+  const active = resolveAdapters(selected);
+  const changingClients = clients !== undefined || mode === 'agents';
   const stage = mkdtempSync(join(tmpdir(), 'agentdevkit-'));
   try {
     const existing = copyResources(join(target, '.pbai4devs'), join(stage, '.pbai4devs'));
@@ -145,15 +152,15 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
     if (bundled.length) for (const path of Object.keys(previous?.files || {})) {
       if (path.startsWith('.pbai4devs/') && !supplied.has(path.slice(11)) && !internal.has(path.slice(11))) rmSync(safePath(stage, path), { force: true });
     }
-    for (const root of adapterRoots) {
+    for (const root of active.roots) {
       const content = read(target, `${root}/.gitignore`);
       if (content) write(stage, `${root}/.gitignore`, content);
     }
     const ownIgnore = read(target, '.pbai4devs/.gitignore');
     if (ownIgnore) write(stage, '.pbai4devs/.gitignore', ownIgnore);
-    if (bundled.length) writeAdapterManifest(stage);
+    writeAdapterManifest(stage, { clients: selected });
     synchronize({ root: stage, force: true, output() {} });
-    for (const name of entryNames) write(stage, name, entryContent(read(target, name), readFileSync(join(packageRoot, '.pbai4devs/templates/entrypoints', name), 'utf8'), language, name));
+    for (const name of active.entrypoints) write(stage, name, entryContent(read(target, name), readFileSync(join(packageRoot, '.pbai4devs/templates/entrypoints', name), 'utf8'), language, name));
     const ignoreTemplate = readFileSync(join(packageRoot, '.pbai4devs/templates/gitignore/TEMPLATE.md'), 'utf8').match(/```gitignore\r?\n([\s\S]*?)```/)?.[1];
     if (!ignoreTemplate) fail('E_TEMPLATE', 'Missing root gitignore template.');
     const rootIgnore = read(target, '.gitignore')?.toString('utf8') || '';
@@ -166,6 +173,7 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
     const paths = walk(stage, '', path => !path.split('/').includes('.agent-tests')).filter(path => !path.startsWith('.pbai4devs/') || !unknown.has(path.slice(11)));
     const desired = new Map(paths.map(path => [path, readFileSync(join(stage, path))]));
     const manifest = { schemaVersion: 1, version: bundled.length ? packageInfo.version : previous.version, language, files: {}, blocks: {} };
+    if (mode !== 'sync' || clients !== undefined || previous?.clients !== undefined) manifest.clients = selected;
     for (const [path, content] of desired) {
       if (path === 'README.md') continue;
       const block = blockDigest(path, content);
@@ -189,7 +197,20 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
       if (hash(current) !== digest) conflicts.push(path);
       changes.push({ path, action: 'remove', content: null, beforeHash: hash(current) });
     }
-    for (const root of adapterRoots) for (const path of walk(join(target, root), '', path => !path.split('/').some(part => ignored.has(part)))) {
+    for (const [path, digest] of Object.entries(previous?.blocks || {})) if (!desired.has(path)) {
+      const current = read(target, path); if (!current) continue;
+      const source = current.toString('utf8');
+      const block = path.endsWith('/.gitignore') ? extractBlock(source, '# BEGIN AGENT IGNORE', '# END AGENT IGNORE') : extractBlock(source);
+      if (!block || hash(block) !== digest) conflicts.push(path);
+      if (!block) continue;
+      let content = source.replace(block, '');
+      if (entryNames.includes(path)) {
+        const template = readFileSync(join(packageRoot, '.pbai4devs/templates/entrypoints', path), 'utf8');
+        if (source === entryContent(null, template, previous.language, path)) content = '';
+      }
+      changes.push({ path, action: content.trim() ? 'update' : 'remove', content: content.trim() ? Buffer.from(content) : null, beforeHash: hash(current) });
+    }
+    for (const root of changingClients ? [] : active.roots) for (const path of walk(join(target, root), '', path => !path.split('/').some(part => ignored.has(part)))) {
       if (!['skills', 'agents', 'commands', 'rules', 'instructions', 'prompts'].includes(path.split('/')[0])) continue;
       const full = `${root}/${path}`; if (desired.has(full) || changes.some(change => change.path === full)) continue;
       const current = read(target, full), source = current.toString('utf8');
@@ -203,7 +224,8 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
       if (!known) conflicts.push(legacy);
       changes.push({ path: legacy, action: 'remove', content: null, beforeHash: hash(legacyContent) });
     }
-    return { target, language, mode, changes, conflicts: [...new Set(conflicts)].sort(), canApply: !conflicts.length || force, manifest };
+    const retiredRoots = adapterRoots.filter(root => !active.roots.includes(root) && changes.some(change => change.action === 'remove' && change.path.startsWith(`${root}/`) && (previous?.files[change.path] || previous?.blocks[change.path])));
+    return { target, language, mode, changes, conflicts: [...new Set(conflicts)].sort(), canApply: !conflicts.length || force, manifest, retiredRoots };
   } finally { rmSync(stage, { recursive: true, force: true }); }
 }
 
@@ -253,6 +275,13 @@ export function applyPlan(plan) {
       catch (error) { if (['ENOENT', 'ENOTEMPTY', 'EEXIST'].includes(error.code)) break; throw error; }
       parent = portable(dirname(parent));
     }
+  }
+  for (const root of plan.retiredRoots || []) {
+    if (!adapterRoots.includes(root)) continue;
+    const directory = safePath(target, root);
+    if (!stat(directory)?.isDirectory()) continue;
+    try { if (readdirSync(directory).length === 0) rmdirSync(directory); }
+    catch (error) { if (!['ENOENT', 'ENOTEMPTY', 'EEXIST'].includes(error.code)) throw error; }
   }
   return { changed: true, backup: [...before.values()].some(Boolean) ? backup : null };
 }

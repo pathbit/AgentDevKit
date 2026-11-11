@@ -21,8 +21,8 @@ recursos compartilhados  +   política de cada cliente
                          v
              projeto que recebe o AgentDevKit
              ├── .pbai4devs/   origem e estado
-             ├── .claude/     apontamentos nativos
-             ├── .github/     skills, regras, prompts, agentes
+             ├── .claude/     se Claude for escolhido
+             ├── .github/     se Copilot for escolhido
              ├── outros clientes...
              └── AGENTS.md    entrada comum
 ```
@@ -50,10 +50,11 @@ de runtime do pacote. Ferramentas opcionais têm instalações próprias.
 ## O que acontece na instalação
 
 1. Resolve o alvo e recusa caminhos reservados ou symlinks perigosos.
-2. Prepara os recursos em uma pasta temporária e gera os apontamentos.
-3. Compara conteúdo e hashes registrados; apresenta mudanças e conflitos.
-4. Com `--dry-run`, encerra sem alterar o alvo.
-5. Ao aplicar, confere novamente os arquivos, salva os anteriores e grava
+2. Resolve os clientes pela opção explícita, estado salvo ou padrão `all`.
+3. Prepara o hub completo e gera os apontamentos dos clientes selecionados.
+4. Compara conteúdo e hashes registrados; apresenta mudanças e conflitos.
+5. Com `--dry-run`, encerra sem alterar o alvo.
+6. Ao aplicar, confere novamente os arquivos, salva os anteriores e grava
    as mudanças. Em erro durante a aplicação, tenta restaurar o que alterou.
 
 O backup fica em `.agent-tests/agentdevkit/backups/` dentro do alvo. É uma
@@ -61,8 +62,9 @@ proteção local: não substitui Git nem um backup externo.
 
 ## Estado e propriedade
 
-`.pbai4devs/estado/agentdevkit.json` registra versão instalada, idioma e hashes
-de arquivos ou blocos gerenciados. É configuração versionável do projeto;
+`.pbai4devs/estado/agentdevkit.json` registra versão, idioma, `clients` e hashes
+de arquivos ou blocos gerenciados. `clients` guarda `["all"]` ou uma seleção.
+Estados antigos sem o campo mantêm todos. É configuração versionável;
 não é cache nem guarda credenciais. Não edite seus hashes manualmente.
 
 `AGENTS.md`, `CLAUDE.md`, `GEMINI.md` e `.gitignore` recebem blocos delimitados.
@@ -77,7 +79,18 @@ e [recuperação](troubleshooting.md).
 
 Catálogos e apontamentos são derivados; o [sincronizador][sync] os reconstrói.
 A CLI usa a política distribuída em `src/adapters/`; no projeto instalado,
-`espelhos.conf` permite sincronizar com o script local e Node.
+`espelhos.conf` reflete a seleção e permite sincronizar com o script local.
+
+Os clientes podem depender da mesma pasta. Codex inclui `.codex` e `.agents`;
+Copilot inclui `.github` e `.vscode`; Antigravity usa `.agents`. A troca
+remove apenas derivações gerenciadas que nenhum selecionado exige. Arquivos
+próprios permanecem, e conteúdo gerenciado modificado exige resolver conflitos.
+Atualizações e sincronizações sem seleção explícita reutilizam o estado salvo.
+
+A interação inicial coleta idioma e clientes somente em terminal interativo.
+Cada opção explícita evita sua pergunta; JSON, simulação e `--yes` evitam todas.
+Não se tenta identificar o agente pela máquina ou por nomes de pastas.
+A seleção não inicia downloads nem altera as decisões de produto.
 
 ## Dados locais e limites
 

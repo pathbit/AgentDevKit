@@ -176,7 +176,8 @@ test('pacote real instala, preserva projetos e oferece próximos passos', { time
     cli(['init', '--target', target, '--yes']);
     write(join(target, '.claude/skills/custom/SKILL.md'), '---\nname: custom\ndescription: Skill própria.\n---\n\n# Custom\n');
     const customHash = digest(join(target, '.claude/skills/custom/SKILL.md'));
-    const nextPackage = { ...json(join(stage, 'package.json')), version: '0.0.2' };
+    const nextVersion = packageJson.version.split('.').map((part, index) => Number(part) + (index === 2 ? 1 : 0)).join('.');
+    const nextPackage = { ...json(join(stage, 'package.json')), version: nextVersion };
     write(join(stage, 'package.json'), JSON.stringify(nextPackage));
     const nextSource = readFileSync(join(stage, '.pbai4devs/README.md'), 'utf8') + '\nNova versão da fixture.\n';
     write(join(stage, '.pbai4devs/README.md'), nextSource);
@@ -185,7 +186,7 @@ test('pacote real instala, preserva projetos e oferece próximos passos', { time
     runNpm(['install', '--offline', '--ignore-scripts', '--no-audit', '--no-fund', '--prefix', upgradeRoot, join(work, upgrade.filename)], work);
     const upgradeBin = join(upgradeRoot, 'node_modules', ...packageJson.name.split('/'), 'bin/agentdevkit.mjs');
     const result = cli(['update', '--target', target, '--yes'], 0, upgradeBin);
-    assert.equal(result.version, '0.0.2');
+    assert.equal(result.version, nextVersion);
     assert.equal(readFileSync(join(target, '.pbai4devs/README.md'), 'utf8'), nextSource);
     assert.equal(digest(join(target, '.claude/skills/custom/SKILL.md')), customHash);
   });

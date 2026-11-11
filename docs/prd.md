@@ -1,7 +1,7 @@
 ---
 description: Requisitos da distribuição portátil AgentDevKit.
 status: aprovado
-version: 0.0.1
+version: 0.0.2
 ---
 
 # PRD do AgentDevKit
@@ -28,9 +28,14 @@ extraído do projeto de origem como produto independente.
 | FR-006 | Seguir preparação, produto, design, configuração, specs e revisão. |
 | FR-007 | Distribuir testes/modelos sem resultados, segredos ou downloads. |
 | FR-008 | Validar o pacote local e preparar a release versionada v0.0.1. |
+| FR-009 | Selecionar agentes e criar apenas seus apontamentos necessários. |
+| FR-010 | Reutilizar a seleção e alterá-la sem perder arquivos próprios. |
 
 Execuções repetidas devem ser idempotentes; a CLI oferece simulação e JSON.
 As instruções permanecem concisas, com detalhes opcionais em referências.
+Na configuração interativa, o usuário escolhe seus agentes. Em automações,
+a opção explícita ou a escolha salva orientam o instalador; sem escolha,
+todos os clientes são mantidos para compatibilidade.
 
 ## Limites e sucesso
 
@@ -40,7 +45,8 @@ gerar arquivos. Não copia documentos reais de produto para o projeto-alvo.
 
 A entrega exige testes de projeto vazio e existente, preservação de arquivos,
 atualização, idiomas, catálogos e distribuição sem artefatos locais.
-Os aceites detalhados ficam na [spec](specs/v0.0.1/SPEC.md).
+Os aceites da distribuição ficam na [spec inicial](specs/v0.0.1/SPEC.md);
+a [spec de seleção](specs/v0.0.2/SPEC.md) detalha a instalação por agente.
 
 ## Autorização
 

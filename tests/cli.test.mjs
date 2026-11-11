@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { run } from '../bin/agentdevkit.mjs';
 import { resolveTarget } from '../src/install.mjs';
+import { packageInfo } from '../src/config.mjs';
 
 const project = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const bin = join(project, 'bin/agentdevkit.mjs');
@@ -26,8 +27,10 @@ function cli(root, args, expected = 0) {
 test('help, version e erros retornam JSON unico com proxima acao', t => {
   const root = fixture(t);
   put(root, '.pbai4devs/estado/agentdevkit.json', '{invalid');
-  assert.equal(cli(root, ['--help', '--lang', 'en']).language, 'en');
-  assert.equal(cli(root, ['--version']).version, '0.0.1');
+  const help = cli(root, ['--help', '--lang', 'en']);
+  assert.equal(help.language, 'en'); assert.equal(Object.hasOwn(help, 'clients'), false);
+  const version = cli(root, ['--version']);
+  assert.equal(version.version, packageInfo.version); assert.equal(Object.hasOwn(version, 'clients'), false);
   const invalid = cli(root, ['nonsense', '--lang', 'es'], 2);
   assert.equal(invalid.language, 'es'); assert.match(invalid.message, /Argumentos inválidos/);
 });
@@ -123,7 +126,7 @@ test('entrada CLI funciona por symlink npm sem executar ao ser importada', t => 
   try { symlinkSync(bin, entry, 'file'); } catch (error) { if (['EPERM', 'EACCES'].includes(error.code)) { t.skip('No symlink privilege'); return; } throw error; }
   const result = spawnSync(process.execPath, [entry, '--version', '--json', '--target', root], { encoding: 'utf8', timeout: 60000 });
   assert.equal(result.status, 0, result.stdout + result.stderr);
-  assert.equal(JSON.parse(result.stdout).version, '0.0.1');
+  assert.equal(JSON.parse(result.stdout).version, packageInfo.version);
   const imported = spawnSync(process.execPath, ['--input-type=module', '-e', 'await import(process.argv[1]);', new URL('../bin/agentdevkit.mjs', import.meta.url).href], { encoding: 'utf8', timeout: 60000 });
   assert.equal(imported.status, 0, imported.stderr); assert.equal(imported.stdout, '');
 });

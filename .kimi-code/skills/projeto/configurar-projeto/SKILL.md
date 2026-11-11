@@ -1,6 +1,6 @@
 ---
 name: configurar-projeto
-description: Prepara um projeto novo e configura sua estrutura técnica após as decisões de produto.
+description: Prepara um projeto e configura a tecnologia após decidir o produto.
 ---
 
 # Configurar projeto

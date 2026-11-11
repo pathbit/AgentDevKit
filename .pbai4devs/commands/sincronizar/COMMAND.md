@@ -13,5 +13,8 @@ apontamentos e remover extras dos destinos gerenciados; preserva os arquivos
 nativos fora desse escopo e mantém backup local do conteúdo próprio removido.
 Após reparar, execute também `--check`.
 
+Respeite os clientes registrados no manifesto. Para mudar a seleção salva,
+use `agentdevkit agents <lista>`; sincronizar não ativa todos os clientes.
+
 Saída: apontamentos atualizados ou divergências encontradas. Templates,
 scripts, ferramentas, estado, testes, documentos e guias ficam fora dos espelhos.

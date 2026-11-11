@@ -8,27 +8,63 @@ description: Formatos de descoberta e limites dos adaptadores de clientes.
 nativos; ferramentas, scripts, templates e downloads ficam no hub. Um link
 orienta a leitura, sem garantir que o cliente importe seu conteúdo.
 
-Os grupos são preservados quando a descoberta permite. Na tabela, `grupo/`
-representa categorias opcionais; `nome` é o identificador único do recurso.
+## Escolher clientes
 
-| Cliente | Skills | Comandos, regras e agentes |
+Use `--agents codex,claude` na instalação ou `agents codex,claude` para alterar
+depois. `--clients` e `clients` são aliases. A CLI salva os IDs no projeto;
+`all` inclui todos, inclusive os legados. Sem seleção explícita, reutiliza a
+salva; sem ambas, usa `all`. Não há detecção automática do agente em execução.
+
+| Cliente | ID | Pastas necessárias |
 | --- | --- | --- |
-| [Codex][codex] | `.agents/skills/grupo/nome/SKILL.md`; `.codex` mantém referências agrupadas | `AGENTS.md` apresenta o hub; os demais tipos em `.codex` são referências |
-| [Claude][claude] | `.claude/skills/nome/SKILL.md` | Comandos `commands/grupo/nome.md`; regras `rules/grupo/nome/RULE.md`; agentes `agents/nome.md` |
-| [Cursor][cursor] | `.cursor/skills/grupo/nome/SKILL.md` | Regras `rules/grupo/nome.mdc`; agentes `agents/nome.md`; comandos diretos `commands/nome.md` |
-| [Copilot][copilot] | `.github/skills/nome/SKILL.md` | Agentes `agents/nome.agent.md`; regras `instructions/grupo/nome.instructions.md`; prompts `prompts/grupo/nome.prompt.md` para Local |
-| [OpenCode V2][opencode] | `.opencode/skills/grupo/nome/SKILL.md` | Comandos `commands/grupo/nome.md`; agentes `agents/grupo/nome.md`; regras como referências |
-| [Gemini CLI][gemini] | `.gemini/skills/nome/SKILL.md` | Comandos `commands/grupo/nome.toml`; agentes `agents/nome.md`; regras como referências |
-| [Antigravity][antigravity] | `.agents/skills/grupo/nome/SKILL.md` com manifesto | Regras agrupadas e agentes registrados nos manifestos; comandos são referências |
-| [ZCode][zcode] | `.zcode/skills/nome/SKILL.md` | Comandos diretos; agentes e regras de projeto são referências |
-| [Kimi Code][kimi] | `.kimi-code/skills/grupo/nome/SKILL.md` | Comandos exigem plugin; os apontamentos não configuram esse plugin |
-| [MiniMax Code][minimax] | `.minimax/skills/nome/SKILL.md` | Os demais tipos são referências agrupadas |
-| [MiMo Code][mimo] | `.mimocode/skills/grupo/nome/SKILL.md` | Agentes e comandos diretos; regras como referências |
-| [DeepSeek Harness][deepseek] | `.dsh/skills/nome/SKILL.md` | Os demais tipos são referências agrupadas |
+| [Codex][codex] | `codex` | `.codex`, `.agents` |
+| [Claude][claude] | `claude` | `.claude` |
+| [Cursor][cursor] | `cursor` | `.cursor` |
+| [Copilot][cp] | `copilot` | `.github`, `.vscode` |
+| [OpenCode V2][opencode] | `opencode` | `.opencode` |
+| [Gemini CLI][gemini] | `gemini` | `.gemini` |
+| [Antigravity][antigravity] | `antigravity` | `.agents` |
+| Antigravity legado | `antigravity-legacy` | `.agent`, `.agents` |
+| [ZCode][zcode] | `zcode` | `.zcode` |
+| [Kimi Code][kimi] | `kimi` | `.kimi-code` |
+| Kimi legado | `kimi-legacy` | `.kimi` |
+| [MiniMax Code][minimax] | `minimax` | `.minimax` |
+| [MiMo Code][mimo] | `mimo` | `.mimocode` |
+| [DeepSeek Harness][deepseek] | `deepseek` | `.dsh` |
 
-`.agent` mantém referências de compatibilidade com Antigravity; a descoberta
-agrupada usa o cliente principal `.agents`. `.kimi` atende instalações legadas;
-o cliente atual usa `.kimi-code`. `.vscode` recebe apenas seu `.gitignore` local.
+Aliases de IDs: `vscode` → `copilot`, `claude-code` → `claude`,
+`kimi-code` → `kimi`, `xiaomi` → `mimo`. Nomes de pastas não são IDs.
+Pastas compartilhadas permanecem se algum escolhido precisar delas.
+`.vscode` recebe apenas seu `.gitignore` local. O hub continua completo;
+seleção altera derivações, sem apagar arquivos próprios dos clientes.
+
+## Formatos nativos
+
+Os grupos são preservados quando a descoberta permite. Abaixo, `grupo/`
+representa categorias opcionais; `nome` é o identificador único do recurso.
+Os caminhos são relativos à pasta do cliente, exceto onde indicado.
+
+- Codex: `.agents/skills/grupo/nome/SKILL.md` e referências agrupadas em
+  `.codex`. `AGENTS.md` apresenta o hub; demais tipos são referências.
+- Claude: `skills/nome/SKILL.md`, `commands/grupo/nome.md`,
+  `rules/grupo/nome/RULE.md` e `agents/nome.md`.
+- Cursor: `skills/grupo/nome/SKILL.md`, `rules/grupo/nome.mdc`,
+  `agents/nome.md` e `commands/nome.md`.
+- Copilot: `skills/nome/SKILL.md`, `agents/nome.agent.md`,
+  `instructions/grupo/nome.instructions.md` e
+  `prompts/grupo/nome.prompt.md` para Local.
+- OpenCode: `skills/grupo/nome/SKILL.md`, `commands/grupo/nome.md`,
+  `agents/grupo/nome.md`; regras como referências.
+- Gemini: `skills/nome/SKILL.md`, `commands/grupo/nome.toml`,
+  `agents/nome.md`; regras como referências.
+- Antigravity: skills e regras agrupadas, agentes planos registrados nos
+  manifestos; comandos como referências. `.agent` é a opção legada.
+- ZCode: `skills/nome/SKILL.md`, comandos diretos; demais tipos são referências.
+- Kimi: `skills/grupo/nome/SKILL.md`; comandos exigem plugin, não configurado
+  pelos apontamentos. `.kimi` é a opção legada.
+- MiniMax e DeepSeek: `skills/nome/SKILL.md`; demais tipos como referências.
+- MiMo: `skills/grupo/nome/SKILL.md`, agentes e comandos diretos;
+  regras como referências.
 
 Claude documenta skills no nível `skills/nome`; sua descoberta de arquivos
 `.claude` em subprojetos não confirma grupos dentro de `skills/`. Gemini,
@@ -37,7 +73,7 @@ planas em plugins. Mantemos esses layouts; não presumimos recursão em agentes 
 comandos quando o fornecedor só documenta arquivos diretos.
 
 Antigravity busca um nível por padrão. Os arquivos `.agents/skills.json`,
-`rules.json` e `agents.json` registram explicitamente cada referência agrupada;
+`rules.json` e `agents.json` registram explicitamente cada referência;
 o sincronizador os atualiza ao criar, mover ou remover recursos. Eles são
 manifestos nativos, distintos dos catálogos internos homônimos em `.pbai4devs`.
 
@@ -49,7 +85,7 @@ Prompts `.prompt.md` pertencem ao harness Local do VS Code, anunciado para
 remoção em fevereiro de 2027. No Copilot, use skills para rotinas invocáveis.
 `GEMINI.md` importa `AGENTS.md`; `CLAUDE.md` aponta para esse mesmo guia.
 
-O instalador gera a política de destinos em `espelhos.conf`; `sincronizar`
+O instalador gera a seleção e a política em `espelhos.conf`; `sincronizar`
 reconstrói os apontamentos somente com Node e os arquivos do hub instalado.
 `--check` não altera arquivos. `--force` faz backup ignorado antes de substituir
 conteúdo próprio que conflite com caminhos gerenciados.
@@ -62,12 +98,12 @@ comprovada. As razões e fontes por adaptador também ficam em
 [codex]: https://learn.chatgpt.com/docs/build-skills
 [claude]: https://code.claude.com/docs/en/skills
 [cursor]: https://cursor.com/docs/skills
-[copilot]: https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/skills
+[cp]: https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/skills
 [opencode]: https://opencode.ai/docs/skills
 [gemini]: https://geminicli.com/docs/cli/skills/
 [antigravity]: https://antigravity.google/docs/customization-discovery
 [zcode]: https://zcode.z.ai/en/docs/skill
 [kimi]: https://moonshotai.github.io/kimi-code/en/customization/skills
-[minimax]: https://github.com/MiniMax-AI/minimax-code/blob/3c21163c85a9684030cb147bfef48c6284fa3c46/packages/agent-modules/skills/src/registry.ts
+[minimax]: https://github.com/MiniMax-AI/minimax-code
 [mimo]: https://mimo.xiaomi.com/mimocode/skills
-[deepseek]: https://github.com/deepseek-ai/deepseek-harness/blob/e8f7b93a344964de3dca1ace9e72b6e4d6de87cb/packages/skill/skill-filesystem/README.md
+[deepseek]: https://github.com/deepseek-ai/deepseek-harness

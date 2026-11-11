@@ -1,6 +1,6 @@
 ---
 name: sincronizar-agentes
-description: Atualiza catálogos gerados e apontamentos dos recursos compartilhados.
+description: Atualiza catálogos e apontamentos dos recursos compartilhados.
 ---
 
 # Sincronizar agentes

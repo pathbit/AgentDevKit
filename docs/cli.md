@@ -1,5 +1,5 @@
 ---
-description: Comandos, opções, JSON e códigos de saída do AgentDevKit 0.0.1.
+description: Comandos, opções, JSON e códigos de saída do AgentDevKit 0.0.2.
 ---
 
 # Referência da CLI
@@ -15,7 +15,7 @@ Ela equivale ao prefixo npx mostrado na instalação. No macOS/Linux:
 
 ```sh
 ADK_RELEASE=https://github.com/pathbit/AgentDevKit/releases/download
-ADK_PACKAGE="$ADK_RELEASE/v0.0.1/agentdevkit-0.0.1.tgz"
+ADK_PACKAGE="$ADK_RELEASE/v0.0.2/agentdevkit-0.0.2.tgz"
 adk() {
   npx --yes --ignore-scripts --package "$ADK_PACKAGE" agentdevkit "$@"
 }
@@ -25,7 +25,7 @@ No Windows/PowerShell:
 
 ```powershell
 $ADK_RELEASE = 'https://github.com/pathbit/AgentDevKit/releases/download'
-$ADK_PACKAGE = "$ADK_RELEASE/v0.0.1/agentdevkit-0.0.1.tgz"
+$ADK_PACKAGE = "$ADK_RELEASE/v0.0.2/agentdevkit-0.0.2.tgz"
 function adk {
   npx --yes --ignore-scripts --package $ADK_PACKAGE agentdevkit @args
 }
@@ -45,18 +45,23 @@ Com um checkout, `node bin/agentdevkit.mjs` substitui `adk`. Não procure esse
 | `next` | Indica a próxima etapa conforme o estado do projeto. |
 | `lang` | Consulta o idioma salvo. |
 | `lang pt`, `lang en`, `lang es` | Salva idioma e atualiza a orientação. |
+| `agents` | Lista os clientes disponíveis e a seleção salva. |
+| `agents codex,claude` | Salva a seleção e atualiza os apontamentos. |
+| `agents all` | Ativa todos os clientes, incluindo os legados. |
 | `tools [ação]` | Delega ao gerenciador local de ferramentas. |
 | `help`, `--help`, `-h` | Mostra ajuda, sem instalar o kit. |
 | `version`, `--version`, `-v` | Mostra a versão da CLI. |
 
-`language` é sinônimo de `lang`; `pt-br` também é aceito como português.
-`update`, `sync`, a troca de idioma e `tools` exigem uma instalação existente.
+`language` é sinônimo de `lang`; `clients` é sinônimo de `agents`.
+`pt-br` também é aceito como português. `update`, `sync`, a troca de idioma ou
+clientes e `tools` exigem uma instalação existente.
 O idioma não traduz automaticamente skills e documentos próprios.
 
 ```sh
 adk doctor --target "./meu projeto"
 adk next --target "./meu projeto"
 adk lang es --target "./meu projeto"
+adk agents codex,claude --dry-run --target "./meu projeto"
 adk update --dry-run --target "./meu projeto"
 adk sync --check --target "./meu projeto"
 ```
@@ -67,8 +72,9 @@ adk sync --check --target "./meu projeto"
 | --- | --- |
 | `--target <pasta>` | Escolhe o projeto; não combine com a pasta de `init`. |
 | `--lang <idioma>` | Idioma desta execução; grava ao aplicar mudanças. |
-| `--yes`, `-y` | Evita a pergunta inicial de idioma; não força conflitos. |
-| `--dry-run` | Simula `init`, `update`, `sync` ou troca de idioma. |
+| `--agents <lista>` | Seleciona clientes; `--clients` é um alias. |
+| `--yes`, `-y` | Evita perguntas iniciais; não força conflitos. |
+| `--dry-run` | Simula instalação, atualização ou troca de configuração. |
 | `--force` | Autoriza substituir conflitos do plano, com backup local. |
 | `--check` | Em `sync`, verifica divergências sem corrigi-las. |
 | `--json` | Emite um objeto JSON no stdout, sem decoração adicional. |
@@ -81,6 +87,31 @@ retornar falha mesmo sem escrever arquivos. Recuperação está no
 `update` não procura “latest”: para mudar de versão, escolha o pacote da nova
 release em `ADK_PACKAGE` e execute seu `update`. `sync` preserva a origem local
 e atualiza suas derivações; não baixa uma versão nova do kit.
+
+## Seleção de clientes
+
+`--agents` aceita IDs separados por vírgula ou `all`. Pode ser usado em `init`,
+`update`, `sync`, `lang` e `agents`. Consultas `doctor`, `next` e `tools` não
+aceitam essa opção. Veja IDs e aliases na [compatibilidade][clients].
+
+```sh
+adk init --agents codex,claude --lang pt --target "./meu projeto"
+adk agents --target "./meu projeto"
+adk agents copilot,cursor --target "./meu projeto"
+```
+
+A escolha explícita prevalece sobre a salva; sem ambas, vale `all`.
+No primeiro `init` interativo, perguntas reúnem idioma e clientes ausentes.
+Com `--yes`, `--json`, `--dry-run` ou sem terminal interativo, use opções
+explícitas ou aceite o estado salvo e os padrões. Não há detecção do agente
+ativo.
+
+O estado salva `clients: ["all"]` ou os IDs selecionados. Projetos antigos sem
+esse campo mantêm todos os clientes. `update` e `sync` reutilizam a escolha;
+pastas compartilhadas permanecem quando outro cliente ainda depende delas.
+Trocar a seleção remove só arquivos gerenciados desnecessários; conteúdo próprio
+é preservado, e alterações conflitantes seguem o mesmo plano e backup.
+`agents` sem lista é consulta; seu `--dry-run` exige uma nova seleção.
 
 ## Ferramentas
 
@@ -107,8 +138,9 @@ Detalhes: [gerenciador de ferramentas][tools].
 adk sync --check --json --target "./meu projeto"
 ```
 
-Campos comuns: `ok`, `command`, `version`, `language`, `target`, `message` e
-`next`. Conforme a ação, aparecem `plan`, `conflicts`, `changed`, `backup`,
+Campos comuns: `ok`, `command`, `version`, `language`, `clients`, `target`,
+`message` e `next`. Conforme a ação, aparecem `plan`, `conflicts`, `changed`,
+`backup`,
 `issues`, `error` ou `toolOutput`. `next` contém orientação e comandos;
 `plan` contém `path`, `action` e `conflict`. Erros capturados usam `error.code`
 e `error.detail`; conflitos e checks podem falhar sem esses campos.
@@ -128,3 +160,4 @@ Volte ao [índice](README.md) ou consulte
 [solução de problemas](troubleshooting.md).
 
 [tools]: ../.pbai4devs/scripts/preparar-ferramentas/README.md
+[clients]: ../.pbai4devs/COMPATIBILIDADE.md

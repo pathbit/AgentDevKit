@@ -15,5 +15,6 @@ Use as [skills](.pbai4devs/skills/README.md),
 
 A [wiki](docs/README.md) orienta uso e manutenção. O [PRD](docs/prd.md),
 [UX](docs/ux-ui.md), [design](docs/design.md) e
-[spec v0.0.1](docs/specs/v0.0.1/SPEC.md) descrevem este produto. Ao concluir uma
-etapa, use [proximos-passos](.pbai4devs/skills/projeto/proximos-passos/SKILL.md).
+[spec inicial](docs/specs/v0.0.1/SPEC.md) descrevem este produto. A
+[spec v0.0.2](docs/specs/v0.0.2/SPEC.md) trata da seleção de clientes. Ao concluir
+uma etapa, use [proximos-passos](.pbai4devs/skills/projeto/proximos-passos/SKILL.md).

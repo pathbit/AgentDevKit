@@ -1,6 +1,6 @@
 ---
 name: preparar-dev
-description: Prepara ou repara o ambiente local de um projeto existente para começar a desenvolver.
+description: Prepara ou repara o ambiente local de um projeto existente.
 ---
 
 # Preparar desenvolvimento
@@ -9,6 +9,11 @@ Inspecione somente este repositório: README, regras, manifests, lockfiles,
 Makefile, Compose, Dockerfiles, exemplos de ambiente e comandos de CI/testes.
 Identifique tecnologia, versões e a forma real de executar; não presuma que a
 estrutura esteja correta nem que tenha sido criada por este agente.
+
+Antes de preparar ferramentas, reutilize a seleção de clientes do pedido ou
+estado do kit. Se faltar, pergunte quais agentes o usuário usa; aplique pela CLI
+com `--agents` ou `agents`, sem inferir pelo aplicativo, SO ou pastas.
+Sem resposta disponível, use `all`. Isso não autoriza recriar o projeto.
 
 1. Use `executar-script` com `inspecionar-projeto` e `diagnosticar-ambiente`
    para descobrir estrutura, SO, arquitetura, Docker/Compose e runtimes.
@@ -26,7 +31,7 @@ estrutura esteja correta nem que tenha sido criada por este agente.
    em `.pbai4devs/tools/<nome>/.local/`. Instale dependências
    do projeto pelos lockfiles e comandos existentes; evite instalações globais.
 4. Prepare os serviços pelo Docker Compose local, conforme a
-   [regra de ambiente](../../../rules/ambiente-local/RULE.md). Se estiver ausente
+   [regra de ambiente][ambiente]. Se estiver ausente
    ou quebrado, adapte os modelos ao projeto com o reparo autorizado. Preserve
    bancos, volumes e segredos; não recrie dados nem execute limpeza destrutiva.
 5. Valide configuração, build, saúde, migrações acordadas e testes relevantes.
@@ -36,3 +41,5 @@ estrutura esteja correta nem que tenha sido criada por este agente.
 Registre resultados locais em `.agent-tests/`; atualize documentação somente
 quando necessário e sincronize seus apontamentos. Para implementar novas
 funcionalidades, encaminhe ao fluxo de specs com seus pré-requisitos.
+
+[ambiente]: ../../../rules/ambiente-local/RULE.md

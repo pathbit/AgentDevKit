@@ -13,6 +13,13 @@ uma stack ou gerar PRD, design e specs automaticamente.
 
 ## 1. Identificar a situação
 
+Na preparação do kit, escolha os agentes que usa: a CLI pergunta em um terminal
+interativo ou aceita `--agents codex,claude`. Um agente de desktop deve reunir
+essa escolha com você antes de executar a instalação; não deve deduzi-la pelo
+nome do aplicativo ou pelas pastas existentes. Sem resposta disponível, o
+padrão é `all`. A seleção salva continua nas atualizações e sincronizações.
+Use `agents` para consultar ou alterar depois; veja a [referência](cli.md).
+
 Use `doctor` para conferir o kit e `next` para consultar a próxima etapa.
 Nos exemplos, `agentdevkit` representa a CLI; no checkout, use
 `node bin/agentdevkit.mjs`. A invocação por npx está no guia de instalação.
@@ -37,6 +44,8 @@ documentos, não comprova comportamento e não autoriza substituir decisões.
 Antes de escrever documentos ou código, leia o contexto já disponível.
 Reúna as dúvidas que alteram objetivo, escopo, dependências ou critérios.
 Não pergunte novamente o que o usuário já decidiu ou o projeto já registra.
+A escolha dos clientes precede o preparo opcional de ferramentas; não aprova
+downloads, início do produto ou mudanças na aplicação.
 
 ```text
 Use configurar-projeto. Primeiro leia o repositório e reúna as dúvidas.

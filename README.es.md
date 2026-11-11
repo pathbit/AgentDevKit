@@ -16,17 +16,21 @@ el kit genera las referencias de cada [cliente compatible][clients].
 Con Node.js 24+ y npm, abre una terminal en tu proyecto (macOS/Linux):
 
 ```sh
-RELEASE=https://github.com/pathbit/AgentDevKit/releases/download/v0.0.1
+RELEASE=https://github.com/pathbit/AgentDevKit/releases/download/v0.0.2
 npx --yes --ignore-scripts \
-  --package="$RELEASE/agentdevkit-0.0.1.tgz" agentdevkit init --lang es
+  --package="$RELEASE/agentdevkit-0.0.2.tgz" agentdevkit init --lang es
 ```
+
+Elige tus agentes en la pregunta inicial o usa `--agents codex,claude`.
+La selección se guarda en el proyecto; `agents` permite consultarla o cambiarla.
+Sin interacción ni selección anterior, el valor predeterminado es `all`.
 
 Después, abre el proyecto en tu agente y pide:
 
 > Lee AGENTS.md y usa la skill proximos-passos para orientar mi trabajo.
 
 La [guía de instalación](docs/installation.md) incluye Windows, Node ausente,
-simulación y actualización. La [release v0.0.1][release] no requiere una
+simulación y actualización. La [release v0.0.2][release] no requiere una
 instalación global. La CLI guarda el idioma `pt`, `en` o `es` por proyecto.
 
 ## Explorar
@@ -54,7 +58,7 @@ formularios. Consulta [cómo participar](docs/community.md).
 agente que lea `AGENTS.md`.
 
 [clients]: .pbai4devs/COMPATIBILIDADE.md
-[release]: https://github.com/pathbit/AgentDevKit/releases/tag/v0.0.1
+[release]: https://github.com/pathbit/AgentDevKit/releases/tag/v0.0.2
 [tests]: docs/tools-and-testing.md
 [cli]: docs/cli.md
 [help]: docs/troubleshooting.md

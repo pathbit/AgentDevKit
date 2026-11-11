@@ -75,5 +75,5 @@ export function getNextSteps({ command, target, language = 'pt', installed, plat
     skill, stage: report.maturity.level,
     instruction: `${text.ask}${key === 'prepare' ? ` ${text.existing}` : ''}`,
   };
-  return ['init', 'update', 'sync', 'lang', 'tools'].includes(command) ? [verification, step] : [step];
+  return ['init', 'update', 'sync', 'lang', 'agents', 'tools'].includes(command) ? [verification, step] : [step];
 }

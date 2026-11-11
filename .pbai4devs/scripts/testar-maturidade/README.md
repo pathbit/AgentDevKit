@@ -22,11 +22,13 @@ resultados de testes, Playwright e pastas temporárias em qualquer caixa,
 semântica de segredos. A saída fica em `tmp/examples/`; a API de testes também
 aceita descendentes de `.agent-tests/`. Regenera apenas pastas identificadas
 como suas. Cada exemplo recebe Git local, sem commits nem identidade alterada.
-O hub `.pbai4devs`, clientes registrados e entradas `AGENTS.md`, `CLAUDE.md` e
-`GEMINI.md` são copiados juntos, incluindo comandos nativos em TOML.
-As entradas vêm de `.pbai4devs/templates/entrypoints/`; sem esse template,
-usa-se o arquivo da raiz. Os testes resolvem cada apontamento pelo formato
-declarado para seu cliente e tipo de recurso.
+O hub `.pbai4devs` e os clientes registrados são copiados, incluindo comandos
+nativos em TOML. `.vscode` exige registro no manifesto. Apenas as entradas
+`AGENTS.md`, `CLAUDE.md` e `GEMINI.md` presentes na origem são incluídas na raiz.
+Os templates substituem somente entradas com blocos gerenciados válidos;
+entradas próprias ou editadas são preservadas. Sem estado de instalação,
+o mantenedor usa `.pbai4devs/templates/entrypoints/`, com fallback para a raiz.
+Os testes resolvem cada apontamento pelo formato declarado do cliente e recurso.
 
 As cópias executam sincronização/reparo/idempotência, catálogo, verificação de
 recursos, diagnóstico, inspeção e gates negativos/positivo. Em dois casos,

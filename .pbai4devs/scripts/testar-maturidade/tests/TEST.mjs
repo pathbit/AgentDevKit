@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import test from 'node:test';
 import { projectRoot, requireNode } from '../../lib/runtime.mjs';
 import { copyAgentStructure, prepareExamples, resourceTargets, SCENARIOS } from '../SCRIPT.mjs';
@@ -12,7 +13,7 @@ function fixture(t) {
   const root = mkdtempSync(join(home, 'maturity-unit-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const put = (name, content = '') => { const file = join(root, name); mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, content); return file; };
-  put('.pbai4devs/espelhos.conf', 'agente|.codex|plano\nagente|.github|plano\nagente|.agents|plano\nagente|.agent|plano\nagente|.gemini|plano\n');
+  put('.pbai4devs/espelhos.conf', 'agente|.codex|plano\nagente|.github|plano\nagente|.agents|plano\nagente|.agent|plano\nagente|.gemini|plano\ngitignore|.vscode\n');
   put('.pbai4devs/skills.json', '{"entries":[{"path":".pbai4devs/skills/projeto/demo"}]}');
   put('.pbai4devs/skills/projeto/demo/SKILL.md', '---\nname: demo\ndescription: Fixture.\n---\n\n# Demo\n');
   put('.codex/skills/demo/SKILL.md', 'ponteiro'); put('.github/skills/demo/SKILL.md', 'ponteiro');
@@ -72,6 +73,75 @@ test('usa entradas distribuídas do hub e mantém fallback legado', t => {
   assert.equal(copied.entrypoints['AGENTS.md'], '.pbai4devs/templates/entrypoints/AGENTS.md');
   assert.equal(copied.entrypoints['CLAUDE.md'], 'CLAUDE.md');
   assert.equal(readFileSync(join(root, 'AGENTS.md'), 'utf8'), '# Produto do distribuidor\n\n[PRD](docs/prd.md)\n');
+});
+
+test('cópias respeitam clientes e entradas de instalações parciais', async t => {
+  for (const [client, manifest, entrypoints] of [
+    ['claude', 'agente|.claude|plano\n', ['AGENTS.md', 'CLAUDE.md']],
+    ['codex', 'agente|.codex|agrupado\nagente|.agents|agrupado\n', ['AGENTS.md']],
+  ]) await t.test(client, t => {
+    const { root, put } = fixture(t);
+    put('.pbai4devs/espelhos.conf', manifest);
+    put('.claude/skills/demo/SKILL.md', 'ponteiro');
+    for (const name of ['AGENTS.md', 'CLAUDE.md', 'GEMINI.md']) {
+      put(`.pbai4devs/templates/entrypoints/${name}`, `# Modelo ${name}\n`);
+      if (!entrypoints.includes(name)) rmSync(join(root, name));
+    }
+    const destination = join(root, 'copy');
+    const copied = copyAgentStructure(root, destination);
+    assert.deepEqual(Object.keys(copied.entrypoints), entrypoints);
+    for (const name of ['AGENTS.md', 'CLAUDE.md', 'GEMINI.md']) {
+      assert.equal(existsSync(join(destination, name)), entrypoints.includes(name), name);
+      assert.ok(existsSync(join(destination, '.pbai4devs/templates/entrypoints', name)));
+    }
+    assert.equal(existsSync(join(destination, '.vscode')), false);
+    assert.equal(existsSync(join(root, '.vscode/settings.json')), true);
+    assert.equal(existsSync(join(destination, '.github')), false);
+    assert.equal(existsSync(join(destination, '.gemini')), false);
+    if (client === 'claude') {
+      assert.deepEqual(copied.roots, ['.pbai4devs', '.claude']);
+      assert.equal(existsSync(join(destination, '.codex')), false);
+      assert.equal(existsSync(join(destination, '.agents')), false);
+    } else {
+      assert.deepEqual(copied.roots, ['.pbai4devs', '.codex', '.agents']);
+      assert.equal(existsSync(join(destination, '.claude')), false);
+    }
+  });
+});
+
+test('configurações do editor exigem registro explícito no manifesto', t => {
+  const { root, put } = fixture(t);
+  put('.pbai4devs/espelhos.conf', 'agente|.codex|plano\nagente|.vscode|plano\ngitignore|.vscode\n');
+  const destination = join(root, 'copy');
+  const copied = copyAgentStructure(root, destination);
+  assert.deepEqual(copied.roots, ['.pbai4devs', '.codex', '.vscode']);
+  assert.equal(readFileSync(join(destination, '.vscode/settings.json'), 'utf8'), '{"fixture":true}\n');
+});
+
+test('instalação parcial preserva entradas próprias e blocos editados', t => {
+  const { root, put } = fixture(t);
+  put('.pbai4devs/espelhos.conf', 'agente|.codex|agrupado\nagente|.agents|agrupado\n');
+  const block = '<!-- BEGIN AGENTDEVKIT -->\nEntrada gerenciada.\n<!-- END AGENTDEVKIT -->';
+  put('.pbai4devs/estado/agentdevkit.json', JSON.stringify({ schemaVersion: 1, version: '1.0.0', language: 'pt', clients: ['codex'], files: {}, blocks: { 'AGENTS.md': createHash('sha256').update(block).digest('hex') } }));
+  put('AGENTS.md', `# Agentes\n\n${block}\n`);
+  const human = '# Claude pessoal\r\n\r\nPreservar byte a byte: ação.\r\n';
+  put('CLAUDE.md', human);
+  rmSync(join(root, 'GEMINI.md'));
+  for (const name of ['AGENTS.md', 'CLAUDE.md', 'GEMINI.md']) put(`.pbai4devs/templates/entrypoints/${name}`, `# Modelo ${name}\n`);
+  const destination = join(root, 'copy');
+  const copied = copyAgentStructure(root, destination);
+  assert.equal(readFileSync(join(destination, 'AGENTS.md'), 'utf8'), '# Modelo AGENTS.md\n');
+  assert.deepEqual(readFileSync(join(destination, 'CLAUDE.md')), Buffer.from(human));
+  assert.doesNotMatch(readFileSync(join(destination, 'CLAUDE.md'), 'utf8'), /BEGIN AGENTDEVKIT/);
+  assert.equal(copied.entrypoints['AGENTS.md'], '.pbai4devs/templates/entrypoints/AGENTS.md');
+  assert.equal(copied.entrypoints['CLAUDE.md'], 'CLAUDE.md');
+  assert.equal(existsSync(join(destination, 'GEMINI.md')), false);
+  assert.equal(existsSync(join(destination, '.claude')), false);
+  assert.equal(existsSync(join(destination, '.vscode')), false);
+  put('AGENTS.md', `# Agentes\n\n${block.replace('gerenciada', 'editada')}\n`);
+  const changed = join(root, 'changed-copy');
+  copyAgentStructure(root, changed);
+  assert.deepEqual(readFileSync(join(changed, 'AGENTS.md')), readFileSync(join(root, 'AGENTS.md')));
 });
 
 test('localiza apontamentos pelo formato de cada tipo e por overrides nativos', t => {

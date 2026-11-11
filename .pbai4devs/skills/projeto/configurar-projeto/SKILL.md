@@ -1,6 +1,6 @@
 ---
 name: configurar-projeto
-description: Prepara um projeto novo e configura sua estrutura técnica após as decisões de produto.
+description: Prepara um projeto e configura a tecnologia após decidir o produto.
 ---
 
 # Configurar projeto
@@ -9,7 +9,10 @@ Inspecione somente este repositório. Se a intenção for rodar ou reparar um
 projeto existente na máquina, use `preparar-dev`; não reinicie seu planejamento.
 Enquanto o usuário configurar apenas os agentes, mantenha modelos em
 `.pbai4devs/templates/`, sem criar produto, `docs/` ou aplicação.
-Comece por `instalar-ferramentas`: confira Node/npm antes dos scripts, prepare
+Antes das ferramentas, confira a seleção de clientes no pedido ou estado do kit.
+Se faltar, pergunte quais usa e aplique pela CLI com `--agents` ou `agents`.
+Não deduza pelo aplicativo, SO ou pastas; sem resposta disponível, use `all`.
+Depois, siga `instalar-ferramentas`: confira Node/npm antes dos scripts, prepare
 as ferramentas e rode o diagnóstico. Isso não escolhe a stack da aplicação.
 
 ## Preparar o projeto
@@ -17,7 +20,7 @@ as ferramentas e rode o diagnóstico. Isso não escolhe a stack da aplicação.
 Reúna dúvidas no início e aproveite decisões existentes. Quando o projeto
 começar, crie ou retome `.pbai4devs/estado/configuracao/ESTADO.md` pelo modelo.
 Combine os arquivos `prd`, `ux_ui`, `design`, `roadmap` e diretórios `releases`,
-`specs`, `tarefas`, além dos documentos de apoio aplicáveis. Crie/evolua o README
+`specs`, `tarefas` e documentos de apoio aplicáveis. Crie/evolua o README
 da raiz pelos [modelos da fase](../../../templates/README.md), preservando os
 fatos existentes; cada pasta de documentos terá seu README. Registre evidências
 da preparação e encaminhe a
@@ -32,12 +35,12 @@ aprovações já dadas.
 
 1. Use `executar-script` com `inspecionar-projeto` e `diagnosticar-ambiente`
    para identificar estrutura, SO, arquitetura e ferramentas.
-   Reúna as perguntas do [modelo de ambiente](../../../templates/ambiente-local/TEMPLATE.md)
+   Reúna as perguntas do [modelo de ambiente][ambiente]
    antes de instalar. Decisões materiais faltantes voltam ao design.
 2. Prepare as ferramentas definidas em `.pbai4devs/tools/<nome>/TOOL.json` com
    `preparar-ferramentas`; confira versões e compatibilidade com SO/arquitetura.
-   Reutilize instalações e lockfiles; não repita init nem troque versões da stack.
-3. Aplique a [estrutura e o ambiente obrigatórios](../../../rules/ambiente-local/RULE.md),
+   Reutilize instalações e lockfiles; não repita init nem troque a stack.
+3. Aplique a [estrutura e o ambiente obrigatórios][estrutura],
    preenchendo os modelos de Makefile, Compose e dockerignore. Configure os
    serviços reais, healthchecks, portas, volumes e comandos da tecnologia.
 4. Configure VS Code e recomende EditorConfig, sem regras conflitantes.
@@ -54,3 +57,6 @@ aprovações já dadas.
 
 Após alterações técnicas, conclua `revisar-entrega`. Sincronize apontamentos
 somente quando recursos dos agentes forem alterados.
+
+[ambiente]: ../../../templates/ambiente-local/TEMPLATE.md
+[estrutura]: ../../../rules/ambiente-local/RULE.md

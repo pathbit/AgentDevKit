@@ -4,8 +4,11 @@ description: Alterações verificáveis por versão do AgentDevKit.
 
 # Changelog
 
-## Ainda não lançado
+## 0.0.2 — 2026-11-11
 
+- Seleção persistente de agentes na instalação e no comando `agents`.
+- Instalação e sincronização limitadas aos clientes escolhidos e dependências.
+- Remoção de apontamentos desmarcados com preservação de arquivos próprios.
 - Pacotes verificados como artifacts do CI e geração manual pelo Actions.
 - Releases reutilizam o pacote testado, com verificação de checksum.
 - Formulários de bugs e melhorias e modelo de pull request.

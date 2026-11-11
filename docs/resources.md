@@ -10,6 +10,9 @@ description: Tipos de recursos, fontes compartilhadas e ciclo de manutenção.
 Edite a origem em `.pbai4devs`. As pastas dos clientes contêm referências e
 metadados de descoberta; editar uma cópia gerada cria divergência.
 O [catálogo](../.pbai4devs/catalog.json) permite encontrar recursos por tipo.
+O hub permanece completo mesmo com poucos clientes selecionados. Apenas os
+apontamentos necessários são gerados; consulte ou altere a seleção com `agents`
+na [CLI](cli.md). Pastas compartilhadas podem atender mais de um cliente.
 
 ## Escolher o tipo certo
 
@@ -79,6 +82,8 @@ node .pbai4devs/scripts/verificar-recursos/SCRIPT.mjs
 ```
 
 O primeiro comando atualiza apontamentos e índices; `--check` só compara.
+O manifesto instalado respeita os clientes escolhidos. Não o substitua por uma
+lista de todos para reparar recursos; altere a seleção pela CLI se necessário.
 Conflitos de conteúdo próprio exigem revisão. Quando a substituição for
 intencional, `--force` faz backup local antes de reparar caminhos gerenciados.
 Não apague pastas inteiras para contornar um conflito.
