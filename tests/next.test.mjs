@@ -38,7 +38,8 @@ test('novo projeto recebe preparação e projeto existente preserva descoberta',
   for (const language of ['pt', 'en', 'es']) {
     const [next] = getNextSteps({ command: 'next', target, language, installed: true });
     assert.equal(next.skill, 'preparar-dev'); assert.ok(next.instruction);
-    assert.ok(next.command.includes(target.replaceAll("'", "'\\''")));
+    const escapedTarget = target.replaceAll("'", process.platform === 'win32' ? "''" : "'\\''");
+    assert.ok(next.command.includes(escapedTarget));
     assert.doesNotMatch(next.command, /'next'/);
   }
 });

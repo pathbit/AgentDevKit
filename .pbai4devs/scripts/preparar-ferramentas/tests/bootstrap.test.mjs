@@ -152,6 +152,6 @@ test('PowerShell: analisa sintaxe quando pwsh esta instalado', t => {
   if (shell.error?.code === 'ENOENT') { t.skip('PowerShell indisponivel nesta plataforma; execucao Windows nao comprovada.'); return; }
   assert.equal(shell.status,0,shell.stderr);
   const script = join(project,'.pbai4devs/scripts/preparar-ferramentas/BOOTSTRAP.ps1');
-  const result=spawnSync(process.platform === 'win32' ? 'powershell.exe' : 'pwsh',['-NoProfile','-Command','$tokens=$null;$errors=$null;[System.Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$tokens,[ref]$errors)|Out-Null;if($errors.Count){$errors|Out-String|Write-Error;exit 1}',script],{encoding:'utf8'});
+  const result=spawnSync(process.platform === 'win32' ? 'powershell.exe' : 'pwsh',['-NoProfile','-Command','$tokens=$null;$errors=$null;[System.Management.Automation.Language.Parser]::ParseFile($env:AGENTDEVKIT_PS_TEST_PATH,[ref]$tokens,[ref]$errors)|Out-Null;if($errors.Count){$errors|Out-String|Write-Error;exit 1}'],{encoding:'utf8',env:{...process.env,AGENTDEVKIT_PS_TEST_PATH:script}});
   assert.equal(result.status,0,result.stderr);
 });
