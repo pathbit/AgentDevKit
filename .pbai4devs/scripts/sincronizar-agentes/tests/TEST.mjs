@@ -464,7 +464,7 @@ test('metadados incompletos, ausentes e com corpo são rejeitados antes de alter
   rejected(root, { force: true }, /Titulo/);
 });
 
-test('symlinks, nomes de controle e registros não regulares são rejeitados sem efeitos', t => {
+test('symlinks são rejeitados sem efeitos quando o sistema permite criá-los', t => {
   for (const location of ['.claude/tools', '.pbai4devs/skills/projeto/demo/external.md', '.pbai4devs/skills.json', '.pbai4devs/espelhos.conf']) {
     const root = fixture(t);
     rmSync(join(root, location), { recursive: true, force: true });
@@ -472,10 +472,24 @@ test('symlinks, nomes de controle e registros não regulares são rejeitados sem
     catch (error) { if (['EPERM', 'EACCES'].includes(error.code)) { t.skip('Sistema não permite criar symlinks de teste.'); return; } throw error; }
     rejected(root, { force: true }, /Link simbolico/);
   }
+});
+
+test('nomes de controle são rejeitados sem efeitos em todos os sistemas', t => {
   const root = fixture(t);
-  write(root, '.claude/skills/invalid\nREADME.md', 'nunca deve fragmentar caminho\n');
+  const manifest = read(root, '.pbai4devs/espelhos.conf');
+  write(root, '.pbai4devs/espelhos.conf', manifest + `nativo|.claude/skills/invalid\u0001.md|${source}\n`);
   rejected(root, { force: true }, /Caminho invalido/);
   assert.match(read(root, 'README.md'), /README raiz preservado/);
+
+  if (process.platform !== 'win32') {
+    const filesystem = fixture(t);
+    write(filesystem, '.claude/skills/invalid\nREADME.md', 'nunca deve fragmentar caminho\n');
+    rejected(filesystem, { force: true }, /Caminho invalido/);
+    assert.match(read(filesystem, 'README.md'), /README raiz preservado/);
+  }
+});
+
+test('registros não regulares são rejeitados sem efeitos', t => {
   const other = fixture(t);
   mkdirSync(join(other, '.pbai4devs/skills.json'));
   rejected(other, { force: true }, /Registro nao e arquivo/);

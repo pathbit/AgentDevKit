@@ -310,7 +310,10 @@ test('envPaths isola estado em probes e run sem trocar ambiente global ou permit
   const { root, manager, local } = fixture(t, { 'test-tool': config });
   const expected = join(local, 'state'); const original = process.env.TOOL_FIXTURE_HOME;
   const environment = toolEnvironment(config, local);
-  assert.equal(environment.TOOL_FIXTURE_HOME, expected); assert.equal(environment.HOME, process.env.HOME); assert.equal(environment.PATH, process.env.PATH);
+  assert.equal(environment.TOOL_FIXTURE_HOME, expected); assert.equal(environment.HOME, process.env.HOME);
+  const pathKey = Object.keys(environment).find(key => key.toUpperCase() === 'PATH');
+  assert.ok(pathKey, 'The inherited PATH must remain present.');
+  assert.equal(environment[pathKey], process.env.PATH);
   assert.equal(process.env.TOOL_FIXTURE_HOME, original);
   manager.catalog['test-tool'].probe = ['require-env', expected];
   await manager.install('test-tool'); assert.equal(manager.check('test-tool').version, '1.0.0');
