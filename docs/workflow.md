@@ -22,7 +22,7 @@ Use `agents` para consultar ou alterar depois; veja a [referência](cli.md).
 
 Use `doctor` para conferir o kit e `next` para consultar a próxima etapa.
 Nos exemplos, `agentdevkit` representa a CLI; no checkout, use
-`node bin/agentdevkit.mjs`. A invocação por npx está no guia de instalação.
+`node .pbai4devs/bin/agentdevkit.mjs`. A invocação por npx está na instalação.
 
 ```sh
 agentdevkit doctor --target .

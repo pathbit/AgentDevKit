@@ -51,6 +51,17 @@ function tracked(root, file) {
   return git(root, ['--literal-pathspecs', 'ls-files', '--error-unmatch', '--', file], true).status === 0;
 }
 
+function ignoredPaths(root, files) {
+  if (!files.length) return new Set();
+  const result = spawnSync('git', ['check-ignore', '--no-index', '--stdin', '-z'], { cwd: root, input: files.join('\0') + '\0', encoding: 'utf8', timeout: 15000, windowsHide: true });
+  if (result.error || ![0, 1].includes(result.status)) fail(`Git: ${result.error?.message || result.stderr?.trim() || 'falha ao conferir ignores'}`);
+  return new Set(result.stdout.split('\0').filter(Boolean));
+}
+
+function stagedDeletions(root) {
+  return new Set(git(root, ['diff', '--cached', '--diff-filter=D', '--no-renames', '--name-only', '-z', '--']).stdout.split('\0').filter(Boolean));
+}
+
 function changedFiles(root) {
   const baseline = head(root);
   const versioned = git(root, baseline ? ['diff', '--name-only', '-z', 'HEAD', '--'] : ['ls-files', '-z']).stdout;
@@ -60,12 +71,14 @@ function changedFiles(root) {
 
 function snapshot(root, mode, paths, documents = [], spec = null) {
   const names = mode === 'git' ? [...changedFiles(root), ...paths] : paths;
-  const files = [...new Set(names.map(file => pathInRoot(root, file)))].sort().map(path => {
+  const selected = [...new Set(names.map(file => pathInRoot(root, file)))].sort();
+  const deleted = stagedDeletions(root), local = ignoredPaths(root, selected);
+  const files = selected.map(path => {
     if (path.toLowerCase().startsWith('.agent-tests/')) fail('Artefatos nao fazem parte do escopo versionado.');
     const absolute = join(root, path);
     if (!existsSync(absolute)) return { path, sha256: null };
     if (!lstatSync(absolute).isFile()) fail(`Escopo exige arquivos: ${path}`);
-    return { path, sha256: createHash('sha256').update(readFileSync(absolute)).digest('hex') };
+    return { path, sha256: createHash('sha256').update(readFileSync(absolute)).digest('hex'), ...(deleted.has(path) && local.has(path) ? { indexAction: 'untrack' } : {}) };
   });
   if (!files.length) fail('Nenhuma alteracao para revisar; indique --scope para uma revisao especifica.');
   return { mode, head: head(root), files, documents, spec };
@@ -81,15 +94,25 @@ export function specCriteria(text) {
 function expectedDocuments(root, state, extra = []) {
   const existing = ['README.md', 'AGENTS.md', 'CLAUDE.md', 'GEMINI.md', 'CONTRIBUTING.md', 'CHANGELOG.md', 'SECURITY.md'].filter(file => existsSync(join(root, file)));
   const changed = state.files.filter(file => /\.mdc?$/i.test(file.path)).map(file => file.path);
-  return [...new Set([...existing, ...changed, ...extra].map(file => pathInRoot(root, file)))].sort();
+  const candidates = [...new Set([...existing, ...changed].map(file => pathInRoot(root, file)))];
+  const local = ignoredPaths(root, candidates);
+  const versioned = new Set(git(root, ['ls-files', '-z']).stdout.split('\0').filter(Boolean));
+  return [...new Set([...candidates.filter(file => !local.has(file) || versioned.has(file)), ...extra.map(file => pathInRoot(root, file))])].sort();
 }
 
 function checkIndex(root, state) {
   const staged = new Set(git(root, ['diff', '--cached', '--name-only', '-z', '--']).stdout.split('\0').filter(Boolean));
+  const deleted = stagedDeletions(root);
+  const indexed = new Set(git(root, ['ls-files', '-z']).stdout.split('\0').filter(Boolean));
+  const local = ignoredPaths(root, state.files.filter(file => file.indexAction === 'untrack').map(file => file.path));
   for (const file of state.files) {
+    if (file.indexAction === 'untrack') {
+      if (!staged.has(file.path) || !deleted.has(file.path) || indexed.has(file.path) || file.sha256 === null || !existsSync(join(root, file.path)) || !local.has(file.path)) fail(`Acao de desindexacao mudou: ${file.path}`);
+      continue;
+    }
+    if (file.indexAction !== undefined) fail(`Acao de indice invalida: ${file.path}`);
     if (!staged.has(file.path)) continue;
-    const index = git(root, ['--literal-pathspecs', 'ls-files', '--stage', '--', file.path]).stdout;
-    const deletedButPresent = !index.trim() && file.sha256 !== null;
+    const deletedButPresent = !indexed.has(file.path) && file.sha256 !== null;
     const differs = git(root, ['--literal-pathspecs', 'diff', '--quiet', '--no-ext-diff', '--', file.path], true);
     if (deletedButPresent || differs.error || differs.status !== 0) fail(`Indice Git difere do arquivo testado: ${file.path}`);
   }
@@ -107,11 +130,12 @@ export function prepareReview({ root = projectRoot, id, execution = new Date().t
   requireNode(); root = repository(root);
   if (!slug.test(id || '') || !slug.test(execution)) fail('Use referencia e execucao como slugs em minusculas.');
   const reference = spec ? pathInRoot(root, spec) : null;
-  if (reference && ignored(root, reference)) fail('A spec deve ser um documento versionavel, fora dos artefatos ignorados.');
+  if (reference && ignored(root, reference) && !tracked(root, reference)) fail('A spec deve ser um documento versionavel, fora dos artefatos ignorados.');
   const criteria = reference ? specCriteria(readFileSync(join(root, reference), 'utf8')) : ['AC-001'];
   let state = snapshot(root, scope.length ? 'scope' : 'git', [...scope, ...(reference ? [reference] : [])]);
   const requiredDocs = expectedDocuments(root, state, documents);
-  for (const file of requiredDocs) if (ignored(root, file)) fail(`Documento deve ser versionavel: ${file}`);
+  const localDocuments = ignoredPaths(root, requiredDocs);
+  for (const file of requiredDocs) if (localDocuments.has(file) && !tracked(root, file)) fail(`Documento deve ser versionavel: ${file}`);
   state = snapshot(root, scope.length ? 'scope' : 'git', [...state.files.map(file => file.path), ...requiredDocs], requiredDocs, reference);
   const prefix = `.agent-tests/${id}/${execution}`;
   const file = artifact(root, output || `${prefix}/revisao.json`, prefix, false);

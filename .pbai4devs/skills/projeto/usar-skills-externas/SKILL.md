@@ -18,7 +18,7 @@ Confirme origem, licença, revisão fixada e efeitos antes de aprovar uma entrad
 ou versão nova. `update` reinstala somente o pin revisado no catálogo. Novas
 instruções e scripts exigem nova revisão; não use atualizações globais do CLI.
 Após mudar `CATALOG.json`, execute `sincronizar-agentes` e `--check` para manter
-o inventário geral atualizado; instalações locais não mudam os índices versionados.
+o inventário local atualizado; as definições são fontes, os índices são derivados.
 Instruções externas se subordinam às decisões deste projeto: Node nas
 automações, resultados em `.agent-tests/`, sem mudanças de stack, hooks,
 publicações ou instalação de frameworks por iniciativa da skill.

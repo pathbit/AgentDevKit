@@ -4,32 +4,40 @@ on:
   push:
     branches: [master, main]
   pull_request:
-  workflow_call:
-    outputs:
-      package-version:
-        description: Version of the verified package
-        value: ${{ jobs.package.outputs.version }}
-      package-sha256:
-        description: SHA-256 of the verified tarball
-        value: ${{ jobs.package.outputs.sha256 }}
-      package-artifact-id:
-        description: Immutable artifact ID for the verified package
-        value: ${{ jobs.package.outputs.artifact-id }}
   workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
-  test:
-    name: ${{ matrix.os }} / Node ${{ matrix.node }}
+  verify:
+    name: ${{ matrix.label }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        node: [24, 26]
+        include:
+          - os: ubuntu-latest
+            node: 24
+            profile: full
+            label: Linux / Node 24 / complete
+          - os: windows-latest
+            node: 24
+            profile: portable
+            label: Windows / Node 24 / portability
+          - os: macos-latest
+            node: 24
+            profile: portable
+            label: macOS / Node 24 / portability
+          - os: ubuntu-latest
+            node: 26
+            profile: smoke
+            label: Linux / Node 26 / compatibility
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -37,56 +45,12 @@ jobs:
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: ${{ matrix.node }}
+          cache: npm
       - run: npm ci --ignore-scripts
-      - run: npm test
-      - run: npm run test:infra
-      - name: Install Markdown validator
-        if: matrix.os == 'ubuntu-latest' && matrix.node == 24
-        run: node .pbai4devs/scripts/preparar-ferramentas/SCRIPT.mjs install markdownlint-cli2
-      - run: npm run check
-
-  package:
-    name: Verified package
-    needs: test
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    outputs:
-      version: ${{ steps.bundle.outputs.version }}
-      sha256: ${{ steps.bundle.outputs.sha256 }}
-      artifact-id: ${{ steps.upload.outputs.artifact-id }}
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
-        with:
-          node-version: 24
-      - run: npm ci --ignore-scripts
-      - run: npm run pack:release
-      - id: bundle
-        name: Select the package and record its checksum
-        run: |
-          node --input-type=module <<'NODE'
-          import { appendFileSync, readFileSync } from 'node:fs';
-          const { version } = JSON.parse(readFileSync('package.json', 'utf8'));
-          const directory = `.agent-tests/release/${version}`;
-          const { sha256 } = JSON.parse(readFileSync(`${directory}/package-manifest.json`, 'utf8'));
-          appendFileSync(process.env.GITHUB_OUTPUT, `version=${version}\nsha256=${sha256}\n`);
-          appendFileSync(process.env.GITHUB_ENV, `AGENTDEVKIT_TARBALL=${process.cwd()}/${directory}/agentdevkit-${version}.tgz\n`);
-          NODE
-      - name: Test the exact package
-        run: npm run test:distribution
-      - name: Stage only the distribution files
-        env:
-          VERSION: ${{ steps.bundle.outputs.version }}
-        run: |
-          mkdir -p "$RUNNER_TEMP/agentdevkit-package"
-          DIRECTORY=".agent-tests/release/$VERSION"
-          cp "$DIRECTORY/agentdevkit-$VERSION.tgz" "$DIRECTORY/SHA256SUMS" \
-            "$DIRECTORY/NOTES.txt" "$DIRECTORY/package-manifest.json" \
-            "$RUNNER_TEMP/agentdevkit-package/"
-      - name: Upload verified package
-        id: upload
+      - name: Verify the selected profile
+        run: node .pbai4devs/release/pipeline.mjs ${{ matrix.profile }}
+      - name: Store the verified package
+        if: matrix.profile == 'full'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: agentdevkit-${{ github.sha }}-${{ github.run_attempt }}

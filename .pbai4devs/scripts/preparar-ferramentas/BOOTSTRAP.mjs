@@ -1,0 +1,189 @@
+#!/usr/bin/env node
+import { createHash } from 'node:crypto';
+import { get } from 'node:https';
+import { createReadStream, createWriteStream, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, realpathSync, renameSync, rmSync } from 'node:fs';
+import { delimiter, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { pipeline } from 'node:stream/promises';
+import { fileURLToPath } from 'node:url';
+import { findExecutable, projectRoot } from '../lib/runtime.mjs';
+import { npmCandidates } from '../lib/npm.mjs';
+
+const versionPattern = /^\d+\.\d+\.\d+$/;
+const stat = path => { try { return lstatSync(path); } catch (error) { if (error.code === 'ENOENT') return null; throw error; } };
+const failure = message => { throw new Error(message); };
+
+function safePath(root, parts) {
+  let path = root;
+  for (const part of parts) {
+    if (!part || part === '..' || part.includes('/') || part.includes('\\')) failure('Caminho de runtime invalido.');
+    path = join(path, part);
+    if (stat(path)?.isSymbolicLink()) failure(`Cache nao pode ser link simbolico: ${path}`);
+  }
+  return path;
+}
+
+export function environmentWithNode(environment, node) {
+  const result = { ...environment };
+  const key = Object.keys(result).find(key => key.toLowerCase() === 'path') || 'PATH';
+  result[key] = `${dirname(node)}${delimiter}${result[key] || ''}`;
+  return result;
+}
+
+export async function downloadOfficial(url, destination) {
+  const parsed = new URL(url);
+  if (parsed.protocol !== 'https:' || parsed.hostname !== 'nodejs.org' || parsed.username || parsed.password) failure('Origem de runtime nao autorizada.');
+  const response = await new Promise((accept, reject) => {
+    const request = get(parsed, accept);
+    request.on('error', reject);
+    request.setTimeout(300000, () => request.destroy(new Error('Tempo limite no download do Node.')));
+  });
+  if (response.statusCode !== 200) { response.resume(); failure(`Download do Node falhou: HTTP ${response.statusCode}`); }
+  let size = 0;
+  response.on('data', chunk => { size += chunk.length; if (size > 150 * 1024 * 1024) response.destroy(new Error('Download do Node excedeu o limite.')); });
+  await pipeline(response, createWriteStream(destination, { flags: 'wx' }));
+}
+
+function probe(node, minimum, run, environment) {
+  const result = run(node, ['-p', 'JSON.stringify({version:process.versions.node,node:process.execPath,bun:Boolean(process.versions.bun)})'], { encoding: 'utf8', timeout: 20000, env: environment });
+  if (result.error || result.status !== 0) return null;
+  try {
+    const info = JSON.parse(result.stdout);
+    return !info.bun && versionPattern.test(info.version) && Number(info.version.split('.')[0]) >= minimum ? info : null;
+  } catch { return null; }
+}
+
+function npmFor(node, run, environment, platform, localOnly = false) {
+  const candidates = localOnly ? [join(dirname(node), 'node_modules/npm/bin/npm-cli.js'), join(dirname(node), '../lib/node_modules/npm/bin/npm-cli.js')] : npmCandidates({ node, environment });
+  for (const candidate of candidates) {
+    if (!candidate || !candidate.endsWith('npm-cli.js') || !stat(candidate)?.isFile()) continue;
+    if (localOnly) {
+      const base = platform === 'win32' ? dirname(node) : resolve(dirname(node), '..');
+      const path = relative(base, candidate);
+      if (path.startsWith('..') || path.includes(`..${sep}`)) continue;
+      safePath(base, path.split(sep));
+    }
+    const file = realpathSync(candidate);
+    const result = run(node, [file, '--version'], { encoding: 'utf8', timeout: 20000, env: environmentWithNode(environment, node) });
+    if (!result.error && result.status === 0 && /^\d+\.\d+\.\d+(?:-[\w.-]+)?$/.test(result.stdout?.trim() || '')) return file;
+  }
+  return null;
+}
+
+function platformName(platform, arch, run, environment, libc) {
+  if (!['darwin', 'linux', 'win32'].includes(platform) || !['x64', 'arm64'].includes(arch)) failure('Node local suporta Windows, macOS e Linux x64/arm64.');
+  if (platform === 'win32') return `win-${arch}`;
+  if (platform === 'darwin') return `darwin-${arch}`;
+  if (!libc) {
+    if (process.report?.getReport().header.glibcVersionRuntime) libc = 'glibc';
+    else {
+      const result = run('ldd', ['--version'], { encoding: 'utf8', timeout: 10000, env: environment });
+      const text = `${result.stdout || ''}\n${result.stderr || ''}`;
+      libc = /musl/i.test(text) ? 'musl' : /glibc|gnu/i.test(text) ? 'glibc' : null;
+    }
+  }
+  if (!['glibc', 'musl'].includes(libc)) failure('Nao foi possivel identificar glibc/musl.');
+  return `linux-${arch}${libc === 'musl' ? '-musl' : ''}`;
+}
+
+export function validateArchive(members, top) {
+  if (!members.trim()) failure('Arquivo vazio.');
+  for (const name of members.trimEnd().split(/\r?\n/)) {
+    if (/[\\:\x00-\x1f\x7f]/.test(name) || name.startsWith('/') || name.split('/').includes('..') || (name !== top && name !== top + '/' && !name.startsWith(top + '/'))) failure('Arquivo contem caminho fora da distribuicao.');
+  }
+}
+
+export function validateExtracted(root) {
+  const base = realpathSync(root);
+  function inside(path) { const value = relative(base, path); return value !== '..' && !value.startsWith('..' + sep) && !isAbsolute(value); }
+  function visit(directory) {
+    for (const name of readdirSync(directory)) {
+      const file = join(directory, name), info = lstatSync(file);
+      if (info.isSymbolicLink()) {
+        const target = readlinkSync(file);
+        if (isAbsolute(target) || !inside(resolve(directory, target)) || !inside(realpathSync(file))) failure('Arquivo contem link fora da distribuicao.');
+      } else if (info.isDirectory()) visit(file);
+      else if (!info.isFile() || info.nlink > 1) failure('Arquivo contem tipo ou hardlink inseguro.');
+    }
+  }
+  visit(base);
+}
+
+export async function ensureRuntime({ root = projectRoot, minimum = 24, node = process.execPath, platform = process.platform, arch = process.arch, libc, run = spawnSync, download = downloadOfficial, environment = process.env } = {}) {
+  if (Number(process.versions.node.split('.')[0]) < 18) failure('O inicializador requer Node.js 18+; instale Node.js 24+ pelo gerenciador do SO.');
+  root = realpathSync(root);
+  const current = probe(node, minimum, run, environment);
+  if (current) {
+    const npm = npmFor(current.node, run, environment, platform);
+    if (npm) return { node: current.node, npm, version: current.version, source: 'current' };
+  }
+  const targetPlatform = platformName(platform, arch, run, environment, libc);
+  const cache = safePath(root, ['.pbai4devs', 'tools', '.cache', 'runtime', 'node', targetPlatform]);
+  if (stat(cache) && !stat(cache).isDirectory()) failure('Cache de runtime nao e diretorio.');
+  if (existsSync(cache)) for (const version of readdirSync(cache).filter(name => /^v24\.\d+\.\d+$/.test(name)).sort((left, right) => right.localeCompare(left, undefined, { numeric: true }))) {
+    const base = safePath(cache, [version]);
+    const executable = safePath(base, platform === 'win32' ? ['node.exe'] : ['bin', 'node']);
+    const found = probe(executable, minimum, run, environment);
+    if (found) { const npm = npmFor(executable, run, environment, platform, true); if (npm) return { node: executable, npm, version: found.version, source: 'cache' }; }
+  }
+  const tar = findExecutable('tar', environment, platform);
+  if (!tar) failure('Instale tar pelo gerenciador do SO para extrair o Node local.');
+  mkdirSync(cache, { recursive: true });
+  const stage = mkdtempSync(join(cache, '.stage.')); let backup, target;
+  const cleanup = () => {
+    if (backup && existsSync(backup) && !existsSync(target)) renameSync(backup, target);
+    rmSync(stage, { recursive: true, force: true });
+  };
+  const onInt = () => { cleanup(); process.exit(130); }, onTerm = () => { cleanup(); process.exit(143); };
+  process.once('SIGINT', onInt); process.once('SIGTERM', onTerm);
+  try {
+    const manifest = join(stage, 'SHASUMS256.txt');
+    await download('https://nodejs.org/dist/latest-v24.x/SHASUMS256.txt', manifest);
+    const extension = platform === 'win32' ? 'zip' : 'tar.gz';
+    const candidates = readFileSync(manifest, 'utf8').split(/\r?\n/).map(line => line.match(/^([a-f0-9]{64})\s+(node-v24\.\d+\.\d+-[^\s]+)$/i)).filter(match => match && match[2].endsWith(`-${targetPlatform}.${extension}`));
+    if (candidates.length !== 1) failure(`Distribuicao oficial Node 24 indisponivel para ${targetPlatform}.`);
+    const [, expected, filename] = candidates[0], archive = join(stage, filename);
+    await download(`https://nodejs.org/dist/${filename.match(/^node-(v24\.\d+\.\d+)-/)[1]}/${filename}`, archive);
+    const hash = createHash('sha256'); for await (const chunk of createReadStream(archive)) hash.update(chunk);
+    if (hash.digest('hex') !== expected.toLowerCase()) failure('SHA-256 divergente; arquivo recusado.');
+    const list = args => {
+      const result = run(tar, args, { encoding: 'utf8', timeout: 120000, maxBuffer: 16 * 1024 * 1024, env: environment });
+      if (result.error || result.status !== 0) failure(`tar falhou: ${result.error?.message || result.stderr || result.status}`);
+      return result.stdout;
+    };
+    const top = filename.slice(0, -extension.length - 1);
+    validateArchive(list(['-tf', archive]), top);
+    const unpack = join(stage, 'unpack'); mkdirSync(unpack);
+    list(['-xf', archive, '-C', unpack]);
+    validateExtracted(unpack);
+    const installation = safePath(unpack, [top]);
+    const executable = safePath(installation, platform === 'win32' ? ['node.exe'] : ['bin', 'node']);
+    const found = probe(executable, minimum, run, environment);
+    const npm = found && npmFor(executable, run, environment, platform, true);
+    if (!found || !npm) failure('Node/npm extraidos falharam na verificacao.');
+    const version = filename.match(/^node-(v24\.\d+\.\d+)-/)[1]; target = safePath(cache, [version]);
+    if (existsSync(target)) { backup = join(stage, 'previous'); renameSync(target, backup); }
+    renameSync(installation, target);
+    return { node: join(target, relative(installation, executable)), npm: join(target, relative(installation, npm)), version: found.version, source: 'download' };
+  } finally { process.removeListener('SIGINT', onInt); process.removeListener('SIGTERM', onTerm); cleanup(); }
+}
+
+export async function main(args = process.argv.slice(2), options = {}) {
+  const runtimeOnly = args[0] === '--runtime-only';
+  if (runtimeOnly && args.length !== 1) failure('--runtime-only nao aceita selecao ou outros argumentos.');
+  if (!runtimeOnly && args.some(arg => arg.startsWith('-'))) failure('Use --runtime-only ou uma selecao de ferramentas.');
+  const runtime = await ensureRuntime(options);
+  process.stdout.write(`node=${runtime.node}\n`);
+  if (runtimeOnly) return 0;
+  const result = (options.run || spawnSync)(runtime.node, [join(options.root || projectRoot, '.pbai4devs/scripts/preparar-ferramentas/SCRIPT.mjs'), 'setup', ...args], { stdio: 'inherit', env: environmentWithNode(options.environment || process.env, runtime.node) });
+  if (result.error) throw result.error;
+  return result.status ?? 1;
+}
+
+function isEntrypoint() {
+  try { return Boolean(process.argv[1]) && realpathSync(resolve(process.argv[1])) === fileURLToPath(import.meta.url); }
+  catch { return false; }
+}
+if (isEntrypoint()) {
+  try { process.exitCode = await main(); } catch (error) { console.error(`bootstrap: ${error.message}`); process.exitCode = 1; }
+}

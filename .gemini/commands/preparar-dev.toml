@@ -1,3 +1,0 @@
-# gerado: sincronizar-agentes
-description = "Prepara ou repara o ambiente de desenvolvimento de um projeto existente."
-prompt = "@{.pbai4devs/commands/preparar-dev/COMMAND.md}\n\n{{args}}"

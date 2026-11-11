@@ -1,4 +1,13 @@
 # Package sources only; downloaded tools and project state stay local.
+/release/**
+/tests/**
+/DEVELOPMENT.md
+/catalog.json
+/skills.json
+/agents.json
+/rules.json
+/espelhos.conf
+/estado/derived.json
 /adapters/**
 /tools/*/**
 !/tools/*/TOOL.json

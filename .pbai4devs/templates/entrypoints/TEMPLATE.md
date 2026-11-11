@@ -5,7 +5,8 @@ status: modelo
 
 # Entradas dos agentes
 
-O instalador combina [AGENTS](AGENTS.md), [CLAUDE](CLAUDE.md) e
-[GEMINI](GEMINI.md) com o conteúdo próprio do projeto.
-Estes arquivos não apontam para documentos específicos do AgentDevKit.
-O simulador usa as mesmas entradas para representar a instalação real.
+O instalador gera [AGENTS](AGENTS.md), [CLAUDE](CLAUDE.md) e
+[GEMINI](GEMINI.md) conforme os clientes escolhidos. Entradas humanas são
+preservadas; somente blocos antigos identificados do kit são migrados.
+Os modelos apontam para a fonte compartilhada. O simulador usa estas entradas
+para representar a instalação real.

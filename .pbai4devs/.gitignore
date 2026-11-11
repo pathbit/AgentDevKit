@@ -1,41 +1,18 @@
 # BEGIN AGENT IGNORE
-# Fontes compartilhadas permitidas
-/*
-!/.gitignore
-!/.npmignore
-!/README.md
-!/INSTRUCTIONS.md
-!/COMPATIBILIDADE.md
-!/espelhos.conf
-!/catalog.json
-!/skills.json
-!/agents.json
-!/rules.json
-!/agents/
-!/commands/
-!/external-skills/
-!/rules/
-!/scripts/
-!/skills/
-!/templates/
-!/tools/
-!/estado/
+# Derivados locais
+/catalog.json
+/skills.json
+/agents.json
+/rules.json
+/espelhos.conf
+/estado/agentdevkit.json
+/estado/derived.json
 
-# Ferramentas: somente definicao, entrada e guia
-/tools/*
-!/tools/README.md
-!/tools/*/
-/tools/*/*
-!/tools/*/TOOL.json
-!/tools/*/SCRIPT.mjs
-!/tools/*/README.md
+# Downloads e launchers de ferramentas
 /tools/bin/
 /tools/npm-cache/
-
-# Skills externas: somente catalogo e guia
-/external-skills/*
-!/external-skills/README.md
-!/external-skills/CATALOG.json
+/tools/*/CURRENT.json
+/external-skills/*/
 
 # ---------------------------
 # CUSTOM IGNORE

@@ -1,144 +1,83 @@
 ---
-description: Instalação do AgentDevKit 0.0.2 em projetos novos ou existentes.
+description: Instalação do AgentDevKit e geração local dos agentes.
 ---
 
 # Instalação
 
-O AgentDevKit instala uma estrutura para trabalhar com agentes no seu projeto.
-Você escolhe a pasta; ele prepara os recursos e indica a próxima etapa.
-Esta página usa o pacote da [release 0.0.2][release], sem depender do npmjs.
+O pacote traz o gerador e as fontes compartilhadas. A instalação prepara
+`.pbai4devs` e cria somente os apontamentos dos agentes escolhidos.
 
-## Com Node.js e npm disponíveis
+## Pré-requisitos
 
-Confira `node --version` e `npm --version`. O runtime usado pelo kit é Node.js
-24 ou superior. A entrada da CLI tenta preparar um runtime local quando recebe
-um Node antigo. Sem Node/npm, siga [o caminho alternativo](#sem-node-ou-npm).
+Use Node.js 18+ com npm para iniciar o pacote. O launcher prepara Node 24+
+quando o runtime atual é antigo; o núcleo e as ferramentas usam Node 24+.
+A extração de runtime usa o executável nativo `tar`, sem scripts shell.
 
-Abra o terminal na pasta do projeto. No macOS ou Linux:
+Sem Node/npm, o agente precisa primeiro instalar o runtime pelo mecanismo do
+sistema operacional e continuar. `npx` não funciona antes dessa instalação.
+O [guia de preparo][bootstrap] explica as duas situações.
 
-```sh
-ADK_RELEASE=https://github.com/pathbit/AgentDevKit/releases/download
-ADK_PACKAGE="$ADK_RELEASE/v0.0.2/agentdevkit-0.0.2.tgz"
-npx --yes --ignore-scripts --package "$ADK_PACKAGE" \
-  agentdevkit init . --lang pt
+## Instalar
+
+Abra um terminal na pasta do projeto e execute:
+
+```console
+npx --yes --ignore-scripts https://github.com/pathbit/AgentDevKit/releases/download/v0.0.3/agentdevkit-0.0.3.tgz
 ```
 
-No Windows, use o PowerShell:
+Sem comando adicional, o pacote executa `init`. Em terminal interativo,
+pergunta idioma e agentes. No aplicativo desktop, peça ao agente para reunir
+as escolhas no chat e usar `--lang` e `--agents` na CLI.
 
-```powershell
-$ADK_RELEASE = 'https://github.com/pathbit/AgentDevKit/releases/download'
-$ADK_PACKAGE = "$ADK_RELEASE/v0.0.2/agentdevkit-0.0.2.tgz"
-npx --yes --ignore-scripts --package $ADK_PACKAGE `
-  agentdevkit init . --lang pt
+Com Git disponível, esta forma curta usa a mesma versão pelo código publicado:
+
+```console
+npx -y --ignore-scripts github:pathbit/AgentDevKit#v0.0.3 init
 ```
 
-O `--yes` antes de `--package` pertence ao npx. No primeiro uso em terminal
-interativo, a CLI pergunta o idioma ausente e quais agentes você usa.
-Use `--lang en` ou `--lang es` para inglês ou espanhol.
+Consulte [CLI](cli.md) para acrescentar seleção, destino e simulação. `--json`,
+`--yes`, `--dry-run` ou ausência de terminal interativo evitam perguntas.
+Sem escolha explícita ou salva, `all` mantém todos os clientes compatíveis.
 
-## Escolher os agentes
+## O que fica no projeto
 
-Informe, por exemplo, `--agents codex,claude` no comando `init`, ou responda à
-pergunta inicial. Use `all` para todos; veja IDs e aliases na
-[compatibilidade](../.pbai4devs/COMPATIBILIDADE.md).
-
-A escolha explícita prevalece sobre a salva em
-`.pbai4devs/estado/agentdevkit.json`. Sem ambas, vale `all`. `--yes` depois de
-`init`, `--json`, `--dry-run` e execuções sem terminal interativo não perguntam.
-Instalações antigas sem seleção também usam `all`.
-
-Se um agente de desktop executar por você, ele deve perguntar quais clientes
-você usa antes de escolher a opção. Não se deduz o agente ativo pelo sistema
-operacional ou pela existência de pastas; sem resposta disponível, usa-se `all`.
-Para consultar ou mudar depois, use `agents` na [CLI](cli.md).
-
-Ao terminar, siga o bloco `[ Próximo passo ]`. Ele informa a skill a usar no
-agente e um comando de verificação. Instalar o kit não aprova decisões de
-produto nem começa a implementar funcionalidades.
-
-## Projeto novo ou existente
-
-Em um projeto novo, siga preparação inicial, PRD, UX/UI, design técnico,
-roadmap, spec e plano aprovado. Só então configure a base técnica e implemente.
-Os documentos nascem dessas decisões com o agente, usando os modelos do hub.
-
-Em um projeto existente, simule primeiro. Exemplo no macOS/Linux:
-
-```sh
-npx --yes --ignore-scripts --package "$ADK_PACKAGE" \
-  agentdevkit init --target "./meu projeto" --dry-run --lang pt
-```
-
-No PowerShell, use o mesmo comando com crase no lugar de `\` para quebrar a
-linha. Sem a quebra, ele também pode ser digitado inteiro em uma linha.
-Revise conflitos e repita sem `--dry-run` para aplicar. O projeto pode estar
-vazio ou já ter código; não use `--force` como primeira tentativa.
-
-O instalador preserva arquivos próprios, como README existente, código,
-configurações do editor, workflows e skills nativas que não pertencem ao kit.
-Mudanças em arquivos gerenciados podem exigir revisão e backup.
-
-| Local | Conteúdo |
+| Conteúdo | Tratamento |
 | --- | --- |
-| `.pbai4devs/` | Origem compartilhada de skills, regras, modelos e scripts. |
-| Pastas dos agentes escolhidos | Apontamentos e formatos nativos gerados. |
-| `AGENTS.md`, `CLAUDE.md`, `GEMINI.md` | Entradas com blocos gerenciados. |
-| `.pbai4devs/estado/agentdevkit.json` | Versão, idioma, clientes e hashes. |
-| `.agent-tests/agentdevkit/backups/` | Cópias locais de arquivos alterados. |
+| `.pbai4devs` com recursos e templates | Fonte compartilhada versionável. |
+| Skills, regras e comandos nos clientes | Apontamentos locais gerados. |
+| Entradas da raiz criadas pelo kit | Arquivos locais gerados. |
+| Índices, manifesto e seleção pessoal | Derivados locais ignorados. |
+| Código, documentos e configurações humanas | Preservados. |
+| Downloads e resultados de testes | Locais e ignorados. |
 
-O kit não baixa as ferramentas opcionais durante `init`. O comando
-`tools setup` prepara e verifica as compatíveis quando você o solicitar.
-O pacote também não exige credenciais para inicializar o projeto.
-Clientes podem compartilhar pastas: Codex usa `.codex` e `.agents`; Copilot
-usa `.github` e `.vscode`. Trocar a seleção remove somente arquivos gerenciados
-que deixaram de ser necessários, preservando arquivos próprios e dependências.
+O gerador completo permanece no pacote npm. Ele não copia `bin/`, `src/`,
+`release/` ou os testes do produto para o projeto atendido.
+Instalar o kit não inicia uma aplicação nem instala todas as ferramentas.
 
-## Sem Node ou npm
+## Git e migração
 
-O npx depende deles e não consegue iniciar sozinho. Se estiver usando um
-agente, peça: “Pergunte quais agentes uso, prepare o runtime do AgentDevKit e
-instale a versão 0.0.2 neste projeto; preserve arquivos e faça o diagnóstico”.
+Um `.gitignore` dentro de `.pbai4devs` só controla essa árvore. Para os
+apontamentos externos, o kit gera exclusões locais do Git, sem ignorar
+workflows, formulários de issues ou configurações humanas em `.github`.
+Sem Git, uma proteção no `.gitignore` da raiz evita incluir os derivados
+quando o repositório for iniciado.
 
-Para fazer manualmente, obtenha o código da tag `v0.0.2` pela [release][release]
-ou clone em uma pasta separada do projeto:
+Arquivos já rastreados exigem migração do índice: apenas saídas identificadas
+do kit podem deixar de ser rastreadas, preservando seus bytes no disco.
+Revise o plano e os conflitos em um projeto existente; use `--dry-run` antes
+de aplicar. Conteúdo humano não deve ser classificado como saída do gerador.
 
-```sh
-git clone --depth 1 -b v0.0.2 https://github.com/pathbit/AgentDevKit.git
-cd AgentDevKit
-```
+## Atualizar e escolher agentes
 
-Na pasta obtida, macOS/Linux:
+Use a versão desejada do pacote para executar `update`. A escolha salva
+continua válida; `agents` consulta e `agents codex,claude` altera a seleção.
+`agents all` habilita todos. As pastas compartilhadas permanecem quando
+necessárias para outro cliente, como `.agents` para Codex e Antigravity.
 
-```sh
-sh .pbai4devs/scripts/preparar-ferramentas/BOOTSTRAP.sh --runtime-only
-```
+O [fluxo de trabalho](workflow.md) orienta a próxima etapa do projeto.
+Se houver erro, consulte [solução de problemas](troubleshooting.md).
 
-Na mesma pasta, Windows/PowerShell:
+[Wiki](README.md) · [Release 0.0.3][release]
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File `
-  .pbai4devs/scripts/preparar-ferramentas/BOOTSTRAP.ps1 -RuntimeOnly
-```
-
-O bootstrap verifica o download oficial por SHA-256 e imprime
-`node=<caminho absoluto>`. Use esse executável para chamar
-`bin/agentdevkit.mjs init --target "caminho/do/seu/projeto" --lang pt`
-com `--agents codex,claude` ou a sua seleção;
-no PowerShell, coloque `&` antes do caminho do executável entre aspas.
-Ele mantém Node/npm no cache local, sem instalar globalmente ou mudar o PATH
-permanente. `--runtime-only` não instala as ferramentas opcionais.
-
-macOS/Linux precisam de `curl` ou `wget`, `tar`, `gzip` e SHA-256 disponíveis.
-Para detalhes e restrições do SO, consulte o [guia do bootstrap][bootstrap].
-Para conferir o pacote manualmente, a release inclui `SHA256SUMS`.
-
-## Depois da instalação
-
-Use a [referência da CLI](cli.md) para `doctor`, `next`, `lang`, `agents`,
-`update` e `sync`. Atualizar usa o pacote invocado; não busca a próxima release
-automaticamente. Se algo falhar, siga
-[solução de problemas](troubleshooting.md).
-Volte ao [índice da documentação](README.md) para o fluxo completo.
-
-[release]: https://github.com/pathbit/AgentDevKit/releases/tag/v0.0.2
 [bootstrap]: ../.pbai4devs/scripts/preparar-ferramentas/BOOTSTRAP.md
+[release]: https://github.com/pathbit/AgentDevKit/releases/tag/v0.0.3

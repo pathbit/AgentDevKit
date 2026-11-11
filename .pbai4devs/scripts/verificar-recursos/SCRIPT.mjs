@@ -105,13 +105,14 @@ export function localLinkTargets(text) {
   }).filter(Boolean);
 }
 
-export function checkMarkdown(root, files) {
+export function checkMarkdown(root, files, { virtualPaths = new Set() } = {}) {
   for (const file of files) {
     const label = normalize(relative(root, file));
     const text = readFileSync(file, 'utf8');
     checkFrontmatter(text, label);
     for (const target of localLinkTargets(text)) {
-      if (!existsSync(resolve(dirname(file), target))) fail(`Link ausente: ${label} -> ${target}`);
+      const destination = resolve(dirname(file), target);
+      if (!existsSync(destination) && !virtualPaths.has(normalize(relative(root, destination)))) fail(`Link ausente: ${label} -> ${target}`);
     }
   }
 }
@@ -175,13 +176,14 @@ export function checkLint(root, files, run = spawnSync) {
   return output.split('\n').filter(line => /^(?:Linting:|Summary:)/.test(line));
 }
 
-export function verifyResources({ root = projectRoot, synchronize = checkSynchronization, lint = checkLint, catalogCheck = checkCatalog } = {}) {
+export function verifyResources({ root = projectRoot, sourceOnly = false, synchronize = checkSynchronization, lint = checkLint, catalogCheck = checkCatalog } = {}) {
   requireNode();
-  synchronize(root);
-  catalogCheck(root);
-  const registry = registryRoots(root);
+  const built = sourceOnly ? buildCatalog(root) : null;
+  if (!sourceOnly) { synchronize(root); catalogCheck(root); }
+  const registry = sourceOnly ? { agents: [], paths: [] } : registryRoots(root);
   const files = collectMarkdown(root, registry);
-  checkMarkdown(root, files);
+  const virtualPaths = new Set(sourceOnly ? [...built.outputs.keys(), '.pbai4devs/espelhos.conf'] : []);
+  checkMarkdown(root, files, { virtualPaths });
   checkResourceReferences(root, files);
   checkAgentExtras(root, registry.agents);
   return { files, messages: [...lint(root, files), 'recursos=passed'] };
@@ -189,10 +191,9 @@ export function verifyResources({ root = projectRoot, synchronize = checkSynchro
 
 export function main(args = process.argv.slice(2), options = {}) {
   requireNode();
-  if (args.length) {
-    if (args.length === 1 && ['--help', '-h'].includes(args[0])) { console.log('Uso: node .pbai4devs/scripts/verificar-recursos/SCRIPT.mjs'); return 0; }
-    fail('verificar-recursos nao aceita argumentos; use --help.');
-  }
+  if (args.length === 1 && ['--help', '-h'].includes(args[0])) { console.log('Uso: node .pbai4devs/scripts/verificar-recursos/SCRIPT.mjs [--source-only]'); return 0; }
+  if (args.length && !(args.length === 1 && args[0] === '--source-only')) fail('Opcao invalida; use --help.');
+  if (args.includes('--source-only')) options = { ...options, sourceOnly: true };
   for (const message of verifyResources(options).messages) console.log(message);
   return 0;
 }

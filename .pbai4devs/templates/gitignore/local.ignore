@@ -1,0 +1,10 @@
+# Derivados locais do AgentDevKit
+/.pbai4devs/catalog.json
+/.pbai4devs/skills.json
+/.pbai4devs/agents.json
+/.pbai4devs/rules.json
+/.pbai4devs/espelhos.conf
+/.pbai4devs/estado/agentdevkit.json
+/.pbai4devs/estado/derived.json
+{{ROOTS}}
+{{OUTPUTS}}

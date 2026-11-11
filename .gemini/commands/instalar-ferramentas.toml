@@ -1,3 +1,0 @@
-# gerado: sincronizar-agentes
-description = "Prepara Node e npm automaticamente, instala e valida as ferramentas locais."
-prompt = "@{.pbai4devs/commands/instalar-ferramentas/COMMAND.md}\n\n{{args}}"

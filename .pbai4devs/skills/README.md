@@ -20,5 +20,5 @@ para manter os documentos e `revisar-entrega` para concluir implementações.
 Use [proximos-passos](projeto/proximos-passos/SKILL.md) para orientar a
 continuidade conforme a fase e as pendências reais.
 
-O índice fica em [AGENTS.md](../../AGENTS.md). Ao alterar o inventário,
-atualize o índice e sincronize os apontamentos das ferramentas.
+O [guia compartilhado](../INSTRUCTIONS.md) orienta o uso das skills.
+Ao alterar o inventário, sincronize os índices e apontamentos locais.

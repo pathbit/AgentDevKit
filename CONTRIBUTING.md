@@ -1,79 +1,68 @@
 ---
-description: Como desenvolver, verificar e documentar mudanças no AgentDevKit.
+description: Como desenvolver, verificar e documentar o AgentDevKit.
 ---
 
 # Contribuir
 
-Abra uma [issue](https://github.com/pathbit/AgentDevKit/issues) para discutir
-problemas ou propostas. Em uma correção, descreva o comando, o comportamento
-esperado e o observado, o sistema operacional e a versão do kit. Remova
-credenciais e dados privados dos exemplos.
-
-Os formulários de [bug][bug] e [melhoria][feature] ajudam a reunir esse contexto.
-Veja como [participar da evolução](docs/community.md) e acompanhar propostas.
+Use [issues][issues] para bugs e propostas. Descreva o contexto, a versão e
+os passos necessários, removendo segredos e dados privados.
 
 ## Preparar o checkout
 
-Use Git, Node.js 24+ e npm:
+Use Git e Node.js 24+ com npm:
 
-```sh
+```console
 git clone https://github.com/pathbit/AgentDevKit.git
 cd AgentDevKit
 npm ci --ignore-scripts
-node bin/agentdevkit.mjs --help
+npm run check
 ```
 
-## Escolher onde alterar
+O checkout contém fontes. Para usar os agentes neste próprio repositório,
+execute `npm run generate`; os apontamentos produzidos são locais e ignorados.
+Não é necessário gerá-los para versionar ou revisar o código.
+
+## Escolher a origem da mudança
 
 | Mudança | Origem |
 | --- | --- |
-| Comportamento da CLI | `src/`, `bin/` e `tests/` |
-| Procedimento compartilhado | `.pbai4devs/skills/` ou `rules/` |
-| Caso de uso ou automação | `.pbai4devs/commands/` ou `scripts/` |
-| Compatibilidade de clientes | `src/adapters/` e testes de adaptadores |
-| Ajuda e exemplos | `docs/` e README do recurso afetado |
+| CLI e instalação | `.pbai4devs/src/` e `.pbai4devs/bin/` |
+| Layout dos clientes | `.pbai4devs/templates/clients/` |
+| Skills, regras e comandos | Respectivas pastas em `.pbai4devs/` |
+| Automação compartilhada | `.pbai4devs/scripts/` |
+| CI e publicação | `.pbai4devs/release/` e workflows do GitHub |
+| Testes do produto | `.pbai4devs/tests/` |
+| Ajuda e exemplos | `docs/` e README do recurso |
 
-Leia o [design](docs/design.md) e o [guia de recursos](docs/resources.md).
-Edite a origem: apontamentos e catálogos são gerados. Depois de mudar recursos,
-execute o sincronizador antes das verificações:
+Leia o [guia do código-fonte][source] e o [design](docs/design.md).
+Modifique fontes e templates, não catálogos, estado ou arquivos dos clientes.
 
-```sh
-node .pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs
-```
+## Verificar e enviar
 
-## Verificar a mudança
-
-```sh
+```console
 npm test
 npm run test:infra
 npm run check
 ```
 
-Os níveis adicionais dependem da mudança. Distribuição exige testar o tarball;
-sincronização e instalação exigem projetos isolados, incluindo um existente;
-interfaces exigem seu fluxo real. Veja [ferramentas e testes][tests].
-O [CI][ci] roda em Linux, macOS e Windows, com Node 24 e 26.
-Depois dos testes, gera e verifica um pacote disponível nos artifacts.
+Escolha verificações adicionais pelo impacto da mudança. Instalação exige
+projetos novos e existentes; Git exige preservação do índice e dos arquivos;
+distribuição exige o pacote real. Consulte [testes][tests].
 
-Versione testes e fixtures; salve relatórios, tarballs e capturas somente em
-destinos ignorados. Use `.agent-tests/` para evidências locais.
+Mantenha testes e fixtures versionados. Relatórios, capturas, downloads,
+apontamentos e preferências locais ficam ignorados. Revise o diff antes de
+enviar e confirme que ele contém somente fontes e mudanças intencionais.
 
-## Documentar e enviar
-
-Atualize os guias afetados e registre o que foi testado, com seus limites.
-Markdown começa com frontmatter YAML e um H1; mantenha exemplos pequenos e
-links relativos válidos. A [wiki](docs/README.md) é a entrada da documentação.
-
-Use a [revisão de entrega][review] para reunir critérios, evidências e revisão
-independente. Descreva no PR o problema, a solução e a validação. Siga as
-[regras Git][git] para commits; não inclua artefatos locais nem credenciais.
-Publicação tem um fluxo separado em [manutenção](docs/maintenance.md).
+Atualize a documentação e use a [revisão de entrega][review] para reunir
+critérios, evidências e revisão independente. O PR deve explicar problema,
+solução e validação. Siga as [regras Git][git]. A [publicação][release] reutiliza
+o artifact aprovado do CI; não cria um pacote diferente na hora de publicar.
 
 [Wiki](docs/README.md) · [Licença MIT](LICENSE)
 
+[issues]: https://github.com/pathbit/AgentDevKit/issues
+[source]: .pbai4devs/DEVELOPMENT.md
 [tests]: docs/tools-and-testing.md
 [review]: .pbai4devs/commands/revisar-entrega/COMMAND.md
 [git]: .pbai4devs/rules/git/RULE.md
-[ci]: https://github.com/pathbit/AgentDevKit/blob/master/.github/workflows/ci.yml
-[bug]: https://github.com/pathbit/AgentDevKit/issues/new?template=bug_report.yml
-[feature]: https://github.com/pathbit/AgentDevKit/issues/new?template=feature_request.yml
+[release]: docs/maintenance.md

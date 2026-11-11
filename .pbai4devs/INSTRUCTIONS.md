@@ -43,8 +43,8 @@ Após criar, alterar, renomear ou remover recursos, use `sincronizar-agentes`.
 Isso regenera `catalog.json` e os índices auxiliares; não mantenha listas JSON
 manualmente. Confira com `--check` antes de concluir a alteração.
 Antes dos `.mjs`, confira Node/npm pelo [primeiro uso][preparo].
-Se faltar runtime numa consulta ou execução, use o bootstrap somente para
-Node/npm (`--runtime-only` no shell ou `-RuntimeOnly` no PowerShell).
+Com Node 18+ disponível, use `BOOTSTRAP.mjs --runtime-only` para preparar
+Node 24+. Sem Node/npm, instale primeiro pelo mecanismo nativo do SO.
 `instalar-ferramentas` usa o fluxo completo: prepara o runtime e executa
 `setup` para instalar e verificar as ferramentas compatíveis.
 Use Node.js 24+ com npm e os comandos de [scripts](scripts/README.md).
@@ -59,8 +59,8 @@ procedimento; ative referências pela tarefa, respeitando a stack decidida.
 cada ferramenta tem `TOOL.json` e `SCRIPT.mjs` em `.pbai4devs/tools/<nome>`.
 Binários e registros em `.local/`, cache e launchers são ignorados.
 
-O [espelhos.conf](espelhos.conf) registra a seleção, layouts e pontos nativos.
-O [catálogo](catalog.json) reúne inventário e comandos das ferramentas.
+O arquivo local `espelhos.conf` registra seleção, layouts e pontos nativos.
+O catálogo local `catalog.json` reúne inventário e comandos das ferramentas.
 Os registros `skills.json`, `rules.json` e `agents.json` indexam as fontes.
 Codex e Antigravity compartilham `.agents`; `.agent` é uma opção legada.
 Gemini usa `.gemini`; Copilot/VS Code usa `.github` e `.vscode`. Veja os demais
@@ -69,9 +69,10 @@ Só clientes selecionados recebem derivações; uma pasta compartilhada permanec
 quando outro cliente precisa dela. Atualizar ou sincronizar respeita a seleção.
 Somente recursos agênticos têm apontamentos; templates, scripts, tools e estado
 permanecem exclusivamente em `.pbai4devs`.
-O sincronizador mantém os `.gitignore` locais de `.pbai4devs` e dos clientes.
+O sincronizador mantém a proteção Git das saídas locais e de `.pbai4devs`.
 Use os [modelos de ignore](templates/gitignore/TEMPLATE.md) para alterar a lista
-de fontes permitidas; deixe apenas regras gerais no `.gitignore` da raiz.
+de fontes e derivados; em Git, os apontamentos usam exclusões locais.
+Sem repositório, o `.gitignore` da raiz protege os derivados até o Git existir.
 Documentos de produto também ficam fora dos espelhos. O comando `sincronizar`
 reconstrói apontamentos com `--force`; `--check` verifica sem alterações.
 

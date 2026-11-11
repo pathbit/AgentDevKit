@@ -4,6 +4,14 @@ description: Alterações verificáveis por versão do AgentDevKit.
 
 # Changelog
 
+## 0.0.3 — 2026-11-11
+
+- Fontes do produto, testes e automações concentrados em `.pbai4devs`.
+- Saídas de agentes e preferências locais fora do versionamento.
+- Layouts de clientes declarativos e entradas geradas com preservação humana.
+- Bootstrap JavaScript e uso de npx mantido, sem scripts shell próprios.
+- CI dividido por responsabilidade e release reutilizando artifact aprovado.
+
 ## 0.0.2 — 2026-11-11
 
 - Seleção persistente de agentes na instalação e no comando `agents`.

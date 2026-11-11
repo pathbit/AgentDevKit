@@ -1,3 +1,0 @@
-# gerado: sincronizar-agentes
-description = "Revisa documentação, critérios e provas antes de commit ou merge."
-prompt = "@{.pbai4devs/commands/revisar-entrega/COMMAND.md}\n\n{{args}}"

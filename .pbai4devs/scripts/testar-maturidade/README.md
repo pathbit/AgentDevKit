@@ -23,14 +23,17 @@ semântica de segredos. A saída fica em `tmp/examples/`; a API de testes també
 aceita descendentes de `.agent-tests/`. Regenera apenas pastas identificadas
 como suas. Cada exemplo recebe Git local, sem commits nem identidade alterada.
 O hub `.pbai4devs` e os clientes registrados são copiados, incluindo comandos
-nativos em TOML. `.vscode` exige registro no manifesto. Apenas as entradas
+nativos em TOML. Sem manifesto local, os templates definem os clientes em
+memória, respeitando a seleção salva. `.vscode` exige registro. Apenas as entradas
 `AGENTS.md`, `CLAUDE.md` e `GEMINI.md` presentes na origem são incluídas na raiz.
 Os templates substituem somente entradas com blocos gerenciados válidos;
 entradas próprias ou editadas são preservadas. Sem estado de instalação,
 o mantenedor usa `.pbai4devs/templates/entrypoints/`, com fallback para a raiz.
 Os testes resolvem cada apontamento pelo formato declarado do cliente e recurso.
 
-As cópias executam sincronização/reparo/idempotência, catálogo, verificação de
+As cópias geram os derivados locais antes dos testes, sem alterar a origem.
+Não copiam o código do produto (`bin`, `src`, `release` e `tests` do hub).
+Executam sincronização/reparo/idempotência, catálogo, verificação de
 recursos, diagnóstico, inspeção e gates negativos/positivo. Em dois casos,
 criação/edição/renomeação/remoção e corrupção dos índices exercitam o ciclo todo.
 Aplicações executam testes HTTP reais em

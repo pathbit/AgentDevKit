@@ -9,16 +9,16 @@ language: en
 
 Organize work with coding agents, from planning to verification. Keep skills,
 rules, commands and agent profiles in `.pbai4devs`; the kit generates the
-references each client can discover. See the [supported clients][clients].
+references each client can discover. Source lives in `.pbai4devs`; client
+folders, generated entrypoints and preferences stay local and untracked.
+See the [supported clients][clients].
 
 ## Start in your project
 
-With Node.js 24+ and npm, open a terminal in your project (macOS/Linux):
+With Node.js 18+ and npm, open a terminal in your project and run:
 
-```sh
-RELEASE=https://github.com/pathbit/AgentDevKit/releases/download/v0.0.2
-npx --yes --ignore-scripts \
-  --package="$RELEASE/agentdevkit-0.0.2.tgz" agentdevkit init --lang en
+```console
+npx --yes --ignore-scripts https://github.com/pathbit/AgentDevKit/releases/download/v0.0.3/agentdevkit-0.0.3.tgz
 ```
 
 Choose your coding agents when prompted, or pass `--agents codex,claude`.
@@ -30,7 +30,7 @@ Then open the project in your coding agent and ask:
 > Read AGENTS.md and use the proximos-passos skill to guide my next steps.
 
 See [installation](docs/installation.md) for Windows, missing Node, previews
-and updates. The [v0.0.2 release][release] runs without a global installation.
+and updates. The [v0.0.3 release][release] runs without a global installation.
 The CLI supports `pt`, `en` and `es`; it saves your selection per project.
 
 ## Explore
@@ -58,7 +58,7 @@ forms. See [how to participate](docs/community.md).
 agent to read `AGENTS.md`.
 
 [clients]: .pbai4devs/COMPATIBILIDADE.md
-[release]: https://github.com/pathbit/AgentDevKit/releases/tag/v0.0.2
+[release]: https://github.com/pathbit/AgentDevKit/releases/tag/v0.0.3
 [tests]: docs/tools-and-testing.md
 [cli]: docs/cli.md
 [help]: docs/troubleshooting.md

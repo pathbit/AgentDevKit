@@ -10,15 +10,15 @@ language: es
 Organiza el trabajo con agentes de código, desde la planificación hasta la
 verificación. Mantén skills, reglas, comandos y perfiles en `.pbai4devs`;
 el kit genera las referencias de cada [cliente compatible][clients].
+Las fuentes viven en `.pbai4devs`; las carpetas, entradas y preferencias
+generadas son locales y no se versionan.
 
 ## Empezar en tu proyecto
 
-Con Node.js 24+ y npm, abre una terminal en tu proyecto (macOS/Linux):
+Con Node.js 18+ y npm, abre una terminal en tu proyecto y ejecuta:
 
-```sh
-RELEASE=https://github.com/pathbit/AgentDevKit/releases/download/v0.0.2
-npx --yes --ignore-scripts \
-  --package="$RELEASE/agentdevkit-0.0.2.tgz" agentdevkit init --lang es
+```console
+npx --yes --ignore-scripts https://github.com/pathbit/AgentDevKit/releases/download/v0.0.3/agentdevkit-0.0.3.tgz
 ```
 
 Elige tus agentes en la pregunta inicial o usa `--agents codex,claude`.
@@ -30,7 +30,7 @@ Después, abre el proyecto en tu agente y pide:
 > Lee AGENTS.md y usa la skill proximos-passos para orientar mi trabajo.
 
 La [guía de instalación](docs/installation.md) incluye Windows, Node ausente,
-simulación y actualización. La [release v0.0.2][release] no requiere una
+simulación y actualización. La [release v0.0.3][release] no requiere una
 instalación global. La CLI guarda el idioma `pt`, `en` o `es` por proyecto.
 
 ## Explorar
@@ -58,7 +58,7 @@ formularios. Consulta [cómo participar](docs/community.md).
 agente que lea `AGENTS.md`.
 
 [clients]: .pbai4devs/COMPATIBILIDADE.md
-[release]: https://github.com/pathbit/AgentDevKit/releases/tag/v0.0.2
+[release]: https://github.com/pathbit/AgentDevKit/releases/tag/v0.0.3
 [tests]: docs/tools-and-testing.md
 [cli]: docs/cli.md
 [help]: docs/troubleshooting.md

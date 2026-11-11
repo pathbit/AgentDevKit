@@ -1,7 +1,7 @@
 ---
 description: Requisitos da distribuição portátil AgentDevKit.
 status: aprovado
-version: 0.0.2
+version: 0.0.3
 ---
 
 # PRD do AgentDevKit
@@ -30,6 +30,10 @@ extraído do projeto de origem como produto independente.
 | FR-008 | Validar o pacote local e preparar a release versionada v0.0.1. |
 | FR-009 | Selecionar agentes e criar apenas seus apontamentos necessários. |
 | FR-010 | Reutilizar a seleção e alterá-la sem perder arquivos próprios. |
+| FR-011 | Versionar as fontes; manter derivações e preferências locais. |
+| FR-012 | Gerar layouts nativos a partir de configurações e templates. |
+| FR-013 | Usar JavaScript/Node nas automações e manter distribuição via npx. |
+| FR-014 | Reutilizar no release o pacote verificado, sem duplicar o CI. |
 
 Execuções repetidas devem ser idempotentes; a CLI oferece simulação e JSON.
 As instruções permanecem concisas, com detalhes opcionais em referências.

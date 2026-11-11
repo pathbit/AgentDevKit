@@ -93,7 +93,7 @@ conteúdo próprio que conflite com caminhos gerenciados.
 As fontes confirmam formatos, não execução de cada cliente. Valide descoberta,
 invocação e resultado no cliente escolhido antes de considerar uma integração
 comprovada. As razões e fontes por adaptador também ficam em
-`src/adapters/index.mjs` no projeto de distribuição AgentDevKit.
+`templates/clients/ADAPTERS.json` no hub de fontes do AgentDevKit.
 
 [codex]: https://learn.chatgpt.com/docs/build-skills
 [claude]: https://code.claude.com/docs/en/skills

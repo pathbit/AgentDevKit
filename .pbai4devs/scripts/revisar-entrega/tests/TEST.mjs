@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { checkReview, prepareReview, sealReview, specCriteria } from '../SCRIPT.mjs';
@@ -185,5 +185,65 @@ test('check exige selo sem permitir bypass pela API', t => {
   const f = approved(t, {}, () => {}, false);
   assert.throws(() => checkReview(f.file, { root: f.root, requireSeal: false }), /nao selada/);
   sealReview(f.file, { root: f.root });
+  assert.equal(checkReview(f.file, { root: f.root }).status, 'passed');
+});
+
+function stageUntrack(f, file = 'generated.md', ignore = true) {
+  f.put(file, '# Saida local\n');
+  f.git('add', '-f', '--', file);
+  f.git('-c', 'user.name=Test User', '-c', 'user.email=test@example.invalid', '-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=disabled-hooks', 'commit', '-q', '-m', 'test: fixture base');
+  f.git('rm', '--cached', '--', file);
+  if (ignore) f.put('.git/info/exclude', `/${file}\n`);
+}
+
+test('desindexação real registra ação e hash físico sem exigir documento local', async t => {
+  for (const scope of [[], ['generated.md']]) await t.test(scope.length ? 'scope' : 'git', t => {
+    const f = approved(t, { scope }, f => stageUntrack(f));
+    const file = f.report.snapshot.files.find(file => file.path === 'generated.md');
+    assert.equal(file.indexAction, 'untrack'); assert.match(file.sha256, /^[a-f0-9]{64}$/);
+    assert.equal(f.report.documentation.some(item => item.path === 'generated.md'), false);
+    assert.ok(existsSync(join(f.root, 'generated.md')));
+    assert.equal(f.git('ls-files', 'generated.md'), '');
+    assert.equal(checkReview(f.file, { root: f.root }).status, 'passed');
+  });
+});
+
+test('desindexação sem ignore continua bloqueada em git e scope', async t => {
+  for (const scope of [[], ['generated.md']]) await t.test(scope.length ? 'scope' : 'git', t => {
+    assert.throws(() => approved(t, { scope }, f => stageUntrack(f, 'generated.md', false)), /Indice Git difere/);
+  });
+});
+
+test('mudanças no arquivo, índice ou ignore invalidam a revisão de desindexação', async t => {
+  const cases = [
+    ['conteudo', f => f.put('generated.md', '# Editado depois\n')],
+    ['indice', f => f.git('add', '-f', 'generated.md')],
+    ['ignore', f => f.put('.git/info/exclude', '')],
+    ['arquivo removido', f => rmSync(join(f.root, 'generated.md'))],
+  ];
+  for (const [name, change] of cases) await t.test(name, t => {
+    const f = approved(t, { scope: [] }, f => stageUntrack(f));
+    change(f);
+    assert.throws(() => checkReview(f.file, { root: f.root }), /mudaram|desindexacao/);
+  });
+});
+
+test('entradas ignoradas fora do índice não entram nos documentos obrigatórios', t => {
+  const f = approved(t, {}, f => {
+    f.put('AGENTS.md', '# Gerado\n'); f.put('CLAUDE.md', '# Gerado\n'); f.put('GEMINI.md', '# Gerado\n');
+    f.put('.git/info/exclude', '/AGENTS.md\n/CLAUDE.md\n/GEMINI.md\n');
+  });
+  for (const name of ['AGENTS.md', 'CLAUDE.md', 'GEMINI.md']) assert.equal(f.report.documentation.some(item => item.path === name), false);
+  assert.equal(checkReview(f.file, { root: f.root }).status, 'passed');
+});
+
+test('documentos rastreados permanecem obrigatórios mesmo com regra de ignore', t => {
+  const f = approved(t, {}, f => {
+    f.put('AGENTS.md', '# Instrução versionada\n');
+    f.git('add', 'AGENTS.md', 'spec.md');
+    f.put('.git/info/exclude', '/AGENTS.md\n/spec.md\n');
+  });
+  assert.ok(f.report.documentation.some(item => item.path === 'AGENTS.md'));
+  assert.ok(f.report.documentation.some(item => item.path === 'spec.md'));
   assert.equal(checkReview(f.file, { root: f.root }).status, 'passed');
 });

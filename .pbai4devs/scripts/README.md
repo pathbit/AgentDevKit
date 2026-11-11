@@ -10,10 +10,10 @@ comando em macOS, Linux e Windows. Bun não faz parte do contrato validado.
 Versione scripts e testes; salve somente resultados em `.agent-tests/`.
 Prepare ferramentas locais com `preparar-ferramentas`, sem instalações globais.
 O runtime da aplicação será decidido no design doc; este requisito é dos agentes.
-Sem Node/npm, use o [bootstrap nativo](preparar-ferramentas/BOOTSTRAP.md) com
-`--runtime-only` no shell ou `-RuntimeOnly` no PowerShell para preparar apenas
-o runtime e continuar a operação. O modo padrão também prepara as ferramentas.
-Esses inicializadores são a única exceção ao uso de `.mjs`.
+Com Node 18+, use o [bootstrap JavaScript](preparar-ferramentas/BOOTSTRAP.md)
+com `--runtime-only` para preparar Node 24+ e continuar a operação.
+Sem Node/npm, o agente instala primeiro pelo mecanismo do sistema operacional.
+Não há inicializadores `.sh` ou `.ps1` no kit.
 
 Na raiz do repositório, use o seletor (adicione `--plan` antes do nome para
 consultar sem executar):
@@ -53,10 +53,9 @@ não um programa Node. Novas automações usam `.mjs`; `.bun` não é necessári
 Os testes de cada script ficam em `<nome>/tests/`; resultados e capturas em
 `.agent-tests/`. Scripts, modelos e ferramentas não têm cópias nos agentes.
 
-No [espelhos.conf](../espelhos.conf), use `agente|pasta|plano` ou
-`nativo|destino|origem|metadados.yaml`; o último campo é opcional. Os metadados
-ficam ao lado da origem, com frontmatter YAML sem corpo. Sem `plano`, mantém
-o agrupamento. Caminhos são relativos à raiz; não use `|` ou quebras de linha.
+Os layouts vêm de `templates/clients/ADAPTERS.json` no hub. O manifesto local
+`espelhos.conf` é gerado dessa fonte. Os metadados nativos ficam ao lado dos
+recursos, com frontmatter YAML sem corpo. Caminhos são relativos à raiz.
 Somente os quatro arquivos principais são fontes; não registre documentos.
 Use `gitignore|pasta` para gerar apenas o `.gitignore`, como em `.vscode`.
 
@@ -65,6 +64,6 @@ preservando configurações e workflows fora do escopo gerenciado. Conteúdo
 próprio substituído recebe backup em `.agent-tests/`; `--check` não altera nada.
 O sincronizador também gera o catálogo completo e os índices auxiliares a partir
 das fontes. Helpers e testes constam como suporte, sem fingir comandos próprios.
-Ele mantém os blocos gerenciados nos `.gitignore` locais e preserva regras
-próprias externas ao bloco. As listas permitidas vêm dos modelos de gitignore.
+Ele protege os derivados contra versionamento e preserva regras humanas.
+As políticas vêm dos modelos de gitignore; o estado e os índices são locais.
 Os exemplos de maturidade usam cópias locais, sem downloads ou estado pessoal.

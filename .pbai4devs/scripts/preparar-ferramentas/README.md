@@ -11,8 +11,9 @@ O [catálogo](../../tools/README.md) é descoberto pelos arquivos `TOOL.json`.
 Peça ao agente `instalar-ferramentas`. Ele segue o
 [preparo automático](BOOTSTRAP.md): verifica Node/npm, instala o runtime local
 quando necessário e continua sozinho até a validação das ferramentas.
-Os inicializadores usam o shell do SO antes de qualquer `.mjs`, sem depender
-de Node instalado, privilégios administrativos ou mudança permanente no PATH.
+O inicializador JavaScript aceita Node 18+ e prepara Node 24+ localmente.
+Sem Node/npm, o agente usa o gerenciador do SO antes de executar o kit.
+Não há mudança permanente no PATH nem scripts Bash ou PowerShell.
 
 Se Node 24+ com npm já estiver disponível, também pode executar diretamente:
 
@@ -31,8 +32,8 @@ pacotes e regenera os atalhos locais, que usam imports relativos.
 ## Operações individuais
 
 Com runtime disponível, execute a ação diretamente. Se ele faltar, use
-`--runtime-only` no bootstrap POSIX ou `-RuntimeOnly` no PowerShell e reutilize
-o caminho retornado; esse modo não instala ferramentas.
+`node .pbai4devs/scripts/preparar-ferramentas/BOOTSTRAP.mjs --runtime-only`
+e reutilize o caminho retornado; esse modo não instala ferramentas.
 
 Na raiz do repositório:
 

@@ -7,6 +7,7 @@ import { spawnSync } from 'node:child_process';
 import { isMain, projectRoot, requireNode } from '../lib/runtime.mjs';
 import { isGeneratedOutput } from '../lib/gitignore.mjs';
 import { resourcePath } from '../sincronizar-agentes/SCRIPT.mjs';
+import { adapterManifest } from '../lib/adapters.mjs';
 
 const assets = join(dirname(fileURLToPath(import.meta.url)), 'assets');
 const owner = 'testar-maturidade';
@@ -39,15 +40,22 @@ export const SCENARIOS = [
   { id: 'monorepo', title: 'Monorepo com dois módulos', expected: 'implementacao', complete: false, app: true, planning: 'ready', layout: 'monorepo', note: 'Dois módulos e caminhos com espaços/acentos; sem impor src na raiz.' },
 ];
 
+function manifest(root) {
+  const file = join(root, '.pbai4devs/espelhos.conf');
+  if (existsSync(file)) return readFileSync(file, 'utf8');
+  const state = join(root, '.pbai4devs/estado/agentdevkit.json');
+  return adapterManifest(root, { clients: existsSync(state) ? json(state).clients : undefined });
+}
+
 export function registeredRoots(root) {
-  const names = readFileSync(join(root, '.pbai4devs/espelhos.conf'), 'utf8').split(/\r?\n/)
+  const names = manifest(root).split(/\r?\n/)
     .filter(line => /^(?:agente|gitignore)\|/.test(line)).map(line => line.split('|')[1]);
   for (const name of names) if (!/^\.[a-z0-9][a-z0-9.-]*$/i.test(name) || ['.git', '.pbai4devs', '.agent-tests'].includes(name.toLowerCase())) fail(`Raiz de agente inválida: ${name}`);
   return [...new Set(names)];
 }
 
 export function resourceTargets(root, source, kind = 'skills') {
-  const rows = readFileSync(join(root, '.pbai4devs/espelhos.conf'), 'utf8').split(/\r?\n/).filter(line => line && !line.startsWith('#')).map(line => line.split('|'));
+  const rows = manifest(root).split(/\r?\n/).filter(line => line && !line.startsWith('#')).map(line => line.split('|'));
   const targets = [];
   for (const [type, agent, layout = 'agrupado'] of rows) {
     if (type !== 'agente') continue;
@@ -61,6 +69,7 @@ export function resourceTargets(root, source, kind = 'skills') {
 function copyAllowed(relativePath, directory = false) {
   const parts = portable(relativePath).split('/');
   const name = parts.at(-1);
+  if (parts[0] === '.pbai4devs' && ['bin', 'src', 'release', 'tests', 'DEVELOPMENT.md'].includes(parts[1])) return false;
   if (isGeneratedOutput(relativePath, directory)) return false;
   if (parts.some(part => ['.git', '.local', '.cache', 'node_modules', 'logs', '.agent-tests', '__pycache__', '.ssh', '.gnupg'].includes(part.toLowerCase()))) return false;
   if (/^\.playwright/i.test(name) || /\.log$/i.test(name) || name === '.DS_Store') return false;
@@ -376,6 +385,7 @@ export function testExample(example) {
   const preserved = hashes(example.root, example.application.protected);
   try {
     const sync = '.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs';
+    run(sync, [], 0, 'sync-prepare-copy');
     run(sync, ['--check'], 0, 'sync-initial');
     const damaged = pointer(example.root, example.copied.roots); rmSync(join(example.root, damaged));
     run(sync, ['--check'], 1, 'sync-damage-detected'); run(sync, [], 0, 'sync-repair');

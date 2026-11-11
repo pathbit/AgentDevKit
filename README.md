@@ -13,17 +13,16 @@ o kit gera os apontamentos que cada cliente sabe encontrar.
 
 Use com Codex, Claude, Cursor, Copilot, OpenCode e outros
 [clientes compatíveis](.pbai4devs/COMPATIBILIDADE.md). Há uma origem;
-cada cliente conserva seu formato de descoberta.
+cada cliente conserva seu formato de descoberta. As fontes ficam em
+`.pbai4devs`; pastas nativas, entradas e preferências são geradas localmente
+e não entram no versionamento.
 
 ## Começar em um projeto
 
-Com Node.js 24+ e npm, abra o terminal na pasta do seu projeto e execute
-(macOS/Linux):
+Com Node.js 18+ e npm, abra o terminal na pasta do seu projeto e execute:
 
-```sh
-RELEASE=https://github.com/pathbit/AgentDevKit/releases/download/v0.0.2
-npx --yes --ignore-scripts \
-  --package="$RELEASE/agentdevkit-0.0.2.tgz" agentdevkit init --lang pt
+```console
+npx --yes --ignore-scripts https://github.com/pathbit/AgentDevKit/releases/download/v0.0.3/agentdevkit-0.0.3.tgz
 ```
 
 Escolha os agentes na pergunta inicial ou informe `--agents codex,claude`.
@@ -36,7 +35,7 @@ Depois, abra o projeto no seu agente e peça:
 
 Windows, instalação sem Node, simulação e atualização estão no
 [guia de instalação](docs/installation.md). A distribuição usa a
-[release v0.0.2](https://github.com/pathbit/AgentDevKit/releases/tag/v0.0.2),
+[release v0.0.3](https://github.com/pathbit/AgentDevKit/releases/tag/v0.0.3),
 sem instalação global. O idioma da CLI pode ser `pt`, `en` ou `es`.
 
 ## Encontre o que precisa

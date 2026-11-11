@@ -4,32 +4,32 @@ description: Diagnóstico, conflitos, backups e recuperação do AgentDevKit.
 
 # Solução de problemas
 
-Comece pelo erro completo e pelo diretório usado. Os exemplos usam o atalho
-opcional `adk` definido na [referência da CLI][atalho].
-Ele pode ser substituído pelo prefixo npx da [instalação](installation.md).
+Comece pelo erro completo e pelo diretório usado. Nos exemplos, `agentdevkit`
+representa o executável obtido por npx, conforme a [referência da CLI][cli].
+O comando completo está na [instalação](installation.md).
 
 ## Diagnóstico rápido
 
-```sh
-adk --version
-adk doctor --target "./meu projeto" --json
-adk sync --check --target "./meu projeto" --json
+```console
+agentdevkit --version
+agentdevkit doctor --target "./meu projeto" --json
+agentdevkit sync --check --target "./meu projeto" --json
 ```
 
 `doctor` verifica a instalação do kit. Para as ferramentas, use
-`adk tools check all`; para o aplicativo, execute os testes do próprio projeto.
+`agentdevkit tools check all`; para o aplicativo, use os testes do projeto.
 Antes de compartilhar uma saída, remova dados privados e caminhos pessoais.
 
-Se um agente não encontrar recursos, confira a seleção com `adk agents`.
-Para incluir um cliente, use `adk agents codex,claude` com a lista completa
-desejada, ou `adk agents all` para todos. Reabra a sessão do cliente quando ele
+Se faltarem recursos, confira a seleção com `agentdevkit agents`.
+Para incluir um cliente, use `agentdevkit agents codex,claude` com a lista
+completa, ou `agentdevkit agents all`. Reabra a sessão do cliente quando ele
 exigir recarregar as skills. Pastas compartilhadas podem atender mais de um
 agente; arquivos próprios também podem manter uma pasta após a desmarcação.
 
 | Sintoma ou código | Próxima ação |
 | --- | --- |
 | `node` ou `npx` não encontrado | Siga [sem Node/npm][runtime]. |
-| `E_ARGS` | Confira comando, opção e aspas com `adk --help`. |
+| `E_ARGS` | Confira comando e aspas com `agentdevkit --help`. |
 | `E_MISSING` | Confirme `--target`; inicialize o projeto correto. |
 | `E_TARGET`, `E_SYMLINK` | Use a pasta real, fora dos diretórios reservados. |
 | `E_CONFLICT` ou lista `conflicts` | Revise o plano e os arquivos afetados. |
@@ -40,8 +40,8 @@ agente; arquivos próprios também podem manter uma pasta após a desmarcação.
 
 Simule antes de substituir uma alteração própria:
 
-```sh
-adk update --target "./meu projeto" --dry-run --json
+```console
+agentdevkit update --target "./meu projeto" --dry-run --json
 ```
 
 Compare cada `conflicts` com o que deseja manter. Edite a origem em
@@ -74,18 +74,19 @@ Os backups são locais e ignorados; não substituem o controle de versão.
 conteúdo alterado ou derivação pendente. Use `sync --check` para inspecionar;
 se as alterações da origem forem intencionais, execute `sync` e confira de novo.
 
-Se `.pbai4devs/estado/agentdevkit.json` estiver inválido, recupere sua cópia
-coerente do Git/backup junto aos arquivos correspondentes. Não apague o estado
-para esconder conflitos nem edite hashes para fazer o diagnóstico passar.
-Se necessário, peça ao agente para comparar os arquivos e planejar o reparo.
+Se `.pbai4devs/estado/agentdevkit.json` estiver inválido, recupere um backup
+local coerente com os arquivos correspondentes. O estado pessoal não é
+versionado. Não invente hashes nem apague o estado para ocultar conflitos;
+peça ao agente para comparar as fontes e planejar o reparo com `init`/`sync`.
 
-Preserve os marcadores dos blocos gerenciados em `AGENTS.md`, `CLAUDE.md`,
-`GEMINI.md` e `.gitignore`. Instruções próprias podem ficar fora dos blocos.
+Entradas humanas permanecem separadas das geradas. Na migração de versões
+antigas, o kit retira somente seu bloco reconhecido e preserva o texto humano.
+Não altere os marcadores dos blocos que ainda serão migrados.
 Não transforme diretórios de agentes ou o hub em links simbólicos.
 Destinos dentro de `.git`, `node_modules` ou `.pbai4devs` são recusados,
 inclusive com variações de maiúsculas/minúsculas.
 
-Na CLI, `adk sync --force` substitui conflitos identificados, com backup, e
+Na CLI, `sync --force` substitui conflitos identificados, com backup, e
 preserva arquivos nativos próprios que não são do kit. O script compartilhado
 `sincronizar-agentes` tem um modo `--force` mais amplo: pode limpar conteúdo
 extra nas áreas de skills, agents, commands e rules. Prefira a CLI para manter
@@ -96,7 +97,8 @@ a instalação; não trate esses dois comandos como equivalentes.
 Confira acesso ao GitHub, ao registro npm e a `nodejs.org`, conforme a etapa.
 Mantenha a verificação de certificados e hashes; resolva proxy, rede ou
 dependências do SO e repita. Não troque por um binário de outra arquitetura.
-O kit usa Node.js 24+; Bun e Python não substituem seu runtime.
+O launcher aceita Node.js 18+ e prepara Node 24+ para o núcleo. Sem Node/npm,
+o agente precisa instalar o runtime pelo mecanismo do SO antes de usar npx.
 
 `tools setup` reutiliza instalações saudáveis e verifica as compatíveis.
 Não aplicável em uma seleção geral não significa “instalado”. Esse preparo
@@ -104,7 +106,7 @@ também não baixa browsers, concede permissões desktop ou inicia aplicativos.
 Veja [ferramentas][tools] para requisitos adicionais da tarefa.
 
 Um lock indica instalação em andamento ou interrompida. Aguarde a operação
-ativa. Se o processo terminou, tente `adk tools unlock <nome>`; só um lock
+ativa. Se o processo terminou, tente `agentdevkit tools unlock <nome>`; só um lock
 local com PID comprovadamente morto é removido. Não apague locks ativos ou
 indeterminados para forçar duas instalações ao mesmo tempo.
 
@@ -116,16 +118,21 @@ solicitado. Se algo continua executando, identifique a sessão, tarefa do
 editor, extensão ou processo que o iniciou e pare-o pela interface responsável.
 Apagar apenas os logs não interrompe um processo que continua gravando.
 
-Diretórios como `.opencode/opencode-loop`, `.playwright*`, caches e relatórios
+Pastas de clientes e saídas como `.opencode/opencode-loop`, `.playwright*`,
+caches e relatórios
 não devem ser versionados. Verifique com `git status` e `git check-ignore -v
 <caminho>`. Se um arquivo já estava rastreado, acrescentar um ignore não o
 retira automaticamente do Git; revise a remoção do índice sem apagar dados.
+
+O `.gitignore` do hub não controla pastas irmãs. Confira a proteção local
+gerada pelo kit, incluindo `info/exclude` nos repositórios Git. Preserve
+configurações humanas em `.github` e `.vscode` ao migrar arquivos antigos.
 
 Para pedir ajuda, inclua SO/arquitetura, versões de Node/npm/AgentDevKit,
 comando executado, código de saída e trecho relevante do JSON, sem segredos.
 Use as [issues do projeto][issues] ou volte ao [índice](README.md).
 
-[atalho]: cli.md#atalho-opcional-para-os-exemplos
-[runtime]: installation.md#sem-node-ou-npm
+[cli]: cli.md
+[runtime]: installation.md#pré-requisitos
 [tools]: ../.pbai4devs/scripts/preparar-ferramentas/README.md
 [issues]: https://github.com/pathbit/AgentDevKit/issues

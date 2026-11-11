@@ -8,6 +8,7 @@ import { checkFrontmatter, checkLint, checkSynchronization, checkCatalog, checkR
 import { buildCatalog } from '../../lib/catalog.mjs';
 import { platformKey, toolWrapper } from '../../preparar-ferramentas/SCRIPT.mjs';
 import './ambiente-local.mjs';
+import { mergeGitignore, planLocalIgnore, applyLocalIgnore } from '../../lib/gitignore.mjs';
 
 requireNode();
 const markdown = '# Exemplo\n';
@@ -225,148 +226,56 @@ test('chama sincronizador e linter pelo Node atual, sem wrappers shell', t => {
   assert.throws(() => checkLint(root, files, () => ({ status: 1, stdout: 'Finding: fixture\nREADME.md: MD041' })), /README.md: MD041/);
 });
 
-const ignored = [
-  '.agent-tests/report.json', '.AgEnT-TeStS/report.json', 'TestResults/report.xml',
-  'tests/TestResults/report.xml', 'tests/testresults/report.xml', 'test-results/result.json',
-  'playwright-report/index.html', 'blob-report/report.zip', 'playwright/.cache/file',
-  'src/tmp/file', 'src/TMP/file', 'src/temp/file', 'src/TeMp/file',
-  '.pbai4devs/tools/agent-browser.exe', '.pbai4devs/tools/download/setup.bat',
-  '.pbai4devs/tools/package.json', '.pbai4devs/tools/node_modules/library/index.js',
-  '.pbai4devs/tools/agent-browser/.local/CURRENT.json',
-  '.pbai4devs/tools/agent-browser/.local/versions/package/README.md',
-  '.pbai4devs/tools/agent-browser/download.exe', '.pbai4devs/tools/agent-browser/download.bat',
-  '.pbai4devs/tools/bin/agent-browser', '.pbai4devs/tools/bin/README.md',
-  '.pbai4devs/tools/.cache/npm/file', '.pbai4devs/tools/npm-cache/file',
-  '.pbai4devs/external-skills/.local/upstream/SKILL.md',
-  '.pbai4devs/external-skills/.local/catalog-state.json',
-  '.PlAyWrIgHt-MCP/report.json', '.playwright.config.ts', '.playwright-mcp',
-  'tests/.PLAYWRIGHT-results.json', 'tests/PLAYWRIGHT-output/report.json'
-];
-const versionable = [
-  '.pbai4devs/scripts/executar-script/SCRIPT.mjs', '.pbai4devs/scripts/verificar-recursos/tests/TEST.mjs',
-  '.pbai4devs/templates/release/TEMPLATE.md', '.pbai4devs/templates/releases/TEMPLATE.md',
-  '.pbai4devs/templates/build/TEMPLATE.md', '.pbai4devs/scripts/tool/SCRIPT.bat',
-  '.pbai4devs/scripts/tool/program.exe', '.pbai4devs/tools/README.md',
-  '.pbai4devs/external-skills/README.md', '.pbai4devs/external-skills/CATALOG.json',
-  '.pbai4devs/tools/agent-browser/TOOL.json', '.pbai4devs/tools/agent-browser/SCRIPT.mjs',
-  '.pbai4devs/tools/agent-browser/README.md', '.pbai4devs/tools/agent-desktop/TOOL.json',
-  '.pbai4devs/tools/markdownlint-cli2/TOOL.json', 'playwright.config.ts',
-  'tests/unittests/example.test.ts', 'tests/e2e/example.spec.ts', 'tests/fixtures/example.json',
-  'tests/fixtures/example.dll', '.vscode/settings.json', 'infra/compose/compose.local.yml', 'scripts/start.cmd'
-];
-const agentRoots = registryRoots(projectRoot).agents;
-const ignoreFiles = ['.gitignore', '.pbai4devs/.gitignore', ...agentRoots.map(root => `${root}/.gitignore`), '.vscode/.gitignore'];
-const localArtifacts = [
-  'sessions/current.json', 'SeSsIoNs/current.json', '.local/state.json', '.cache/data.json',
-  'logs/current.txt', 'auth.json', 'credentials.json',
-  'settings.local.json', 'settings.LoCaL.json', 'opencode-loop/state.json',
-  '.playwright-mcp/result.json', '.PlAyWrIgHt-MCP/result.json',
-  '.DS_Store', 'Thumbs.db', 'draft.swp', '.env', '.ENV.production',
-  'NoDe_MoDuLeS/demo/index.js', '.AgEnT-TeStS/report.json'
-];
-for (const root of agentRoots) {
-  ignored.push(`${root}/unknown-private-file.json`, `${root}/tools/payload.js`, `${root}/cache/data.json`, `${root}/CaChE/data.json`);
-  for (const local of localArtifacts) ignored.push(`${root}/${local}`, `${root}/skills/demo/${local}`);
-  versionable.push(`${root}/.gitignore`, `${root}/skills/demo/SKILL.md`, `${root}/skills/demo/fixtures/example.json`, `${root}/skills/demo/fixtures/cache/input.json`, `${root}/skills/demo/.env.development.example`, `${root}/agents/demo/AGENT.md`, `${root}/agents/demo/native.yaml`, `${root}/commands/demo/COMMAND.md`, `${root}/rules/demo/RULE.md`);
-}
-ignored.push('.pbai4devs/unknown-private-file.json', '.vscode/unknown-private-file.json');
-for (const root of ['.pbai4devs/scripts/demo', '.pbai4devs/estado', '.vscode']) {
-  for (const local of localArtifacts) ignored.push(`${root}/${local}`);
-}
-versionable.push(
-  '.pbai4devs/.gitignore', '.pbai4devs/README.md', '.pbai4devs/espelhos.conf', '.pbai4devs/catalog.json',
-  '.pbai4devs/skills.json', '.pbai4devs/agents.json', '.pbai4devs/rules.json', '.pbai4devs/agents/revisor/claude.yaml',
-  '.pbai4devs/scripts/demo/tests/fixtures/expected.json', '.pbai4devs/scripts/demo/tests/fixtures/cache/input.json', '.pbai4devs/scripts/demo/.env.development.example', '.pbai4devs/estado/project.json',
-  '.claude/settings.json', '.codex/config.toml', '.cursor/mcp.json',
-  '.opencode/opencode.json', '.opencode/opencode.jsonc', '.github/copilot-instructions.md',
-  '.github/instructions/demo.instructions.md', '.github/prompts/demo.prompt.md',
-  '.github/workflows/ci.yml', '.github/actions/demo/action.yml', '.github/actions/cache/action.yml',
-  '.vscode/.gitignore', '.vscode/extensions.json', '.vscode/tasks.json', '.vscode/launch.json',
-  '.gemini/commands/instalar-ferramentas.toml', 'GEMINI.md'
-);
+
 function git(root, args, input) {
   const result = spawnSync('git', ['-C', root, ...args], { encoding: 'utf8', input });
   if (result.error) throw result.error;
   return result;
 }
 function ignoredPaths(root, paths) {
-  const result = git(root, ['check-ignore', '--no-index', '--stdin', '-z'], `${paths.join('\0')}\0`);
+  const result = git(root, ['check-ignore', '--no-index', '--stdin', '-z'], paths.join('\0') + '\0');
   assert.ok([0, 1].includes(result.status), result.stderr);
   return result.stdout.split('\0').filter(Boolean);
 }
+function ignoreFixture(t) {
+  const context = fixture(t, 'local-source-ignore-');
+  assert.equal(git(context.root, ['init', '-q']).status, 0);
+  for (const name of ['local.ignore', 'shared.ignore', 'agents.ignore']) context.file('.pbai4devs/templates/gitignore/' + name, readFileSync(join(projectRoot, '.pbai4devs/templates/gitignore/' + name), 'utf8'));
+  context.file('.pbai4devs/.gitignore', mergeGitignore('', readFileSync(join(projectRoot, '.pbai4devs/templates/gitignore/shared.ignore'), 'utf8')).text);
+  for (const root of ['.github', '.vscode']) context.file(root + '/.gitignore', mergeGitignore('', readFileSync(join(projectRoot, '.pbai4devs/templates/gitignore/agents.ignore'), 'utf8')).text);
+  return context;
+}
 
-test('gitignore mantém fontes elegíveis e ignora artefatos em qualquer caixa', t => {
-  for (const name of ['.playwright', '.PLAYWRIGHT', '.PlAyWrIgHt.config.ts']) {
-    for (const prefix of ['', 'tests/', 'nested/deep/']) ignored.push(`${prefix}${name}`);
-  }
-  const model = readFileSync(join(projectRoot, '.pbai4devs/templates/gitignore/TEMPLATE.md'), 'utf8');
-  const block = model.match(/```gitignore\r?\n([\s\S]*?)```/)?.[1];
-  assert.ok(block, 'Modelo deve conter bloco gitignore.');
-  const { root, file } = fixture(t, 'gitignore-');
-  assert.equal(git(root, ['init', '-q']).status, 0);
-  for (const path of ignoreFiles) file(path, readFileSync(join(projectRoot, path), 'utf8'));
-  for (const location of [projectRoot, root]) {
-    const actual = new Set(ignoredPaths(location, ignored));
-    assert.deepEqual(ignored.filter(path => !actual.has(path)), [], `Ignorados ausentes em ${relative(projectRoot, location) || '.'}`);
-    assert.deepEqual(ignoredPaths(location, versionable), []);
-  }
-  const actual = readFileSync(join(projectRoot, '.gitignore'), 'utf8');
-  assert.deepEqual(ignoredPaths(projectRoot, ['.vscode-test/download', '.VSCODE-TEST/download']).sort(), ['.VSCODE-TEST/download', '.vscode-test/download']);
-  const rules = actual.split(/\r?\n/).filter(line => line.trim() && !line.trim().startsWith('#'));
-  for (const agent of ['.pbai4devs', ...agentRoots, '.vscode']) {
-    assert.ok(!rules.some(line => line.includes(agent)), `Regras de ${agent} devem ficar no proprio .gitignore.`);
-  }
-  const marker = '# CUSTOM IGNORE';
-  assert.equal(actual.split(marker).length, 2, 'A seção custom deve existir uma vez.');
-  const tail = actual.slice(actual.indexOf(marker));
-  for (const line of block.split(/\r?\n/).filter(line => line && !line.startsWith('#'))) assert.ok(tail.includes(line), `Regra custom ausente: ${line}`);
+test('fontes novas permanecem elegíveis e derivados locais ficam fora do índice', t => {
+  const { root, file } = ignoreFixture(t);
+  const outputs = ['.github/skills/generated/SKILL.md', '.vscode/.gitignore', '.github/.gitignore'];
+  applyLocalIgnore(planLocalIgnore(root, { outputs }));
+  const sources = ['.pbai4devs/src/new.mjs', '.pbai4devs/bin/new.mjs', '.pbai4devs/tests/new.test.mjs', '.pbai4devs/release/new.mjs', '.github/workflows/own.yml', '.github/ISSUE_TEMPLATE/bug.yml', '.github/skills/human/SKILL.md', '.vscode/settings.json'];
+  const generated = [...outputs, '.pbai4devs/catalog.json', '.pbai4devs/skills.json', '.pbai4devs/espelhos.conf', '.pbai4devs/estado/agentdevkit.json'];
+  for (const path of [...sources, ...generated]) file(path, 'fixture\n');
+  assert.deepEqual(ignoredPaths(root, sources), []);
+  assert.deepEqual(new Set(ignoredPaths(root, generated)), new Set(generated));
+  assert.equal(git(root, ['add', '--all']).status, 0);
+  const tracked = git(root, ['ls-files', '-z']).stdout.split('\0');
+  for (const path of sources) assert.ok(tracked.includes(path), path);
+  for (const path of generated) assert.equal(tracked.includes(path), false, path);
 });
 
-test('git add preserva arquivos compartilhados e nunca inclui estado local dos agentes', t => {
-  const { root, file } = fixture(t, 'gitignore-index-');
-  assert.equal(git(root, ['init', '-q']).status, 0);
-  for (const path of ignoreFiles) file(path, readFileSync(join(projectRoot, path), 'utf8'));
-  const sourceFiles = ['.pbai4devs/tools/agent-browser/TOOL.json', '.pbai4devs/scripts/demo/tests/TEST.mjs', '.codex/skills/demo/SKILL.md', '.vscode/settings.json', '.github/workflows/ci.yml'];
-  const stateFiles = ['.pbai4devs/tools/agent-browser/.local/CURRENT.json', '.codex/auth.json', '.opencode/opencode-loop/state.json', '.claude/settings.local.json'];
-  for (const path of [...sourceFiles, ...stateFiles]) file(path, 'fixture\n');
-  const added = git(root, ['add', '--all']);
-  assert.equal(added.status, 0, added.stderr);
-  const tracked = git(root, ['ls-files', '-z']);
-  assert.equal(tracked.status, 0, tracked.stderr);
-  assert.deepEqual(tracked.stdout.split('\0').filter(Boolean).sort(), [...ignoreFiles, ...sourceFiles].sort());
+test('ignores locais cobrem resultados em qualquer caixa sem bloquear fixtures', t => {
+  const { root } = ignoreFixture(t);
+  const ignored = ['.pbai4devs/.PLAYWRIGHT-MCP/session.json', '.pbai4devs/tests/TestResults/report.xml', '.github/skills/demo/.env', '.github/skills/demo/NoDe_MoDuLeS/dep.js', '.vscode/logs/session.log'];
+  assert.deepEqual(new Set(ignoredPaths(root, ignored)), new Set(ignored));
+  assert.deepEqual(ignoredPaths(root, ['.pbai4devs/tests/fixtures/cache/input.json', '.github/skills/demo/.env.development.example', '.vscode/new-config.json']), []);
 });
 
-test('gitignores locais protegem fontes e artefatos mesmo sem gitignore na raiz', t => {
-  const { root, file } = fixture(t, 'gitignore-local-');
-  assert.equal(git(root, ['init', '-q']).status, 0);
-  for (const path of ignoreFiles.filter(path => path !== '.gitignore')) file(path, readFileSync(join(projectRoot, path), 'utf8'));
-  const internal = path => ['.pbai4devs', ...agentRoots, '.vscode'].some(directory => path.startsWith(`${directory}/`));
-  const expectedIgnored = ignored.filter(internal);
-  const actual = new Set(ignoredPaths(root, expectedIgnored));
-  assert.deepEqual(expectedIgnored.filter(path => !actual.has(path)), [], 'Ignore local nao deve depender das regras genericas da raiz.');
-  assert.deepEqual(ignoredPaths(root, versionable.filter(internal)), [], 'Fontes internas devem permanecer elegiveis sem ignore raiz.');
-});
-
-test('arquivos de agentes ja rastreados respeitam os gitignores locais', () => {
-  const result = git(projectRoot, ['ls-files', '--cached', '-z']);
-  assert.equal(result.status, 0, result.stderr);
-  const roots = ['.pbai4devs', ...agentRoots, '.vscode'];
-  const tracked = result.stdout.split('\0').filter(path => roots.some(root => path.startsWith(`${root}/`)));
-  if (tracked.length) assert.deepEqual(ignoredPaths(projectRoot, tracked), [], 'Remova artefatos locais do indice Git; gitignore nao remove arquivos ja rastreados.');
-});
-
-test('nenhuma fonte ou asset do catalogo compartilhado fica oculto no Git', () => {
-  const { catalog } = buildCatalog(projectRoot);
-  const sources = [...new Set(Object.values(catalog).flatMap(entries => Array.isArray(entries) ? entries.flatMap(entry => [entry.path, ...(entry.assets || [])]) : []).filter(path => path?.startsWith('.pbai4devs/') && !path.includes('/.local/')))];
-  assert.ok(sources.some(path => path.endsWith('/claude.yaml')));
-  assert.ok(sources.some(path => path.endsWith('/BOOTSTRAP.sh')));
-  assert.ok(sources.some(path => path.endsWith('/compose.local.yml.template')));
-  assert.deepEqual(ignoredPaths(projectRoot, sources), [], 'Fontes, fixtures e metadados do catalogo precisam continuar elegiveis.');
-});
-
-test('nenhum .playwright* está rastreado ou elegível no Git', () => {
-  const result = git(projectRoot, ['ls-files', '--cached', '--others', '--exclude-standard', '-z']);
-  assert.equal(result.status, 0, result.stderr);
-  const artifacts = result.stdout.split('\0').filter(path => path.split(/[\\/]/).some(part => /^\.playwright/i.test(part)));
-  assert.deepEqual(artifacts, []);
+test('validação source-only não exige catálogo, manifesto ou adaptadores gerados', t => {
+  const { root, file } = resourceFixture(t);
+  rmSync(join(root, '.pbai4devs/espelhos.conf'));
+  file('.pbai4devs/README.md', document('# Origem\n\n[Índice](catalog.json)\n'));
+  const before = readdirSync(root, { recursive: true }).sort();
+  const result = verifyResources({ root, sourceOnly: true, synchronize() { throw new Error('Não sincronizar fontes'); }, lint: () => ['lint=fixture'] });
+  assert.ok(result.files.includes(join(root, '.pbai4devs/README.md')));
+  assert.deepEqual(readdirSync(root, { recursive: true }).sort(), before);
+  file('.pbai4devs/README.md', document('# Origem\n\n[Erro](not-a-generated-file.json)\n'));
+  assert.throws(() => verifyResources({ root, sourceOnly: true, lint: () => [] }), /Link ausente/);
 });

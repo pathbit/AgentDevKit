@@ -7,12 +7,14 @@ description: Índice da estrutura compartilhada dos agentes.
 `.pbai4devs` é a origem compartilhada dos recursos instalados pelo AgentDevKit.
 Para a ordem de trabalho e os comandos,
 leia [INSTRUCTIONS.md](INSTRUCTIONS.md).
-O [catálogo completo](catalog.json) é gerado das fontes pelo sincronizador.
+O catálogo local `catalog.json` é gerado das fontes pelo sincronizador.
 Ele inclui recursos, ferramentas, automações, modelos e referências externas.
 Os arquivos `skills.json`, `rules.json` e `agents.json` são índices auxiliares
 das fontes. Os clientes selecionados usam seus diretórios de apontamentos.
 O estado `estado/agentdevkit.json` guarda `clients`: `["all"]` ou os IDs
-escolhidos.
+escolhidos. Catálogos, manifesto, estado e pastas nativas são derivados locais;
+não devem ser commitados. No repositório do kit, `bin/`, `src/`, `release/`
+e `tests/` também guardam o código-fonte do produto.
 Use `agents` na CLI para consultar ou alterar; `all` inclui os clientes legados.
 O hub fica completo; clientes podem compartilhar pastas necessárias.
 
@@ -33,9 +35,10 @@ layout registrado. Veja a [compatibilidade](COMPATIBILIDADE.md) dos clientes.
 Recursos auxiliares e guias ficam exclusivamente em `.pbai4devs`.
 Os testes das automações ficam em `scripts/<nome>/tests/`; seus resultados são
 ignorados em `.agent-tests/`.
-O `.gitignore` desta pasta controla suas fontes e arquivos locais. Cada cliente
-tem seu `.gitignore`, gerado dos [modelos](templates/gitignore/TEMPLATE.md);
-as regras específicas dos agentes não ficam no `.gitignore` da raiz.
+O `.gitignore` desta pasta controla sua árvore. As saídas nos clientes são
+protegidas por regras locais geradas dos [modelos](templates/gitignore/TEMPLATE.md).
+Um `.gitignore` não consegue ignorar irmãos com `../`; o gerador usa o local
+correto do Git e preserva configurações humanas.
 Os modelos acompanham cada fase. Após implementar, use `atualizar-documentacao`
 e o comando `revisar-entrega` para fechar documentação, revisão e evidências.
 

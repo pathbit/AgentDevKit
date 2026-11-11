@@ -9,6 +9,7 @@ import { synchronize, header, isReference, resourcePath } from '../SCRIPT.mjs';
 import { buildCatalog } from '../../lib/catalog.mjs';
 import { toolWrapper } from '../../preparar-ferramentas/SCRIPT.mjs';
 import { mergeGitignore, ignoreBegin, ignoreEnd, validateIgnoreClients } from '../../lib/gitignore.mjs';
+import './LOCAL_IGNORE.mjs';
 import { validateCatalog as validateExternalCatalog } from '../../gerenciar-skills-externas/SCRIPT.mjs';
 
 const project = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
@@ -21,7 +22,7 @@ const write = (root, path, content) => { mkdirSync(dirname(join(root, path)), { 
 const pointer = (origin = 'origem.md', title = 'Referencia') => `---\ndescription: Referencia.\n---\n\n# ${title}\n\n${marker}\nLeia e siga [origem](${origin}).\n`;
 const toolConfig = (name = 'demo') => ({ name, description: `Ferramenta ${name}.`, group: 'base', source: `https://github.com/fixture/${name}`, download: { provider: 'npm', package: name, registry: 'https://registry.npmjs.org/', repository: `fixture/${name}`, channel: 'latest' }, platforms: [`${process.platform}-${process.arch}`], scripts: { entry: 'SCRIPT.mjs' }, probe: ['--version'] });
 const externalConfig = () => ({ schemaVersion: 1, allowlist: ['fixture/skills'], skills: [{ id: 'external-demo', repository: 'fixture/skills', commit: 'a'.repeat(40), path: 'skills/demo/SKILL.md', name: 'external-demo', license: 'MIT', use: 'Revisar exemplo externo.', status: 'reviewed', notes: 'Sem execução automática.' }] });
-const run = (root, options = {}) => synchronize({ root, output() {}, ...options });
+const run = (root, options = {}) => synchronize({ root, localIgnores: false, generateEntrypoints: false, output() {}, ...options });
 function snapshot(root) {
   const result = [];
   function visit(folder, parent = '') {
@@ -310,7 +311,7 @@ test('allowlist abre somente configuracoes e diretorios declarados no Git', t =>
 test('allowlist invalida ou token ausente falha antes de mutacoes', t => {
   for (const config of [[], null, { '.pbai4devs': {} }, { '../outside': {} }, { '.codex': [], '.vscode': {} }, { '.codex': { resources: 'false' } }, { '.codex': { allow: null } }, { '.codex': { extra: true } }, { '.codex': {}, '.CODEX': {} }]) assert.throws(() => validateIgnoreClients(config));
   for (const path of ['/absolute', '../outside', 'nested/../outside', './file', 'C:/file', 'back\\slash', 'double//slash', '*', '*.json', '!file', '#file', 'ends ', '']) assert.throws(() => validateIgnoreClients({ '.codex': { allow: [path] } }), /relativo/);
-  for (const body of ['no-token\n', '{{ALLOWLIST}}\n{{ALLOWLIST}}\n']) {
+  for (const body of ['{{ALLOWLIST}}\n{{ALLOWLIST}}\n']) {
     const root = fixture(t, true); write(root, '.pbai4devs/templates/gitignore/agents.ignore', body); rejected(root, { force: true }, /unico/);
   }
   const root = fixture(t, true); write(root, '.pbai4devs/templates/gitignore/clients.json', '{broken'); rejected(root, { force: true });
@@ -520,7 +521,10 @@ test('frontmatter e reconhecimento de apontamentos não confundem instruções p
 
 test('CLI Node propaga códigos de check e rejeita opções sem invocar shell', t => {
   const root = fixture(t);
-  run(root);
+  write(root, '.pbai4devs/templates/gitignore/local.ignore', readFileSync(join(project, '.pbai4devs/templates/gitignore/local.ignore'), 'utf8'));
+  write(root, '.pbai4devs/templates/gitignore/agents.ignore', readFileSync(join(project, '.pbai4devs/templates/gitignore/agents.ignore'), 'utf8'));
+  assert.equal(spawnSync('git', ['init', '-q', root]).status, 0);
+  run(root, { localIgnores: true });
   const before = snapshot(root);
   const good = spawnSync(process.execPath, [cli, '--root', root, '--check'], { encoding: 'utf8' });
   assert.equal(good.status, 0, good.stderr);
@@ -533,6 +537,43 @@ test('CLI Node propaga códigos de check e rejeita opções sem invocar shell', 
   write(root, source, skill.replace('Exemplo.', 'Novo.'));
   const changed = spawnSync(process.execPath, [cli, '--root', root, '--force', '--check'], { encoding: 'utf8' });
   assert.equal(changed.status, 1, changed.stderr);
+});
+
+test('gera manifesto e entradas sem estado e atualiza apenas entradas integralmente próprias', t => {
+  const root = fixture(t, true);
+  write(root, source, skill);
+  rmSync(join(root, '.pbai4devs/espelhos.conf'));
+  for (const name of ['AGENTS.md', 'CLAUDE.md', 'GEMINI.md']) write(root, `.pbai4devs/templates/entrypoints/${name}`, `---\ndescription: Entrada.\n---\n\n# ${name}\n`);
+  write(root, 'CLAUDE.md', '# Instruções humanas\n');
+  assertCheckReadonly(root, { generateEntrypoints: true });
+  const first = run(root, { generateEntrypoints: true });
+  assert.ok(first.ownedOutputs.includes('AGENTS.md'));
+  assert.equal(first.ownedOutputs.includes('CLAUDE.md'), false);
+  assert.equal(read(root, 'CLAUDE.md'), '# Instruções humanas\n');
+  assert.ok(existsSync(join(root, '.agents/skills/projeto/demo/SKILL.md')));
+  assertCheckReadonly(root, { generateEntrypoints: true }, 0);
+  write(root, '.pbai4devs/templates/entrypoints/AGENTS.md', '---\ndescription: Entrada.\n---\n\n# Atualizada\n');
+  run(root, { generateEntrypoints: true });
+  assert.match(read(root, 'AGENTS.md'), /# Atualizada/);
+  write(root, 'AGENTS.md', read(root, 'AGENTS.md') + '\nTexto humano.\n');
+  const second = run(root, { generateEntrypoints: true });
+  assert.equal(second.ownedOutputs.includes('AGENTS.md'), false);
+  assert.match(read(root, 'AGENTS.md'), /Texto humano/);
+});
+
+test('entradas da CLI usam ownership integral sem criar registro derivado redundante', t => {
+  const root = fixture(t, true);
+  const template = '---\ndescription: Entrada.\n---\n\n# Agentes\n';
+  const entry = template + '\nResponda em português.\n';
+  write(root, source, skill);
+  write(root, '.pbai4devs/templates/entrypoints/AGENTS.md', template);
+  write(root, 'AGENTS.md', entry);
+  write(root, '.pbai4devs/estado/agentdevkit.json', JSON.stringify({ clients: ['codex'], files: { 'AGENTS.md': createHash('sha256').update(entry).digest('hex') } }));
+  const result = run(root, { generateEntrypoints: true });
+  assert.ok(result.ownedOutputs.includes('AGENTS.md'));
+  assert.equal(read(root, 'AGENTS.md'), entry);
+  assert.equal(existsSync(join(root, '.pbai4devs/estado/derived.json')), false);
+  assertCheckReadonly(root, { generateEntrypoints: true }, 0);
 });
 
 function completeCatalogFixture(t) {

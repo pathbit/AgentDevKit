@@ -16,12 +16,10 @@ node .pbai4devs/scripts/executar-script/SCRIPT.mjs preparar-ferramentas list
 são preservados; falhas não tentam outro runtime. Scripts shell/Python e links
 simbólicos são recusados. Arquivos `.js`/`.cjs` existentes usam o mesmo Node.
 
-Sem Node/npm, o agente chama primeiro o
-[bootstrap nativo](../preparar-ferramentas/BOOTSTRAP.md) com `--runtime-only`
-em macOS/Linux ou `-RuntimeOnly` no PowerShell. Ele prepara apenas o runtime
-e informa seu caminho absoluto para continuar a operação solicitada.
-Os inicializadores são chamados pelo shell, fora deste seletor;
-o modo padrão também instala ferramentas e fica reservado ao preparo completo.
+Com Node 18+, o [bootstrap JavaScript](../preparar-ferramentas/BOOTSTRAP.md)
+aceita `--runtime-only` e prepara Node 24+ antes da operação solicitada.
+Sem Node/npm, o agente instala primeiro o runtime pelo mecanismo do SO.
+O modo padrão do bootstrap prepara também as ferramentas; reserve-o ao setup.
 
 `testar-navegador` mantém o executor Playwright indicado em `SCRIPT.conf`;
 sem `--plan`, retorna 69 para o agente usar o conector, sem executar o arquivo.

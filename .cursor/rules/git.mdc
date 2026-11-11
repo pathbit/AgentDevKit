@@ -1,9 +1,0 @@
----
-description: Convenções de Git e autoria dos commits do projeto.
-alwaysApply: true
----
-
-# Regras Git
-
-<!-- gerado: sincronizar-agentes -->
-Leia e siga [origem](../../.pbai4devs/rules/git/RULE.md).

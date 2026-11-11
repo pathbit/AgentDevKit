@@ -1,3 +1,0 @@
-# gerado: sincronizar-agentes
-description = "Comando para consultar o status do roadmap."
-prompt = "@{.pbai4devs/commands/status-roadmap/COMMAND.md}\n\n{{args}}"

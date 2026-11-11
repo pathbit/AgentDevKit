@@ -5,7 +5,7 @@ description: Catálogo de CLIs e ferramentas condicionais para os agentes.
 # Ferramentas
 
 Cada pasta mantém `TOOL.json`, `SCRIPT.mjs` e um guia.
-O [catálogo gerado](../catalog.json) relaciona essas definições aos comandos
+O catálogo local `catalog.json` relaciona essas definições aos comandos
 de instalação, atualização, verificação e execução. Ao editar definições,
 rode `sincronizar-agentes` e `--check`; versões instaladas ficam no estado local.
 O instalador comum consulta `latest` na origem oficial e instala com

@@ -21,8 +21,9 @@ preserve os metadados exigidos pela ferramenta.
 Ao criar ou atualizar `.gitignore`, mantenha o bloco do
 [modelo de gitignore](../../templates/gitignore/TEMPLATE.md)
 como última seção CUSTOM IGNORE e acrescente os padrões específicos ali.
-Regras de `.pbai4devs` e dos clientes pertencem aos `.gitignore` locais, gerados
-das fontes desse modelo. Não acrescente esses caminhos ao arquivo da raiz.
+As políticas vêm desse modelo. `.pbai4devs/.gitignore` controla o hub; o gerador
+protege os derivados externos no Git local. Sem Git, uma proteção temporária
+na raiz evita versioná-los ao iniciar o repositório.
 Confira com Git tanto os arquivos permitidos quanto os artefatos ignorados.
 Scripts compartilhados devem ser versionados; resultados locais, ignorados.
 Ignore o conteúdo baixado de tools, preservando `TOOL.json`, scripts próprios

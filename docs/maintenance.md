@@ -1,120 +1,88 @@
 ---
-description: Manutenção da documentação, compatibilidade e releases do kit.
+description: Verificação, pacotes e releases do AgentDevKit.
 ---
 
 # Manutenção e releases
 
-Este guia é para quem mantém o AgentDevKit. Para atualizar o kit em um projeto,
-use o [guia de instalação](installation.md).
+Para atualizar o kit em um projeto, use [instalação](installation.md).
+Este guia explica como manter e publicar o gerador.
 
-## Manter a documentação útil
+## Manter fontes e guias
 
-Documente uma tarefa por página: objetivo, pré-requisito, exemplo, resultado
-esperado e como resolver os erros mais comuns. O README apresenta o produto;
-a [wiki](README.md) direciona a leitura; a referência guarda os detalhes.
+Edite as fontes em `.pbai4devs`, não os apontamentos locais. Documente objetivo,
+pré-requisito, exemplo e resultado esperado. Use links para os detalhes e evite
+copiar a mesma regra para vários arquivos.
 
-Mantenha procedimentos em sua origem e use links. Uma regra nova pertence ao
-hub, não a cópias de texto em cada cliente. Guias de uso vivem em `docs/`;
-contratos específicos ficam junto à skill, script ou ferramenta.
+Ao mudar layouts, revise templates, compatibilidade e testes. Ao mudar comandos,
+revise ajuda, idiomas e exemplos. Markdown começa com frontmatter e H1.
+Resultados e capturas de verificação permanecem ignorados.
 
-Ao mudar um comando, revise exemplos, ajuda, tradução e próximos passos. Ao
-mudar um cliente, revise [compatibilidade][clients], política, apontamentos e
-testes. Preserve os metadados nativos exigidos por cada formato.
+## Verificar sem desperdiçar CI
 
-Confira todos os Markdown alterados: frontmatter, H1, links, blocos de código
-e lint. Execute os exemplos em alvos isolados. Diferencie resultado observado
-de comportamento esperado; não publique saídas locais como prova permanente.
+O CI tem quatro perfis:
 
-## Preparar uma versão
+| Perfil | Responsabilidade |
+| --- | --- |
+| Linux / Node 24 | Fontes, produto, infraestrutura, lint e pacote real. |
+| Windows / Node 24 | Portabilidade da CLI, arquivos e runtime. |
+| macOS / Node 24 | Portabilidade da CLI, arquivos e runtime. |
+| Linux / Node 26 | Smoke de compatibilidade. |
 
-1. Atualize a versão em `package.json` e no lockfile, o changelog e os exemplos
-   que dependem dela. Registre escopo e critérios da entrega.
-2. Execute os testes de [contribuição](../CONTRIBUTING.md), a matriz funcional
-   quando aplicável e a revisão independente da entrega.
-3. Envie o commit revisado. O [CI][ci] testa seis combinações de sistema/Node,
-   gera o pacote, testa o tarball exato e guarda quatro arquivos no artifact:
-   `.tgz`, `SHA256SUMS`, `NOTES.txt` e `package-manifest.json`.
-4. Para uma **nova versão aprovada**, crie e envie sua tag `v<versao>`.
-   A tag deve corresponder ao `package.json` e ao lockfile. Não mova uma tag
-   já publicada. Publicar exige permissão no repositório.
+A distribuição real é testada uma vez no perfil completo. Os outros perfis
+validam seus riscos específicos. Execuções antigas da mesma referência podem
+ser canceladas quando substituídas, sem cancelar uma publicação em andamento.
 
-O [workflow de release][release] executa o CI e baixa o artifact pelo seu ID.
-Confere o SHA-256 contra o valor do job que o testou e contra `SHA256SUMS`;
-publica esse mesmo arquivo e o checksum. Não reempacota entre teste e publicação.
-Uma falha bloqueia a publicação; uma release existente não é sobrescrita.
-Somente o job de publicação tem permissão para escrever no repositório.
+`npm run ci:full`, `ci:portable` e `ci:smoke` executam os perfis localmente.
+A [contribuição](../CONTRIBUTING.md) explica os checks durante o desenvolvimento.
 
-## Gerar ou publicar pelo Actions
+## Gerar um pacote
 
-Para **gerar um pacote sem publicar uma release**, abra
-[Actions → CI][ci-page], selecione **Run workflow** e escolha a branch.
-Ao terminar, baixe `agentdevkit-<commit>-<tentativa>` na seção **Artifacts**.
-O pacote também é gerado nos pushes e PRs aprovados pelo CI.
+O [CI][ci] roda em pushes e PRs; também pode ser iniciado em **Run workflow**.
+O perfil completo produz `agentdevkit-<versão>.tgz`, `SHA256SUMS`, notas e
+manifesto. O artifact inclui commit, execução e checksum para identificar
+exatamente o que foi testado. Downloads do Actions exigem login e expiram;
+releases são o canal público de instalação.
 
-Esses artifacts duram 14 dias e seu download exige login no GitHub. Releases
-são o canal público para instalação; um artifact de branch não é uma versão
-publicada. Nenhum tarball ou relatório é commitado no repositório.
+Para investigar localmente:
 
-O envio de uma nova tag inicia a release automaticamente. Para repetir uma
-publicação que falhou, corrija a causa e use **Re-run failed jobs**. Também é
-possível iniciar o workflow para uma tag existente com GitHub CLI autenticada:
-
-```sh
-gh workflow run release.yml --ref vX.Y.Z
-```
-
-Substitua pela tag real, que deve conter o workflow atualizado. Executar
-Release em uma branch é recusado; uma tag já publicada continua preservada.
-O workflow usa `GITHUB_TOKEN`, sem exigir token pessoal salvo nos secrets.
-
-## Conferir o pacote localmente
-
-Para investigar o empacotamento antes de enviar mudanças:
-
-```sh
+```console
 npm run pack:release
 ```
 
-O diretório `.agent-tests/release/<versao>/` recebe os mesmos quatro arquivos.
-Para testar o pacote da versão atual:
+O resultado fica em `.agent-tests/release/<versão>/`. Esse comando não publica
+nada. Nunca versione o tarball ou seus relatórios.
 
-```sh
-ADK_BUILD="$PWD/.agent-tests/release/0.0.2"
-export AGENTDEVKIT_TARBALL="$ADK_BUILD/agentdevkit-0.0.2.tgz"
-npm run test:distribution
-```
+## Publicar uma versão
 
-No PowerShell, atribua o caminho absoluto a `$env:AGENTDEVKIT_TARBALL`.
-Essa variável seleciona o pacote existente, sem reempacotá-lo. `npm pack`
-sozinho não publica no GitHub nem no registro npm.
+1. Atualize versão e lockfile, changelog, exemplos e escopo da entrega.
+2. Conclua testes, documentação e revisão independente.
+3. Envie o commit à branch principal e aguarde o CI aprovado.
+4. Crie e envie a tag `v<versão>` para esse mesmo commit.
 
-## Conferir após publicar
+O [workflow de release][release] localiza o CI aprovado de um push na branch
+principal, confere o commit e baixa seu artifact por ID. Verifica procedência,
+versão e checksum antes de publicar. Não repete a suíte nem reempacota.
 
-Abra a release, baixe o pacote e `SHA256SUMS`, confira o SHA-256 e instale o
-arquivo público em um projeto descartável. Execute `doctor` e `sync --check`.
-Isso verifica a distribuição acessível ao usuário, além do checkout local.
+Se o artifact expirou, reexecute o CI original do push e depois a release.
+Uma execução manual de CI serve para diagnóstico, mas não substitui essa
+procedência. Uma release existente não é sobrescrita.
 
-A [release v0.0.1][v1] é a primeira publicação. Correções de documentação em
-`master` podem ser mais recentes que seus arquivos; o pacote de uma release
-permanece ligado à versão publicada.
+Se o upload falhar após a criação do rascunho, ele permanece privado. Confira
+o rascunho antes de tentar novamente: o publicador não substitui uma release
+existente, mesmo em rascunho. Remova somente o rascunho incompleto dessa tentativa
+após conferir a origem; nunca apague uma release publicada para repetir o fluxo.
 
-## Ler o CI corretamente
+Para reiniciar uma publicação que falhou, use **Re-run failed jobs** ou
+`gh workflow run release.yml --ref vX.Y.Z` com a tag real. O token do workflow
+cuida da publicação; não é necessário guardar um token pessoal nos secrets.
 
-O [CI][ci] tem seis combinações: três sistemas operacionais com Node 24 e 26.
-Ele executa testes do produto, testes da infraestrutura e verificações dos
-recursos. O lint Markdown é instalado no job Linux/Node 24.
-Depois das seis combinações, o job **Verified package** testa a distribuição
-e disponibiliza o artifact. Ele também precisa passar para concluir o CI.
+## Conferir a entrega pública
 
-A matriz funcional de oito projetos é uma execução separada de
-`testar-maturidade run`; não confunda seus cenários com os seis jobs do CI.
-Resultados ficam em diretórios ignorados. Falhas e restrições do ambiente
-devem acompanhar a revisão, sem prometer validação de clientes não executados.
+Baixe o pacote e o checksum pela release, confira SHA-256 e instale em um
+projeto descartável por `npx`. Teste seleção, `doctor` e `sync --check`.
+Uma aprovação de CI não substitui a prova de que o arquivo público é utilizável.
 
-[Wiki](README.md) · [Design](design.md) · [Contribuir](../CONTRIBUTING.md)
+[Wiki](README.md) · [Comunidade](community.md)
 
-[clients]: ../.pbai4devs/COMPATIBILIDADE.md
-[ci]: https://github.com/pathbit/AgentDevKit/blob/master/.github/workflows/ci.yml
-[release]: https://github.com/pathbit/AgentDevKit/blob/master/.github/workflows/release.yml
-[v1]: https://github.com/pathbit/AgentDevKit/releases/tag/v0.0.1
-[ci-page]: https://github.com/pathbit/AgentDevKit/actions/workflows/ci.yml
+[ci]: https://github.com/pathbit/AgentDevKit/actions/workflows/ci.yml
+[release]: https://github.com/pathbit/AgentDevKit/actions/workflows/release.yml

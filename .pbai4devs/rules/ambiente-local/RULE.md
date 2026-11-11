@@ -5,8 +5,9 @@ description: Estrutura mínima e ambiente local dos projetos com Docker Compose.
 
 # Ambiente local
 
-Na configuração técnica de projetos novos, crie `.vscode/`, `.pbai4devs/`, as
-pastas de agentes suportadas, `src/`, `tests/` e `infra/compose/compose.local.yml`.
+Na configuração técnica de projetos novos, mantenha `.pbai4devs/` e gere apenas
+os clientes selecionados. Configure `.vscode/` quando esse editor for adotado.
+Para a aplicação, crie `src/`, `tests/` e `infra/compose/compose.local.yml`.
 São obrigatórios `.gitignore`, `.gitattributes`, `.editorconfig`,
 `.dockerignore`, `Makefile` e `README.md`; `scripts/` é opcional para automações
 da aplicação. Em projetos existentes, preserve a organização até uma

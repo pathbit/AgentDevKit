@@ -1,3 +1,0 @@
-# gerado: sincronizar-agentes
-description = "Identifica o ambiente local e a estrutura do projeto sem alterações."
-prompt = "@{.pbai4devs/commands/diagnosticar/COMMAND.md}\n\n{{args}}"

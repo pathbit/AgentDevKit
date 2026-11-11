@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import test from 'node:test';
 import { projectRoot, requireNode } from '../../lib/runtime.mjs';
-import { copyAgentStructure, prepareExamples, resourceTargets, SCENARIOS } from '../SCRIPT.mjs';
+import { copyAgentStructure, prepareExamples, registeredRoots, resourceTargets, SCENARIOS } from '../SCRIPT.mjs';
 
 requireNode();
 function fixture(t) {
@@ -36,6 +36,7 @@ test('copia recursos e configurações, excluindo payloads, caches e segredos', 
   put('.env.example', 'PORT=3000\n');
   const excluded = ['.pbai4devs/tools/demo/.local/package/README.md', '.pbai4devs/tools/demo/download.exe', '.pbai4devs/tools/.cache/archive', '.pbai4devs/tools/bin/demo.mjs', '.pbai4devs/external-skills/.local/upstream/SKILL.md', '.pbai4devs/scripts/demo/node_modules/pkg/index.js', '.pbai4devs/scripts/demo/.env', '.pbai4devs/scripts/demo/report.log', '.env', '.codex/auth.json', '.github/credentials.json', '.vscode/settings.local.json', '.pbai4devs/scripts/demo/private.pem', '.pbai4devs/scripts/demo/config.local.toml', '.codex/.credentials.json', '.agents/.local/token.json', '.gemini/auth.json'];
   excluded.push('.pbai4devs/scripts/demo/playwright-report/index.html', '.pbai4devs/scripts/demo/TEST-RESULTS/report.json', '.pbai4devs/scripts/demo/TmP/generated.json', '.gemini/Temp/context.json', '.gemini/Sessions/state.json', '.pbai4devs/scripts/demo/history.jsonl', '.pbai4devs/skills/demo/.PLAYWRIGHT-MCP/session.json');
+  excluded.push('.pbai4devs/bin/agentdevkit.mjs', '.pbai4devs/src/cli.mjs', '.pbai4devs/release/pipeline.mjs', '.pbai4devs/tests/cli.test.mjs', '.pbai4devs/DEVELOPMENT.md');
   const kept = ['.pbai4devs/scripts/demo/tests/fixtures/cache/input.json', '.pbai4devs/scripts/demo/tests/fixtures/playwright-response.json', '.pbai4devs/templates/demo/compose.local.yml.template'];
   for (const file of kept) put(file, 'fixture versionavel');
   for (const file of excluded) put(file, 'não copiar');
@@ -154,6 +155,19 @@ test('localiza apontamentos pelo formato de cada tipo e por overrides nativos', 
   assert.deepEqual(resourceTargets(root, '.pbai4devs/skills/projeto/demo/SKILL.md'), [
     '.claude/skills/demo/SKILL.md', '.codex/skills/projeto/demo/SKILL.md', '.codex/skills/alias/SKILL.md',
   ]);
+});
+
+test('checkout de fontes sem manifesto deriva clientes em memória', t => {
+  const { root, put } = fixture(t);
+  const manifest = join(root, '.pbai4devs/espelhos.conf');
+  rmSync(manifest);
+  assert.ok(registeredRoots(root).includes('.claude'));
+  const source = '.pbai4devs/skills/projeto/demo/SKILL.md';
+  assert.ok(resourceTargets(root, source).includes('.claude/skills/demo/SKILL.md'));
+  put('.pbai4devs/estado/agentdevkit.json', JSON.stringify({ clients: ['claude'] }));
+  assert.deepEqual(registeredRoots(root), ['.claude']);
+  assert.deepEqual(resourceTargets(root, source), ['.claude/skills/demo/SKILL.md']);
+  assert.equal(existsSync(manifest), false);
 });
 
 test('saída não pode sobrepor recursos de origem nem escapar das áreas de teste', t => {

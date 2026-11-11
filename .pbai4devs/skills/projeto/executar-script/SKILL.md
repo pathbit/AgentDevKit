@@ -5,10 +5,10 @@ description: Identifica ferramentas instaladas e executa scripts pelo interpreta
 
 # Executar script
 
-No início da sessão, confira Node.js 24+ e npm. Se faltar ou falhar, execute
-o [preparo automático](../../../scripts/preparar-ferramentas/BOOTSTRAP.md)
-pelo shell do SO com `--runtime-only` em macOS/Linux ou `-RuntimeOnly` no
-PowerShell. Isso prepara apenas Node/npm; preserve a operação solicitada.
+No início, confira Node.js 24+ e npm. Com Node 18+, execute o
+[bootstrap JavaScript](../../../scripts/preparar-ferramentas/BOOTSTRAP.md)
+com `--runtime-only` para preparar o núcleo. Sem Node, instale-o primeiro
+pelo mecanismo nativo do SO. Preserve a operação originalmente solicitada.
 Faça o preparo pelo usuário e reutilize o caminho absoluto informado, sem
 depender de PATH global. Execute
 `diagnosticar-ambiente` pelo seletor de [scripts](../../../scripts/README.md).

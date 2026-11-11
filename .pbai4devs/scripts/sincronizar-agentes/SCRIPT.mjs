@@ -2,10 +2,12 @@
 // Planeja em memória; somente os caminhos gerenciados pelo manifesto são alterados.
 import { cpSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, rmdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, posix, resolve } from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import { requireNode, projectRoot, isMain } from '../lib/runtime.mjs';
 import { buildCatalog } from '../lib/catalog.mjs';
-import { mergeGitignore, validateIgnoreClients, renderClientIgnore, isGeneratedOutput } from '../lib/gitignore.mjs';
+import { resourcePath } from '../lib/resource-path.mjs';
+import { adapterManifest, resolveAdapters } from '../lib/adapters.mjs';
+import { mergeGitignore, validateIgnoreClients, renderClientIgnore, isGeneratedOutput, planLocalIgnore, applyLocalIgnore, checkLocalIgnore, ignoreBegin, ignoreEnd } from '../lib/gitignore.mjs';
 
 const marker = '<!-- gerado: sincronizar-agentes -->';
 const tomlMarker = '# gerado: sincronizar-agentes';
@@ -67,24 +69,9 @@ function link(target, source) {
   return posix.relative(posix.dirname(target), source).split('/').map(part => encodeURIComponent(part).replace(/[!'()*]/g, character => '%' + character.charCodeAt(0).toString(16).toUpperCase())).join('/');
 }
 
-// Layouts de arquivo preservam os grupos, retirando apenas o nome do principal.
-export function resourcePath(source, kind, mode = 'agrupado') {
-  if (!Object.hasOwn(principals, kind) || !layouts.has(mode)) fail(`Formato invalido: ${kind}/${mode}`);
-  const path = source.slice('.pbai4devs/'.length);
-  if (mode === 'agrupado') return path;
-  const slug = posix.basename(posix.dirname(source));
-  if (mode === 'plano') {
-    if (!/^[a-z0-9-]+$/.test(slug)) fail(`Nome invalido para layout plano: ${source}`);
-    return kind === 'skills' ? `skills/${slug}/SKILL.md` : `${kind}/${slug}.md`;
-  }
-  if (kind === 'skills') fail(`Skills exigem formato agrupado ou plano: ${mode}`);
-  const folder = posix.dirname(path);
-  const extensions = { arquivo: '.md', mdc: '.mdc', instrucoes: '.instructions.md', prompt: '.prompt.md', agente: '.agent.md' };
-  const scopes = { instrucoes: 'instructions', prompt: 'prompts' };
-  return `${scopes[mode] || kind}${folder.slice(kind.length)}${extensions[mode]}`;
-}
+export { resourcePath } from '../lib/resource-path.mjs';
 
-export function synchronize({ root = projectRoot, check = false, force = false, output = console.log } = {}) {
+export function synchronize({ root = projectRoot, check = false, force = false, localIgnores = true, generateEntrypoints = true, output = console.log } = {}) {
   requireNode();
   root = realpathSync(resolve(root));
   const absolute = value => join(root, ...value.split('/'));
@@ -137,7 +124,10 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
   const natives = [];
   const legacy = [];
   const config = '.pbai4devs/espelhos.conf';
-  const configText = read(safe(config));
+  const configExists = stat(safe(config));
+  const stateFile = '.pbai4devs/estado/agentdevkit.json';
+  const installed = stat(safe(stateFile)) ? JSON.parse(read(safe(stateFile))) : null;
+  const configText = configExists ? read(safe(config)) : adapterManifest(root, { clients: installed?.clients });
   const rows = configText.split('\n');
   function ignoreRoot(target) {
     if (!/^\.[^/]+$/.test(target) || reserved.has(target.toLowerCase())) fail(`Pasta de agente invalida: ${target}`);
@@ -381,12 +371,49 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
     }
   }
   for (const { target } of missing) cleanScope(target);
+  const rootEntries = new Map();
+  const entryRegistry = '.pbai4devs/estado/derived.json';
+  if (generateEntrypoints) {
+    const previous = stat(safe(entryRegistry)) ? JSON.parse(read(safe(entryRegistry))) : { schemaVersion: 1, entries: {} };
+    if (previous?.schemaVersion !== 1 || !previous.entries || typeof previous.entries !== 'object' || Array.isArray(previous.entries) || Object.entries(previous.entries).some(([name, hash]) => !['AGENTS.md', 'CLAUDE.md', 'GEMINI.md'].includes(name) || !/^[a-f0-9]{64}$/.test(hash))) fail('Registro de entradas derivadas invalido.');
+    const next = { schemaVersion: 1, entries: {} };
+    for (const name of resolveAdapters(installed?.clients).entrypoints) {
+      const template = `.pbai4devs/templates/entrypoints/${name}`;
+      if (!stat(safe(template))?.isFile()) continue;
+      const info = stat(safe(name));
+      const current = info?.isFile() ? readFileSync(absolute(name)) : null;
+      const previousHash = previous.entries[name] ?? installed?.files?.[name];
+      if (info && (!current || createHash('sha256').update(current).digest('hex') !== previousHash)) continue;
+      if (current && createHash('sha256').update(current).digest('hex') === installed?.files?.[name]) {
+        rootEntries.set(name, current.toString('utf8'));
+        continue;
+      }
+      const content = readFileSync(absolute(template), 'utf8');
+      const nextHash = createHash('sha256').update(content).digest('hex');
+      next.entries[name] = nextHash;
+      rootEntries.set(name, content);
+    }
+    const content = JSON.stringify(next, null, 2) + '\n';
+    if ((Object.keys(next.entries).length || stat(safe(entryRegistry))) && (!stat(safe(entryRegistry)) || readFileSync(absolute(entryRegistry), 'utf8') !== content)) registries.set(entryRegistry, content);
+  }
+  const ownedOutputs = sorted([...targets, ...built.outputs.keys(), '.pbai4devs/espelhos.conf', ...rootEntries.keys(), ...(generateEntrypoints && (stat(safe(entryRegistry)) || registries.has(entryRegistry)) ? [entryRegistry] : []),
+    ...[...discoveries].flatMap(agent => ['skills', 'rules', 'agents'].map(kind => `${agent}/${kind}.json`)),
+    ...[...ignoreTemplates.keys()].filter(target => {
+      if (target === '.pbai4devs/.gitignore') return false;
+      const content = ignoreFiles.get(target) ?? readFileSync(absolute(target), 'utf8');
+      const start = content.indexOf(ignoreBegin), finish = content.indexOf(ignoreEnd);
+      return start >= 0 && finish > start && !(content.slice(0, start) + content.slice(finish + ignoreEnd.length)).trim();
+    }),
+  ]);
+  const localPlan = localIgnores ? planLocalIgnore(root, { outputs: ownedOutputs }) : null;
+  const localStatus = localPlan ? checkLocalIgnore(localPlan) : { changed: 0, missing: [], trackedOutputs: [] };
   const removals = topPaths(remove);
   const backups = topPaths(backup);
-  const summary = { changed: changed.length, stale: removals.length, conflicts: conflicts.size, missing: missing.length, legacy: legacy.length, registries: registries.size, gitignores: ignoreFiles.size };
+  const rootEntryChanges = [...rootEntries].filter(([name, content]) => !stat(absolute(name)) || readFileSync(absolute(name), 'utf8') !== content);
+  const summary = { changed: changed.length + rootEntryChanges.length, stale: removals.length, conflicts: conflicts.size, missing: missing.length, legacy: legacy.length, registries: registries.size, gitignores: ignoreFiles.size, manifests: configExists ? 0 : 1, localIgnores: localStatus.changed + localStatus.missing.length + localStatus.trackedOutputs.length };
   const dirty = Object.values(summary).some(Boolean);
-  output(`${summary.changed} desatualizadas; ${summary.stale} obsoletas; ${summary.conflicts} conflitos; ${summary.missing} origens nativas ausentes; ${summary.legacy} documentos antigos; ${summary.registries} indices derivados; ${summary.gitignores} gitignores.`);
-  if (check) return { ...summary, exitCode: dirty ? 1 : 0 };
+  output(`${summary.changed} desatualizadas; ${summary.stale} obsoletas; ${summary.conflicts} conflitos; ${summary.missing} origens nativas ausentes; ${summary.legacy} documentos antigos; ${summary.registries} indices derivados; ${summary.gitignores} gitignores; ${summary.localIgnores} exclusoes locais.`);
+  if (check) return { ...summary, ownedOutputs, exitCode: dirty ? 1 : 0 };
   if (conflicts.size) fail(`Use --force para reconstruir somente os caminhos gerenciados: ${sorted(conflicts).join(', ')}`);
   function atomic(value, text) {
     const target = safe(value);
@@ -410,6 +437,8 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
   for (const value of changed) atomic(value, expected.get(value));
   for (const [value, text] of registries) atomic(value, text);
   for (const [value, text] of ignoreFiles) atomic(value, text);
+  for (const [value, text] of rootEntryChanges) atomic(value, text);
+  if (localPlan) applyLocalIgnore(localPlan);
   function pruneEmpty(value) {
     if (!stat(safe(value))?.isDirectory()) return;
     for (const name of readdirSync(absolute(value))) if (stat(safe(`${value}/${name}`))?.isDirectory()) pruneEmpty(`${value}/${name}`);
@@ -418,8 +447,8 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
   for (const agent of agents.keys()) for (const kind of [...Object.keys(principals), 'instructions', 'prompts']) pruneEmpty(`${agent}/${kind}`);
   const omittedRows = new Set([...legacy, ...missing.map(native => native.index)]);
   const finalConfig = rows.filter((row, index) => !omittedRows.has(index)).join('\n').replace(/\n*$/, '\n');
-  if (configText !== finalConfig) atomic(config, finalConfig);
-  return { ...summary, exitCode: 0, ...(backupRoot ? { backupRoot } : {}) };
+  if (!configExists || configText !== finalConfig) atomic(config, finalConfig);
+  return { ...summary, ownedOutputs, exitCode: 0, ...(backupRoot ? { backupRoot } : {}) };
 }
 
 export function main(args = process.argv.slice(2)) {

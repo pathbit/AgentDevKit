@@ -1,3 +1,0 @@
-# gerado: sincronizar-agentes
-description = "Atualiza ou confere os apontamentos compartilhados dos agentes."
-prompt = "@{.pbai4devs/commands/sincronizar/COMMAND.md}\n\n{{args}}"

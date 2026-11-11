@@ -9,7 +9,7 @@ description: Tipos de recursos, fontes compartilhadas e ciclo de manutenção.
 
 Edite a origem em `.pbai4devs`. As pastas dos clientes contêm referências e
 metadados de descoberta; editar uma cópia gerada cria divergência.
-O [catálogo](../.pbai4devs/catalog.json) permite encontrar recursos por tipo.
+O catálogo local `catalog.json` permite encontrar recursos por tipo.
 O hub permanece completo mesmo com poucos clientes selecionados. Apenas os
 apontamentos necessários são gerados; consulte ou altere a seleção com `agents`
 na [CLI](cli.md). Pastas compartilhadas podem atender mais de um cliente.
@@ -64,7 +64,7 @@ ou `manual`; `glob` exige `globs`, e decisão do modelo exige descrição útil.
 
 Metadados específicos de um cliente ficam em YAML ao lado da fonte, como
 `agents/revisor/claude.yaml`. O manifesto registra sua aplicação. Para evoluir
-os adaptadores do próprio AgentDevKit, a implementação fica em `src/adapters/`.
+os adaptadores do AgentDevKit, edite `templates/clients/ADAPTERS.json` no hub.
 Consulte a [compatibilidade][compatibilidade] antes de prometer descoberta.
 
 O agrupamento varia conforme o formato realmente suportado pelo cliente.
@@ -93,8 +93,8 @@ com backup. Ele não equivale a `agentdevkit sync --force`: a CLI controla sua
 própria lista de arquivos e preserva recursos locais não registrados por ela.
 Escolha a operação pelo escopo; não prometa preservação indistinta.
 
-Não edite manualmente `catalog.json`, `skills.json`, `rules.json` ou
-`agents.json`: são derivados. Configurações nativas de cliente e documentos
+Não edite ou versione `catalog.json`, `skills.json`, `rules.json` ou
+`agents.json`: são derivados locais. Configurações nativas e documentos
 do projeto não devem ser substituídos por cópias desses índices.
 
 ## O que permanece fora dos espelhos

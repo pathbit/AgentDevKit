@@ -1,3 +1,0 @@
-# gerado: sincronizar-agentes
-description = "Confere a estrutura, os testes e as ferramentas locais dos agentes."
-prompt = "@{.pbai4devs/commands/verificar-agentes/COMMAND.md}\n\n{{args}}"
