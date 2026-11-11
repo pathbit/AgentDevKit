@@ -7,8 +7,8 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { applyPlan, planInstallation } from '../src/install.mjs';
 
-const project = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const bin = join(project, '.pbai4devs/bin/agentdevkit.mjs');
+const project = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const bin = join(project, 'bin/agentdevkit.mjs');
 const statePath = '.pbai4devs/estado/agentdevkit.json';
 const hash = value => createHash('sha256').update(value).digest('hex');
 const read = (root, path) => readFileSync(join(root, path), 'utf8');

@@ -6,9 +6,9 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { getNextSteps } from '../src/next.mjs';
-import { inspectProject } from '../scripts/inspecionar-projeto/SCRIPT.mjs';
+import { inspectProject } from '../.pbai4devs/scripts/inspecionar-projeto/SCRIPT.mjs';
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 function fixture(t) {
   const target = realpathSync(mkdtempSync(join(tmpdir(), "agentdevkit próximos $() ' -")));
   t.after(() => rmSync(target, { recursive: true, force: true }));

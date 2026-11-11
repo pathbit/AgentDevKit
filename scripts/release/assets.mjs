@@ -4,7 +4,7 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { findNpmCli } from '../scripts/lib/npm.mjs';
+import { findNpmCli } from '../../.pbai4devs/scripts/lib/npm.mjs';
 
 export const releaseRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 export const sha256 = value => createHash('sha256').update(value).digest('hex');
@@ -29,8 +29,8 @@ export function buildRelease(root = releaseRoot, { env = process.env } = {}) {
   if (packed.error || packed.status !== 0) throw new Error(packed.error?.message || packed.stderr || 'npm pack falhou.');
   const [result] = JSON.parse(packed.stdout);
   const paths = result.files.map(item => item.path);
-  if (!paths.includes('.pbai4devs/bin/agentdevkit.mjs') || !paths.some(path => path.startsWith('.pbai4devs/skills/'))) throw new Error('Pacote sem CLI ou skills.');
-  if (paths.some(path => /(^|\/)(?:\.git|\.agent-tests|node_modules|\.local|\.cache|tmp|temp)(\/|$)/i.test(path) || /(^|\/)\.playwright/i.test(path))) throw new Error('Pacote inclui artefatos locais.');
+  if (!paths.includes('bin/agentdevkit.mjs') || !paths.includes('src/cli.mjs') || !paths.some(path => path.startsWith('.pbai4devs/skills/'))) throw new Error('Pacote sem CLI, núcleo ou skills.');
+  if (paths.some(path => /(^|\/)(?:\.git|\.agent-tests|node_modules|\.local|\.cache|tmp|temp)(\/|$)/i.test(path) || /(^|\/)\.playwright/i.test(path) || /^(?:tests|scripts\/release|examples)\//.test(path))) throw new Error('Pacote inclui artefatos locais ou arquivos exclusivos de desenvolvimento.');
   const file = join(output, `agentdevkit-${pkg.version}.tgz`);
   const generated = join(output, basename(result.filename));
   if (generated !== file) renameSync(generated, file);

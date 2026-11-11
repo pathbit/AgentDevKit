@@ -9,8 +9,9 @@ language: en
 
 Organize work with coding agents, from planning to verification. Keep skills,
 rules, commands and agent profiles in `.pbai4devs`; the kit generates the
-references each client can discover. Source lives in `.pbai4devs`; client
-folders, generated entrypoints and preferences stay local and untracked.
+references each client can discover. Code lives in `src/`, product tests in
+`tests/`, and shared agent resources in `.pbai4devs/`. Generated client
+folders, entrypoints and preferences stay local and untracked.
 See the [supported clients][clients].
 
 ## Start in your project
@@ -19,7 +20,7 @@ With Node.js 18+ and npm, [sign in to GitHub Packages][packages].
 Then open a terminal in your project and run:
 
 ```console
-npx -y --registry=https://npm.pkg.github.com @pathbit/agentdevkit@0.0.3 init
+npx -y --registry=https://npm.pkg.github.com @pathbit/agentdevkit@0.0.4 init
 ```
 
 Choose your coding agents when prompted, or pass `--agents codex,claude`.
@@ -32,7 +33,7 @@ Then open the project in your coding agent and ask:
 
 See [installation](docs/installation.md) for Windows, missing Node, previews
 and updates. GitHub Packages requires authentication, including public npm
-packages. The [v0.0.3 release][release] also offers a tarball without registry
+packages. The [v0.0.4 release][release] also offers a tarball without registry
 login. Neither method requires a global installation.
 The CLI supports `pt`, `en` and `es`; it saves your selection per project.
 
@@ -46,6 +47,14 @@ The CLI supports `pt`, `en` and `es`; it saves your selection per project.
 | Install tools and verify work | [Tools and tests][tests] |
 | Look up options or fix an error | [CLI][cli] · [Troubleshooting][help] |
 | Improve the kit | [Contributing](CONTRIBUTING.md) |
+| Try the scenarios | [Examples](https://github.com/pathbit/AgentDevKit/tree/master/examples) |
+
+## Develop this repository
+
+Use Node.js 24+ with npm. Run `npm ci --ignore-scripts`, `npm run check`,
+`npm test` and `npm run examples`. Examples are generated locally in
+`examples/generated/`; `npm run test:examples` runs the scenarios.
+See the [development guide](docs/development.md) for the project structure.
 
 Detailed guides are in Portuguese. Installing the kit prepares instructions;
 tools are installed separately. Product documents follow your planning
@@ -61,7 +70,7 @@ forms. See [how to participate](docs/community.md).
 agent to read `AGENTS.md`.
 
 [clients]: .pbai4devs/COMPATIBILIDADE.md
-[release]: https://github.com/pathbit/AgentDevKit/releases/tag/v0.0.3
+[release]: https://github.com/pathbit/AgentDevKit/releases/tag/v0.0.4
 [tests]: docs/tools-and-testing.md
 [cli]: docs/cli.md
 [help]: docs/troubleshooting.md

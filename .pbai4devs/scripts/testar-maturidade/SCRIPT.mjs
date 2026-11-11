@@ -6,13 +6,19 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { isMain, projectRoot, requireNode } from '../lib/runtime.mjs';
 import { isGeneratedOutput } from '../lib/gitignore.mjs';
-import { resourcePath } from '../sincronizar-agentes/SCRIPT.mjs';
+import { resourcePath, synchronize } from '../sincronizar-agentes/SCRIPT.mjs';
 import { adapterManifest } from '../lib/adapters.mjs';
 
 const assets = join(dirname(fileURLToPath(import.meta.url)), 'assets');
 const owner = 'testar-maturidade';
 const marker = '.maturity-case.json';
 const suiteMarker = '.maturity-suite.json';
+const outputIgnore = '# Exemplos gerados permanecem locais.\n*\n';
+const defaultOutput = root => join(root, 'examples/generated');
+const prepareResources = root => {
+  const result = synchronize({ root, localIgnores: false, output: () => {} });
+  if (result.exitCode !== 0) fail('Não foi possível preparar os apontamentos do exemplo.');
+};
 const portable = value => value.split(sep).join('/');
 const digest = value => createHash('sha256').update(value).digest('hex');
 const fail = message => { throw new Error(message); };
@@ -144,7 +150,14 @@ function ownership(root, file, expectedId) {
 
 function ensureOutput(output) {
   if (existsSync(output) && lstatSync(output).isSymbolicLink()) fail('A pasta de exemplos não pode ser um link.');
-  if (existsSync(output) && (existsSync(join(output, 'README.md')) || existsSync(join(output, 'REPORT.json'))) && !ownership(output, suiteMarker)) fail('Índice de exemplos existente não pertence a este gerador.');
+  for (const name of [suiteMarker, 'README.md', 'REPORT.json', '.gitignore']) {
+    const item = stat(join(output, name));
+    if (item && (!item.isFile() || item.isSymbolicLink())) fail(`Arquivo de saída deve ser regular: ${name}`);
+  }
+  if (existsSync(output) && [suiteMarker, 'README.md', 'REPORT.json'].some(name => existsSync(join(output, name)))
+    && !ownership(output, suiteMarker)) fail('Índice de exemplos existente não pertence a este gerador.');
+  if (existsSync(join(output, 'REPORT.json')) && !ownership(output, 'REPORT.json')) fail('Relatório de exemplos existente não pertence a este gerador.');
+  if (existsSync(join(output, '.gitignore')) && readFileSync(join(output, '.gitignore'), 'utf8') !== outputIgnore) fail('Ignore de exemplos existente não pertence a este gerador.');
   mkdirSync(output, { recursive: true });
 }
 
@@ -227,10 +240,11 @@ function gitInit(root) {
   if (result.error || result.status !== 0) fail(`Git init: ${result.error?.message || result.stderr}`);
 }
 
-export function prepareExamples({ sourceRoot = projectRoot, outputRoot = join(sourceRoot, 'tmp/examples'), scenarios = SCENARIOS, initializeGit = true } = {}) {
+export function prepareExamples({ sourceRoot = projectRoot, outputRoot = defaultOutput(sourceRoot), scenarios = SCENARIOS, initializeGit = true, renderResources = prepareResources } = {}) {
   requireNode(); sourceRoot = realpathSync(resolve(sourceRoot)); outputRoot = resolve(outputRoot);
   const outputPath = portable(relative(sourceRoot, outputRoot));
-  if (!(outputPath === 'tmp/examples' || outputPath.startsWith('tmp/examples/') || outputPath.startsWith('.agent-tests/'))) fail('Saída permitida somente em tmp/examples ou descendente de .agent-tests.');
+  if (!(outputPath === 'examples/generated' || outputPath.startsWith('examples/generated/')
+    || outputPath === 'tmp/examples' || outputPath.startsWith('tmp/examples/') || outputPath.startsWith('.agent-tests/'))) fail('Saída permitida somente em examples/generated, tmp/examples ou descendente de .agent-tests.');
   noLinks(sourceRoot, outputRoot);
   const ids = new Set();
   for (const scenario of scenarios) {
@@ -244,6 +258,9 @@ export function prepareExamples({ sourceRoot = projectRoot, outputRoot = join(so
     if (existsSync(destination) && !ownership(destination, marker, scenario.id)) fail(`Diretório existente não é gerenciado: ${destination}`);
   }
   write(outputRoot, suiteMarker, JSON.stringify({ owner, version: 1 }, null, 2) + '\n');
+  write(outputRoot, '.gitignore', outputIgnore);
+  rmSync(join(outputRoot, 'REPORT.json'), { force: true });
+  writeIndex(outputRoot, [], 'preparing');
   const examples = [];
   for (const scenario of scenarios) {
     const destination = join(outputRoot, scenario.id);
@@ -253,16 +270,19 @@ export function prepareExamples({ sourceRoot = projectRoot, outputRoot = join(so
     planning(destination, scenario);
     const app = application(destination, scenario);
     write(destination, 'README.md', document(scenario.title, `${scenario.note}\n\nEste é um exemplo gerado. Estados de aprovação/publicação são dados de teste.\nRevisão do gate é simulação contratual, não revisão humana.\n\nOs scripts dos agentes foram copiados, sem pacotes ou credenciais conhecidas.\nO filtro não detecta segredos em conteúdo arbitrário.\n${app.tests.length ? `\nPara repetir os testes: \`${scenario.layout === 'legacy' ? 'npm run test:legacy' : 'npm test'}\`.\nO harness executa os testes Node diretamente, sem instalar dependências.\nO teste abre HTTP em porta efêmera e encerra o servidor.\n` : '\nNão há aplicação; a prova real exercita os scripts copiados.\n'}`, `fase: ${scenario.expected}\n`));
+    renderResources(destination);
     if (initializeGit) gitInit(destination);
     examples.push({ ...scenario, root: destination, copied, application: app });
   }
+  write(outputRoot, 'REPORT.json', JSON.stringify({ owner, version: 1, status: 'prepared', scenarios: [...ids], results: [] }, null, 2) + '\n');
   writeIndex(outputRoot, examples, 'prepared');
   return examples;
 }
 
 function writeIndex(outputRoot, examples, status) {
   const rows = examples.map(item => `| [${item.id}](${item.id}/README.md) | ${item.expected} | ${item.status || 'prepared'} |`).join('\n');
-  write(outputRoot, 'README.md', document('Exemplos de maturidade', `Projetos sintéticos com cópias locais da estrutura de agentes.\nNenhum resultado certifica produção, revisão humana ou outros sistemas operacionais.\n\n| Cenário | Nível esperado | Resultado |\n| --- | --- | --- |\n${rows}\n\nRelatório: \`REPORT.json\`. Logs e evidências por projeto ficam em \`.agent-tests/\`.\nPastas sem marcador deste gerador são preservadas.\n`, `status: ${status}\n`));
+  const progress = status === 'preparing' ? '\nPreparação em andamento; os resultados anteriores foram invalidados.\n' : '';
+  write(outputRoot, 'README.md', document('Exemplos de maturidade', `Projetos sintéticos com cópias locais da estrutura de agentes.\nNenhum resultado certifica produção, revisão humana ou outros sistemas operacionais.\n${progress}\n| Cenário | Nível esperado | Resultado |\n| --- | --- | --- |${rows ? '\n' + rows : ''}\n\nRelatório: \`REPORT.json\`. Logs e evidências por projeto ficam em \`.agent-tests/\`.\nPastas sem marcador deste gerador são preservadas.\n`, `status: ${status}\n`));
 }
 
 function hashes(root, files) { return Object.fromEntries(files.map(file => [file, digest(readFileSync(join(root, file)))])); }
@@ -431,7 +451,7 @@ export function testExample(example) {
 export function runExamples(options = {}) {
   const examples = prepareExamples(options);
   const results = examples.map(example => { const result = testExample(example); console.log(`${example.id}=${result.status}${result.error ? ': ' + result.error : ''}`); return result; });
-  const outputRoot = resolve(options.outputRoot || join(options.sourceRoot || projectRoot, 'tmp/examples'));
+  const outputRoot = resolve(options.outputRoot || defaultOutput(options.sourceRoot || projectRoot));
   const report = { owner, version: 1, status: results.every(item => item.status === 'passed') ? 'passed' : 'failed', platform: process.platform, arch: process.arch, node: process.version, results, limits: ['Provas reais somente das operações descritas e APIs locais.', 'Pareceres do gate são simulações explícitas, sem revisão humana.', 'Não certifica produção nem sistemas operacionais não executados.'] };
   write(outputRoot, 'REPORT.json', JSON.stringify(report, null, 2) + '\n');
   writeIndex(outputRoot, examples.map(example => ({ ...example, status: results.find(result => result.id === example.id).status })), report.status);
@@ -440,7 +460,7 @@ export function runExamples(options = {}) {
 
 export function main(args = process.argv.slice(2)) {
   requireNode(); const [mode = 'help', ...rest] = args;
-  if (['help', '--help', '-h'].includes(mode)) { console.log('Uso: testar-maturidade prepare|run [--case <id>]. Exemplos gerados em tmp/examples; apenas pastas marcadas são substituídas.'); return 0; }
+  if (['help', '--help', '-h'].includes(mode)) { console.log('Uso: testar-maturidade prepare|run [--case <id>]. Exemplos gerados em examples/generated; apenas pastas marcadas são substituídas.'); return 0; }
   if (!['prepare', 'run'].includes(mode)) fail('Use prepare ou run.');
   let scenarios = SCENARIOS;
   if (rest.length) {

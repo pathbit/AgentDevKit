@@ -7,7 +7,7 @@ import { requireNode, isMain } from '../lib/runtime.mjs';
 
 const repository = fs.realpathSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..'));
 const defaultAgents = ['.agents', '.agent', '.gemini', '.claude', '.codex', '.cursor', '.github', '.opencode'];
-const defaultExcluded = ['.git', '.pbai4devs', '.agent-tests', ...defaultAgents, '.vscode', 'node_modules', 'vendor', 'target', 'dist', 'build', 'bin', 'obj', '.venv', 'venv', '.cache', '.next', '.nuxt', 'coverage', 'test-results', 'playwright-report', 'blob-report', 'tmp', 'temp'];
+const defaultExcluded = ['.git', '.pbai4devs', '.agent-tests', ...defaultAgents, '.vscode', 'node_modules', 'vendor', 'target', 'dist', 'build', 'bin', 'obj', '.venv', 'venv', '.cache', '.next', '.nuxt', 'coverage', 'test-results', 'playwright-report', 'blob-report', 'tmp', 'temp', 'examples'];
 const manifests = new Map([
   ['package.json', 'javascript'], ['deno.json', 'javascript'], ['deno.jsonc', 'javascript'],
   ['pyproject.toml', 'python'], ['Pipfile', 'python'], ['setup.py', 'python'], ['setup.cfg', 'python'],
@@ -37,7 +37,7 @@ const present = (root, name, directory) => {
   catch { return false; }
 };
 const inside = candidate => { const relative = path.relative(repository, candidate); return relative !== '..' && !relative.startsWith('..' + path.sep) && !path.isAbsolute(relative); };
-const fixturePath = candidate => /^(?:\.agent-tests\/|tmp\/examples\/)/.test(normalize(path.relative(repository, candidate)));
+const fixturePath = candidate => /^(?:\.agent-tests\/|tmp\/examples\/|examples\/generated\/)/.test(normalize(path.relative(repository, candidate)));
 
 function metadata(root, file) {
   if (!present(root, file, false) || fs.statSync(path.join(root, file)).size > 1024 * 1024) return { fields: {}, documents: {} };
@@ -171,9 +171,9 @@ export function main(args = process.argv.slice(2)) {
     if (option === '--check') check = true;
     else if (option === '--root' && args.length) {
       const candidate = path.resolve(repository, args.shift());
-      if (!inside(candidate) || !fixturePath(candidate)) throw new Error('--root aceita somente fixtures em .agent-tests/ ou tmp/examples/ do repositorio ativo.');
+      if (!inside(candidate) || !fixturePath(candidate)) throw new Error('--root aceita somente fixtures em examples/generated/, .agent-tests/ ou tmp/examples/ do repositorio ativo.');
       root = fs.realpathSync(candidate);
-      if (!inside(root) || !fixturePath(root)) throw new Error('A fixture deve permanecer em .agent-tests/ ou tmp/examples/ do repositorio ativo.');
+      if (!inside(root) || !fixturePath(root)) throw new Error('A fixture deve permanecer em examples/generated/, .agent-tests/ ou tmp/examples/ do repositorio ativo.');
     } else throw new Error('Opcao invalida; use [--check] [--root <fixture-no-repositorio>].');
   }
   const report = inspectProject(root, { check });

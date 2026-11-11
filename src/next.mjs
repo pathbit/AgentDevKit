@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { releaseCommand } from './config.mjs';
-import { inspectProject } from '../scripts/inspecionar-projeto/SCRIPT.mjs';
+import { inspectProject } from '../.pbai4devs/scripts/inspecionar-projeto/SCRIPT.mjs';
 
 const messages = {
   pt: {

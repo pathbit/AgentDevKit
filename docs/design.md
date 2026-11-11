@@ -12,22 +12,24 @@ contratos de cada entrega.
 ## Fontes no repositório
 
 ```text
-.pbai4devs/
-├── bin/              entrada do pacote npx
+AgentDevKit/
 ├── src/              CLI e instalação
-├── release/          CI, empacotamento e publicação
+├── bin/              entrada do pacote npx
 ├── tests/            testes do produto
-├── templates/        documentos e layouts dos clientes
-├── scripts/          automações compartilhadas
-├── skills/           procedimentos
-├── rules/            convenções
-├── agents/           perfis
-└── tools/            definições de ferramentas
+├── scripts/release/  CI, empacotamento e publicação
+├── examples/         guia e cenários gerados localmente
+├── docs/             guias e decisões do produto
+└── .pbai4devs/        skills, regras, templates e ferramentas compartilhadas
 ```
 
 Metadados npm, licença, documentação e workflows do GitHub ficam nos seus
 locais padrão. Pastas nativas dos clientes, índices e estado local não fazem
 parte da fonte versionada.
+
+`npm run examples` gera as árvores de demonstração em `examples/generated/`.
+Elas contêm `.claude`, `.codex` e os demais clientes, sem misturar exemplos com
+a configuração ativa da raiz. `npm run test:examples` executa os cenários.
+O [guia de desenvolvimento](development.md) reúne os comandos do projeto.
 
 ## Resultado instalado
 

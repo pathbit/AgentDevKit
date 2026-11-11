@@ -18,20 +18,22 @@ npm ci --ignore-scripts
 npm run check
 ```
 
-O checkout contém fontes. Para usar os agentes neste próprio repositório,
-execute `npm run generate`; os apontamentos produzidos são locais e ignorados.
-Não é necessário gerá-los para versionar ou revisar o código.
+O checkout contém fontes. Execute `npm run examples` para explorar os agentes
+em `examples/generated/`, sem criar todas as pastas de clientes na raiz.
+Os exemplos gerados são locais e ignorados; seu guia fica em
+[`examples/`](examples/README.md).
 
 ## Escolher a origem da mudança
 
 | Mudança | Origem |
 | --- | --- |
-| CLI e instalação | `.pbai4devs/src/` e `.pbai4devs/bin/` |
+| CLI e instalação | `src/` e `bin/` |
 | Layout dos clientes | `.pbai4devs/templates/clients/` |
 | Skills, regras e comandos | Respectivas pastas em `.pbai4devs/` |
 | Automação compartilhada | `.pbai4devs/scripts/` |
-| CI e publicação | `.pbai4devs/release/` e workflows do GitHub |
-| Testes do produto | `.pbai4devs/tests/` |
+| CI e publicação | `scripts/release/` e workflows do GitHub |
+| Testes do produto | `tests/` |
+| Exemplos de uso | `examples/` e gerador compartilhado |
 | Ajuda e exemplos | `docs/` e README do recurso |
 
 Leia o [guia do código-fonte][source] e o [design](docs/design.md).
@@ -63,7 +65,7 @@ autenticação do workflow. Nunca inclua tokens no código ou no `.npmrc` versio
 [Wiki](docs/README.md) · [Licença MIT](LICENSE)
 
 [issues]: https://github.com/pathbit/AgentDevKit/issues
-[source]: .pbai4devs/DEVELOPMENT.md
+[source]: docs/development.md
 [tests]: docs/tools-and-testing.md
 [review]: .pbai4devs/commands/revisar-entrega/COMMAND.md
 [git]: .pbai4devs/rules/git/RULE.md

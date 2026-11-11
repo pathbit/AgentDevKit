@@ -4,9 +4,9 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { adapters, adapterRoots, availableClients, normalizeClients, resolveAdapters, adapterManifest, writeAdapterManifest } from '../src/adapters/index.mjs';
-import { synchronize } from '../scripts/sincronizar-agentes/SCRIPT.mjs';
+import { synchronize } from '../.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs';
 
-const project = fileURLToPath(new URL('../..', import.meta.url));
+const project = fileURLToPath(new URL('..', import.meta.url));
 const write = (root, file, text) => { mkdirSync(dirname(join(root, file)), { recursive: true }); writeFileSync(join(root, file), text); };
 const read = (root, file) => readFileSync(join(root, file), 'utf8');
 function fixture(t) {

@@ -26,7 +26,7 @@ Automações seguem `executar-script`: identifique SO, runtimes e conectores;
 reutilize scripts e ferramentas instaladas antes de gerar código na conversa.
 Enquanto configurar os agentes, mantenha os documentos de produto como modelos.
 Testes compartilhados ficam junto de cada script em `tests/`; testes do
-próprio AgentDevKit ficam em `.pbai4devs/tests`. Em tools, versione fontes;
+próprio AgentDevKit ficam em `tests/`, na raiz. Em tools, versione fontes;
 downloads e registros ficam em `<nome>/.local/`, cache em `.cache/`, launchers em
 `bin/`. Não duplique o instalador nem espelhe esses recursos nas ferramentas.
 Mantenha os derivados locais e ignorados pelo sincronizador. Novas fontes

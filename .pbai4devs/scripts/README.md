@@ -32,7 +32,7 @@ node .pbai4devs/scripts/executar-script/SCRIPT.mjs diagnosticar-ambiente
 | `sincronizar-agentes` | Repara com `--force`; `--check` só confere |
 | `verificar-recursos` | Estrutura Markdown, links e espelhos |
 | `testar-infraestrutura` | Executa `tests/TEST.mjs` com Node |
-| `testar-maturidade` | Gera e executa cenários em `tmp/examples/` |
+| `testar-maturidade` | Gera e executa cenários em `examples/generated/` |
 | `testar-navegador` | Cenários via conector Playwright; veja a [referência](testar-navegador/REFERENCE.md) |
 
 Cada [ferramenta](../tools/README.md) tem `TOOL.json` e um `SCRIPT.mjs`,

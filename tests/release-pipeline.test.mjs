@@ -4,11 +4,11 @@ import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync
 import { spawnSync } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { npmExecutable, sha256 } from '../release/assets.mjs';
-import { guardSourceOnlyGit, markVerified, runPipeline } from '../release/pipeline.mjs';
-import { assertApprovedSource, githubRequest, publishVerifiedPackage, releaseTag, resolveVerifiedPackage, verifyDistribution } from '../release/publish.mjs';
+import { npmExecutable, sha256 } from '../scripts/release/assets.mjs';
+import { guardSourceOnlyGit, markVerified, runPipeline } from '../scripts/release/pipeline.mjs';
+import { assertApprovedSource, githubRequest, publishVerifiedPackage, releaseTag, resolveVerifiedPackage, verifyDistribution } from '../scripts/release/publish.mjs';
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const repository = 'pathbit/AgentDevKit', commit = 'a'.repeat(40), version = '1.2.3';
 const run = { id: 42, run_attempt: 2, head_sha: commit, head_branch: 'master', event: 'push', path: '.github/workflows/ci.yml', status: 'completed', conclusion: 'success', repository: { full_name: repository }, head_repository: { full_name: repository } };
 const resolution = { schemaVersion: 1, repository, tag: `v${version}`, version, sourceCommit: commit, runId: 42, runAttempt: 2, branch: 'master', workflowPath: run.path, artifactId: 50, artifactName: `agentdevkit-${commit}-2` };
@@ -49,7 +49,7 @@ test('check Git distingue fontes de saídas e não gera arquivos no checkout', t
   const put = (path, text = 'fixture') => { mkdirSync(dirname(join(directory, path)), { recursive: true }); writeFileSync(join(directory, path), text); };
   const git = (...args) => { const result = spawnSync('git', ['-C', directory, ...args], { encoding: 'utf8', shell: false }); assert.equal(result.status, 0, result.stderr); };
   put('.pbai4devs/templates/clients/ADAPTERS.json', readFileSync(join(root, '.pbai4devs/templates/clients/ADAPTERS.json')));
-  for (const file of ['README.md', '.github/workflows/ci.yml', '.github/ISSUE_TEMPLATE/bug.yml', '.github/PULL_REQUEST_TEMPLATE.md', '.github/.gitignore', '.vscode/.gitignore', '.vscode/settings.json', '.pbai4devs/agents/revisor/claude.yaml', '.pbai4devs/estado/README.md', '.pbai4devs/estado/configuracao/ESTADO.md', '.pbai4devs/templates/example.sh.template']) put(file);
+  for (const file of ['README.md', 'src/cli.mjs', 'bin/agentdevkit.mjs', 'tests/example.test.mjs', 'scripts/release/pipeline.mjs', 'examples/.claude/skills/example/SKILL.md', '.github/workflows/ci.yml', '.github/ISSUE_TEMPLATE/bug.yml', '.github/PULL_REQUEST_TEMPLATE.md', '.github/.gitignore', '.vscode/.gitignore', '.vscode/settings.json', '.pbai4devs/agents/revisor/claude.yaml', '.pbai4devs/estado/README.md', '.pbai4devs/estado/configuracao/ESTADO.md', '.pbai4devs/templates/example.sh.template']) put(file);
   git('init', '--quiet'); git('add', '.');
   assert.ok(guardSourceOnlyGit(directory).files > 0);
   const calls = [];
@@ -63,6 +63,21 @@ test('check Git distingue fontes de saídas e não gera arquivos no checkout', t
     git('rm', '--cached', '--quiet', '--', file);
   }
   assert.ok(guardSourceOnlyGit(directory).files > 0);
+});
+
+test('perfis usam testes e executável da raiz sem ampliar a matriz', () => {
+  const calls = [];
+  const options = { root, run(_root, args) { calls.push(args); } };
+  runPipeline('portable', options);
+  assert.deepEqual(calls[0], ['--test', 'tests/adapters.test.mjs', 'tests/cli.test.mjs', 'tests/client-selection.test.mjs', 'tests/next.test.mjs']);
+  assert.equal(calls.length, 4);
+  calls.length = 0;
+  runPipeline('smoke', options);
+  assert.deepEqual(calls, [
+    ['--test', 'tests/adapters.test.mjs', 'tests/next.test.mjs'],
+    ['bin/agentdevkit.mjs', '--help'],
+    ['bin/agentdevkit.mjs', '--version'],
+  ]);
 });
 
 test('seleção aguarda o CI correto e recusa origem de PR, fork, branch ou SHA diferentes', async () => {

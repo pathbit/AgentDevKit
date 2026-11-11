@@ -13,9 +13,9 @@ o kit gera os apontamentos que cada cliente sabe encontrar.
 
 Use com Codex, Claude, Cursor, Copilot, OpenCode e outros
 [clientes compatíveis](.pbai4devs/COMPATIBILIDADE.md). Há uma origem;
-cada cliente conserva seu formato de descoberta. As fontes ficam em
-`.pbai4devs`; pastas nativas, entradas e preferências são geradas localmente
-e não entram no versionamento.
+cada cliente conserva seu formato de descoberta. No repositório, o código
+fica em `src/`, os testes em `tests/` e os recursos compartilhados em
+`.pbai4devs/`. Pastas nativas, entradas e preferências são geradas localmente.
 
 ## Começar em um projeto
 
@@ -23,7 +23,7 @@ Com Node.js 18+ e npm, faça o [login no GitHub Packages][packages].
 Na pasta do seu projeto, execute:
 
 ```console
-npx -y --registry=https://npm.pkg.github.com @pathbit/agentdevkit@0.0.3 init
+npx -y --registry=https://npm.pkg.github.com @pathbit/agentdevkit@0.0.4 init
 ```
 
 Escolha os agentes na pergunta inicial ou informe `--agents codex,claude`.
@@ -36,7 +36,7 @@ Depois, abra o projeto no seu agente e peça:
 
 Windows, instalação sem Node, simulação e atualização estão no
 [guia de instalação](docs/installation.md). A distribuição usa a
-mesma versão no GitHub Packages e na [release v0.0.3][release],
+mesma versão no GitHub Packages e na [release v0.0.4][release],
 sem instalação global. O tarball da release também permite instalar sem login
 no registro. O idioma da CLI pode ser `pt`, `en` ou `es`.
 
@@ -50,6 +50,22 @@ no registro. O idioma da CLI pode ser `pt`, `en` ou `es`.
 | Instalar ferramentas e comprovar uma entrega | [Ferramentas e testes][tests] |
 | Consultar opções ou resolver um erro | [CLI][cli] · [Soluções][help] |
 | Melhorar o próprio kit | [Contribuir](CONTRIBUTING.md) |
+| Experimentar os cenários | [Exemplos](https://github.com/pathbit/AgentDevKit/tree/master/examples) |
+
+## Desenvolver este repositório
+
+Com Node.js 24+ e npm, na raiz:
+
+```console
+npm ci --ignore-scripts
+npm run check
+npm test
+npm run examples
+```
+
+Os exemplos aparecem em `examples/generated/`. Para testar todos os cenários,
+use `npm run test:examples`; para verificar o pacote, `npm run verify`.
+O [guia de desenvolvimento](docs/development.md) explica a árvore e os comandos.
 
 Instalar o kit prepara instruções. As ferramentas são instaladas por uma ação
 separada; PRD, design e specs surgem quando você inicia o planejamento.
@@ -68,4 +84,4 @@ agente para ler `AGENTS.md`.
 [help]: docs/troubleshooting.md
 [issues]: https://github.com/pathbit/AgentDevKit/issues/new/choose
 [packages]: docs/packages.md
-[release]: https://github.com/pathbit/AgentDevKit/releases/tag/v0.0.3
+[release]: https://github.com/pathbit/AgentDevKit/releases/tag/v0.0.4

@@ -54,13 +54,17 @@ No checkout, `npm test` verifica o produto; `npm run test:infra` verifica as
 automações compartilhadas; `npm run check` valida as fontes. Os perfis de
 [CI](maintenance.md) evitam repetir a suíte completa em cada sistema.
 
-Os testes do produto ficam em `.pbai4devs/tests/`. Os testes compartilhados
+Os testes do produto ficam em `tests/`, na raiz. Os testes compartilhados
 ficam em `scripts/<nome>/tests/` dentro do hub. Em uma aplicação atendida,
 o código de testes segue os diretórios acordados para aquele projeto.
 
 A [matriz de maturidade][matrix] usa oito projetos sintéticos. Ela comprova
 contratos do kit; não aprova um produto real nem certifica todos os aplicativos.
 Os pareceres simulados dessa matriz não substituem revisão independente.
+Use `npm run examples` para preparar as cópias e `npm run test:examples`
+para executá-las em `examples/generated/`. O [guia dos exemplos][examples]
+explica cada cenário; o [guia de desenvolvimento](development.md) reúne as
+verificações do repositório.
 
 ## Guardar os resultados
 
@@ -78,3 +82,4 @@ prova em sucesso. Feche a entrega pela [revisão][review].
 [desktop]: ../.pbai4devs/tools/agent-desktop/README.md
 [matrix]: ../.pbai4devs/scripts/testar-maturidade/README.md
 [review]: ../.pbai4devs/commands/revisar-entrega/COMMAND.md
+[examples]: https://github.com/pathbit/AgentDevKit/tree/master/examples

@@ -67,6 +67,35 @@ test('ignora resultados locais em qualquer caixa e ainda verifica fixtures comun
   assert.throws(() => verify(root), /fixtures\/cache\/input.md/);
 });
 
+test('verifica Markdown de todas as pastas padrão e documentos da raiz', t => {
+  const { root, file } = resourceFixture(t);
+  const sources = ['src/README.md', 'bin/README.md', 'tests/README.md', 'scripts/release/README.md',
+    'examples/README.md', 'CHANGELOG.md', 'CONTRIBUTING.md', 'GUIDE.MD',
+    '.github/PULL_REQUEST_TEMPLATE.md', '.github/ISSUE_TEMPLATE/question.md'];
+  for (const source of sources) file(source);
+  const collected = verify(root).files;
+  for (const source of sources) {
+    assert.ok(collected.includes(join(root, source)), source);
+    file(source, '# Sem frontmatter\n');
+    assert.throws(() => verify(root), /Frontmatter\/H1 invalido/);
+    file(source);
+  }
+});
+
+test('coleta source-only ignora exemplos gerados e clientes, sem exigir Git', t => {
+  const { root, file } = resourceFixture(t);
+  const guide = file('examples/README.md');
+  file('examples/generated/README.md', '# Resultado inválido\n');
+  file('examples/generated/demo/.pbai4devs/README.md', '# Cópia inválida\n');
+  file('src/node_modules/dependency/README.md', '# Download inválido\n');
+  file('scripts/TEST-RESULTS/README.md', '# Resultado inválido\n');
+  file('.github/skills/generated/SKILL.md', '# Cliente inválido\n');
+  file('.codex/skills/generated/SKILL.md', '# Cliente inválido\n');
+  const result = verifyResources({ root, sourceOnly: true, lint: () => ['lint=fixture'] });
+  assert.ok(result.files.includes(guide));
+  for (const path of result.files) assert.doesNotMatch(relative(root, path), /examples[\\/]generated|node_modules|TEST-RESULTS|\.github[\\/]skills|\.codex/);
+});
+
 test('catalogo derivado cobre recursos e detecta JSON editado sem reescrever', t => {
   const { root, file } = resourceFixture(t);
   file('.pbai4devs/commands/inspecionar/COMMAND.md', document('# Inspecionar\n\n[Script](../../scripts/inspecionar/SCRIPT.mjs).\n'));
@@ -250,7 +279,7 @@ test('fontes novas permanecem elegíveis e derivados locais ficam fora do índic
   const { root, file } = ignoreFixture(t);
   const outputs = ['.github/skills/generated/SKILL.md', '.vscode/.gitignore', '.github/.gitignore'];
   applyLocalIgnore(planLocalIgnore(root, { outputs }));
-  const sources = ['.pbai4devs/src/new.mjs', '.pbai4devs/bin/new.mjs', '.pbai4devs/tests/new.test.mjs', '.pbai4devs/release/new.mjs', '.github/workflows/own.yml', '.github/ISSUE_TEMPLATE/bug.yml', '.github/skills/human/SKILL.md', '.vscode/settings.json'];
+  const sources = ['src/new.mjs', 'bin/new.mjs', 'tests/new.test.mjs', 'scripts/release/new.mjs', '.github/workflows/own.yml', '.github/ISSUE_TEMPLATE/bug.yml', '.github/skills/human/SKILL.md', '.vscode/settings.json'];
   const generated = [...outputs, '.pbai4devs/catalog.json', '.pbai4devs/skills.json', '.pbai4devs/espelhos.conf', '.pbai4devs/estado/agentdevkit.json'];
   for (const path of [...sources, ...generated]) file(path, 'fixture\n');
   assert.deepEqual(ignoredPaths(root, sources), []);

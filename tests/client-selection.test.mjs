@@ -7,8 +7,8 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { main, parseArgs } from '../src/cli.mjs';
 
-const project = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const bin = join(project, '.pbai4devs/bin/agentdevkit.mjs');
+const project = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const bin = join(project, 'bin/agentdevkit.mjs');
 const statePath = '.pbai4devs/estado/agentdevkit.json';
 function fixture(t) {
   mkdirSync(join(project, '.agent-tests'), { recursive: true });

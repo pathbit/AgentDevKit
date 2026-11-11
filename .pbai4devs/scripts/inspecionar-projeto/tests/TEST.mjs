@@ -98,7 +98,7 @@ test('manifests inválidos geram aviso sem revelar seu conteúdo', t => {
 });
 
 test('rejeita origens fora das fixtures e opções desconhecidas', () => {
-  for (const args of [['--root', dirname(projectRoot)], ['--root', '.pbai4devs'], ['--unknown']]) {
+  for (const args of [['--root', dirname(projectRoot)], ['--root', '.pbai4devs'], ['--root', 'examples'], ['--root', 'examples/custom'], ['--unknown']]) {
     const result = spawnSync(process.execPath, [script, ...args], { encoding: 'utf8' });
     assert.ifError(result.error);
     assert.equal(result.status, 2);
@@ -129,15 +129,25 @@ test('classifica sinais de maturidade sem confundir planejamento com produto fun
   assert.match(result.report.maturity.limits[0], /nao substitui/);
 });
 
-test('exemplos temporários e caches Playwright não viram aplicação do projeto real', t => {
+test('exemplos e caches Playwright não viram aplicação do projeto real', t => {
   const { file, run } = fixture(t);
-  for (const folder of ['tmp/examples/a', 'TEMP/project', '.PLAYWRIGHT-MCP', 'playwright-results']) {
+  for (const folder of ['examples/generated/a', 'examples/fixture', 'tmp/examples/a', 'TEMP/project', '.PLAYWRIGHT-MCP', 'playwright-results']) {
     file(`${folder}/package.json`, '{}'); file(`${folder}/main.mjs`, 'export const fake=1;');
   }
   file('.PLAYWRIGHT-state.js', 'export const transient = true;');
   const report = run().report;
   assert.equal(report.mode, 'agentes-sem-aplicacao');
   assert.deepEqual(report.manifests, []); assert.deepEqual(report.sources, []);
+});
+
+test('aceita inspecionar cenário em examples/generated sem liberar outras pastas', t => {
+  const base = join(projectRoot, 'examples/generated'); mkdirSync(base, { recursive: true });
+  const root = mkdtempSync(join(base, 'inspector-fixture-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  writeFileSync(join(root, 'package.json'), '{}');
+  const result = spawnSync(process.execPath, [script, '--root', root], { encoding: 'utf8' });
+  assert.ifError(result.error); assert.equal(result.status, 0, result.stderr);
+  assert.equal(JSON.parse(result.stdout).mode, 'aplicacao-detectada');
 });
 
 test('status arbitrários e referências fora da raiz não expõem dados da configuração', t => {

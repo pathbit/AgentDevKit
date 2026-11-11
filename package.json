@@ -1,6 +1,6 @@
 {
   "name": "@pathbit/agentdevkit",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "PathBit AgentDevKit: specs, skills and workflows for coding agents.",
   "type": "module",
   "license": "MIT",
@@ -19,9 +19,11 @@
     "node": ">=18"
   },
   "bin": {
-    "agentdevkit": ".pbai4devs/bin/agentdevkit.mjs"
+    "agentdevkit": "bin/agentdevkit.mjs"
   },
   "files": [
+    "bin/",
+    "src/",
     ".pbai4devs/",
     "docs/",
     "README.md",
@@ -32,14 +34,20 @@
     "LICENSE"
   ],
   "scripts": {
-    "test": "node --test .pbai4devs/tests/*.test.mjs",
-    "test:distribution": "node --test .pbai4devs/tests/distribution.test.mjs",
-    "pack:release": "node .pbai4devs/release/assets.mjs",
+    "cli": "node bin/agentdevkit.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "test:distribution": "node --test tests/distribution.test.mjs",
     "test:infra": "node .pbai4devs/scripts/testar-infraestrutura/SCRIPT.mjs",
-    "generate": "node .pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs",
-    "check": "node .pbai4devs/release/pipeline.mjs check",
-    "ci:full": "node .pbai4devs/release/pipeline.mjs full",
-    "ci:portable": "node .pbai4devs/release/pipeline.mjs portable",
-    "ci:smoke": "node .pbai4devs/release/pipeline.mjs smoke"
+    "examples": "node .pbai4devs/scripts/testar-maturidade/SCRIPT.mjs prepare",
+    "test:examples": "node .pbai4devs/scripts/testar-maturidade/SCRIPT.mjs run",
+    "generate": "npm run examples",
+    "agents:sync": "node .pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs",
+    "check": "node scripts/release/pipeline.mjs check",
+    "verify": "node scripts/release/pipeline.mjs full",
+    "build": "node scripts/release/assets.mjs",
+    "pack:release": "node scripts/release/assets.mjs",
+    "ci:full": "node scripts/release/pipeline.mjs full",
+    "ci:portable": "node scripts/release/pipeline.mjs portable",
+    "ci:smoke": "node scripts/release/pipeline.mjs smoke"
   }
 }

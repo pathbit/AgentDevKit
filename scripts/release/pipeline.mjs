@@ -54,7 +54,7 @@ export function markVerified(directory, env = process.env) {
 export function runPipeline(profile, { root = releaseRoot, env = process.env, run = executeNode } = {}) {
   if (Number(process.versions.node.split('.')[0]) < 24) throw new Error('Use Node.js 24+.');
   const hub = '.pbai4devs';
-  const tests = `${hub}/tests`;
+  const tests = 'tests';
   const test = names => run(root, ['--test', ...names.map(name => `${tests}/${name}`)], env);
   const check = () => {
     guardSourceOnlyGit(root, env);
@@ -79,7 +79,7 @@ export function runPipeline(profile, { root = releaseRoot, env = process.env, ru
   }
   if (profile === 'smoke') {
     test(['adapters.test.mjs', 'next.test.mjs']);
-    for (const flag of ['--help', '--version']) run(root, [`${hub}/bin/agentdevkit.mjs`, flag], env);
+    for (const flag of ['--help', '--version']) run(root, ['bin/agentdevkit.mjs', flag], env);
     return;
   }
   throw new Error('Use full, portable, smoke ou check.');

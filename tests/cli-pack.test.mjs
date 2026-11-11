@@ -1,25 +1,26 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
-import { delimiter, dirname, join, resolve } from 'node:path';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { gunzipSync } from 'node:zlib';
+import { findNpmCli } from '../.pbai4devs/scripts/lib/npm.mjs';
 
-const project = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+const project = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const put = (root, path, content) => { const file = join(root, path); mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, content); };
 
 test('npm pack real exclui estado e payloads em qualquer caixa e preserva fontes e fixtures', t => {
-  const fromPath = (process.env.PATH || '').split(delimiter).map(path => join(path, 'npm')).filter(existsSync).map(file => realpathSync(file));
-  const npm = [process.env.npm_execpath, join(dirname(process.execPath), 'node_modules/npm/bin/npm-cli.js'), join(dirname(process.execPath), '../lib/node_modules/npm/bin/npm-cli.js'), ...fromPath].find(file => file?.endsWith('.js') && existsSync(file));
+  const npm = findNpmCli();
   assert.ok(npm, 'npm CLI is required for the package regression test.');
   const evidence = join(project, '.agent-tests'); mkdirSync(evidence, { recursive: true });
   const work = mkdtempSync(join(evidence, 'cli-pack-')); t.after(() => rmSync(work, { recursive: true, force: true }));
   const stage = join(work, 'source'); mkdirSync(stage);
   cpSync(join(project, 'package.json'), join(stage, 'package.json'));
   cpSync(join(project, '.pbai4devs/.npmignore'), join(stage, '.pbai4devs/.npmignore'), { recursive: true });
-  put(stage, '.pbai4devs/bin/agentdevkit.mjs', '#!/usr/bin/env node\n');
+  put(stage, 'bin/agentdevkit.mjs', '#!/usr/bin/env node\n');
+  put(stage, 'src/cli.mjs', '// Package implementation\n');
   const marker = 'AGENTDEVKIT_PRIVATE_SENTINEL_MUST_NOT_BE_IN_ARCHIVE';
   const excluded = [
     'tools/demo/.local/private.json', 'tools/demo/.LOCAL/private.json', 'tools/.cache/runtime/node',
@@ -35,6 +36,8 @@ test('npm pack real exclui estado e payloads em qualquer caixa e preserva fontes
     'scripts/demo/config.LOCAL.JSON', 'scripts/demo/.ENV.production', 'scripts/demo/trace.LOG',
   ];
   for (const path of excluded) put(stage, `.pbai4devs/${path}`, marker);
+  const developmentOnly = ['tests/private.test.mjs', 'scripts/release/private.mjs', 'examples/.claude/skills/private/SKILL.md'];
+  for (const path of developmentOnly) put(stage, path, marker);
   const kept = [
     'README.md', 'estado/README.md', 'external-skills/README.md', 'external-skills/CATALOG.json',
     'tools/demo/TOOL.json', 'tools/demo/SCRIPT.mjs', 'tools/demo/README.md',
@@ -51,6 +54,8 @@ test('npm pack real exclui estado e payloads em qualquer caixa e preserva fontes
   const packed = JSON.parse(result.stdout)[0], paths = packed.files.map(file => file.path);
   for (const path of excluded) assert.equal(paths.includes(`.pbai4devs/${path}`), false, path);
   for (const path of kept) assert.ok(paths.includes(`.pbai4devs/${path}`), path);
+  for (const path of ['bin/agentdevkit.mjs', 'src/cli.mjs']) assert.ok(paths.includes(path), path);
+  for (const path of developmentOnly) assert.equal(paths.includes(path), false, path);
   const archive = readFileSync(join(work, packed.filename));
   assert.equal(gunzipSync(archive).includes(Buffer.from(marker)), false, 'Private sentinel bytes leaked into the actual tarball.');
   const name = `cli-pack-node${process.versions.node.split('.')[0]}`;

@@ -8,11 +8,12 @@ Use a [instalação](installation.md) para obter o pacote por `npx`. Com Git,
 esta forma curta serve para os exemplos de consulta:
 
 ```console
-npx -y --ignore-scripts github:pathbit/AgentDevKit#v0.0.3 --help
+npx -y --ignore-scripts github:pathbit/AgentDevKit#v0.0.4 --help
 ```
 
 Nas tabelas, `agentdevkit` representa esse executável. No checkout das fontes,
-use `node .pbai4devs/bin/agentdevkit.mjs`. Esse código não é copiado ao projeto
+use `npm run cli -- <comando>` ou `node bin/agentdevkit.mjs`.
+Esse código não é copiado ao projeto
 atendido; lá os comandos de manutenção usam o pacote por `npx`.
 
 ## Comandos

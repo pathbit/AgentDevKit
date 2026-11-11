@@ -22,7 +22,7 @@ e acesso ao pacote. Guarde a credencial na configuração do usuário, nunca
 no repositório. Em seguida, na pasta do projeto:
 
 ```console
-npx -y --registry=https://npm.pkg.github.com @pathbit/agentdevkit@0.0.3 init
+npx -y --registry=https://npm.pkg.github.com @pathbit/agentdevkit@0.0.4 init
 ```
 
 Acrescente `--agents codex,claude` para selecionar clientes, `--dry-run` para

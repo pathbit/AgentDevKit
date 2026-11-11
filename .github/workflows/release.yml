@@ -47,7 +47,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           AGENTDEVKIT_RELEASE_TAG: ${{ inputs.tag }}
-        run: node .pbai4devs/release/publish.mjs resolve
+        run: node scripts/release/publish.mjs resolve
 
   publish:
     name: Publish the verified bytes
@@ -81,11 +81,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           AGENTDEVKIT_RELEASE_RESOLUTION: ${{ needs.resolve.outputs.resolution }}
           AGENTDEVKIT_ARTIFACT_DIR: ${{ runner.temp }}/agentdevkit-package
-        run: node .pbai4devs/release/publish.mjs publish
+        run: node scripts/release/publish.mjs publish
       - name: Publish the same tarball to GitHub Packages
         env:
           GH_TOKEN: ${{ github.token }}
           NODE_AUTH_TOKEN: ${{ github.token }}
           AGENTDEVKIT_RELEASE_RESOLUTION: ${{ needs.resolve.outputs.resolution }}
           AGENTDEVKIT_ARTIFACT_DIR: ${{ runner.temp }}/agentdevkit-package
-        run: node .pbai4devs/release/packages.mjs publish
+        run: node scripts/release/packages.mjs publish

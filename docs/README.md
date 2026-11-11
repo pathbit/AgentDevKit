@@ -19,6 +19,7 @@ pode trocar de agente sem manter várias cópias das mesmas instruções.
 | Executar ou verificar algo | [CLI](cli.md) → [ferramentas e testes][tests] |
 | Corrigir uma dificuldade | [Soluções e recuperação](troubleshooting.md) |
 | Contribuir com o kit | [Contribuir][contrib] → [design](design.md) |
+| Desenvolver e experimentar | [Guia rápido](development.md) → [exemplos][examples] |
 | Preparar uma versão | [Manutenção e releases](maintenance.md) |
 | Publicar ou instalar o pacote npm | [GitHub Packages](packages.md) |
 | Relatar um bug ou propor melhoria | [Participar](community.md) |
@@ -66,3 +67,4 @@ CLI orienta a comunicação dos agentes, sem traduzir documentos existentes.
 [clients]: ../.pbai4devs/COMPATIBILIDADE.md
 [tests]: tools-and-testing.md
 [contrib]: ../CONTRIBUTING.md
+[examples]: https://github.com/pathbit/AgentDevKit/tree/master/examples

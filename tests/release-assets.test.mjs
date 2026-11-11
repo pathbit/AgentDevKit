@@ -6,9 +6,9 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { gunzipSync } from 'node:zlib';
-import { npmExecutable } from '../release/assets.mjs';
+import { npmExecutable } from '../scripts/release/assets.mjs';
 
-const project = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+const project = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const version = '1.2.3';
 const name = '@pathbit/agentdevkit-fixture';
 const sourceMarker = 'AGENTDEVKIT_RELEASE_FIXTURE_SOURCE';
@@ -18,20 +18,21 @@ function fixture(t, { packageVersion = version, lockVersion = packageVersion, ro
   const root = mkdtempSync(join(artifacts, 'release-assets com espaço-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const write = (path, content) => { const file = join(root, path); mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, content); };
-  const pkg = { name, version: packageVersion, type: 'module', files: ['.pbai4devs/'], bin: { agentdevkit: '.pbai4devs/bin/agentdevkit.mjs' } };
+  const pkg = { name, version: packageVersion, type: 'module', files: ['bin/', 'src/', '.pbai4devs/'], bin: { agentdevkit: 'bin/agentdevkit.mjs' } };
   write('package.json', JSON.stringify(pkg));
   write('package-lock.json', JSON.stringify({ name, version: lockVersion, lockfileVersion: 3, packages: rootEntry ? { '': { name, version: rootVersion } } : {} }));
-  write('.pbai4devs/bin/agentdevkit.mjs', '#!/usr/bin/env node\nconsole.log("fixture");\n');
+  write('bin/agentdevkit.mjs', '#!/usr/bin/env node\nconsole.log("fixture");\n');
+  write('src/cli.mjs', 'export const fixture = true;\n');
   write('.pbai4devs/skills/example/SKILL.md', `---\nname: example\ndescription: Release fixture.\n---\n\n# Example\n\n${sourceMarker}\n`);
-  mkdirSync(join(root, '.pbai4devs/release'));
-  cpSync(join(project, '.pbai4devs/release/assets.mjs'), join(root, '.pbai4devs/release/assets.mjs'));
+  mkdirSync(join(root, 'scripts/release'), { recursive: true });
+  cpSync(join(project, 'scripts/release/assets.mjs'), join(root, 'scripts/release/assets.mjs'));
   mkdirSync(join(root, '.pbai4devs/scripts/lib'), { recursive: true });
   cpSync(join(project, '.pbai4devs/scripts/lib/npm.mjs'), join(root, '.pbai4devs/scripts/lib/npm.mjs'));
   return { root, output: join(root, '.agent-tests/release', packageVersion) };
 }
 
 function execute(root, { refType = 'branch', refName = 'master' } = {}) {
-  return spawnSync(process.execPath, [join(root, '.pbai4devs/release/assets.mjs')], {
+  return spawnSync(process.execPath, [join(root, 'scripts/release/assets.mjs')], {
     cwd: root, encoding: 'utf8', timeout: 60000,
     env: { ...process.env, npm_execpath: npmExecutable(), GITHUB_REF_TYPE: refType, GITHUB_REF_NAME: refName,
       GITHUB_SHA: 'a'.repeat(40), GITHUB_REPOSITORY: 'pathbit/AgentDevKit',
@@ -54,7 +55,8 @@ test('release produz quatro arquivos e checksum dos bytes reais do pacote', asyn
     assert.equal(readFileSync(join(output, 'SHA256SUMS'), 'utf8'), `${digest}  ${archiveName}\n`);
     const manifest = JSON.parse(readFileSync(join(output, 'package-manifest.json'), 'utf8'));
     assert.equal(manifest.version, version); assert.equal(manifest.file, archiveName); assert.equal(manifest.sha256, digest);
-    assert.ok(manifest.files.some(file => file.path === '.pbai4devs/bin/agentdevkit.mjs'));
+    assert.ok(manifest.files.some(file => file.path === 'bin/agentdevkit.mjs'));
+    assert.ok(manifest.files.some(file => file.path === 'src/cli.mjs'));
     assert.ok(manifest.files.some(file => file.path === '.pbai4devs/skills/example/SKILL.md'));
     assert.equal(manifest.sourceCommit, 'a'.repeat(40));
     assert.equal(manifest.provenance.runId, '123');
@@ -75,6 +77,25 @@ test('tag inválida ou divergente falha antes de criar artefatos', async t => {
     assert.match(result.stderr, /tag.*versão/i);
     assert.equal(existsSync(join(root, '.agent-tests/release')), false);
   });
+});
+
+test('pacote novo exige núcleo e exclui testes, release e exemplos', async t => {
+  for (const path of ['tests/fixture.mjs', 'scripts/release/fixture.mjs', 'examples/.claude/skills/example/SKILL.md']) await t.test(path, subtest => {
+    const { root } = fixture(subtest);
+    const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+    pkg.files.push(path.split('/')[0]);
+    writeFileSync(join(root, 'package.json'), JSON.stringify(pkg));
+    mkdirSync(dirname(join(root, path)), { recursive: true });
+    writeFileSync(join(root, path), 'development fixture');
+    const result = execute(root);
+    assert.equal(result.status, 1, result.stdout + result.stderr);
+    assert.match(result.stderr, /exclusivos de desenvolvimento/);
+  });
+  const { root } = fixture(t);
+  rmSync(join(root, 'src/cli.mjs'));
+  const result = execute(root);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stderr, /núcleo/);
 });
 
 test('versão não estável e versões inconsistentes do lock não geram pacote', async t => {

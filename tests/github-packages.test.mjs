@@ -5,10 +5,10 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { npmExecutable, sha256 } from '../release/assets.mjs';
-import { publishRegistryPackage } from '../release/packages.mjs';
+import { npmExecutable, sha256 } from '../scripts/release/assets.mjs';
+import { publishRegistryPackage } from '../scripts/release/packages.mjs';
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const version = '1.2.3', packageName = '@pathbit/agentdevkit';
 const repository = 'pathbit/AgentDevKit', commit = 'a'.repeat(40);
 const resolution = { schemaVersion: 1, repository, tag: `v${version}`, version, sourceCommit: commit,
@@ -20,13 +20,13 @@ const request = async (_method, path) => path.includes('/actions/runs/')
   ? run : { object: { type: 'commit', sha: commit } };
 const env = { ...process.env, NODE_AUTH_TOKEN: 'test-secret-do-not-log', GH_TOKEN: 'test-github-secret' };
 
-function fixture(t, archive = Buffer.from('exact approved archive bytes')) {
+function fixture(t, archive = Buffer.from('exact approved archive bytes'), releaseVersion = version) {
   const base = join(root, '.agent-tests'); mkdirSync(base, { recursive: true });
   const directory = mkdtempSync(join(base, 'github-packages com espaço-'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
-  const file = `agentdevkit-${version}.tgz`, path = join(directory, file), digest = sha256(archive);
+  const file = `agentdevkit-${releaseVersion}.tgz`, path = join(directory, file), digest = sha256(archive);
   writeFileSync(path, archive);
-  writeFileSync(join(directory, 'package-manifest.json'), JSON.stringify({ version, file, sha256: digest,
+  writeFileSync(join(directory, 'package-manifest.json'), JSON.stringify({ version: releaseVersion, file, sha256: digest,
     sourceCommit: commit, provenance: { repository, runId: '42', runAttempt: '2', event: 'push', ref: 'refs/heads/master' },
     verification: { status: 'passed', profile: 'full', sourceCommit: commit } }));
   writeFileSync(join(directory, 'SHA256SUMS'), `${digest}  ${file}\n`);
@@ -167,18 +167,25 @@ test('configuração temporária usa token só por ambiente e elimina overrides 
   await publishRegistryPackage(m.options);
 });
 
-test('inspeção real lê o pacote local sem publicar nem alterar seus bytes', async t => {
-  const f = fixture(t), source = join(f.directory, 'source'); mkdirSync(source);
-  writeFileSync(join(source, 'package.json'), JSON.stringify({ name: packageName, version, bin: { agentdevkit: 'cli.js' } }));
-  writeFileSync(join(source, 'cli.js'), '#!/usr/bin/env node\nconsole.log("fixture");\n');
-  const packed = spawnSync(process.execPath, [npmExecutable(), 'pack', '--ignore-scripts', '--json', '--pack-destination', f.directory], {
-    cwd: source, env: { ...env, npm_config_cache: join(f.directory, 'pack-cache'), npm_config_offline: 'true' }, encoding: 'utf8', shell: false,
+test('inspeção real preserva TGZ antigo e atual sem presumir o caminho do executável', async t => {
+  for (const release of [{ version: '0.0.3', bin: '.pbai4devs/bin/agentdevkit.mjs' }, { version, bin: 'bin/agentdevkit.mjs' }]) await t.test(release.version, async subtest => {
+    const f = fixture(subtest), source = join(f.directory, 'source'); mkdirSync(source);
+    writeFileSync(join(source, 'package.json'), JSON.stringify({ name: packageName, version: release.version, bin: { agentdevkit: release.bin } }));
+    mkdirSync(dirname(join(source, release.bin)), { recursive: true });
+    writeFileSync(join(source, release.bin), '#!/usr/bin/env node\nconsole.log("fixture");\n');
+    const packed = spawnSync(process.execPath, [npmExecutable(), 'pack', '--ignore-scripts', '--json', '--pack-destination', f.directory], {
+      cwd: source, env: { ...env, npm_config_cache: join(f.directory, 'pack-cache'), npm_config_offline: 'true' }, encoding: 'utf8', shell: false,
+    });
+    assert.equal(packed.status, 0, packed.stderr);
+    const archive = readFileSync(join(f.directory, JSON.parse(packed.stdout)[0].filename));
+    const real = fixture(subtest, archive, release.version), m = mock(real, {
+      views: [{ integrity: real.integrity }], metadata: { version: release.version },
+      execResult: success({ ok: true, command: 'version', version: release.version }),
+    });
+    m.options.resolution = { ...resolution, version: release.version, tag: `v${release.version}` };
+    const delegate = m.options.execute;
+    m.options.execute = (command, args, config) => args[1] === 'pack' ? spawnSync(command, args, config) : delegate(command, args, config);
+    assert.equal((await publishRegistryPackage(m.options)).status, 'skipped');
+    assert.deepEqual(readFileSync(real.path), archive);
   });
-  assert.equal(packed.status, 0, packed.stderr);
-  const archive = readFileSync(join(f.directory, JSON.parse(packed.stdout)[0].filename));
-  const real = fixture(t, archive), m = mock(real, { views: [{ integrity: real.integrity }] });
-  const delegate = m.options.execute;
-  m.options.execute = (command, args, config) => args[1] === 'pack' ? spawnSync(command, args, config) : delegate(command, args, config);
-  assert.equal((await publishRegistryPackage(m.options)).status, 'skipped');
-  assert.deepEqual(readFileSync(real.path), archive);
 });

@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { realpathSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ensureRuntime, environmentWithNode } from '../scripts/preparar-ferramentas/BOOTSTRAP.mjs';
+import { ensureRuntime, environmentWithNode } from '../.pbai4devs/scripts/preparar-ferramentas/BOOTSTRAP.mjs';
 
 const file = fileURLToPath(import.meta.url);
 export async function run(argv = process.argv.slice(2), options = {}) {
@@ -15,7 +15,7 @@ export async function run(argv = process.argv.slice(2), options = {}) {
   let error;
   try {
     if (Number(version.split('.')[0]) < 18) throw new Error('Instale Node.js 24+ pelo gerenciador do sistema operacional.');
-    const runtime = await (options.ensureRuntime || ensureRuntime)({ root: resolve(dirname(file), '../..'), run: options.spawn || spawnSync });
+    const runtime = await (options.ensureRuntime || ensureRuntime)({ root: resolve(dirname(file), '..'), run: options.spawn || spawnSync });
     const result = (options.spawn || spawnSync)(runtime.node, [file, ...argv], { stdio: 'inherit', env: environmentWithNode(process.env, runtime.node) });
     if (result.error) throw result.error;
     return result.status ?? 1;

@@ -5,7 +5,10 @@ import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import test from 'node:test';
 import { projectRoot, requireNode } from '../../lib/runtime.mjs';
-import { copyAgentStructure, prepareExamples, registeredRoots, resourceTargets, SCENARIOS } from '../SCRIPT.mjs';
+import { copyAgentStructure, prepareExamples as prepare, registeredRoots, resourceTargets, SCENARIOS } from '../SCRIPT.mjs';
+
+// As fixtures pequenas isolam a cópia; o caso source-only usa o renderizador real.
+const prepareExamples = options => prepare({ ...options, renderResources: () => {} });
 
 requireNode();
 function fixture(t) {
@@ -24,7 +27,7 @@ function fixture(t) {
   put('.gitignore', readFileSync(join(projectRoot, '.gitignore')));
   put('.pbai4devs/scripts/inspecionar-projeto/SCRIPT.mjs', readFileSync(join(projectRoot, '.pbai4devs/scripts/inspecionar-projeto/SCRIPT.mjs')));
   put('.pbai4devs/scripts/lib/runtime.mjs', readFileSync(join(projectRoot, '.pbai4devs/scripts/lib/runtime.mjs')));
-  return { root, put, outputRoot: join(root, 'tmp/examples') };
+  return { root, put, outputRoot: join(root, 'examples/generated') };
 }
 
 test('copia recursos e configurações, excluindo payloads, caches e segredos', t => {
@@ -37,6 +40,7 @@ test('copia recursos e configurações, excluindo payloads, caches e segredos', 
   const excluded = ['.pbai4devs/tools/demo/.local/package/README.md', '.pbai4devs/tools/demo/download.exe', '.pbai4devs/tools/.cache/archive', '.pbai4devs/tools/bin/demo.mjs', '.pbai4devs/external-skills/.local/upstream/SKILL.md', '.pbai4devs/scripts/demo/node_modules/pkg/index.js', '.pbai4devs/scripts/demo/.env', '.pbai4devs/scripts/demo/report.log', '.env', '.codex/auth.json', '.github/credentials.json', '.vscode/settings.local.json', '.pbai4devs/scripts/demo/private.pem', '.pbai4devs/scripts/demo/config.local.toml', '.codex/.credentials.json', '.agents/.local/token.json', '.gemini/auth.json'];
   excluded.push('.pbai4devs/scripts/demo/playwright-report/index.html', '.pbai4devs/scripts/demo/TEST-RESULTS/report.json', '.pbai4devs/scripts/demo/TmP/generated.json', '.gemini/Temp/context.json', '.gemini/Sessions/state.json', '.pbai4devs/scripts/demo/history.jsonl', '.pbai4devs/skills/demo/.PLAYWRIGHT-MCP/session.json');
   excluded.push('.pbai4devs/bin/agentdevkit.mjs', '.pbai4devs/src/cli.mjs', '.pbai4devs/release/pipeline.mjs', '.pbai4devs/tests/cli.test.mjs', '.pbai4devs/DEVELOPMENT.md');
+  excluded.push('bin/agentdevkit.mjs', 'src/cli.mjs', 'scripts/release/pipeline.mjs', 'tests/cli.test.mjs', 'examples/README.md');
   const kept = ['.pbai4devs/scripts/demo/tests/fixtures/cache/input.json', '.pbai4devs/scripts/demo/tests/fixtures/playwright-response.json', '.pbai4devs/templates/demo/compose.local.yml.template'];
   for (const file of kept) put(file, 'fixture versionavel');
   for (const file of excluded) put(file, 'não copiar');
@@ -52,14 +56,68 @@ test('copia recursos e configurações, excluindo payloads, caches e segredos', 
 
 test('regeneração preserva pastas alheias e recusa sobrescrevê-las', t => {
   const { root, put, outputRoot } = fixture(t);
-  put('tmp/examples/anotacoes/keep.txt', 'preservado');
+  put('examples/generated/anotacoes/keep.txt', 'preservado');
+  put('examples/README.md', 'Guia humano.');
   const options = { sourceRoot: root, outputRoot, scenarios: [SCENARIOS[0]], initializeGit: false };
   prepareExamples(options); prepareExamples(options);
   assert.equal(readFileSync(join(outputRoot, 'anotacoes/keep.txt'), 'utf8'), 'preservado');
-  put('tmp/examples/descoberta/keep.txt', 'humano');
+  assert.equal(readFileSync(join(root, 'examples/README.md'), 'utf8'), 'Guia humano.');
+  put('examples/generated/descoberta/keep.txt', 'humano');
   assert.throws(() => prepareExamples({ ...options, scenarios: [SCENARIOS[1]] }), /não é gerenciado/);
   assert.equal(readFileSync(join(outputRoot, 'descoberta/keep.txt'), 'utf8'), 'humano');
   assert.throws(() => prepareExamples({ ...options, scenarios: [{ ...SCENARIOS[0], id: '../outside' }] }), /IDs únicos e seguros/);
+});
+
+test('destino padrão redefine apenas relatório próprio e mantém resultados fora do Git', t => {
+  const { root, outputRoot } = fixture(t);
+  const git = (...args) => {
+    const result = spawnSync('git', ['-C', root, ...args], { encoding: 'utf8', shell: false });
+    assert.ifError(result.error); assert.equal(result.status, 0, result.stderr); return result.stdout;
+  };
+  git('init', '--template=', '--quiet');
+  const options = { sourceRoot: root, scenarios: [SCENARIOS[0]], initializeGit: false };
+  const examples = prepareExamples(options);
+  assert.equal(examples[0].root, join(outputRoot, SCENARIOS[0].id));
+  const reportFile = join(outputRoot, 'REPORT.json');
+  writeFileSync(reportFile, JSON.stringify({ owner: 'testar-maturidade', status: 'passed', results: [{ stale: true }] }));
+  prepareExamples(options);
+  assert.deepEqual(JSON.parse(readFileSync(reportFile)), { owner: 'testar-maturidade', version: 1,
+    status: 'prepared', scenarios: [SCENARIOS[0].id], results: [] });
+  assert.match(git('check-ignore', '--verbose', 'examples/generated/REPORT.json'), /examples\/generated\/\.gitignore:2:\*/);
+  assert.match(git('check-ignore', '--verbose', 'examples/generated/somente-agentes/README.md'), /examples\/generated\/\.gitignore:2:\*/);
+  const human = JSON.stringify({ owner: 'human', notes: 'preservar' });
+  writeFileSync(reportFile, human);
+  assert.throws(() => prepareExamples(options), /Relatório.*não pertence/);
+  assert.equal(readFileSync(reportFile, 'utf8'), human);
+});
+
+test('preserva ignore humano e continua aceitando destinos legados', t => {
+  const { root, put } = fixture(t);
+  const options = { sourceRoot: root, scenarios: [SCENARIOS[0]], initializeGit: false };
+  put('examples/generated/.gitignore', '!README.md\n');
+  assert.throws(() => prepareExamples(options), /Ignore.*não pertence/);
+  assert.equal(readFileSync(join(root, 'examples/generated/.gitignore'), 'utf8'), '!README.md\n');
+  for (const target of ['tmp/examples', '.agent-tests/cases']) {
+    const outputRoot = join(root, target);
+    const [example] = prepareExamples({ ...options, outputRoot });
+    assert.equal(example.root, join(outputRoot, SCENARIOS[0].id));
+  }
+});
+
+test('preparação interrompida não conserva resultado anterior nem declara sucesso', t => {
+  const { root, put, outputRoot } = fixture(t);
+  const options = { sourceRoot: root, scenarios: [SCENARIOS[0]], initializeGit: false };
+  prepareExamples(options);
+  const report = join(outputRoot, 'REPORT.json');
+  const index = join(outputRoot, 'README.md');
+  writeFileSync(report, JSON.stringify({ owner: 'testar-maturidade', status: 'passed', results: [{}] }));
+  writeFileSync(index, readFileSync(index, 'utf8').replaceAll('prepared', 'passed'));
+  put('.pbai4devs/estado/agentdevkit.json', JSON.stringify({ blocks: null }));
+  assert.throws(() => prepareExamples(options), /Estado da instalação/);
+  assert.equal(existsSync(report), false);
+  assert.match(readFileSync(index, 'utf8'), /status: preparing/);
+  assert.doesNotMatch(readFileSync(index, 'utf8'), /status: passed|\| passed \|/);
+  assert.doesNotMatch(readFileSync(index, 'utf8'), /\n{3,}/);
 });
 
 test('usa entradas distribuídas do hub e mantém fallback legado', t => {
@@ -170,10 +228,23 @@ test('checkout de fontes sem manifesto deriva clientes em memória', t => {
   assert.equal(existsSync(manifest), false);
 });
 
+test('prepare gera apontamentos reais mesmo sem pastas de clientes na origem', t => {
+  const { root } = fixture(t);
+  const sourceRoot = join(root, 'source-only');
+  copyAgentStructure(projectRoot, sourceRoot);
+  const roots = registeredRoots(sourceRoot);
+  for (const client of roots) rmSync(join(sourceRoot, client), { recursive: true, force: true });
+  const [example] = prepare({ sourceRoot, scenarios: [SCENARIOS[0]], initializeGit: false });
+  const skill = '.pbai4devs/skills/projeto/criar-skill/SKILL.md';
+  for (const target of resourceTargets(sourceRoot, skill)) assert.ok(existsSync(join(example.root, target)), target);
+  for (const client of roots) assert.equal(existsSync(join(sourceRoot, client)), false, client);
+  for (const file of ['src/cli.mjs', 'bin/agentdevkit.mjs', 'scripts/release/pipeline.mjs', 'tests/cli.test.mjs']) assert.equal(existsSync(join(example.root, file)), false, file);
+});
+
 test('saída não pode sobrepor recursos de origem nem escapar das áreas de teste', t => {
   const { root } = fixture(t);
   const original = readFileSync(join(root, '.pbai4devs/espelhos.conf'), 'utf8');
-  for (const location of ['.pbai4devs/generated', '.github', '.codex', '.agents', '.agent', '.gemini', 'tmp', 'output', '../outside']) {
+  for (const location of ['.pbai4devs/generated', '.github', '.codex', '.agents', '.agent', '.gemini', 'examples', 'examples/custom', 'tmp', 'output', '../outside']) {
     assert.throws(() => prepareExamples({ sourceRoot: root, outputRoot: join(root, location), scenarios: [SCENARIOS[0]], initializeGit: false }), /Saída permitida/);
     assert.equal(readFileSync(join(root, '.pbai4devs/espelhos.conf'), 'utf8'), original);
     assert.equal(existsSync(join(root, location, '.maturity-suite.json')), false);

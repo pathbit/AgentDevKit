@@ -31,6 +31,8 @@ export function registryRoots(root) {
 }
 
 function walk(root, location, files, { skipTools = true } = {}) {
+  const path = normalize(relative(root, location));
+  if (/^examples\/generated(?:\/|$)/i.test(path)) return;
   const item = checkedStat(root, location);
   if (!item) return;
   if (location === join(root, '.pbai4devs/external-skills/.local')) return;
@@ -39,7 +41,7 @@ function walk(root, location, files, { skipTools = true } = {}) {
   if (item.isDirectory()) {
     if (excluded.has(basename(location))) return;
     for (const child of readdirSync(location).sort()) walk(root, join(location, child), files, { skipTools });
-  } else if (item.isFile() && ['.md', '.mdc'].includes(extname(location))) files.add(location);
+  } else if (item.isFile() && ['.md', '.mdc'].includes(extname(location).toLowerCase())) files.add(location);
 }
 
 export function collectMarkdown(root, registry = registryRoots(root)) {
@@ -52,7 +54,10 @@ export function collectMarkdown(root, registry = registryRoots(root)) {
     if (item?.isDirectory() && !checkedStat(root, join(location, 'README.md'))?.isFile()) fail(`README ausente: .pbai4devs/${directory.name}/`);
   }
   const files = new Set();
-  for (const name of ['.pbai4devs', 'docs', 'README.md', 'AGENTS.md', 'CLAUDE.md', 'GEMINI.md', ...registry.paths]) walk(root, resolve(root, name), files);
+  const rootMarkdown = readdirSync(root).filter(name => ['.md', '.mdc'].includes(extname(name).toLowerCase()));
+  const sources = ['.pbai4devs', 'docs', 'src', 'bin', 'tests', 'scripts', 'examples',
+    '.github/PULL_REQUEST_TEMPLATE.md', '.github/ISSUE_TEMPLATE', ...rootMarkdown];
+  for (const name of [...sources, ...registry.paths]) walk(root, resolve(root, name), files);
   const tools = join(agents, 'tools');
   if (checkedStat(root, tools)) {
     const guide = join(tools, 'README.md');

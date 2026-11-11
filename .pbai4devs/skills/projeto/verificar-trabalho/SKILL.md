@@ -15,7 +15,7 @@ identificar ferramentas disponíveis e selecione os níveis aplicáveis. Use
 2. **Comportamento:** execute testes relevantes, lint, tipos e build definidos
    no projeto; para automações dos agentes, execute `testar-infraestrutura`.
    Ao alterar catálogo, sincronizador, instalador ou cópia de projetos, execute
-   também `testar-maturidade run` e confira cada cenário em `tmp/examples/`.
+   também `testar-maturidade run` e confira os cenários em `examples/generated/`.
    Confira resultados e códigos de saída; não instale ferramentas
    ou invente metas de cobertura sem decisões do projeto.
 3. **Navegador:** obrigatório para alterações que afetem a web. Abra a URL real

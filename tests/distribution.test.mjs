@@ -5,12 +5,13 @@ import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, re
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import { findNpmCli } from '../.pbai4devs/scripts/lib/npm.mjs';
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const json = file => JSON.parse(readFileSync(file, 'utf8'));
 const write = (file, text) => { mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, text); };
 const digest = file => createHash('sha256').update(readFileSync(file)).digest('hex');
-const npm = [process.env.npm_execpath, join(dirname(process.execPath), 'node_modules/npm/bin/npm-cli.js'), join(dirname(process.execPath), '../lib/node_modules/npm/bin/npm-cli.js')].find(file => file && existsSync(file));
+const npm = findNpmCli();
 
 function snapshot(folder) {
   const entries = {};
@@ -48,7 +49,7 @@ test('pacote real instala, preserva projetos e oferece próximos passos', { time
       return true;
     } });
   }
-  const localOnly = ['.pbai4devs/tools/agent-browser/.local/secret.json', '.pbai4devs/tools/.cache/download.bin', '.pbai4devs/external-skills/.local/private/SKILL.md', '.pbai4devs/scripts/exemplo/.playwright-mcp/log.json', '.pbai4devs/scripts/exemplo/sessions/state.json', '.pbai4devs/scripts/exemplo/auth.json', '.agent-tests/output.json', 'tmp/output.txt'];
+  const localOnly = ['.pbai4devs/tools/agent-browser/.local/secret.json', '.pbai4devs/tools/.cache/download.bin', '.pbai4devs/external-skills/.local/private/SKILL.md', '.pbai4devs/scripts/exemplo/.playwright-mcp/log.json', '.pbai4devs/scripts/exemplo/sessions/state.json', '.pbai4devs/scripts/exemplo/auth.json', '.agent-tests/output.json', 'tmp/output.txt', 'tests/private.test.mjs', 'scripts/release/private.mjs', 'examples/.claude/skills/private/SKILL.md'];
   for (const relative of localOnly) write(join(stage, relative), 'LOCAL_ONLY_DO_NOT_DISTRIBUTE');
   const environment = { ...process.env, PATH: `${dirname(process.execPath)}${process.platform === 'win32' ? ';' : ':'}${process.env.PATH || ''}`, npm_config_cache: join(work, 'npm-cache'), npm_config_offline: 'true', npm_config_audit: 'false', npm_config_fund: 'false', npm_config_ignore_scripts: 'true' };
   const runNpm = (args, cwd = stage) => {
@@ -77,17 +78,19 @@ test('pacote real instala, preserva projetos e oferece próximos passos', { time
     }, null, 2) + '\n');
     assert.ok(unchanged, 'O artefato selecionado mudou durante a verificação.');
   };
-  assert.ok(packed.files.some(file => file.path === '.pbai4devs/bin/agentdevkit.mjs'));
+  assert.ok(packed.files.some(file => file.path === 'bin/agentdevkit.mjs'));
+  assert.ok(packed.files.some(file => file.path === 'src/cli.mjs'));
   assert.ok(packed.files.some(file => file.path === '.pbai4devs/skills/projeto/proximos-passos/SKILL.md'));
   for (const file of packed.files) {
     assert.doesNotMatch(file.path, /(?:^|\/)(?:\.local|\.cache|node_modules|\.agent-tests|tmp|temp)(?:\/|$)/, file.path);
     assert.ok(!file.path.startsWith('.pbai4devs/adapters/'), file.path);
+    assert.doesNotMatch(file.path, /^(?:tests|examples|scripts\/release)\//, file.path);
     assert.ok(!localOnly.includes(file.path), file.path);
   }
   const installed = join(work, 'installed');
   runNpm(['install', '--offline', '--ignore-scripts', '--no-audit', '--no-fund', '--prefix', installed, tarball], work);
   const packageRoot = join(installed, 'node_modules', ...packageJson.name.split('/'));
-  const bin = join(packageRoot, '.pbai4devs/bin/agentdevkit.mjs');
+  const bin = join(packageRoot, 'bin/agentdevkit.mjs');
   assert.ok(existsSync(bin));
   for (const relative of readdirSync(packageRoot, { recursive: true })) {
     const file = relative.split(sep).join('/');
@@ -122,6 +125,7 @@ test('pacote real instala, preserva projetos e oferece próximos passos', { time
     assert.equal(json(join(target, '.pbai4devs/estado/agentdevkit.json')).language, 'en');
     assert.ok(existsSync(join(target, '.pbai4devs/skills/projeto/proximos-passos/SKILL.md')));
     assert.equal(existsSync(join(target, 'docs')), false);
+    for (const folder of ['src', 'bin', 'tests', 'scripts', 'examples']) assert.equal(existsSync(join(target, folder)), false, folder);
     for (const relative of localOnly) assert.equal(existsSync(join(target, relative)), false, relative);
     const before = snapshot(target);
     cli(['init', '--target', target, '--yes']); cli(['update', '--target', target, '--yes']);
@@ -134,7 +138,7 @@ test('pacote real instala, preserva projetos e oferece próximos passos', { time
 
   await subtest('projeto existente preserva código, instruções e configurações próprias', () => {
     const target = join(work, 'projeto existente');
-    const sentinels = ['src/app.mjs', 'README.md', '.vscode/settings.json', '.github/workflows/ci.yml', '.claude/skills/custom/SKILL.md', '.env', '.pbai4devs/tools/agent-browser/.local/state.json', '.pbai4devs/tools/.cache/keep.bin'];
+    const sentinels = ['src/app.mjs', 'tests/app.test.mjs', 'bin/custom.mjs', 'README.md', '.vscode/settings.json', '.github/workflows/ci.yml', '.claude/skills/custom/SKILL.md', '.env', '.pbai4devs/tools/agent-browser/.local/state.json', '.pbai4devs/tools/.cache/keep.bin'];
     for (const relative of sentinels) write(join(target, relative), `USER_OWNED:${relative}\n`);
     write(join(target, '.vscode/settings.json'), '{"editor.wordWrap":"on"}\n');
     write(join(target, '.github/workflows/ci.yml'), 'name: Meu CI\non: push\njobs: {}\n');
@@ -185,7 +189,7 @@ test('pacote real instala, preserva projetos e oferece próximos passos', { time
     const upgrade = JSON.parse(runNpm(['pack', '--json', '--ignore-scripts', '--pack-destination', work]))[0];
     const upgradeRoot = join(work, 'upgrade-installed');
     runNpm(['install', '--offline', '--ignore-scripts', '--no-audit', '--no-fund', '--prefix', upgradeRoot, join(work, upgrade.filename)], work);
-    const upgradeBin = join(upgradeRoot, 'node_modules', ...packageJson.name.split('/'), '.pbai4devs/bin/agentdevkit.mjs');
+    const upgradeBin = join(upgradeRoot, 'node_modules', ...packageJson.name.split('/'), 'bin/agentdevkit.mjs');
     const result = cli(['update', '--target', target, '--yes'], 0, upgradeBin);
     assert.equal(result.version, nextVersion);
     assert.equal(readFileSync(join(target, '.pbai4devs/README.md'), 'utf8'), nextSource);

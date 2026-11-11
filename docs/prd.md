@@ -1,7 +1,7 @@
 ---
 description: Requisitos da distribuição portátil AgentDevKit.
 status: aprovado
-version: 0.0.3
+version: 0.0.4
 ---
 
 # PRD do AgentDevKit
@@ -35,6 +35,8 @@ extraído do projeto de origem como produto independente.
 | FR-013 | Usar JavaScript/Node nas automações e manter distribuição via npx. |
 | FR-014 | Reutilizar no release o pacote verificado, sem duplicar o CI. |
 | FR-015 | Publicar um pacote npm no GitHub Packages, instalável via npx. |
+| FR-016 | Organizar código e testes em `src/` e `tests/`, na raiz. |
+| FR-017 | Gerar exemplos isolados e acessíveis por comandos documentados. |
 
 Execuções repetidas devem ser idempotentes; a CLI oferece simulação e JSON.
 As instruções permanecem concisas, com detalhes opcionais em referências.

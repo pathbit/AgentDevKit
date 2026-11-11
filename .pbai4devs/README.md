@@ -13,8 +13,8 @@ Os arquivos `skills.json`, `rules.json` e `agents.json` são índices auxiliares
 das fontes. Os clientes selecionados usam seus diretórios de apontamentos.
 O estado `estado/agentdevkit.json` guarda `clients`: `["all"]` ou os IDs
 escolhidos. Catálogos, manifesto, estado e pastas nativas são derivados locais;
-não devem ser commitados. No repositório do kit, `bin/`, `src/`, `release/`
-e `tests/` também guardam o código-fonte do produto.
+não devem ser commitados. No repositório do kit, o código do produto fica em
+`src/`, `bin/`, `tests/` e `scripts/release/`, na raiz.
 Use `agents` na CLI para consultar ou alterar; `all` inclui os clientes legados.
 O hub fica completo; clientes podem compartilhar pastas necessárias.
 
@@ -45,6 +45,6 @@ e o comando `revisar-entrega` para fechar documentação, revisão e evidências
 Use o [comando sincronizar](commands/sincronizar/COMMAND.md) para reparar tudo;
 o script também aceita `--check` para só conferir.
 Os [exemplos de maturidade](scripts/testar-maturidade/README.md) são gerados em
-`tmp/examples/`, com cópias portáveis da estrutura e relatórios ignorados.
+`examples/generated/`, com cópias portáveis da estrutura e relatórios ignorados.
 
 [externas]: external-skills/README.md

@@ -14,6 +14,7 @@ status: vigente
 | Seleção de agentes v0.0.2 | CLI e adaptadores | [Spec][selection]. |
 | Fontes e geração local v0.0.3 | Seleção e distribuição | [Spec][source]. |
 | Pacote npm no GitHub Packages | Artefato aprovado da release | [Spec][packages]. |
+| Estrutura e exemplos v0.0.4 | CLI, distribuição e gerador | [Spec][layout]. |
 
 A primeira entrega segue a [spec v0.0.1](specs/v0.0.1/SPEC.md) e está disponível
 na [release v0.0.1][release]. Os detalhes de mudanças estão no
@@ -30,3 +31,4 @@ comportamento existente, sem alterar a versão de uma release já publicada.
 [selection]: specs/v0.0.2/SPEC.md
 [source]: specs/v0.0.3/SPEC.md
 [packages]: specs/github-packages/SPEC.md
+[layout]: specs/v0.0.4/SPEC.md

@@ -4,6 +4,15 @@ description: Alterações verificáveis por versão do AgentDevKit.
 
 # Changelog
 
+## 0.0.4 — 2026-11-11
+
+- Código em `src/`, testes em `tests/` e publicação em `scripts/release/`.
+- Exemplos completos em `examples/generated/`, com guia versionado e comandos.
+- Preparação dos exemplos sem depender de pastas geradas na raiz.
+- Relatórios de exemplos atualizados, sem reutilizar resultados antigos.
+- Guia rápido de desenvolvimento e automações npm para verificar e empacotar.
+- Compatibilidade de instalação, atualização e publicação mantida.
+
 ## Distribuição no GitHub Packages
 
 - Pacote único `@pathbit/agentdevkit` instalável pelo registro com npx.

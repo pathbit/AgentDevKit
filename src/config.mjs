@@ -2,8 +2,8 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const frameworkRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-export const packageRoot = resolve(frameworkRoot, '..');
+export const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+export const frameworkRoot = resolve(packageRoot, '.pbai4devs');
 export const packageInfo = JSON.parse(readFileSync(resolve(packageRoot, 'package.json'), 'utf8'));
 export const statePath = '.pbai4devs/estado/agentdevkit.json';
 export const entryNames = ['AGENTS.md', 'CLAUDE.md', 'GEMINI.md'];

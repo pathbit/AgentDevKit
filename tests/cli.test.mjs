@@ -8,8 +8,8 @@ import { run } from '../bin/agentdevkit.mjs';
 import { resolveTarget } from '../src/install.mjs';
 import { packageInfo } from '../src/config.mjs';
 
-const project = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const bin = join(project, '.pbai4devs/bin/agentdevkit.mjs');
+const project = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const bin = join(project, 'bin/agentdevkit.mjs');
 function fixture(t) {
   mkdirSync(join(project, '.agent-tests'), { recursive: true });
   const root = mkdtempSync(join(project, '.agent-tests/cli-'));
@@ -178,7 +178,7 @@ test('saida humana resume alteracoes e limita o plano enquanto JSON permanece co
 
 test('bootstrap automatico preserva argumentos e status sem instalar ferramentas', async () => {
   const calls = []; const runtime = resolve(project, 'fake-node24');
-  const code = await run(['init', '--target', 'a b', '--json'], { nodeVersion: '22.0.0', ensureRuntime: async () => ({ node: runtime }), spawn(file, args) { calls.push({ file, args }); return { status: 7 }; } });
+  const code = await run(['init', '--target', 'a b', '--json'], { nodeVersion: '22.0.0', ensureRuntime: async options => { assert.equal(options.root, project); return { node: runtime }; }, spawn(file, args) { calls.push({ file, args }); return { status: 7 }; } });
   assert.equal(code, 7); assert.equal(calls[0].file, runtime);
   assert.deepEqual(calls[0].args.slice(1), ['init', '--target', 'a b', '--json']);
   let output = '';

@@ -9,9 +9,9 @@ Este guia explica como manter e publicar o gerador.
 
 ## Manter fontes e guias
 
-Edite as fontes em `.pbai4devs`, não os apontamentos locais. Documente objetivo,
-pré-requisito, exemplo e resultado esperado. Use links para os detalhes e evite
-copiar a mesma regra para vários arquivos.
+Edite `src/` para o código, `tests/` para os testes e `.pbai4devs/` para os
+recursos compartilhados. Documente objetivo, pré-requisito, exemplo e resultado
+esperado. Use links para os detalhes e evite repetir a mesma regra.
 
 Ao mudar layouts, revise templates, compatibilidade e testes. Ao mudar comandos,
 revise ajuda, idiomas e exemplos. Markdown começa com frontmatter e H1.
@@ -32,7 +32,9 @@ A distribuição real é testada uma vez no perfil completo. Os outros perfis
 validam seus riscos específicos. Execuções antigas da mesma referência podem
 ser canceladas quando substituídas, sem cancelar uma publicação em andamento.
 
-`npm run ci:full`, `ci:portable` e `ci:smoke` executam os perfis localmente.
+`npm run verify` executa o perfil completo. `ci:portable` e `ci:smoke`
+executam os demais perfis localmente. `npm run test:examples` verifica os
+cenários em `examples/generated/` quando a mudança afeta a geração.
 A [contribuição](../CONTRIBUTING.md) explica os checks durante o desenvolvimento.
 
 ## Gerar um pacote
@@ -46,11 +48,12 @@ releases são o canal público de instalação.
 Para investigar localmente:
 
 ```console
-npm run pack:release
+npm run build
 ```
 
 O resultado fica em `.agent-tests/release/<versão>/`. Esse comando não publica
 nada. Nunca versione o tarball ou seus relatórios.
+`pack:release` permanece disponível com o mesmo comportamento.
 
 ## Publicar uma versão
 
