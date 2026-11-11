@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
@@ -8,8 +8,9 @@ import { createHash } from 'node:crypto';
 import { projectRoot } from '../../lib/runtime.mjs';
 import { planLocalIgnore, applyLocalIgnore, checkLocalIgnore, planUntrack, applyUntrack, restoreUntrack, assertLocalIgnoreUnchanged } from '../../lib/gitignore.mjs';
 
-function fixture(t) {
-  const root = mkdtempSync(join(tmpdir(), 'agentdevkit-ignore-'));
+function fixture(t, canonical = true) {
+  const created = mkdtempSync(join(tmpdir(), 'agentdevkit-ignore-'));
+  const root = canonical ? realpathSync.native(created) : created;
   t.after(() => rmSync(root, { recursive: true, force: true }));
   put(root, '.pbai4devs/templates/gitignore/local.ignore', readFileSync(join(projectRoot, '.pbai4devs/templates/gitignore/local.ignore')));
   return root;
@@ -209,4 +210,81 @@ test('preflight dispensa somente regras de bloco substituído com hash válido',
   assert.throws(() => checkLocalIgnore(plan, { replacedBlocks: [{ ...replacement, sha256: '0'.repeat(64) }] }), /Bloco de ignore mudou/);
   assert.throws(() => applyLocalIgnore(plan), /Regras humanas/);
   assert.equal(readFileSync(join(root, '.github/.gitignore'), 'utf8'), `# Humano\r\n${block}\r\n!/human.md\r\n`);
+});
+
+test('aliases ancestrais usam caminhos nativos em exclusão, desindexação e rollback', t => {
+  const base = fixture(t), project = join(base, 'project'), alias = join(base, 'alias');
+  mkdirSync(project);
+  try { symlinkSync(base, alias, process.platform === 'win32' ? 'junction' : 'dir'); }
+  catch (error) { if (['EPERM', 'EACCES'].includes(error.code)) { t.skip('Sem permissão para criar alias.'); return; } throw error; }
+  git(project, ['init', '-q']);
+  const native = realpathSync.native;
+  const canonical = native(project), viaAlias = join(alias, 'project');
+  let nativeCalls = 0;
+  t.mock.method(realpathSync, 'native', (...args) => { nativeCalls++; return native(...args); });
+  const plan = planLocalIgnore(viaAlias, { outputs: ['generated.md'] });
+  assert.equal(plan.root, canonical); assert.equal(plan.location.top, canonical); assert.equal(plan.location.prefix, '');
+  applyLocalIgnore(plan);
+  assert.equal(planLocalIgnore(project, { outputs: ['generated.md'] }).edits.length, 0);
+  const future = planLocalIgnore(join(viaAlias, 'future', 'nested'), { outputs: ['generated.md'] });
+  assert.equal(future.root, join(canonical, 'future', 'nested'));
+  assert.equal(future.location.prefix, 'future/nested'); assert.equal(existsSync(future.root), false);
+  put(project, 'generated.md', 'gerado\n'); git(project, ['add', '-f', 'generated.md']);
+  const untrack = planUntrack(viaAlias, { 'generated.md': createHash('sha256').update('gerado\n').digest('hex') });
+  assert.equal(untrack.root, canonical); applyUntrack(untrack); restoreUntrack(untrack);
+  assert.equal(git(project, ['show', ':generated.md']), 'gerado\n');
+  assert.ok(nativeCalls > 3, 'As comparações devem usar realpathSync.native.');
+});
+
+test('canonicalização recorre a realpath quando operação nativa não é suportada', t => {
+  const root = fixture(t), expected = realpathSync(root);
+  t.mock.method(realpathSync, 'native', () => { throw Object.assign(new Error('Sem suporte'), { code: 'ENOSYS' }); });
+  const plan = planLocalIgnore(join(root, 'future'), { outputs: ['generated.md'] });
+  assert.equal(plan.root, join(expected, 'future')); assert.equal(existsSync(plan.root), false);
+});
+
+test('Windows normaliza o alias temporário 8.3 antes de comparar a raiz Git', { skip: process.platform !== 'win32' }, t => {
+  const root = fixture(t, false), canonical = realpathSync.native(root);
+  git(root, ['init', '-q']);
+  const plan = planLocalIgnore(root, { outputs: ['generated.md'] });
+  assert.equal(plan.root, canonical); assert.equal(plan.location.top, canonical); assert.equal(plan.location.prefix, '');
+  const future = planLocalIgnore(join(root, 'future'), { outputs: ['generated.md'] });
+  assert.equal(future.root, join(canonical, 'future')); assert.equal(future.location.prefix, 'future');
+  put(root, 'generated.md', 'gerado\n'); git(root, ['add', 'generated.md']);
+  const untrack = planUntrack(root, { 'generated.md': createHash('sha256').update('gerado\n').digest('hex') });
+  applyUntrack(untrack); restoreUntrack(untrack);
+  assert.equal(git(root, ['show', ':generated.md']), 'gerado\n');
+});
+
+test('canonicalização do índice mantém rejeição de symlink antes de resolver o destino', t => {
+  const root = fixture(t); git(root, ['init', '-q']); put(root, 'generated.md', 'gerado\n'); git(root, ['add', 'generated.md']);
+  const plan = planUntrack(root, { 'generated.md': createHash('sha256').update('gerado\n').digest('hex') });
+  applyUntrack(plan);
+  const index = join(root, '.git/index'), saved = join(root, '.git/saved-index');
+  renameSync(index, saved);
+  try { symlinkSync(saved, index); }
+  catch (error) { renameSync(saved, index); if (['EPERM', 'EACCES'].includes(error.code)) { t.skip('Sem permissão para criar symlink.'); return; } throw error; }
+  const before = readFileSync(saved);
+  assert.throws(() => restoreUntrack(plan), /Link simbolico/);
+  assert.throws(() => checkLocalIgnore({ root, location: null, paths: [], edits: [], trackedOutputs: [] }, {
+    replacedBlocks: [{ path: index, firstLine: 1, lastLine: 1, sha256: '0'.repeat(64) }],
+  }), /Link simbolico/);
+  assert.deepEqual(readFileSync(saved), before);
+});
+
+test('worktree usa a raiz nativa, exclude comum e seu próprio índice', t => {
+  const root = fixture(t); git(root, ['init', '-q']); put(root, 'seed.txt', 'base\n'); git(root, ['add', 'seed.txt']);
+  git(root, ['-c', 'user.name=Test User', '-c', 'user.email=test@example.invalid', '-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=disabled-hooks', 'commit', '-q', '-m', 'test: worktree fixture']);
+  const linked = join(root, 'linked-worktree');
+  git(root, ['worktree', 'add', '-q', '-b', 'fixture-linked', linked]);
+  const plan = planLocalIgnore(linked, { outputs: ['generated.md'] });
+  assert.equal(plan.root, realpathSync.native(linked));
+  assert.equal(plan.location.top, realpathSync.native(linked));
+  assert.equal(plan.location.exclude, realpathSync.native(join(root, '.git/info/exclude')));
+  applyLocalIgnore(plan); assert.equal(checkLocalIgnore(planLocalIgnore(linked, { outputs: ['generated.md'] })).ok, true);
+  put(linked, 'generated.md', 'gerado\n'); git(linked, ['add', '-f', 'generated.md']);
+  const untrack = planUntrack(linked, { 'generated.md': createHash('sha256').update('gerado\n').digest('hex') });
+  applyUntrack(untrack); restoreUntrack(untrack);
+  assert.equal(git(linked, ['show', ':generated.md']), 'gerado\n');
+  assert.equal(git(root, ['ls-files', 'generated.md']), '');
 });

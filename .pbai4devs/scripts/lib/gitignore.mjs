@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { closeSync, lstatSync, mkdirSync, openSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
@@ -65,6 +65,14 @@ const localStat = file => { try { return lstatSync(file); } catch (error) { if (
 const localRead = file => localStat(file) ? readFileSync(file, 'utf8') : null;
 const portable = path => path.split(sep).join('/');
 
+function canonicalExisting(path) {
+  if (typeof realpathSync.native === 'function') {
+    try { return realpathSync.native(path); }
+    catch (error) { if (!['ENOSYS', 'ENOTSUP', 'EINVAL'].includes(error.code)) throw error; }
+  }
+  return realpathSync(path);
+}
+
 function checkedLocalPath(file) {
   let current = resolve(file);
   while (true) {
@@ -110,7 +118,8 @@ function localRoot(value) {
   const missing = []; let parent = resolve(value);
   while (!localStat(parent)) { missing.unshift(parent.slice(dirname(parent).length + 1)); parent = dirname(parent); }
   if (!localStat(parent).isDirectory() || localStat(parent).isSymbolicLink()) throw new Error('Raiz local exige diretorio real.');
-  return { root: join(realpathSync(parent), ...missing), parent: realpathSync(parent) };
+  const canonical = canonicalExisting(parent);
+  return { root: join(canonical, ...missing), parent: canonical };
 }
 
 // Os padrões vêm do hub; apenas os nomes concretos dos derivados são calculados.
@@ -126,14 +135,18 @@ export function planLocalIgnore(root, { outputs = [], templateRoot } = {}) {
   const roots = [...new Set(policy.adapters.flatMap(adapter => [adapter.root, ...(adapter.extraRoots || [])]))].filter(path => !['.github', '.vscode'].includes(path));
   if (roots.some(path => typeof path !== 'string' || !/^\.[a-z0-9][a-z0-9-]*$/.test(path) || ['.git', '.pbai4devs', '.agent-tests'].includes(path))) throw new Error('Raiz de cliente invalida para exclusao.');
   const paths = [...new Set([...outputs.map(checkedOutput), ...template.split(/\r?\n/).filter(line => line.startsWith('/')).map(line => checkedOutput(line.slice(1)))])].sort();
-  const info = gitCommand(resolved.parent, ['rev-parse', '--path-format=absolute', '--show-toplevel', '--git-path', 'info/exclude']);
+  const info = gitCommand(resolved.parent, ['rev-parse', '--show-toplevel', '--git-path', 'info/exclude']);
   let location = null;
   if (info.status === 0) {
-    const [top, exclude] = info.stdout.trimEnd().split(/\r?\n/);
-    if (!top || !exclude) throw new Error('Localizacao Git invalida.');
+    const [reportedTop, reportedExclude] = info.stdout.trimEnd().split(/\r?\n/);
+    if (!reportedTop || !reportedExclude) throw new Error('Localizacao Git invalida.');
+    const exclude = resolve(resolved.parent, reportedExclude);
+    const top = canonicalExisting(reportedTop);
     const prefix = relative(top, root);
     if (isAbsolute(prefix) || prefix === '..' || prefix.startsWith(`..${sep}`)) throw new Error('Projeto fora da arvore Git.');
-    location = { top, exclude: checkedLocalPath(exclude), prefix: portable(prefix) };
+    checkedLocalPath(exclude);
+    const canonicalExclude = localStat(exclude) ? canonicalExisting(exclude) : join(localRoot(dirname(exclude)).root, basename(exclude));
+    location = { top, exclude: checkedLocalPath(canonicalExclude), prefix: portable(prefix) };
   } else if (info.error && info.error.code !== 'ENOENT' || !info.error && !/not a git repository/i.test(info.stderr || '')) {
     throw new Error(`Nao foi possivel localizar Git: ${info.error?.message || info.stderr}`);
   }
@@ -162,7 +175,7 @@ export function planLocalIgnore(root, { outputs = [], templateRoot } = {}) {
 export function checkLocalIgnore(plan, { replacedBlocks = [] } = {}) {
   const missing = [];
   const replacements = replacedBlocks.map(item => {
-    const path = realpathSync(resolve(item.path)), inside = relative(plan.root, path);
+    const path = canonicalExisting(checkedLocalPath(resolve(item.path))), inside = relative(localRoot(plan.root).root, path);
     if (isAbsolute(inside) || inside === '..' || inside.startsWith(`..${sep}`) || !Number.isInteger(item.firstLine) || !Number.isInteger(item.lastLine) || item.firstLine < 1 || item.lastLine < item.firstLine || !/^[a-f0-9]{64}$/.test(item.sha256)) throw new Error('Faixa de ignore gerenciado invalida.');
     const content = readFileSync(checkedLocalPath(path), 'utf8');
     const lines = [...content.matchAll(/[^\r\n]*(?:\r\n|\n|\r|$)/g)].filter(match => match[0]);
@@ -183,7 +196,7 @@ export function checkLocalIgnore(plan, { replacedBlocks = [] } = {}) {
       const match = matches.get(relativePaths[index]);
       const negative = match?.pattern.startsWith('!');
       const humanOverride = negative && /(?:^|[\\/])\.gitignore$/.test(match.source);
-      const replaced = negative && replacements.some(item => item.path === resolve(plan.location.top, match.source) && match.line >= item.firstLine && match.line <= item.lastLine);
+      const replaced = negative && replacements.some(item => item.path === canonicalExisting(resolve(plan.location.top, match.source)) && match.line >= item.firstLine && match.line <= item.lastLine);
       if (!replaced && ((!plan.edits.length && (!match || negative)) || humanOverride)) missing.push(probes[index]);
     }
   }
@@ -261,7 +274,7 @@ export function applyUntrack(plan) {
   if (current.index !== plan.index || current.paths.length !== plan.paths.length) throw new Error('Ownership ou indice mudou antes de desindexar.');
   const location = gitCommand(plan.root, ['rev-parse', '--show-toplevel']);
   if (location.status !== 0 || location.error) throw new Error('Nao foi possivel localizar a raiz Git para desindexar.');
-  const top = location.stdout.trimEnd(), prefix = portable(relative(top, plan.root));
+  const top = canonicalExisting(location.stdout.trimEnd()), prefix = portable(relative(top, localRoot(plan.root).root));
   const paths = plan.paths.map(path => prefix ? `${prefix}/${path}` : path);
   const result = gitCommand(top, ['rm', '--cached', '--pathspec-from-file=-', '--pathspec-file-nul'], paths.join('\0') + '\0');
   if (result.status !== 0 || result.error) throw new Error(result.error?.message || result.stderr || 'Falha ao desindexar derivados.');
@@ -272,9 +285,12 @@ export function applyUntrack(plan) {
 // permanecem. O lock é do próprio Git e o trabalho ocorre numa cópia desse índice.
 export function restoreUntrack(plan) {
   if (!plan?.paths?.length) return { restored: [], preserved: [] };
-  const located = gitCommand(plan.root, ['rev-parse', '--path-format=absolute', '--show-toplevel', '--git-path', 'index']);
+  const located = gitCommand(plan.root, ['rev-parse', '--show-toplevel', '--git-path', 'index']);
   if (located.status !== 0 || located.error) throw new Error('Nao foi possivel localizar o indice para rollback.');
-  const [top, indexPath] = located.stdout.trimEnd().split(/\r?\n/);
+  const [reportedTop, relativeIndex] = located.stdout.trimEnd().split(/\r?\n/);
+  const reportedIndex = resolve(plan.root, relativeIndex);
+  checkedLocalPath(reportedIndex);
+  const top = canonicalExisting(reportedTop), indexPath = canonicalExisting(reportedIndex);
   checkedLocalPath(indexPath);
   if (!localStat(indexPath)) throw new Error('Indice ausente; rollback automatico recusado.');
   const lock = `${indexPath}.lock`;
@@ -288,7 +304,7 @@ export function restoreUntrack(plan) {
     const existing = new Set(current.stdout.split('\0').filter(Boolean).map(record => record.slice(record.indexOf('\t') + 1)));
     const entries = plan.index.split('\0').filter(Boolean);
     const selected = new Set(plan.paths), restored = [], preserved = [];
-    const prefix = portable(relative(top, plan.root));
+    const prefix = portable(relative(top, localRoot(plan.root).root));
     const records = [];
     for (const record of entries) {
       const at = record.indexOf('\t'), path = record.slice(at + 1);
