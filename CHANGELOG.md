@@ -11,6 +11,8 @@ description: Alterações verificáveis por versão do AgentDevKit.
 - Sincronização mantém recursos humanos, inclusive com `--force`.
 - Caminhos preservados são informados sem registrar propriedade indevida.
 - Matriz OSS verifica agentes preexistentes e sincronização independente.
+- Inventário e fluxo documental exigem leitura e complementos sem substituição.
+- Exercícios documentais cobrem projetos reais e um projeto vazio.
 
 ## 0.0.8 — 2026-11-11
 

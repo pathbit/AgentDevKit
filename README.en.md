@@ -44,6 +44,7 @@ The CLI supports `pt`, `en` and `es`; it saves your selection per project.
 | --- | --- |
 | Understand the kit | [Documentation wiki](docs/README.md) |
 | Plan or resume a project | [Workflow](docs/guides/workflow.md) |
+| Improve existing documentation | [Inventory and additions](docs/guides/documentation.md) |
 | Create a skill or command | [Resources](docs/guides/resources.md) |
 | Install tools and verify work | [Tools and tests][tests] |
 | Look up options or fix an error | [CLI][cli] · [Troubleshooting][help] |

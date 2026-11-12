@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 import { projectRoot, requireNode } from '../../lib/runtime.mjs';
+import { inspectDocumentation } from '../SCRIPT.mjs';
 
 requireNode();
 const script = join(projectRoot, '.pbai4devs/scripts/inspecionar-projeto/SCRIPT.mjs');
@@ -158,4 +160,169 @@ test('status arbitrários e referências fora da raiz não expõem dados da conf
   assert.equal(result.report.maturity.planning.prd.path, null);
   assert.equal(result.report.maturity.planning.ready, false);
   assert.ok(!result.stdout.includes(secret));
+});
+
+test('inventário documental vazio não cria arquivos nem presume aprovação', t => {
+  const { root, run } = fixture(t);
+  const result = run();
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(result.report.documentation.files, []);
+  assert.deepEqual(result.report.documentation.configured, []);
+  assert.equal(result.report.documentation.scan.truncated, false);
+  assert.equal(result.report.documentation.scan.complete, true);
+  assert.deepEqual(readdirSync(root), []);
+  assert.match(result.report.documentation.limits.at(-1), /nao cria documentos/);
+});
+
+test('descobre documentação real sem impor caixa, pasta docs ou frontmatter', t => {
+  const { root, file, run } = fixture(t);
+  const content = 'DOC_CONTENT_MUST_NOT_BE_EMITTED_182711';
+  for (const name of ['Readme.md', 'CONTRIBUTING.rst', 'SECURITY.adoc', 'History.md', 'ARCHITECTURE.md', 'AGENTS.md', 'LICENSE', 'examples/README', '_examples/server/README.md', 'wiki/guide.mdx', 'rfcs/001-change.md', 'packages/docs/content/api.mdx', '.github/CONTRIBUTING.md', '.github/SECURITY.md', '.github/copilot-instructions.md']) file(name, content);
+  for (const name of ['node_modules/lib/README.md', '.pbai4devs/README.md', '.claude/skills/private/SKILL.md', '.github/skills/demo/SKILL.md', '.github/agents/revisor.agent.md', 'examples/generated/fixture/README.md', '.PLAYWRIGHT-MCP/README.md', 'tmp/README.md']) file(name, content);
+  const result = run();
+  assert.equal(result.status, 0, result.stderr);
+  const docs = result.report.documentation;
+  assert.equal(docs.files.length, 15);
+  assert.equal(docs.files.find(item => item.path === 'Readme.md').role, 'readme');
+  assert.equal(docs.files.find(item => item.path === 'rfcs/001-change.md').role, 'decision');
+  assert.equal(docs.files.find(item => item.path === 'ARCHITECTURE.md').role, 'design');
+  assert.equal(docs.files.find(item => item.path === 'AGENTS.md').role, 'instructions');
+  assert.equal(docs.files.find(item => item.path === '.github/copilot-instructions.md').role, 'instructions');
+  assert.equal(docs.files.find(item => item.path === '.github/CONTRIBUTING.md').role, 'contribution');
+  assert.equal(docs.files.find(item => item.path === 'LICENSE').role, 'license');
+  assert.ok(docs.exclusions.paths.includes('.github/skills'));
+  assert.equal(docs.files.find(item => item.path === 'wiki/guide.mdx').sha256, createHash('sha256').update(content).digest('hex'));
+  assert.ok(docs.files.every(item => item.origin === 'inferred' && item.kind === 'file'));
+  assert.ok(!result.stdout.includes(content));
+  assert.equal(readFileSync(join(root, 'Readme.md'), 'utf8'), content);
+});
+
+test('caminhos cadastrados têm proveniência sem assumir status ou ler arquivos de configuração', t => {
+  const { file, run } = fixture(t);
+  file('.pbai4devs/estado/configuracao/ESTADO.md', '---\ndocumentos:\n  design: architecture/current.md\n  specs: specifications\n  prd: planning/absent.md\n  readme: ../private-secret.md\n  seguranca: .env\n---\n# Estado\n');
+  file('architecture/current.md', '# Existing architecture\n');
+  file('specifications/current.mdx', '# Increment\n');
+  file('.env', 'DO_NOT_EMIT_OR_HASH_THIS_SECRET');
+  const result = run();
+  assert.equal(result.status, 0, result.stderr);
+  const docs = result.report.documentation;
+  assert.deepEqual(docs.files.find(item => item.path === 'architecture/current.md').configuredAs, ['design']);
+  assert.equal(docs.files.find(item => item.path === 'specifications/current.mdx').origin, 'configured');
+  assert.ok(docs.configured.some(item => item.role === 'prd' && item.kind === 'missing'));
+  assert.ok(docs.warnings.some(item => item.reason === 'invalid-configured-path'));
+  assert.ok(docs.warnings.some(item => item.reason === 'configured-path-not-document'));
+  assert.ok(!docs.files.some(item => item.path === '.env'));
+  assert.ok(!result.stdout.includes('private-secret') && !result.stdout.includes('DO_NOT_EMIT'));
+  assert.equal(docs.files.some(item => Object.hasOwn(item, 'status')), false);
+});
+
+test('documentos simbólicos permanecem opacos sem ler destinos internos, externos ou ausentes', t => {
+  const { root, file, run } = fixture(t);
+  const outside = mkdtempSync(join(projectRoot, '.agent-tests', 'outside-docs-'));
+  t.after(() => rmSync(outside, { recursive: true, force: true }));
+  file('docs/real.md', '# Actual document\n');
+  writeFileSync(join(outside, 'private.md'), 'OUTSIDE_SECRET_MUST_NOT_APPEAR');
+  try {
+    symlinkSync('docs/real.md', join(root, 'README.md'));
+    symlinkSync(join(outside, 'private.md'), join(root, 'CLAUDE.md'));
+    symlinkSync('absent.md', join(root, 'missing.md'));
+    symlinkSync(outside, join(root, 'external'), process.platform === 'win32' ? 'junction' : 'dir');
+  } catch (error) {
+    if (process.platform !== 'win32' || !['EPERM', 'EACCES'].includes(error.code)) throw error;
+    t.skip('Links simbólicos indisponíveis sem permissão do Windows.'); return;
+  }
+  file('.pbai4devs/estado/configuracao/ESTADO.md', '---\ndocumentos:\n  design: external/private.md\n---\n# State\n');
+  const result = run();
+  assert.equal(result.status, 0, result.stderr);
+  const docs = result.report.documentation;
+  for (const name of ['README.md', 'CLAUDE.md', 'missing.md', 'external']) {
+    const item = docs.files.find(item => item.path === name);
+    assert.equal(item?.kind, 'symbolic-link', name);
+    assert.equal(item.sha256, undefined);
+  }
+  assert.ok(!docs.files.some(item => item.path === 'external/private.md'));
+  assert.ok(!result.stdout.includes(outside) && !result.stdout.includes('OUTSIDE_SECRET'));
+  assert.equal(docs.scan.complete, false);
+  assert.ok(docs.warnings.some(item => item.file === 'external' && item.reason === 'symbolic-link-not-inspected'));
+  assert.equal(readFileSync(join(outside, 'private.md'), 'utf8'), 'OUTSIDE_SECRET_MUST_NOT_APPEAR');
+});
+
+test('pastas documentais simbólicas sem cadastro não ocultam uma leitura incompleta', t => {
+  const { root, run } = fixture(t);
+  const outside = mkdtempSync(join(projectRoot, '.agent-tests', 'outside-doc-tree-'));
+  t.after(() => rmSync(outside, { recursive: true, force: true }));
+  const privateContent = 'UNREAD_EXTERNAL_DOCUMENT_719329';
+  writeFileSync(join(outside, 'private.md'), privateContent);
+  try {
+    for (const name of ['docs', 'wiki', 'rfcs', 'examples', 'custom-docs']) symlinkSync(outside, join(root, name), process.platform === 'win32' ? 'junction' : 'dir');
+    symlinkSync('absent-directory', join(root, 'missing-directory'), process.platform === 'win32' ? 'junction' : 'dir');
+  } catch (error) {
+    if (process.platform !== 'win32' || !['EPERM', 'EACCES'].includes(error.code)) throw error;
+    t.skip('Links simbólicos indisponíveis sem permissão do Windows.'); return;
+  }
+  const result = run();
+  assert.equal(result.status, 0, result.stderr);
+  const docs = result.report.documentation;
+  assert.equal(docs.scan.complete, false);
+  assert.equal(docs.scan.bytesRead, 0);
+  assert.deepEqual(docs.configured, []);
+  assert.deepEqual(docs.files.map(item => item.path), ['custom-docs', 'docs', 'examples', 'missing-directory', 'rfcs', 'wiki']);
+  assert.ok(docs.files.every(item => item.kind === 'symbolic-link' && item.role === 'unclassified' && !item.sha256));
+  assert.equal(docs.warnings.filter(item => item.reason === 'symbolic-link-not-inspected').length, 6);
+  assert.ok(!result.stdout.includes(outside) && !result.stdout.includes(privateContent));
+  assert.equal(readFileSync(join(outside, 'private.md'), 'utf8'), privateContent);
+  const limited = inspectDocumentation(root, { maxFiles: 1 });
+  assert.equal(limited.files.length, 1);
+  assert.equal(limited.scan.truncated, true);
+  assert.equal(limited.scan.complete, false);
+});
+
+test('limites documentais são explícitos e não retornam inventário parcial como completo', t => {
+  const { root, file } = fixture(t);
+  file('a.md', '123'); file('b.md', '456'); file('deep/nested/c.md', '789');
+  const files = inspectDocumentation(root, { maxFiles: 1 });
+  assert.equal(files.files.length, 1); assert.equal(files.scan.truncated, true);
+  assert.equal(files.scan.complete, false);
+  const entries = inspectDocumentation(root, { maxEntries: 1 });
+  assert.equal(entries.scan.entries, 1); assert.equal(entries.scan.truncated, true);
+  const depth = inspectDocumentation(root, { maxDepth: 0 });
+  assert.ok(!depth.files.some(item => item.path.startsWith('deep/')));
+  assert.ok(depth.warnings.some(item => item.reason === 'depth-limit'));
+  const bytes = inspectDocumentation(root, { maxFileBytes: 2 });
+  assert.equal(bytes.scan.bytesHashed, 0); assert.equal(bytes.scan.truncated, true);
+  assert.ok(bytes.files.every(item => !item.sha256));
+  const total = inspectDocumentation(root, { maxTotalBytes: 4 });
+  assert.ok(total.scan.bytesRead <= 4); assert.ok(total.scan.bytesHashed <= 4);
+  assert.equal(total.scan.truncated, true);
+  for (const limits of [{ maxFiles: -1 }, { maxEntries: 25001 }, { unknown: 1 }]) assert.throws(() => inspectDocumentation(root, limits), /Limite documental/);
+});
+
+test('inventário repetido preserva bytes, modos, caminhos e índice Git', t => {
+  const { root, file, run } = fixture(t);
+  file('README.md', '# Existing\n'); file('docs/guide.md', 'No imposed frontmatter\n');
+  const git = (...args) => {
+    const result = spawnSync('git', ['-C', root, ...args], { encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr); return result.stdout;
+  };
+  git('init', '--quiet', '--template='); git('add', '--', 'README.md');
+  const snapshot = () => {
+    const files = {};
+    const visit = (folder = '') => {
+      for (const name of readdirSync(join(root, folder)).sort()) {
+        if (name === '.git') continue;
+        const relative = folder ? `${folder}/${name}` : name;
+        const info = lstatSync(join(root, relative));
+        files[relative] = { mode: info.mode, kind: info.isDirectory() ? 'directory' : info.isSymbolicLink() ? 'symbolic-link' : 'file' };
+        if (info.isSymbolicLink()) files[relative].target = readlinkSync(join(root, relative));
+        else if (info.isDirectory()) visit(relative);
+        else files[relative].sha256 = createHash('sha256').update(readFileSync(join(root, relative))).digest('hex');
+      }
+    };
+    visit(); return { files, index: git('ls-files', '--stage'), staged: git('diff', '--cached', '--binary'), config: readFileSync(join(root, '.git/config'), 'utf8') };
+  };
+  const before = snapshot();
+  const first = run(), second = run();
+  assert.equal(first.status, 0, first.stderr); assert.equal(second.status, 0, second.stderr);
+  assert.deepEqual(first.report.documentation, second.report.documentation);
+  assert.deepEqual(snapshot(), before);
 });

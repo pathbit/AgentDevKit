@@ -41,6 +41,8 @@ documentos, não comprova comportamento e não autoriza substituir decisões.
 
 ## 2. Reunir as perguntas no início
 
+Antes de criar documentos, [inventarie e leia o que existe](documentation.md).
+Reutilize os caminhos e complemente lacunas, sem substituir pelo template.
 Antes de escrever documentos ou código, leia o contexto já disponível.
 Reúna as dúvidas que alteram objetivo, escopo, dependências ou critérios.
 Não pergunte novamente o que o usuário já decidiu ou o projeto já registra.

@@ -24,6 +24,12 @@ documentos:
 
 # Configuração do projeto
 
+## Documentos existentes
+
+- Inventário e leitura inicial: a registrar antes de criar documentos.
+- Caminhos e papéis reaproveitados: a definir; não impor novos nomes.
+- Lacunas e complementos acordados: a definir, preservando o conteúdo anterior.
+
 ## Preparação
 
 - Evidências e pendências: a definir.

@@ -6,6 +6,8 @@ description: Define ou justifica a não aplicação de UX e interface com o usu�
 # Criar UX/UI
 
 Siga `.pbai4devs/rules/qualidade/RULE.md` ao criar arquivos Markdown.
+Antes de escrever, use `atualizar-documentacao` para ler e reaproveitar documentos
+existentes; aplique o template somente às lacunas.
 
 Consulte `.pbai4devs/estado/configuracao/ESTADO.md` e confira o PRD
 com `status: aprovado` e a

@@ -48,6 +48,7 @@ O idioma da CLI pode ser `pt`, `en` ou `es`.
 | --- | --- |
 | Entender e começar | [Wiki](docs/README.md) |
 | Planejar ou retomar um projeto | [Fluxo de trabalho](docs/guides/workflow.md) |
+| Evoluir documentos existentes | [Inventário e complementos](docs/guides/documentation.md) |
 | Criar uma skill ou comando | [Recursos](docs/guides/resources.md) |
 | Instalar ferramentas e comprovar uma entrega | [Ferramentas e testes][tests] |
 | Consultar opções ou resolver um erro | [CLI][cli] · [Soluções][help] |

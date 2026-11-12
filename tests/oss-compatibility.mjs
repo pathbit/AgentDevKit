@@ -323,6 +323,13 @@ export function main(args = process.argv.slice(2)) {
   return report.status === 'passed' ? 0 : 1;
 }
 
+// Shared by the opt-in documentation exercise; no helper runs on import.
+export {
+  parse as parseCompatibilityArgs, outputDirectory, environment, recorder,
+  fileSnapshot, workspace, gitSnapshot, info, put, json, hash, portable,
+  repositoryRoot, registry,
+};
+
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try { process.exitCode = main(); }
   catch (error) { console.error(error.message); process.exitCode = 1; }

@@ -6,6 +6,8 @@ description: Define e revisa o documento de requisitos do produto com o usuário
 # Criar PRD
 
 Siga `.pbai4devs/rules/qualidade/RULE.md` ao criar arquivos Markdown.
+Antes de escrever, use `atualizar-documentacao` para ler e reaproveitar documentos
+existentes; aplique o template somente às lacunas.
 
 Confira a preparação em `.pbai4devs/estado/configuracao/ESTADO.md`. Se não estiver
 concluída e comprovada, encaminhe a `configurar-projeto` para a fase

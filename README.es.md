@@ -45,6 +45,7 @@ La CLI guarda el idioma `pt`, `en` o `es` por proyecto.
 | --- | --- |
 | Entender el kit | [Wiki](docs/README.md) |
 | Planificar o retomar un proyecto | [Flujo](docs/guides/workflow.md) |
+| Mejorar documentación existente | [Inventario y complementos](docs/guides/documentation.md) |
 | Crear una skill o comando | [Recursos](docs/guides/resources.md) |
 | Instalar herramientas y verificar | [Herramientas y pruebas][tests] |
 | Consultar opciones o resolver un error | [CLI][cli] · [Soluciones][help] |

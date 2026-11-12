@@ -69,8 +69,8 @@ test('perfis usam testes e executável da raiz sem ampliar a matriz', () => {
   const calls = [];
   const options = { root, run(_root, args) { calls.push(args); } };
   runPipeline('portable', options);
-  assert.deepEqual(calls[0], ['--test', 'tests/adapters.test.mjs', 'tests/cli.test.mjs', 'tests/client-selection.test.mjs', 'tests/native-coexistence.test.mjs', 'tests/next.test.mjs']);
-  assert.equal(calls.length, 5);
+  assert.deepEqual(calls[0], ['--test', 'tests/adapters.test.mjs', 'tests/cli.test.mjs', 'tests/client-selection.test.mjs', 'tests/documentation-compatibility.test.mjs', 'tests/native-coexistence.test.mjs', 'tests/next.test.mjs']);
+  assert.equal(calls.length, 6);
   calls.length = 0;
   runPipeline('smoke', options);
   assert.deepEqual(calls, [

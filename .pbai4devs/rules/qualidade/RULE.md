@@ -15,8 +15,10 @@ Use `verificar-trabalho` para provar as mudanças. Alterações web exigem testa
 o fluxo real no navegador; desktop exige abrir e testar a aplicação. Código
 revisado, build ou fixture isolada não substituem essa prova funcional.
 
-Comece arquivos Markdown com frontmatter YAML adequado ao tipo e título H1;
-preserve os metadados exigidos pela ferramenta.
+Comece novos arquivos Markdown com frontmatter YAML adequado ao tipo e título
+H1; preserve os metadados exigidos pela ferramenta. Em documentos humanos
+existentes, mantenha o formato e o conteúdo: não os reformate apenas para
+impor esse padrão.
 
 Ao criar ou atualizar `.gitignore`, mantenha o bloco do
 [modelo de gitignore](../../templates/gitignore/TEMPLATE.md)

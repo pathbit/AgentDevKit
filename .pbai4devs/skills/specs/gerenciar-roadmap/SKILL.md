@@ -10,7 +10,8 @@ mostre preparação, releases, specs e tarefas com dependências e bloqueios.
 Use `[ ]`, `[-]` e `[x]` conforme evidências; informe estados desconhecidos.
 Sem roadmap, diga que ainda não foi criado. Não conclua entregas sem prova.
 
-Ao planejar ou atualizar, use o modelo de roadmap no caminho acordado. Registre
+Antes de alterar documentos, aplique o inventário de `atualizar-documentacao`.
+Ao planejar ou atualizar, use o modelo só para lacunas no caminho acordado. Registre
 objetivos, prioridades, etapas, dependências e pendências de PRD, UX/UI e design.
 Mantenha referências e estados coerentes ao aprovar ou revisar documentos;
 não invente escopo, datas ou releases. Identifique as specs do primeiro entregável

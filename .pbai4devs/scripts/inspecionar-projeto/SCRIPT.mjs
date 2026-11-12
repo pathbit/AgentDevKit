@@ -2,6 +2,7 @@
 // Inventario somente leitura; nomes e caminhos, nunca valores de configuracao.
 import fs from 'node:fs';
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { requireNode, isMain } from '../lib/runtime.mjs';
 
@@ -92,7 +93,146 @@ function maturity(root, report) {
   return { level, planning, configuration, released, signals: { application: report.mode === 'aplicacao-detectada', structure: report.contract.complete }, limits: ['Classificacao descritiva; status em arquivos nao substitui aprovacao, testes ou provas de funcionamento.'] };
 }
 
-export function inspectProject(root = repository, { check = false } = {}) {
+const documentRoles = new Set(['readme', 'contribuicao', 'changelog', 'seguranca', 'adrs', 'prd', 'ux_ui', 'design', 'roadmap', 'releases', 'specs', 'tarefas']);
+const documentLimits = { maxDepth: 12, maxEntries: 25000, maxFiles: 2000, maxFileBytes: 2 * 1024 * 1024, maxTotalBytes: 16 * 1024 * 1024 };
+const documentClients = [...defaultAgents, '.zcode', '.zai', '.kimi', '.kimi-code', '.minimax', '.mimocode', '.dsh'];
+const documentName = name => /\.(?:md|mdx|rst|adoc)$/i.test(name) || /^(?:readme|contributing|changelog|history|security|licen[cs]e|copying|notice|authors|code_of_conduct|architecture|design|roadmap)(?:\.txt)?$/i.test(name);
+const documentRole = file => {
+  const name = path.posix.basename(file).toLowerCase();
+  if (/^readme(?:\.|$)/.test(name)) return 'readme';
+  if (/^(?:agents|claude|gemini|copilot-instructions)\.md$/.test(name)) return 'instructions';
+  if (/^(?:licen[cs]e|copying|notice)(?:\.|$)/.test(name)) return 'license';
+  if (/^code_of_conduct(?:\.|$)/.test(name)) return 'conduct';
+  if (/^contribut/.test(name)) return 'contribution';
+  if (/^security(?:\.|$)/.test(name)) return 'security';
+  if (/^(?:changelog|history)(?:\.|$)/.test(name)) return 'changelog';
+  if (/(^|\/)(?:adr|adrs|decisions|rfcs)(\/|$)/i.test(file) || /^adr[-_.]/.test(name)) return 'decision';
+  if (/(^|\/)(?:prd|product|requisitos)(?:\.|\/|$)/i.test(file)) return 'product';
+  if (/(?:architecture|arquitetura|design)(?:\.|\/|$)/i.test(file)) return 'design';
+  if (/roadmap/i.test(name)) return 'roadmap';
+  if (/(^|\/)(?:spec|specs|specifications)(\/|$)/i.test(file)) return 'spec';
+  return 'document';
+};
+
+// Names, kinds and bounded hashes only. A guessed role is never an approval.
+export function inspectDocumentation(root, limits = {}) {
+  root = fs.realpathSync(path.resolve(root));
+  const bounds = { ...documentLimits, ...limits };
+  for (const [key, value] of Object.entries(bounds)) {
+    if (!(key in documentLimits) || !Number.isSafeInteger(value) || value < 0 || value > documentLimits[key]) throw new Error('Limite documental invalido.');
+  }
+  const ignored = new Set([...defaultExcluded, ...documentClients, ...agentRoots(root)].filter(name => !['examples', '.github'].includes(name)).map(name => name.toLowerCase()));
+  const excludedPaths = ['examples/generated', ...['skills', 'agents', 'commands', 'rules', 'instructions', 'prompts'].map(name => `.github/${name}`)];
+  const files = new Map();
+  const configured = [];
+  const warnings = [];
+  const scan = { ...bounds, entries: 0, bytesRead: 0, bytesHashed: 0, truncated: false };
+  const warn = (file, reason) => warnings.push({ file, reason });
+  const excludedDocument = file => file.split('/').some(name => ignored.has(name.toLowerCase()) || /^\.?playwright/i.test(name))
+    || excludedPaths.some(prefix => file.toLowerCase() === prefix || file.toLowerCase().startsWith(prefix + '/'));
+  const safeDocument = value => typeof value === 'string' && value.length > 0 && !path.isAbsolute(value) && !/[\\\x00-\x1f\x7f:]/.test(value)
+    && !value.split('/').some(part => !part || part === '.' || part === '..');
+  const locate = file => {
+    let current = root;
+    const parts = file.split('/');
+    for (const [index, part] of parts.entries()) {
+      current = path.join(current, part);
+      let item;
+      try { item = fs.lstatSync(current); }
+      catch (error) { if (['ENOENT', 'ENOTDIR'].includes(error.code)) return { kind: 'missing' }; throw error; }
+      if (item.isSymbolicLink()) return { kind: 'symbolic-link', boundary: parts.slice(0, index + 1).join('/'), item };
+      if (index < parts.length - 1 && !item.isDirectory()) return { kind: 'missing' };
+      if (index === parts.length - 1) return { kind: item.isFile() ? 'file' : item.isDirectory() ? 'directory' : 'unsupported', item };
+    }
+  };
+  function boundedHash(file, expected) {
+    if (expected.size > bounds.maxFileBytes || expected.size > bounds.maxTotalBytes - scan.bytesRead) {
+      scan.truncated = true; warn(file, 'hash-byte-limit'); return;
+    }
+    let descriptor;
+    try {
+      descriptor = fs.openSync(path.join(root, file), fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0));
+      const before = fs.fstatSync(descriptor);
+      if (!before.isFile() || before.dev !== expected.dev || before.ino !== expected.ino || before.size !== expected.size
+        || before.mtimeMs !== expected.mtimeMs || before.ctimeMs !== expected.ctimeMs) { warn(file, 'changed-during-read'); return; }
+      const buffer = Buffer.alloc(Math.min(before.size + 1, bounds.maxTotalBytes - scan.bytesRead));
+      let length = 0;
+      while (length < buffer.length) {
+        const read = fs.readSync(descriptor, buffer, length, buffer.length - length, length);
+        if (!read) break;
+        length += read;
+        scan.bytesRead += read;
+      }
+      const after = fs.fstatSync(descriptor);
+      if (length !== before.size || after.size !== before.size || after.mtimeMs !== before.mtimeMs || after.ctimeMs !== before.ctimeMs) {
+        warn(file, 'changed-during-read'); return;
+      }
+      scan.bytesHashed += length;
+      return createHash('sha256').update(buffer.subarray(0, length)).digest('hex');
+    } catch (error) { warn(file, error.code === 'ELOOP' ? 'symbolic-link-during-read' : 'unreadable-document'); }
+    finally { if (descriptor !== undefined) fs.closeSync(descriptor); }
+  }
+  function add(file, found, role) {
+    if (files.has(file)) {
+      if (role) { const entry = files.get(file); entry.origin = 'configured'; entry.configuredAs = [...new Set([...(entry.configuredAs || []), role])].sort(); }
+      return;
+    }
+    if (files.size >= bounds.maxFiles) { scan.truncated = true; warn(file, 'file-limit'); return; }
+    const inferredRole = found.kind === 'symbolic-link' && !documentName(path.posix.basename(file)) ? 'unclassified' : documentRole(file);
+    const entry = { path: file, kind: found.kind, role: inferredRole, origin: role ? 'configured' : 'inferred', bytes: found.item.size };
+    if (role) entry.configuredAs = [role];
+    if (found.kind === 'symbolic-link') warn(file, 'symbolic-link-not-inspected');
+    if (found.kind === 'file') {
+      const digest = boundedHash(file, found.item);
+      if (digest) entry.sha256 = digest;
+    }
+    files.set(file, entry);
+  }
+  function walk(directory = '', depth = 0, role) {
+    if (directory) {
+      const found = locate(directory);
+      if (found.kind !== 'directory') { if (found.kind === 'symbolic-link') add(found.boundary, found, role); return; }
+    }
+    let children;
+    try { children = fs.readdirSync(path.join(root, directory), { withFileTypes: true }).sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0); }
+    catch { warn(directory || '.', 'unreadable-directory'); return; }
+    // Discard a listing if the directory became a link while being inspected.
+    if (directory && locate(directory).kind !== 'directory') { warn(directory, 'changed-during-read'); return; }
+    for (const child of children) {
+      if (scan.entries >= bounds.maxEntries || files.size >= bounds.maxFiles) { scan.truncated = true; return; }
+      scan.entries++;
+      const file = directory ? `${directory}/${child.name}` : child.name;
+      if (excludedDocument(file)) continue;
+      const found = locate(file);
+      if (found.kind === 'directory') {
+        if (depth < bounds.maxDepth) walk(file, depth + 1, role);
+        else { scan.truncated = true; warn(file, 'depth-limit'); }
+      } else if (found.kind === 'file' && documentName(child.name)) add(file, found, role);
+      else if (found.kind === 'symbolic-link') add(found.boundary, found, role);
+    }
+  }
+  const declared = metadata(root, '.pbai4devs/estado/configuracao/ESTADO.md').documents;
+  for (const [role, file] of Object.entries(declared)) {
+    if (!documentRoles.has(role)) continue;
+    if (!safeDocument(file)) { if (file !== null) warn(null, 'invalid-configured-path'); continue; }
+    if (excludedDocument(file)) { configured.push({ role, path: file, kind: 'excluded' }); continue; }
+    const found = locate(file);
+    configured.push({ role, path: file, kind: found.kind });
+    if (found.kind === 'directory') walk(file, 0, role);
+    else if (found.kind === 'file' && documentName(path.posix.basename(file))) add(file, found, role);
+    else if (found.kind === 'file') warn(file, 'configured-path-not-document');
+    else if (found.kind === 'symbolic-link') add(found.boundary, found, role);
+  }
+  walk();
+  return {
+    files: [...files.values()].sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0),
+    configured, scan: { ...scan, complete: !scan.truncated && warnings.length === 0 }, warnings,
+    exclusions: { directories: [...ignored].sort(), paths: excludedPaths, prefixes: ['playwright', '.playwright'] },
+    limits: ['Papeis inferidos por nome; confirme o conteudo antes de propor alteracoes.', 'Links simbolicos sao opacos; destinos nao sao lidos.', 'O inventario nao cria documentos nem comprova aprovacao ou completude.'],
+  };
+}
+
+export function inspectProject(root = repository, { check = false, documentationLimits } = {}) {
   requireNode();
   root = fs.realpathSync(path.resolve(root));
   if (!fs.statSync(root).isDirectory()) throw new Error('A origem deve ser um diretorio.');
@@ -160,6 +300,7 @@ export function inspectProject(root = repository, { check = false } = {}) {
   report.languages = [...languages].sort();
   report.contract = { checked: check, complete: report.structure.missing.length === 0 };
   report.maturity = maturity(root, report);
+  report.documentation = inspectDocumentation(root, documentationLimits);
   return report;
 }
 

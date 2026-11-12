@@ -24,6 +24,7 @@ pode trocar de agente sem manter várias cópias das mesmas instruções.
 | --- | --- |
 | Primeiro uso | [Instalar][install] → [seguir o fluxo][flow] |
 | Projeto em andamento | [Instalar com simulação][install] → [retomar][flow] |
+| Evoluir documentação existente | [Inventariar e complementar](guides/documentation.md) |
 | Personalizar agentes | [Recursos][resources] → [compatibilidade][clients] |
 | Executar ou verificar algo | [CLI](guides/cli.md) → [ferramentas e testes][tests] |
 | Corrigir uma dificuldade | [Soluções e recuperação](guides/troubleshooting.md) |

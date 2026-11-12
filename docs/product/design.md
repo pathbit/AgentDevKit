@@ -66,6 +66,18 @@ O estado registra versão, escolha e propriedade local. Índices e manifesto
 podem ser reconstruídos. Downloads, credenciais e relatórios ficam fora do
 pacote e do Git.
 
+## Inventário e evolução documental
+
+O inspetor inclui metadados de documentação no JSON: caminhos, tipo, papel
+provável, origem da indicação, tamanho e hash quando couber nos limites.
+Ele não escreve arquivos, não emite conteúdo e não lê destinos simbólicos.
+Limites e avisos impedem interpretar uma busca parcial como ausência de docs.
+
+A skill `atualizar-documentacao` usa esse inventário antes dos templates.
+O agente lê o material, propõe ações por arquivo e aplica complementos
+autorizados. Organização usa índices e links, preservando caminhos e conteúdo.
+Produto e aprovações dependem das decisões reais do usuário.
+
 ## Runtime
 
 O launcher aceita Node 18+ e prepara Node 24+ antes de carregar o núcleo.

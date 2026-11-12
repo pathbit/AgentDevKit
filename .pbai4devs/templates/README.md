@@ -30,7 +30,10 @@ enquanto o usuário estiver preparando somente a estrutura dos agentes.
 | [SECURITY][security] | Suporte público | Política/suporte mudar. |
 | [Comando][comando] | Recurso agêntico | Entrada ou fluxo mudar. |
 
-Copie só artefatos aplicáveis, remova instruções/placeholders e confirme fatos.
+Antes, inventarie e leia os documentos existentes com `atualizar-documentacao`.
+Use os modelos como lista de lacunas. Copie somente artefatos aplicáveis ainda
+ausentes; nunca substitua documentos existentes. Remova placeholders e confirme
+fatos nos novos arquivos; preserve nomes, formatos, seções e decisões anteriores.
 README acompanha o projeto desde a preparação; documentos de produto surgem
 após descoberta. Segurança depende de suporte e canal realmente definidos.
 

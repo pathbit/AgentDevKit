@@ -59,9 +59,9 @@ recursos, com frontmatter YAML sem corpo. Caminhos são relativos à raiz.
 Somente os quatro arquivos principais são fontes; não registre documentos.
 Use `gitignore|pasta` para gerar apenas o `.gitignore`, como em `.vscode`.
 
-`sincronizar-agentes --force` reconstrói os destinos e limpa auxiliares,
-preservando configurações e workflows fora do escopo gerenciado. Conteúdo
-próprio substituído recebe backup em `.agent-tests/`; `--check` não altera nada.
+`sincronizar-agentes --force` repara os destinos gerenciados com backup em
+`.agent-tests/`. Recursos e configurações humanos permanecem intactos, inclusive
+quando ocupam o caminho de um apontamento. `--check` não altera arquivos.
 O sincronizador também gera o catálogo completo e os índices auxiliares a partir
 das fontes. Helpers e testes constam como suporte, sem fingir comandos próprios.
 Ele protege os derivados contra versionamento e preserva regras humanas.

@@ -6,6 +6,10 @@ description: Ordem de trabalho e manutenção dos agentes.
 
 Peça a skill pelo nome ou solicite a leitura de seu `SKILL.md`.
 
+Antes de trabalhar na documentação, use `atualizar-documentacao` para inventariar
+e ler os arquivos existentes. Preserve seus caminhos e conteúdo; complemente
+lacunas e organize por índices, sem substituir documentos pelos modelos.
+
 Antes de instalar ou preparar ferramentas, pergunte quais clientes o usuário
 usa, se não houver escolha no pedido ou no estado do kit. A CLI aceita
 `--agents codex,claude`; `agents` consulta ou altera a seleção depois.

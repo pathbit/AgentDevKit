@@ -5,6 +5,7 @@ description: Cria uma spec de incremento, esclarecendo requisitos e dúvidas com
 
 # Criar spec
 
+Antes de escrever, aplique o inventário e plano de `atualizar-documentacao`.
 Leia os caminhos em `.pbai4devs/estado/configuracao/ESTADO.md`. Exija PRD/design
 aprovados e UX/UI aprovado ou não aplicável com justificativa aprovada.
 Confira evidências, atualidade e decisões essenciais ao incremento; se faltar

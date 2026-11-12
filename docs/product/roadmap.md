@@ -19,7 +19,7 @@ status: vigente
 | Apresentação e licença v0.0.6 | Distribuição e atualização | [Spec][public]. |
 | Compatibilidade real v0.0.7 | Testes em clones existentes | [Spec][oss]. |
 | Preservação v0.0.8 | Auditoria e regressões | [Spec][robustness]. |
-| Coexistência v0.0.9 | Preservação e testes em projetos reais | [Spec][coexistence]. |
+| Coexistência v0.0.9 | Agentes, documentos e projetos reais | [Spec][coexistence]. |
 
 A primeira entrega segue a [spec v0.0.1](../specs/v0.0.1/SPEC.md), disponível
 na [release v0.0.1][release]. Os detalhes de mudanças estão no

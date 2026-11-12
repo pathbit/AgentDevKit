@@ -51,7 +51,8 @@
     "ci:full": "node scripts/release/pipeline.mjs full",
     "ci:portable": "node scripts/release/pipeline.mjs portable",
     "ci:smoke": "node scripts/release/pipeline.mjs smoke",
-    "test:oss": "node tests/oss-compatibility.mjs"
+    "test:oss": "node tests/oss-compatibility.mjs",
+    "test:docs": "node tests/documentation-compatibility.mjs"
   },
   "author": {
     "name": "PathBit",

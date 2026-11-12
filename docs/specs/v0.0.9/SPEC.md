@@ -1,16 +1,18 @@
 ---
-description: Coexistência com agentes e links simbólicos de projetos existentes.
+description: Coexistência com agentes e evolução da documentação existente.
 status: aprovado
 version: 0.0.9
 ---
 
-# Preservar agentes existentes
+# Preservar agentes e documentação existentes
 
 ## Objetivo
 
 Instalar e atualizar o AgentDevKit no Zod e em projetos com agentes próprios,
 preservando configurações, arquivos, permissões, links e estado do Git.
-O pedido atual substitui o bloqueio conservador documentado na
+Orientar também a evolução documental a partir do inventário e da leitura
+dos materiais existentes, sem reiniciar o projeto. O pedido atual substitui
+o bloqueio conservador documentado na
 [versão anterior](../v0.0.8/SPEC.md).
 
 ## Contrato
@@ -24,6 +26,10 @@ O pedido atual substitui o bloqueio conservador documentado na
 - Manter a validação estrita em fontes, estado, ferramentas, Git e caminhos
   antes pertencentes ao kit. Um link não pode esconder alteração gerenciada.
 - Manter os mesmos contratos na CLI e no sincronizador instalado.
+- Antes de editar documentos, inventariar e ler os existentes. Reaproveitar
+  caminhos, seções e decisões; templates orientam somente lacunas.
+- Organizar por índices e links, sem apagar, mover ou substituir documentos.
+  Em projetos novos, não inventar produto ou aprovação sem respostas.
 
 ## Critérios de aceite
 
@@ -35,6 +41,10 @@ O pedido atual substitui o bloqueio conservador documentado na
 | AC-004 | Init, update, doctor e sync são coerentes e idempotentes. |
 | AC-005 | Zod, Express e Chi passam na matriz do pacote, preservando Git. |
 | AC-006 | Regressões, documentação, CI e pacote público são verificados. |
+| AC-007 | Inventário detecta documentação real sem alterar arquivos. |
+| AC-008 | Skills exigem leitura e plano aditivo antes dos templates. |
+| AC-009 | Exercícios documentais preservam conteúdo e arquivos fora do plano. |
+| AC-010 | Projeto vazio recebe o kit sem documentos de produto inventados. |
 
 ## Validação
 
@@ -43,9 +53,14 @@ substituição de caminhos após o plano e mudança de seleção dos clientes.
 Rodar pipeline completo, maturidade e matriz OSS com o TGZ candidato;
 repetir a matriz com o pacote publicado. Comparar bytes, tipos, modos,
 destinos de links, staging e configuração Git nos clones.
+Execute também o inventário instalado e o fluxo de documentação em clones
+reais: plano por arquivo, complemento baseado em fatos, índice novo e revisão.
+Separe essa prova da simples instalação e de fixtures do harness; não atribua
+ao pacote geração automática de conteúdo ou aprovações de produto.
 
 Clones e evidências ficam ignorados em `tmp/` e `.agent-tests/`.
-O escopo é a instalação do kit; não afirmar execução das aplicações clonadas.
+O escopo é o kit e seu fluxo documental; não afirmar execução das aplicações
+clonadas.
 
 ## Documentação afetada
 

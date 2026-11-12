@@ -84,7 +84,7 @@ node .pbai4devs/scripts/verificar-recursos/SCRIPT.mjs
 O primeiro comando atualiza apontamentos e índices; `--check` só compara.
 O manifesto instalado respeita os clientes escolhidos. Não o substitua por uma
 lista de todos para reparar recursos; altere a seleção pela CLI se necessário.
-Conflitos de conteúdo próprio exigem revisão. Quando a substituição for
+Conflitos em arquivos gerenciados exigem revisão. Quando a substituição for
 intencional, `--force` faz backup local antes de reparar caminhos gerenciados.
 Não apague pastas inteiras para contornar um conflito.
 

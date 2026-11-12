@@ -1,9 +1,9 @@
 ---
-description: Coexistência do AgentDevKit com agentes previamente configurados.
+description: Preservação de agentes e evolução da documentação existente.
 ---
 
 # Versão 0.0.9
 
-[Spec](SPEC.md): instalação sem alterar links ou recursos humanos existentes.
+[Spec](SPEC.md): preservar agentes e complementar documentos existentes.
 
 [Specs](../README.md) · [Changelog](../../../CHANGELOG.md)

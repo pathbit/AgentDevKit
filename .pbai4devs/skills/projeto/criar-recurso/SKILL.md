@@ -7,6 +7,7 @@ description: Encaminha criações e cria documentos, modelos ou novos recursos.
 
 Se o pedido for um modelo, trabalhe em `.pbai4devs/templates/` sem iniciar a
 definição do produto. Encaminhe documentos reais à skill correspondente.
+Para documentos, comece pelo inventário e plano de `atualizar-documentacao`.
 
 Confira se o recurso já existe e use a skill específica quando disponível:
 `criar-skill`, `criar-agente`, `criar-comando`, `criar-regra`, `criar-prd`,

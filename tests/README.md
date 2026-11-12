@@ -30,3 +30,19 @@ com os arquivos preservados; não equivale a uma instalação bem-sucedida.
 O processo retorna `1` se algum cenário falhar ou bloquear. No Zod, confere
 a preservação dos links `CLAUDE.md`, `README.md` e `.codex/skills`, enquanto
 os apontamentos disponíveis são instalados nas demais rotas nativas.
+
+## Fluxo documental
+
+```console
+npm run test:docs -- --version 0.0.9
+```
+
+O runner reutiliza a matriz OSS e consulta o inventário do pacote instalado.
+Registra um plano aditivo, acrescenta um trecho controlado a um README regular
+e cria um índice de links. Depois repete a manutenção do kit e compara conteúdo,
+arquivos fora do plano e Git. Também verifica um projeto vazio sem inventar PRD,
+design ou aprovação. Aceita `--tarball` para validar um candidato.
+
+Esses complementos são fixtures do harness: comprovam inventário e preservação,
+não a qualidade da autoria autônoma por um modelo. Um exercício real do agente
+deve ler a skill e a documentação, propor o complemento e passar pela revisão.

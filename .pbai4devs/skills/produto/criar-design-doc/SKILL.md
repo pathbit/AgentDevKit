@@ -6,6 +6,8 @@ description: Define e revisa o design técnico do produto com o usuário.
 # Criar design técnico
 
 Siga `.pbai4devs/rules/qualidade/RULE.md` ao criar arquivos Markdown.
+Antes de escrever, use `atualizar-documentacao` para ler e reaproveitar documentos
+existentes; aplique o template somente às lacunas.
 
 Consulte `.pbai4devs/estado/configuracao/ESTADO.md` e confira o PRD aprovado
 e UX/UI aprovado ou não aplicável com justificativa,

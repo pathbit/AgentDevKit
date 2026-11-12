@@ -131,9 +131,10 @@ test('link em caminho já gerenciado continua sendo um erro e não causa gravaç
   const state = readFileSync(join(root, '.pbai4devs/estado/agentdevkit.json'));
   rmSync(file);
   if (!link(t, '../../../outside.txt', file)) return;
+  const originalLink = readlinkSync(file);
   const denied = await cli(root, ['update', '--force'], 1);
   assert.equal(denied.error.code, 'E_SYMLINK');
-  assert.equal(readlinkSync(file), '../../../outside.txt');
+  assert.equal(readlinkSync(file), originalLink);
   assert.deepEqual(readFileSync(join(root, '.pbai4devs/estado/agentdevkit.json')), state);
   assert.equal(readFileSync(join(directory, 'outside.txt'), 'utf8'), 'external content\n');
 });

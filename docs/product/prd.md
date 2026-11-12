@@ -1,7 +1,7 @@
 ---
 description: Requisitos da distribuição portátil AgentDevKit.
 status: aprovado
-version: 0.0.6
+version: 0.0.9
 ---
 
 # PRD do AgentDevKit
@@ -40,6 +40,9 @@ extraído do projeto de origem como produto independente.
 | FR-018 | Publicar autoria PathBit, palavras-chave e licença MIT no npm. |
 | FR-019 | Exibir README legível no npm sem alterar o Markdown fonte. |
 | FR-020 | Levar a licença do kit ao hub sem alterar a licença do projeto. |
+| FR-021 | Inventariar documentos existentes antes de propor alterações. |
+| FR-022 | Complementar documentação sem substituir arquivos por templates. |
+| FR-023 | Provar o fluxo documental em projetos reais e em projeto vazio. |
 
 Execuções repetidas devem ser idempotentes; a CLI oferece simulação e JSON.
 As instruções permanecem concisas, com detalhes opcionais em referências.
