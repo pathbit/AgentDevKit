@@ -64,6 +64,8 @@ O bloco local também protege `.agent-tests`, `tmp`, `temp`, `.playwright*`
 e relatórios de testes, inclusive com letras maiúsculas e em subpastas.
 O `.gitignore` existente e seus arquivos rastreados são preservados;
 uma exceção humana que conflite com essa proteção é informada como conflito.
+Nomes próprios de artefatos e arquivos existentes também são conferidos;
+a validação fica restrita ao projeto e aos ignores de seus ancestrais.
 
 Arquivos já rastreados exigem migração do índice: apenas saídas identificadas
 do kit podem deixar de ser rastreadas, preservando seus bytes no disco.
@@ -86,10 +88,14 @@ Links simbólicos em caminhos usados pela instalação podem bloquear a operaç�
 O kit informa o caminho e não converte nem remove o link automaticamente.
 Use a simulação para identificar esse caso antes de aplicar.
 
+Arquivos humanos não se tornam gerenciados apenas por conterem um link.
+As alterações de arquivos existentes preservam permissões, inclusive em backup
+e restauração após falha.
+
 O [fluxo de trabalho](workflow.md) orienta a próxima etapa do projeto.
 Se houver erro, consulte [solução de problemas](troubleshooting.md).
 
-[Wiki](../README.md) · [Spec v0.0.7][spec]
+[Wiki](../README.md) · [Spec v0.0.8][spec]
 
 [bootstrap]: ../../.pbai4devs/scripts/preparar-ferramentas/BOOTSTRAP.md
-[spec]: ../specs/v0.0.7/SPEC.md
+[spec]: ../specs/v0.0.8/SPEC.md

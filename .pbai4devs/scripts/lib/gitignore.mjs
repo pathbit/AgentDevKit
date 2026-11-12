@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { closeSync, lstatSync, mkdirSync, openSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { chmodSync, closeSync, lstatSync, mkdirSync, openSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { basename, dirname, isAbsolute, join, posix, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
@@ -63,6 +63,7 @@ export function renderClientIgnore(template, settings = {}) {
 
 const localStat = file => { try { return lstatSync(file); } catch (error) { if (['ENOENT', 'ENOTDIR'].includes(error.code)) return null; throw error; } };
 const localRead = file => localStat(file) ? readFileSync(file, 'utf8') : null;
+const localMode = file => { const item = localStat(file); return item ? item.mode & 0o777 : null; };
 const portable = path => path.split(sep).join('/');
 
 function canonicalExisting(path) {
@@ -144,6 +145,61 @@ function artifactProbes(root, patterns) {
   return [...probes];
 }
 
+const matchesComponent = (part, pattern) => posix.matchesGlob(`x${part}`, `x${pattern.replace(/[{}()]/g, '\\$&')}`);
+
+function matchesParts(parts, pattern) {
+  const cache = new Map();
+  function match(part, glob) {
+    const key = `${part}:${glob}`; if (cache.has(key)) return cache.get(key);
+    const expected = pattern[glob];
+    const result = glob === pattern.length ? part === parts.length
+      : expected === '**' ? match(part, glob + 1) || part < parts.length && match(part + 1, glob)
+        : part < parts.length && matchesComponent(parts[part], expected) && match(part + 1, glob + 1);
+    cache.set(key, result); return result;
+  }
+  return match(0, 0);
+}
+
+function artifactPath(path, patterns, directory = false) {
+  const parts = path.split('/');
+  return patterns.some(pattern => {
+    const rule = pattern.slice(3).replace(/\/$/, '');
+    return parts.some((part, index) => (index < parts.length - 1 || directory || !pattern.endsWith('/'))
+      && (rule.includes('/') ? matchesParts(parts.slice(0, index + 1), ['**', ...rule.split('/')])
+        : matchesComponent(part, rule)));
+  });
+}
+
+function visibleArtifactProbes(root, location, patterns) {
+  const listed = gitCommand(location.top, ['--literal-pathspecs', '-c', 'core.excludesFile=', 'ls-files', '--cached', '--others', '--exclude-standard', '-z', '--', location.prefix ? `${location.prefix}/` : '.']);
+  if (listed.error || listed.status !== 0) throw new Error(listed.error?.message || listed.stderr || 'Falha ao conferir artefatos existentes.');
+  const paths = listed.stdout.split('\0').filter(Boolean), prefix = location.prefix ? `${location.prefix}/` : '';
+  const probes = new Set(paths.filter(path => path.startsWith(prefix)).map(path => path.slice(prefix.length)).filter(path => artifactPath(path, patterns)));
+  const ignores = new Set(paths.filter(path => path.startsWith(prefix) && (path === '.gitignore' || path.endsWith('/.gitignore'))));
+  let ancestor = root;
+  while (true) {
+    ignores.add(portable(relative(location.top, join(ancestor, '.gitignore'))));
+    if (ancestor === location.top) break;
+    ancestor = dirname(ancestor);
+  }
+  for (const path of ignores) {
+    const file = join(location.top, path), item = localStat(file);
+    if (!item?.isFile() || item.isSymbolicLink()) continue;
+    // Git resolves precedence; these literals only add witnesses for named exceptions.
+    for (const line of readFileSync(checkedLocalPath(file), 'utf8').split(/\r?\n/)) {
+      if (!line.startsWith('!') || line.length === 1) continue;
+      const rule = line.slice(1).replace(/(?<!\\) +$/, ''), directory = rule.endsWith('/') || rule.endsWith('/**');
+      const literal = rule.replace(/(?:\/\*\*)+\/?$/, '').replace(/\/$/, '').replace(/^\//, '');
+      if (/(^|[^\\])[*?\[]/.test(literal)) continue;
+      const ruleBase = !rule.startsWith('/') && !literal.includes('/') && relative(dirname(file), root).split(sep)[0] !== '..' ? root : dirname(file);
+      const candidate = portable(relative(root, resolve(ruleBase, literal.replace(/\\(.)/g, '$1'))));
+      if (!candidate || candidate === '..' || candidate.startsWith('../') || !artifactPath(candidate, patterns, directory)) continue;
+      probes.add(checkedOutput(directory ? `${candidate}/.agentdevkit-artifact-probe` : candidate));
+    }
+  }
+  return [...probes];
+}
+
 function localIgnoreSource(location, source) {
   const path = resolve(location.top, source);
   if (path === location.exclude) return true;
@@ -204,9 +260,9 @@ export function planLocalIgnore(root, { outputs = [], templateRoot } = {}) {
   const body = fixed.split(/\r?\n/).map(line => location?.prefix && line.startsWith('/') ? `/${escapePattern(location.prefix)}${line}` : line).join('\n');
   const target = location?.exclude ?? checkedLocalPath(join(root, '.gitignore'));
   const before = localRead(target), after = localBlock(before, first, last, body);
-  const edits = before === after ? [] : [{ path: target, before, after }];
+  const edits = before === after ? [] : [{ path: target, before, after, beforeMode: localMode(target) }];
   const probes = [...paths, ...rootProbes(root, roots)];
-  const artifactPaths = artifactProbes(root, artifacts);
+  const artifactPaths = [...new Set([...artifactProbes(root, artifacts), ...(location ? visibleArtifactProbes(root, location, artifacts) : [])])];
   const wanted = new Set(probes.map(path => location?.prefix ? `${location.prefix}/${path}` : path));
   if (location && !before?.includes(first) && !localRead(join(root, '.gitignore'))?.includes(first)) {
     const ignored = ignoreMatches(location, [...probes, ...artifactPaths]);
@@ -215,10 +271,10 @@ export function planLocalIgnore(root, { outputs = [], templateRoot } = {}) {
   if (location) {
     const fallback = checkedLocalPath(join(root, '.gitignore'));
     const old = localRead(fallback), next = localBlock(old, first, last, null);
-    if (old !== null && old !== next) edits.push({ path: fallback, before: old, after: next });
+    if (old !== null && old !== next) edits.push({ path: fallback, before: old, after: next, beforeMode: localMode(fallback) });
   }
   const tracked = location ? gitCommand(location.top, ['ls-files', '-z']).stdout.split('\0').filter(path => wanted.has(path)).map(path => location.prefix ? path.slice(location.prefix.length + 1) : path) : [];
-  return { root, status: location ? 'git' : 'fallback', location, paths, roots, artifactProbes: artifactPaths, edits, trackedOutputs: tracked, first, last };
+  return { root, status: location ? 'git' : 'fallback', location, paths, roots, artifactPatterns: artifacts, artifactProbes: artifactPaths, edits, trackedOutputs: tracked, first, last };
 }
 
 export function checkLocalIgnore(plan, { replacedBlocks = [] } = {}) {
@@ -235,7 +291,8 @@ export function checkLocalIgnore(plan, { replacedBlocks = [] } = {}) {
     return { ...item, path };
   });
   if (plan.location && (plan.paths.length || plan.artifactProbes?.length)) {
-    const probes = [...plan.paths, ...rootProbes(plan.root, plan.roots || []), ...(plan.artifactProbes || [])];
+    const probes = [...new Set([...plan.paths, ...rootProbes(plan.root, plan.roots || []), ...(plan.artifactProbes || []),
+      ...(plan.artifactPatterns ? visibleArtifactProbes(plan.root, plan.location, plan.artifactPatterns) : [])])];
     const { paths: relativePaths, matches } = ignoreMatches(plan.location, probes);
     for (let index = 0; index < relativePaths.length; index++) {
       const match = matches.get(relativePaths[index]);
@@ -252,8 +309,19 @@ export function checkLocalIgnore(plan, { replacedBlocks = [] } = {}) {
 export function assertLocalIgnoreUnchanged(plan) {
   for (const edit of plan.edits) {
     checkedLocalPath(edit.path);
-    if (localRead(edit.path) !== edit.before) throw new Error(`Exclusao alterada apos planejar: ${edit.path}`);
+    if (localRead(edit.path) !== edit.before || Object.hasOwn(edit, 'beforeMode') && localMode(edit.path) !== edit.beforeMode) throw new Error(`Exclusao alterada apos planejar: ${edit.path}`);
   }
+}
+
+function atomicLocalWrite(path, content, mode, published) {
+  const temporary = `${path}.agentdevkit-${randomUUID()}`;
+  try {
+    writeFileSync(temporary, content, { flag: 'wx' });
+    if (mode !== null && mode !== undefined) chmodSync(temporary, mode);
+    const writtenMode = localMode(temporary);
+    renameSync(temporary, path);
+    published?.(writtenMode);
+  } finally { rmSync(temporary, { force: true }); }
 }
 
 export function applyLocalIgnore(plan) {
@@ -264,18 +332,19 @@ export function applyLocalIgnore(plan) {
   try {
     for (const edit of plan.edits) {
       mkdirSync(dirname(edit.path), { recursive: true });
-      const temporary = `${edit.path}.agentdevkit-${randomUUID()}`;
-      try { writeFileSync(temporary, edit.after, { flag: 'wx' }); renameSync(temporary, edit.path); }
-      finally { rmSync(temporary, { force: true }); }
-      written.push(edit);
+      atomicLocalWrite(edit.path, edit.after, edit.beforeMode, mode => written.push({ edit, mode }));
     }
     const verified = checkLocalIgnore({ ...plan, edits: [], trackedOutputs: [] });
     if (verified.missing.length) throw new Error(`Regras humanas reabrem derivados locais: ${verified.missing.join(', ')}`);
   } catch (error) {
-    for (const edit of written.reverse()) {
-      if (localRead(edit.path) !== edit.after) continue;
-      if (edit.before === null) rmSync(edit.path, { force: true }); else writeFileSync(edit.path, edit.before);
+    const rollbackErrors = [];
+    for (const { edit, mode } of written.reverse()) {
+      try {
+        if (localRead(edit.path) !== edit.after || localMode(edit.path) !== mode) continue;
+        if (edit.before === null) rmSync(edit.path, { force: true }); else atomicLocalWrite(edit.path, edit.before, edit.beforeMode);
+      } catch (failure) { rollbackErrors.push(failure); }
     }
+    if (rollbackErrors.length) throw new AggregateError([error, ...rollbackErrors], `${error.message}; rollback incompleto: ${rollbackErrors.map(failure => failure.message).join('; ')}`, { cause: error });
     throw error;
   }
   return { status: plan.status, changed: plan.edits.length, trackedOutputs: plan.trackedOutputs };

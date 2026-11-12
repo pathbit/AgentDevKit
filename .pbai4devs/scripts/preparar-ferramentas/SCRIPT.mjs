@@ -101,6 +101,14 @@ function sourcePath(root, name) {
   return file;
 }
 
+function storagePath(root, name, kind) {
+  const file = sourcePath(root, name);
+  let item;
+  try { item = lstatSync(file); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+  if (item && !(kind === 'directory' ? item.isDirectory() : item.isFile())) fail(`Caminho local exige ${kind}: ${name}`);
+  return file;
+}
+
 export function loadCatalog(root = projectRoot) {
   root = realpathSync(root);
   const home = sourcePath(root, '.pbai4devs/tools'); const catalog = Object.create(null);
@@ -272,15 +280,21 @@ export class ToolManager {
     return { mode: 'setup', selection: selected, platform: this.target, node: process.version, nodePath: process.execPath, npm, results: entries, summary, status: summary.failed ? 'failed' : summary.passed ? 'passed' : 'not-applicable', exitCode: summary.failed ? 1 : 0 };
   }
   local(name) { this.entry(name); return join(this.home, name, '.local'); }
+  storage(name) {
+    const local = this.local(name), tool = join(this.home, name);
+    for (const path of [this.home, tool, local, join(local, 'versions'), join(tool, 'versions'), join(this.home, '.cache'), join(this.home, '.cache/npm'), join(this.home, 'npm-cache')]) storagePath(this.root, path, 'directory');
+    for (const path of [join(local, 'CURRENT.json'), join(tool, 'CURRENT.json')]) storagePath(this.root, path, 'file');
+    return { local, tool };
+  }
   current(name) {
-    this.entry(name);
-    const local = this.local(name); const legacy = join(this.home, name);
+    const { local, tool: legacy } = this.storage(name);
     const base = existsSync(join(local, 'CURRENT.json')) ? local : legacy;
     const file = join(base, 'CURRENT.json');
     if (!existsSync(file)) fail(`Ferramenta ausente: ${name}; execute install ${name}.`);
     const info = json(file);
     if (info.name !== name || info.platform !== this.target || !versionPattern.test(info.version || '')) fail(`Instalacao incompativel: ${name}`);
-    return { ...info, layout: base === local ? 'local' : 'legacy', prefix: join(base, 'versions', `${info.version}-${this.target}`) };
+    const prefix = storagePath(this.root, join(base, 'versions', `${info.version}-${this.target}`), 'directory');
+    return { ...info, layout: base === local ? 'local' : 'legacy', prefix };
   }
   check(name) {
     const entry = this.entry(name); const runtime = this.runtime(name); const info = this.current(name);
@@ -306,7 +320,7 @@ export class ToolManager {
     for (const legacy of [name, `${name}.cmd`, `${name}.ps1`, `${name}.sh`]) rmSync(join(bin, legacy), { force: true });
   }
   migrate(name) {
-    const local = this.local(name); const tool = join(this.home, name);
+    const { local, tool } = this.storage(name);
     const legacyState = join(tool, 'CURRENT.json'); const legacyVersions = join(tool, 'versions');
     if (existsSync(legacyState)) {
       if (existsSync(join(local, 'CURRENT.json')) || (existsSync(join(local, 'versions')) && readdirSync(join(local, 'versions')).length)) fail(`Layouts local e antigo coexistem: ${name}; revise antes de migrar.`);
@@ -318,15 +332,15 @@ export class ToolManager {
     }
     const oldCache = join(this.home, 'npm-cache');
     if (existsSync(oldCache)) {
-      const cache = join(this.home, '.cache'); mkdirSync(cache, { recursive: true });
-      try { renameSync(oldCache, join(cache, existsSync(join(cache, 'npm')) ? `npm-legacy-${process.pid}-${Date.now()}` : 'npm')); }
+      const cache = storagePath(this.root, join(this.home, '.cache'), 'directory'); mkdirSync(cache, { recursive: true });
+      const destination = storagePath(this.root, join(cache, existsSync(join(cache, 'npm')) ? `npm-legacy-${randomUUID()}` : 'npm'), 'directory');
+      try { renameSync(oldCache, destination); }
       catch (error) { if (error.code !== 'ENOENT' || existsSync(oldCache)) throw error; }
     }
   }
   async withLock(name, action) {
-    const local = this.local(name);
-    for (const directory of [this.home, join(this.home, name), local]) if (existsSync(directory) && lstatSync(directory).isSymbolicLink()) fail(`Diretorio local nao pode ser um link: ${directory}`);
-    mkdirSync(local, { recursive: true }); const lock = join(local, '.update-lock');
+    const { local } = this.storage(name);
+    mkdirSync(local, { recursive: true }); const lock = storagePath(this.root, join(local, '.update-lock'), 'directory');
     try { mkdirSync(lock); } catch (error) {
       if (error.code === 'EEXIST') {
         const status = this.lockStatus(name);
@@ -334,8 +348,8 @@ export class ToolManager {
       }
       throw error;
     }
-    try { writeFileSync(join(lock, 'owner.json'), JSON.stringify({ pid: process.pid, hostname: hostname(), startedAt: new Date().toISOString() })); return await action(); }
-    finally { rmSync(lock, { recursive: true, force: true }); }
+    try { writeFileSync(storagePath(this.root, join(lock, 'owner.json'), 'file'), JSON.stringify({ pid: process.pid, hostname: hostname(), startedAt: new Date().toISOString() }), { flag: 'wx' }); return await action(); }
+    finally { rmSync(storagePath(this.root, lock, 'directory'), { recursive: true, force: true }); }
   }
   lockStatus(name) {
     const lock = sourcePath(this.root, join(this.local(name), '.update-lock'));
@@ -380,29 +394,36 @@ export class ToolManager {
     return this.updateLocked(name);
   }); }
   async update(name) { this.preflight([name]); return this.withLock(name, async () => { this.migrate(name); return this.updateLocked(name); }); }
-  commitState(name, temporary) { renameSync(temporary, join(this.local(name), 'CURRENT.json')); }
+  commitState(name, temporary) {
+    const { local } = this.storage(name);
+    renameSync(storagePath(this.root, temporary, 'file'), storagePath(this.root, join(local, 'CURRENT.json'), 'file'));
+  }
   async updateLocked(name) {
     const entry = this.entry(name); const runtime = this.runtime(name); const release = validateRelease(name, entry, await this.fetchRelease(name, entry));
+    const { local } = this.storage(name);
+    const target = storagePath(this.root, join(local, 'versions', `${release.version}-${this.target}`), 'directory');
     let installed;
     try { installed = this.check(name); } catch { /* Ausente ou quebrado: reparar em staging. */ }
     if (installed?.version === release.version) { this.launchers(name); return { ...installed, changed: false }; }
-    const local = this.local(name); mkdirSync(join(local, 'versions'), { recursive: true });
-    const stage = mkdtempSync(join(local, '.stage-')); const target = join(local, 'versions', `${release.version}-${this.target}`);
-    const temporary = join(local, `CURRENT.${process.pid}.${Date.now()}.json`); let previous; let moved = false;
+    mkdirSync(storagePath(this.root, join(local, 'versions'), 'directory'), { recursive: true });
+    const stage = mkdtempSync(join(local, '.stage-'));
+    const temporary = storagePath(this.root, join(local, `CURRENT.${randomUUID()}.json`), 'file'); let previous; let moved = false;
     try {
       this.installPackage(stage, entry.download.package, release.version, entry, runtime);
+      this.storage(name); storagePath(this.root, stage, 'directory');
       const pkg = json(join(stage, 'node_modules', entry.download.package, 'package.json')); const lock = json(join(stage, 'package-lock.json'));
       if (pkg.name !== entry.download.package || pkg.version !== release.version || lock.packages?.[`node_modules/${entry.download.package}`]?.integrity !== release.dist.integrity) fail('Pacote instalado nao corresponde ao registro.');
       prepareExecutables(stage, entry, this.target);
       execute(stage, entry, entry.probe, true, entry.probeInput, toolEnvironment(entry, local, runtime), runtime);
+      this.storage(name); storagePath(this.root, target, 'directory');
       const info = { name, package: entry.download.package, version: release.version, platform: this.target, node: runtime.version, nodePath: runtime.file, source: entry.source, tarball: release.dist.tarball, integrity: release.dist.integrity, checkedAt: new Date().toISOString() };
-      writeFileSync(temporary, `${JSON.stringify(info, null, 2)}\n`);
+      writeFileSync(storagePath(this.root, temporary, 'file'), `${JSON.stringify(info, null, 2)}\n`, { flag: 'wx' });
       this.launchers(name);
-      if (existsSync(target)) { previous = `${target}.previous-${process.pid}-${Date.now()}`; renameSync(target, previous); }
-      try { renameSync(stage, target); moved = true; this.commitState(name, temporary); }
-      catch (error) { if (moved) rmSync(target, { recursive: true, force: true }); if (previous) renameSync(previous, target); throw error; }
+      if (existsSync(target)) { previous = storagePath(this.root, `${target}.previous-${randomUUID()}`, 'directory'); renameSync(storagePath(this.root, target, 'directory'), previous); }
+      try { renameSync(storagePath(this.root, stage, 'directory'), storagePath(this.root, target, 'directory')); moved = true; this.commitState(name, temporary); }
+      catch (error) { if (moved) rmSync(storagePath(this.root, target, 'directory'), { recursive: true, force: true }); if (previous) renameSync(storagePath(this.root, previous, 'directory'), storagePath(this.root, target, 'directory')); throw error; }
       return { ...info, layout: 'local', prefix: target, changed: true };
-    } finally { rmSync(stage, { recursive: true, force: true }); rmSync(temporary, { force: true }); }
+    } finally { rmSync(storagePath(this.root, stage, 'directory'), { recursive: true, force: true }); rmSync(storagePath(this.root, temporary, 'file'), { force: true }); }
   }
   run(name, args) { const entry = this.entry(name); const runtime = this.runtime(name); return execute(this.current(name).prefix, entry, args, false, undefined, toolEnvironment(entry, this.local(name), runtime), runtime); }
 }

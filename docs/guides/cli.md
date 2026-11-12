@@ -63,6 +63,15 @@ e `unlock`. Consultar ou executar não instala silenciosamente.
 `setup` prepara as ferramentas compatíveis; outros comandos podem receber
 um nome ou grupo. Consulte [ferramentas e testes](tools-and-testing.md).
 
+Em `tools`, use `--` antes dos argumentos que pertencem à ferramenta:
+
+```console
+npx @pathbit/agentdevkit tools run agent-browser -- --json --help
+```
+
+Nesse exemplo, `--json` pertence ao agent-browser. Opções do kit ficam antes
+do separador. `--help` e `--version` do kit não exigem um projeto instalado.
+
 ## JSON e retorno
 
 As respostas incluem `ok`, `command`, `version`, `language`, `target` e

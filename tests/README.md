@@ -12,11 +12,13 @@ Estes testes não são copiados para os projetos atendidos.
 Para verificar o pacote publicado em projetos reais, execute:
 
 ```console
-npm run test:oss -- --version 0.0.7
+npm run test:oss -- --version 0.0.8
 ```
 
 O teste clona os commits de [Express, Zod e Chi](fixtures/oss-projects.json).
 Confere arquivos, permissões, links, staging, instalação, atualização e ignores.
+Uma referência Markdown curta também comprova a preservação de arquivos
+humanos.
 Clones e evidências ficam em `tmp/oss-compatibility/`, ignorado pelo Git.
 Exige rede; não roda no `npm test` padrão nem executa as aplicações clonadas.
 Use `--project express` para um caso e `--help` para todas as opções.

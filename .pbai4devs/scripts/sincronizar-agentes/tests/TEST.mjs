@@ -10,6 +10,7 @@ import { buildCatalog } from '../../lib/catalog.mjs';
 import { toolWrapper } from '../../preparar-ferramentas/SCRIPT.mjs';
 import { mergeGitignore, ignoreBegin, ignoreEnd, validateIgnoreClients } from '../../lib/gitignore.mjs';
 import './LOCAL_IGNORE.mjs';
+import './HUMAN_OWNERSHIP.mjs';
 import { validateCatalog as validateExternalCatalog } from '../../gerenciar-skills-externas/SCRIPT.mjs';
 
 const project = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
@@ -58,7 +59,7 @@ function fixture(t, minimal = false) {
   write(root, '.pbai4devs/agents/revisor/kimi-code.yaml', '---\nname: revisor\ntools: [Read, Grep, Glob]\n---\n');
   write(root, '.pbai4devs/agents/revisor/opencode.yaml', '---\nmode: subagent\npermission:\n  edit: deny\n---\n');
   write(root, '.pbai4devs/adapters/antigravity/agents/revisor.md', pointer('../../../agents/revisor/AGENT.md', 'Revisor'));
-  write(root, '.opencode/agents/revisor/AGENT.md', '---\nmode: subagent\npermission:\n  edit: deny\n---\n\n# Revisor\n\nLeia e siga [origem](../../../.pbai4devs/agents/revisor/AGENT.md).\n');
+  write(root, '.opencode/agents/revisor/AGENT.md', `---\nmode: subagent\npermission:\n  edit: deny\n---\n\n# Revisor\n\n${marker}\nLeia e siga [origem](../../../.pbai4devs/agents/revisor/AGENT.md).\n`);
   write(root, '.github/workflows/ci.yml', 'workflow-preservado\n');
   write(root, '.vscode/settings.json', '{"fixture":"config-preservada"}\n');
   write(root, '.vscode/extensions.json', '{"recommendations":[]}\n');

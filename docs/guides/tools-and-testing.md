@@ -32,6 +32,8 @@ node .pbai4devs/scripts/preparar-ferramentas/SCRIPT.mjs setup
 `setup` reutiliza instalações saudáveis e verifica as compatíveis. Um nome
 ou grupo limita a seleção. `check`, `info` e `run` não trocam uma consulta
 por instalação. Downloads, caches e recibos permanecem locais e ignorados.
+O gerenciador recusa links simbólicos nos caminhos que escreve ou usa como
+estado local; a atualização não segue esses links para fora da instalação.
 
 ## Escolher a prova
 

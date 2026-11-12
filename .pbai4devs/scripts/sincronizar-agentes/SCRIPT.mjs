@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 // Planeja em memória; somente os caminhos gerenciados pelo manifesto são alterados.
-import { cpSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, rmdirSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, rmdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, posix, resolve } from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
 import { requireNode, projectRoot, isMain } from '../lib/runtime.mjs';
 import { buildCatalog } from '../lib/catalog.mjs';
 import { resourcePath } from '../lib/resource-path.mjs';
 import { adapterManifest, resolveAdapters } from '../lib/adapters.mjs';
-import { mergeGitignore, validateIgnoreClients, renderClientIgnore, isGeneratedOutput, planLocalIgnore, applyLocalIgnore, checkLocalIgnore, ignoreBegin, ignoreEnd } from '../lib/gitignore.mjs';
+import { mergeGitignore, validateIgnoreClients, renderClientIgnore, isGeneratedOutput, planLocalIgnore, applyLocalIgnore, checkLocalIgnore, assertLocalIgnoreUnchanged, ignoreBegin, ignoreEnd } from '../lib/gitignore.mjs';
 
 const marker = '<!-- gerado: sincronizar-agentes -->';
 const tomlMarker = '# gerado: sincronizar-agentes';
@@ -113,9 +113,13 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
   }
   const referenceFile = value => {
     const info = stat(safe(value));
-    return Boolean(info?.isFile() && info.size <= 1024 * 1024 && isReference(read(absolute(value))));
+    if (!info?.isFile() || info.size > 1024 * 1024) return false;
+    const bytes = readFileSync(absolute(value)), text = normalize(bytes.toString('utf8'));
+    const recorded = installed?.files?.[value] === createHash('sha256').update(bytes).digest('hex');
+    const marked = text.split('\n').includes(marker) || text.startsWith(tomlMarker + '\n');
+    return isReference(text) && (marked || recorded);
   };
-  const onlyReferences = value => scan(value).every(file => /\.(md|mdc|toml)$/.test(file) && referenceFile(file));
+  const onlyReferences = value => { const files = scan(value); return files.length > 0 && files.every(file => /\.(md|mdc|toml)$/.test(file) && referenceFile(file)); };
   const protectedPath = value => /^(workflows(?:\/|$)|settings\.json$|extensions\.json$)/.test(value.slice(value.indexOf('/') + 1).toLowerCase());
   const agents = new Map();
   const formats = new Map();
@@ -237,6 +241,7 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
   }
   function cleanScope(value) {
     if (!stat(safe(value))) return;
+    if (stat(safe(value)).isDirectory() && !scan(value).length) return;
     if (force && value.split('/')[1] === 'external-skills') planRemove(value, true);
     else if (onlyReferences(value)) planRemove(value);
     else if (force) planRemove(value, true);
@@ -410,16 +415,72 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
   const removals = topPaths(remove);
   const backups = topPaths(backup);
   const rootEntryChanges = [...rootEntries].filter(([name, content]) => !stat(absolute(name)) || readFileSync(absolute(name), 'utf8') !== content);
+  const omittedRows = new Set([...legacy, ...missing.map(native => native.index)]);
+  const finalConfig = rows.filter((row, index) => !omittedRows.has(index)).join('\n').replace(/\n*$/, '\n');
+  const configChanged = !configExists || configText !== finalConfig;
+  function capture(value) {
+    const file = safe(value), info = stat(file);
+    if (!info) return null;
+    if (info.isFile()) return { mode: info.mode & 0o777, data: readFileSync(file) };
+    if (!info.isDirectory()) fail(`Tipo de arquivo nao suportado: ${value}`);
+    return { mode: info.mode & 0o777, children: Object.fromEntries(readdirSync(file).sort(compare).map(name => [name, capture(`${value}/${name}`)])) };
+  }
+  function fingerprint(value) {
+    return createHash('sha256').update(JSON.stringify(value)).digest('hex');
+  }
+  const transactionRoots = topPaths([...removals, ...changed, ...registries.keys(), ...ignoreFiles.keys(), ...rootEntryChanges.map(([name]) => name), ...(configChanged ? [config] : [])]);
+  const originals = new Map(transactionRoots.map(value => [value, capture(value)]));
+  const currentHashes = new Map([...originals].map(([value, content]) => [value, fingerprint(content)]));
+  const originalDirectories = new Set();
+  for (const value of transactionRoots) {
+    let parent = posix.dirname(value);
+    while (parent !== '.') { if (stat(safe(parent))?.isDirectory()) originalDirectories.add(parent); parent = posix.dirname(parent); }
+  }
+  const touched = new Set(), createdDirectories = new Set(), restoredDirectories = new Set();
+  const prunedDirectories = new Map();
+  let restoring = false;
   const summary = { changed: changed.length + rootEntryChanges.length, stale: removals.length, conflicts: conflicts.size, missing: missing.length, legacy: legacy.length, registries: registries.size, gitignores: ignoreFiles.size, manifests: configExists ? 0 : 1, localIgnores: localStatus.changed + localStatus.missing.length + localStatus.trackedOutputs.length };
   const dirty = Object.values(summary).some(Boolean);
   output(`${summary.changed} desatualizadas; ${summary.stale} obsoletas; ${summary.conflicts} conflitos; ${summary.missing} origens nativas ausentes; ${summary.legacy} documentos antigos; ${summary.registries} indices derivados; ${summary.gitignores} gitignores; ${summary.localIgnores} exclusoes locais.`);
   if (check) return { ...summary, ownedOutputs, exitCode: dirty ? 1 : 0 };
   if (conflicts.size) fail(`Use --force para reconstruir somente os caminhos gerenciados: ${sorted(conflicts).join(', ')}`);
+  if (localStatus.missing.length) fail(`Regras humanas reabrem derivados locais: ${localStatus.missing.join(', ')}`);
+  if (localPlan) assertLocalIgnoreUnchanged(localPlan);
+  function ensureDirectory(value) {
+    let parent = posix.dirname(value);
+    const missing = [];
+    while (parent !== '.' && !stat(safe(parent))) { missing.push(parent); parent = posix.dirname(parent); }
+    for (const directory of missing.reverse()) {
+      mkdirSync(safe(directory)); createdDirectories.add(directory);
+      if (restoring) restoredDirectories.add(directory);
+    }
+  }
+  function mutate(value, action, text) {
+    const boundary = transactionRoots.find(root => value === root || value.startsWith(root + '/'));
+    if (!boundary || fingerprint(capture(boundary)) !== currentHashes.get(boundary)) fail(`Arquivo mudou apos planejar: ${value}`);
+    const beforeHash = currentHashes.get(boundary);
+    touched.add(boundary);
+    let failure;
+    try { action(); } catch (error) { failure = error; }
+    let afterHash;
+    try { afterHash = fingerprint(capture(boundary)); }
+    catch (error) { currentHashes.set(boundary, 'conteudo-concorrente'); throw failure || error; }
+    const matches = text === undefined || (text === null ? !stat(safe(value)) : stat(safe(value))?.isFile() && readFileSync(absolute(value)).equals(Buffer.from(text)));
+    if (!matches && afterHash !== beforeHash) {
+      currentHashes.set(boundary, 'conteudo-concorrente');
+      if (failure) throw failure;
+      fail(`Mudanca concorrente preservada: ${value}`);
+    }
+    currentHashes.set(boundary, afterHash);
+    if (failure) throw failure;
+    if (!matches) fail(`Arquivo nao corresponde a gravacao planejada: ${value}`);
+  }
   function atomic(value, text) {
     const target = safe(value);
-    mkdirSync(dirname(target), { recursive: true });
+    const mode = stat(target)?.isFile() ? stat(target).mode & 0o777 : undefined;
+    ensureDirectory(value);
     const temporary = `${target}.sync.${randomUUID()}`;
-    try { writeFileSync(temporary, text, { flag: 'wx' }); renameSync(temporary, target); }
+    try { writeFileSync(temporary, text, { flag: 'wx' }); if (mode !== undefined) chmodSync(temporary, mode); renameSync(temporary, target); }
     finally { rmSync(temporary, { force: true }); }
   }
   let backupRoot;
@@ -433,21 +494,60 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
     }
     output(`Backup local: ${posix.join('.agent-tests', backupRoot.slice(backupRoot.lastIndexOf('/') + 1).split('\\').at(-1))}`);
   }
-  for (const value of removals) rmSync(safe(value), { recursive: true, force: true });
-  for (const value of changed) atomic(value, expected.get(value));
-  for (const [value, text] of registries) atomic(value, text);
-  for (const [value, text] of ignoreFiles) atomic(value, text);
-  for (const [value, text] of rootEntryChanges) atomic(value, text);
-  if (localPlan) applyLocalIgnore(localPlan);
-  function pruneEmpty(value) {
-    if (!stat(safe(value))?.isDirectory()) return;
-    for (const name of readdirSync(absolute(value))) if (stat(safe(`${value}/${name}`))?.isDirectory()) pruneEmpty(`${value}/${name}`);
-    if (!readdirSync(absolute(value)).length) rmdirSync(absolute(value));
+  function restore(value, content) {
+    rmSync(safe(value), { recursive: true, force: true });
+    if (!content) return;
+    ensureDirectory(value);
+    if (content.data) writeFileSync(safe(value), content.data);
+    else {
+      mkdirSync(safe(value));
+      for (const [name, child] of Object.entries(content.children)) restore(`${value}/${name}`, child);
+    }
+    chmodSync(safe(value), content.mode);
   }
-  for (const agent of agents.keys()) for (const kind of [...Object.keys(principals), 'instructions', 'prompts']) pruneEmpty(`${agent}/${kind}`);
-  const omittedRows = new Set([...legacy, ...missing.map(native => native.index)]);
-  const finalConfig = rows.filter((row, index) => !omittedRows.has(index)).join('\n').replace(/\n*$/, '\n');
-  if (!configExists || configText !== finalConfig) atomic(config, finalConfig);
+  try {
+    if (localPlan) assertLocalIgnoreUnchanged(localPlan);
+    for (const value of removals) mutate(value, () => rmSync(safe(value), { recursive: true, force: true }), null);
+    for (const value of changed) mutate(value, () => atomic(value, expected.get(value)), expected.get(value));
+    for (const [value, text] of registries) mutate(value, () => atomic(value, text), text);
+    for (const [value, text] of ignoreFiles) mutate(value, () => atomic(value, text), text);
+    for (const [value, text] of rootEntryChanges) mutate(value, () => atomic(value, text), text);
+    if (configChanged) mutate(config, () => atomic(config, finalConfig), finalConfig);
+    // Só os ancestrais de remoções conhecidas são candidatos à limpeza.
+    for (const value of removals) {
+      let parent = posix.dirname(value);
+      const boundary = value.split('/').slice(0, 2).join('/');
+      while (parent.startsWith(boundary + '/') || parent === boundary) {
+        const info = stat(safe(parent));
+        if (!info?.isDirectory() || readdirSync(absolute(parent)).length) break;
+        rmdirSync(safe(parent)); prunedDirectories.set(parent, info.mode & 0o777); parent = posix.dirname(parent);
+      }
+    }
+    if (localPlan) applyLocalIgnore(localPlan);
+  } catch (error) {
+    const failures = [];
+    restoring = true;
+    for (const value of [...touched].reverse()) {
+      try {
+        if (fingerprint(capture(value)) !== currentHashes.get(value)) fail(`Mudanca concorrente preservada: ${value}`);
+        restore(value, originals.get(value));
+      } catch (failure) { failures.push(failure); }
+    }
+    for (const [directory, mode] of [...prunedDirectories].sort(([left], [right]) => right.length - left.length)) {
+      try {
+        if (!stat(safe(directory))) ensureDirectory(`${directory}/.restore-probe`);
+        const info = stat(safe(directory));
+        if (!info?.isDirectory() || !restoredDirectories.has(directory) && (info.mode & 0o777) !== mode) fail(`Diretorio concorrente preservado: ${directory}`);
+        chmodSync(safe(directory), mode);
+      } catch (failure) { failures.push(failure); }
+    }
+    for (const directory of sorted(createdDirectories).sort((a, b) => b.length - a.length)) {
+      try { if (!originalDirectories.has(directory) && stat(safe(directory))?.isDirectory() && !readdirSync(absolute(directory)).length) rmdirSync(safe(directory)); }
+      catch (failure) { failures.push(failure); }
+    }
+    if (failures.length) throw new AggregateError([error, ...failures], `${error.message}; rollback incompleto: ${failures.map(failure => failure.message).join('; ')}`);
+    throw error;
+  }
   return { ...summary, ownedOutputs, exitCode: 0, ...(backupRoot ? { backupRoot } : {}) };
 }
 

@@ -176,8 +176,10 @@ function testProject(project, options, output, env, npm) {
     assert.equal(git('rev-parse', 'HEAD').trim().toLowerCase(), project.commit.toLowerCase());
     const trackedPaths = git('ls-files', '-z').split('\0').filter(Boolean);
     const nativeSkill = `.claude/skills/oss-preexisting-${project.id}/SKILL.md`;
-    assert.ok(!existsSync(join(directory, nativeSkill)), 'Sentinela nativa já existe.');
+    const nativeReference = `.claude/skills/oss-preexisting-${project.id}/REFERENCE.md`;
+    assert.ok(!existsSync(join(directory, nativeSkill)) && !existsSync(join(directory, nativeReference)), 'Sentinela nativa já existe.');
     writeClone(directory, nativeSkill, `---\nname: oss-preexisting-${project.id}\ndescription: Existing user-owned native skill.\n---\n\n# Existing native skill\n\nPreserve this file.\n`);
+    writeClone(directory, nativeReference, '# Project reference\n\nLeia [manual](https://example.com/manual).\n');
     if (project.dirty) {
       const path = project.dirtyFile || 'README.md';
       assert.equal(fileSnapshot(directory, path).kind, 'file', `dirty exige ${path} regular.`);
@@ -185,10 +187,10 @@ function testProject(project, options, output, env, npm) {
       writeClone(directory, path, Buffer.concat([readFileSync(join(directory, path)), Buffer.from(comment)]));
       git('add', '--', path);
     }
-    paths = [...trackedPaths, nativeSkill];
-    baseline = { files: originalSnapshot(directory, paths), git: gitSnapshot(directory, git), trackedPaths, nativeSentinel: nativeSkill };
+    paths = [...trackedPaths, nativeSkill, nativeReference];
+    baseline = { files: originalSnapshot(directory, paths), git: gitSnapshot(directory, git), trackedPaths, nativeSentinel: nativeSkill, nativeReference };
     put(join(evidence, 'baseline.json'), JSON.stringify(baseline, null, 2) + '\n');
-    result.originalFiles = trackedPaths.length; result.nativeSentinel = nativeSkill; result.checkout = baseline.git.head; checked('checkout-pinned');
+    result.originalFiles = trackedPaths.length; result.nativeSentinel = nativeSkill; result.nativeReference = nativeReference; result.checkout = baseline.git.head; checked('checkout-pinned');
     const cli = (name, args, expected = 0) => {
       const text = run(name, process.execPath, [npm, 'exec', '--yes', '--ignore-scripts', `--registry=${registry}`,
         `--package=${options.tarball || `@pathbit/agentdevkit@${options.version}`}`, '--', 'agentdevkit', ...args, '--json'], join(output, 'npm-work'), expected);

@@ -18,6 +18,7 @@ status: vigente
 | Instalação pelo registro v0.0.5 | Pacote publicado | [Spec][registry]. |
 | Apresentação e licença v0.0.6 | Distribuição e atualização | [Spec][public]. |
 | Compatibilidade real v0.0.7 | Testes em clones existentes | [Spec][oss]. |
+| Preservação v0.0.8 | Auditoria e regressões | [Spec][robustness]. |
 
 A primeira entrega segue a [spec v0.0.1](../specs/v0.0.1/SPEC.md), disponível
 na [release v0.0.1][release]. Os detalhes de mudanças estão no
@@ -38,3 +39,4 @@ comportamento existente, sem alterar a versão de uma release já publicada.
 [registry]: ../specs/v0.0.5/SPEC.md
 [public]: ../specs/v0.0.6/SPEC.md
 [oss]: ../specs/v0.0.7/SPEC.md
+[robustness]: ../specs/v0.0.8/SPEC.md

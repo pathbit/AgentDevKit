@@ -7,6 +7,7 @@ import { spawnSync } from 'node:child_process';
 import { run } from '../bin/agentdevkit.mjs';
 import { resolveTarget } from '../src/install.mjs';
 import { packageInfo } from '../src/config.mjs';
+import { parseArgs } from '../src/cli.mjs';
 
 const project = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const bin = join(project, 'bin/agentdevkit.mjs');
@@ -34,6 +35,46 @@ test('help, version e erros retornam JSON unico com proxima acao', t => {
   assert.equal(version.version, packageInfo.version); assert.equal(Object.hasOwn(version, 'clients'), false);
   const invalid = cli(root, ['nonsense', '--lang', 'es'], 2);
   assert.equal(invalid.language, 'es'); assert.match(invalid.message, /Argumentos inválidos/);
+});
+
+test('tools preserva argumentos opacos após -- e opções globais antes dele', () => {
+  const opaque = ['--', '--json', '--lang', 'en', '--target', 'example.test', '--agents', 'all', '--help', '--version'];
+  const options = parseArgs(['--json', '--lang', 'es', '--target', 'project', 'tools', 'run', 'agent-browser', ...opaque]);
+  assert.equal(options.command, 'tools');
+  assert.equal(options.json, true); assert.equal(options.language, 'es');
+  assert.equal(options.target, 'project'); assert.equal(options.clients, undefined);
+  assert.deepEqual(options.toolArgs, ['run', 'agent-browser', ...opaque]);
+  const childOnly = parseArgs(['tools', 'run', 'agent-browser', ...opaque]);
+  assert.equal(childOnly.json, false); assert.equal(childOnly.language, null);
+  assert.equal(childOnly.target, null);
+});
+
+test('tools encaminha flags do processo filho sem mudar idioma ou destino da CLI', t => {
+  const root = fixture(t);
+  put(root, '.pbai4devs/estado/agentdevkit.json', JSON.stringify({ schemaVersion: 1, version: packageInfo.version, language: 'pt', clients: ['codex'], files: {}, blocks: {} }));
+  put(root, '.pbai4devs/scripts/preparar-ferramentas/SCRIPT.mjs', 'process.stdout.write(JSON.stringify(process.argv.slice(2)));\n');
+  const opaque = ['run', 'agent-browser', '--', '--json', '--lang', 'en', '--target', 'example.test'];
+  const result = spawnSync(process.execPath, [bin, '--json', '--target', root, 'tools', ...opaque], { encoding: 'utf8', timeout: 60000 });
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  const value = JSON.parse(result.stdout);
+  assert.equal(value.command, 'tools'); assert.equal(value.language, 'pt');
+  assert.equal(value.target, root); assert.deepEqual(JSON.parse(value.toolOutput), opaque);
+});
+
+test('help e version independem de cwd reservado, destino e estado do projeto', t => {
+  const root = fixture(t), cwd = join(root, 'node_modules');
+  mkdirSync(cwd);
+  put(cwd, '.pbai4devs/estado/agentdevkit.json', '{invalid');
+  for (const [flag, command] of [['--help', 'help'], ['--version', 'version']]) {
+    for (const targetArgs of [[], ['--target', join(root, '.git')]]) {
+      const result = spawnSync(process.execPath, [bin, flag, '--json', '--lang', 'en', ...targetArgs], { cwd, encoding: 'utf8', timeout: 60000 });
+      assert.equal(result.status, 0, result.stdout + result.stderr);
+      const value = JSON.parse(result.stdout);
+      assert.equal(value.ok, true); assert.equal(value.command, command);
+      assert.equal(value.language, 'en'); assert.equal(value.error, undefined);
+    }
+  }
+  assert.equal(readFileSync(join(cwd, '.pbai4devs/estado/agentdevkit.json'), 'utf8'), '{invalid');
 });
 
 test('sem comando inicializa; dry-run nao cria destino; init e update sao idempotentes', t => {

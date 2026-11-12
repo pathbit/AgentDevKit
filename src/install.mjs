@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { existsSync, lstatSync, readFileSync, writeFileSync, readdirSync, mkdirSync, mkdtempSync, realpathSync, renameSync, rmSync, rmdirSync } from 'node:fs';
+import { chmodSync, existsSync, lstatSync, readFileSync, writeFileSync, readdirSync, mkdirSync, mkdtempSync, realpathSync, renameSync, rmSync, rmdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { synchronize, isReference } from '../.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs';
@@ -77,8 +77,24 @@ function walk(root, path = '', filter = () => true) {
   return files;
 }
 
-function write(root, path, content) {
-  const target = safePath(root, path); mkdirSync(dirname(target), { recursive: true }); writeFileSync(target, content);
+function write(root, path, content, mode) {
+  const target = safePath(root, path); mkdirSync(dirname(target), { recursive: true });
+  writeFileSync(target, content, mode === undefined ? undefined : { mode });
+  if (mode !== undefined) chmodSync(target, mode);
+}
+
+function atomicWrite(root, path, content, mode, onPublished) {
+  const file = safePath(root, path);
+  mkdirSync(dirname(file), { recursive: true });
+  const temporary = `${file}.agentdevkit-${randomUUID()}`;
+  try {
+    writeFileSync(temporary, content, { flag: 'wx', ...(mode === undefined ? {} : { mode }) });
+    if (mode !== undefined) chmodSync(temporary, mode);
+    const writtenMode = stat(temporary).mode & 0o777;
+    renameSync(temporary, file);
+    onPublished?.(writtenMode);
+    return writtenMode;
+  } finally { rmSync(temporary, { force: true }); }
 }
 
 function read(root, path) {
@@ -294,34 +310,55 @@ export function applyPlan(plan) {
   safePath(target, backup);
   for (const change of plan.changes) safePath(target, change.path);
   const before = new Map(plan.changes.map(change => [change.path, read(target, change.path)]));
+  const beforeModes = new Map(plan.changes.map(change => {
+    const info = stat(safePath(target, change.path));
+    return [change.path, info ? info.mode & 0o777 : undefined];
+  }));
   for (const change of plan.changes) if ((before.get(change.path) ? hash(before.get(change.path)) : null) !== change.beforeHash) fail('E_CHANGED', `File changed after planning: ${change.path}`);
-  for (const [path, content] of before) if (content) write(target, `${backup}/${path}`, content);
-  const applied = [];
+  for (const [path, content] of before) if (content) write(target, `${backup}/${path}`, content, beforeModes.get(path));
+  const applied = [], removedDirectories = [];
   let untracked = false;
   try {
     if (plan.untrack?.paths.length) { applyUntrack(plan.untrack); untracked = true; }
     for (const change of plan.changes) {
       const file = safePath(target, change.path);
-      if (change.content === null) rmSync(file, { force: true });
-      else {
-        mkdirSync(dirname(file), { recursive: true });
-        const temporary = `${file}.agentdevkit-${randomUUID()}`;
-        try { writeFileSync(temporary, change.content, { flag: 'wx' }); renameSync(temporary, file); }
-        finally { rmSync(temporary, { force: true }); }
-      }
-      applied.push(change.path);
+      const content = change.content;
+      const signature = { path: change.path, hash: content === null ? null : hash(content) };
+      if (content === null) { rmSync(file, { force: true }); applied.push(signature); }
+      else atomicWrite(target, change.path, content, beforeModes.get(change.path), mode => {
+        signature.mode = mode; applied.push(signature);
+      });
     }
-    pruneRemovedDirectories(plan);
+    pruneRemovedDirectories(plan, directory => removedDirectories.push(directory));
     const changesFallback = plan.changes.some(change => change.path === '.gitignore');
     // Metadata is committed last; its writer rolls back partial writes itself.
     const ignored = applyLocalIgnore(changesFallback ? planLocalIgnore(target, { outputs: plan.ownedOutputs }) : plan.localIgnore);
     return { changed: Boolean(plan.changes.length || ignored.changed || untracked), backup: [...before.values()].some(Boolean) ? backup : null };
   } catch (error) {
-    const rollbackErrors = [];
-    for (const path of applied.reverse()) {
-      const content = before.get(path);
-      try { if (content) write(target, path, content); else rmSync(safePath(target, path), { force: true }); }
+    const rollbackErrors = [], preserved = [];
+    for (const removed of [...removedDirectories].sort((a, b) => a.path.length - b.path.length)) {
+      let directory, current;
+      try { directory = safePath(target, removed.path); current = stat(directory); }
+      catch { preserved.push(removed.path); continue; }
+      if (current) continue;
+      try { mkdirSync(directory, { mode: removed.mode }); chmodSync(directory, removed.mode); }
       catch (failure) { rollbackErrors.push(failure); }
+    }
+    for (const appliedFile of applied.reverse()) {
+      const { path } = appliedFile;
+      let unchanged = false;
+      try {
+        const file = safePath(target, path), info = stat(file);
+        unchanged = appliedFile.hash === null ? !info : Boolean(info?.isFile()
+          && (info.mode & 0o777) === appliedFile.mode && hash(readFileSync(file)) === appliedFile.hash);
+      } catch { /* Não restaurar quando não é possível comprovar a própria gravação. */ }
+      if (!unchanged) { preserved.push(path); continue; }
+      const content = before.get(path);
+      try { if (content) atomicWrite(target, path, content, beforeModes.get(path)); else rmSync(safePath(target, path), { force: true }); }
+      catch (failure) { rollbackErrors.push(failure); }
+    }
+    if (preserved.length) {
+      try { error.rollbackPreservedPaths = preserved; } catch { /* Preserve a exceção original. */ }
     }
     if (untracked) try { restoreUntrack(plan.untrack); } catch (failure) { rollbackErrors.push(failure); }
     if (rollbackErrors.length) throw Object.assign(new AggregateError([error, ...rollbackErrors], `${error.message}; rollback incompleto: ${rollbackErrors.map(failure => failure.message).join('; ')}`, { cause: error }), { code: error.code || 'E_OPERATION' });
@@ -329,7 +366,7 @@ export function applyPlan(plan) {
   }
 }
 
-function pruneRemovedDirectories(plan) {
+function pruneRemovedDirectories(plan, onRemoved) {
   const { target } = plan;
   const legacy = '.pbai4devs/adapters/README.md';
   const removed = plan.changes.filter(change => change.action === 'remove' && (allowedManaged(change.path) || change.path === legacy));
@@ -342,8 +379,9 @@ function pruneRemovedDirectories(plan) {
     const boundary = parent.startsWith('.pbai4devs/') ? '.pbai4devs' : adapterRoots.find(root => parent.startsWith(`${root}/`));
     while (boundary && parent.startsWith(`${boundary}/`)) {
       const directory = safePath(target, parent);
-      if (!stat(directory)?.isDirectory() || readdirSync(directory).length) break;
-      try { rmdirSync(directory); }
+      const info = stat(directory);
+      if (!info?.isDirectory() || readdirSync(directory).length) break;
+      try { rmdirSync(directory); onRemoved?.({ path: parent, mode: info.mode & 0o777 }); }
       catch (error) { if (['ENOENT', 'ENOTEMPTY', 'EEXIST'].includes(error.code)) break; throw error; }
       parent = portable(dirname(parent));
     }
@@ -351,8 +389,9 @@ function pruneRemovedDirectories(plan) {
   for (const root of plan.retiredRoots || []) {
     if (!adapterRoots.includes(root)) continue;
     const directory = safePath(target, root);
-    if (!stat(directory)?.isDirectory()) continue;
-    try { if (readdirSync(directory).length === 0) rmdirSync(directory); }
+    const info = stat(directory);
+    if (!info?.isDirectory()) continue;
+    try { if (readdirSync(directory).length === 0) { rmdirSync(directory); onRemoved?.({ path: root, mode: info.mode & 0o777 }); } }
     catch (error) { if (!['ENOENT', 'ENOTEMPTY', 'EEXIST'].includes(error.code)) throw error; }
   }
 }

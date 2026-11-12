@@ -232,6 +232,87 @@ test('falha ao gravar CURRENT restaura o target anterior e o pacote em uso', asy
   assert.equal(manager.check('test-tool').version, '1.0.0'); assert.ok(!existsSync(join(local, '.update-lock')));
 });
 
+test('versions simbolico existente ou quebrado e recusado antes de baixar ou escrever', async t => {
+  for (const broken of [false, true]) await t.test(broken ? 'broken' : 'existing', async subtest => {
+    const { root, manager, state, local } = fixture(subtest);
+    const outside = join(root, 'outside'); mkdirSync(outside);
+    writeFileSync(join(outside, 'keep.txt'), 'preservado'); mkdirSync(local);
+    if (!createSymlink(subtest, broken ? join(outside, 'missing') : outside, join(local, 'versions'), process.platform === 'win32' ? 'junction' : 'dir')) return;
+    for (const action of ['install', 'update']) await assert.rejects(manager[action]('test-tool'), /nao pode ser um link/);
+    assert.equal(state.fetches, 0); assert.equal(state.installs, 0);
+    assert.deepEqual(readdirSync(outside), ['keep.txt']);
+    assert.equal(readFileSync(join(outside, 'keep.txt'), 'utf8'), 'preservado');
+    assert.equal(existsSync(join(local, 'CURRENT.json')), false);
+    assert.equal(existsSync(join(local, '.update-lock')), false);
+  });
+});
+
+test('recibo CURRENT e destino de versao simbolicos nao sao seguidos nem substituidos', async t => {
+  for (const kind of ['current', 'target', 'broken-target']) await t.test(kind, async subtest => {
+    const { root, manager, state, local } = fixture(subtest); await manager.install('test-tool');
+    const receipt = readFileSync(join(local, 'CURRENT.json'));
+    const outside = join(root, 'outside'); mkdirSync(outside); writeFileSync(join(outside, 'keep.txt'), 'preservado');
+    if (kind === 'current') {
+      writeFileSync(join(outside, 'CURRENT.json'), receipt); rmSync(join(local, 'CURRENT.json'));
+      if (!createSymlink(subtest, join(outside, 'CURRENT.json'), join(local, 'CURRENT.json'))) return;
+      assert.throws(() => manager.check('test-tool'), /nao pode ser um link/);
+    } else {
+      state.version = '2.0.0';
+      if (!createSymlink(subtest, kind === 'target' ? outside : join(outside, 'missing'), join(local, 'versions', `2.0.0-${platformKey()}`), process.platform === 'win32' ? 'junction' : 'dir')) return;
+    }
+    const before = readdirSync(outside), installs = state.installs;
+    await assert.rejects(manager.update('test-tool'), /nao pode ser um link/);
+    assert.equal(state.installs, installs); assert.deepEqual(readdirSync(outside), before);
+    assert.equal(readFileSync(join(outside, 'keep.txt'), 'utf8'), 'preservado');
+    assert.deepEqual(readFileSync(kind === 'current' ? join(outside, 'CURRENT.json') : join(local, 'CURRENT.json')), receipt);
+  });
+});
+
+test('troca de versions durante fetch ou install nao escapa da arvore local', async t => {
+  for (const phase of ['fetch', 'install']) await t.test(phase, async subtest => {
+    const { root, manager, state, local } = fixture(subtest); await manager.install('test-tool');
+    const receipt = readFileSync(join(local, 'CURRENT.json')); state.version = '2.0.0';
+    const outside = join(root, 'outside'); mkdirSync(outside);
+    const probe = join(local, 'symlink-probe');
+    if (!createSymlink(subtest, outside, probe, process.platform === 'win32' ? 'junction' : 'dir')) return;
+    unlinkSync(probe);
+    const versions = join(local, 'versions'), kept = join(local, 'versions-kept'); let linked = false;
+    const replace = () => {
+      renameSync(versions, kept);
+      symlinkSync(outside, versions, process.platform === 'win32' ? 'junction' : 'dir'); linked = true;
+    };
+    if (phase === 'fetch') manager.fetchRelease = async () => { replace(); return release('2.0.0'); };
+    else manager.installPackage = (prefix, name, version) => { packageFiles(prefix, name, version); replace(); };
+    try {
+      await assert.rejects(manager.update('test-tool'), /nao pode ser um link/);
+      assert.deepEqual(readdirSync(outside), []); assert.deepEqual(readFileSync(join(local, 'CURRENT.json')), receipt);
+    } finally { if (linked) { unlinkSync(versions); renameSync(kept, versions); } }
+    assert.equal(manager.check('test-tool').version, '1.0.0');
+    assert.equal(existsSync(join(local, '.update-lock')), false);
+  });
+});
+
+test('migracao recusa links de versions antigo e cache compartilhado sem mover dados', async t => {
+  for (const kind of ['legacy-versions', 'cache']) await t.test(kind, async subtest => {
+    const { root, manager, state } = fixture(subtest);
+    const home = join(root, '.pbai4devs/tools'), legacy = join(home, 'test-tool');
+    const outside = join(root, 'outside'); mkdirSync(outside); writeFileSync(join(outside, 'keep.txt'), 'preservado');
+    if (kind === 'legacy-versions') {
+      writeFileSync(join(legacy, 'CURRENT.json'), JSON.stringify({ name: 'test-tool', version: '1.0.0', platform: platformKey() }));
+      if (!createSymlink(subtest, outside, join(legacy, 'versions'), process.platform === 'win32' ? 'junction' : 'dir')) return;
+    } else {
+      mkdirSync(join(home, 'npm-cache')); writeFileSync(join(home, 'npm-cache/keep.txt'), 'cache antigo');
+      if (!createSymlink(subtest, outside, join(home, '.cache'), process.platform === 'win32' ? 'junction' : 'dir')) return;
+    }
+    await assert.rejects(manager.install('test-tool'), /nao pode ser um link/);
+    assert.equal(state.fetches, 0); assert.equal(state.installs, 0);
+    assert.deepEqual(readdirSync(outside), ['keep.txt']);
+    assert.equal(readFileSync(join(outside, 'keep.txt'), 'utf8'), 'preservado');
+    if (kind === 'legacy-versions') assert.ok(existsSync(join(legacy, 'CURRENT.json')));
+    else assert.equal(readFileSync(join(home, 'npm-cache/keep.txt'), 'utf8'), 'cache antigo');
+  });
+});
+
 test('duas atualizacoes nao disputam a mesma ferramenta nem apagam lock alheio', async t => {
   const { manager, state, local } = fixture(t); let enter; let proceed;
   const entered = new Promise(resolve => { enter = resolve; });

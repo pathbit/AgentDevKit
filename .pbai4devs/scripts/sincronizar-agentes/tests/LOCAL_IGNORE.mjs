@@ -1,10 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import fs from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import { projectRoot } from '../../lib/runtime.mjs';
 import { planLocalIgnore, applyLocalIgnore, checkLocalIgnore, planUntrack, applyUntrack, restoreUntrack, assertLocalIgnoreUnchanged } from '../../lib/gitignore.mjs';
 
@@ -353,4 +355,146 @@ test('worktree usa a raiz nativa, exclude comum e seu próprio índice', t => {
   applyUntrack(untrack); restoreUntrack(untrack);
   assert.equal(git(linked, ['show', ':generated.md']), 'gerado\n');
   assert.equal(git(root, ['ls-files', 'generated.md']), '');
+});
+
+test('exceções com nomes arbitrários de artefatos não passam por amostragem', t => {
+  for (const [name, directory] of [['.playwright-custom', true], ['.playwright-report.json', false], ['playwright-e2e', true]]) {
+    const root = fixture(t); git(root, ['init', '-q']);
+    const human = `!/${name}${directory ? '/' : ''}\n${directory ? `!/${name}/**\n` : ''}`;
+    put(root, '.gitignore', human);
+    const before = readFileSync(join(root, '.git/info/exclude'));
+    const plan = planLocalIgnore(root);
+    assert.ok(checkLocalIgnore(plan).missing.some(path => path.startsWith(name)), name);
+    assert.throws(() => applyLocalIgnore(plan), /Regras humanas/);
+    assert.equal(readFileSync(join(root, '.gitignore'), 'utf8'), human);
+    assert.deepEqual(readFileSync(join(root, '.git/info/exclude')), before);
+  }
+});
+
+test('arquivo real reaberto por glob é detectado também se surgir após o plano', t => {
+  const root = fixture(t); git(root, ['init', '-q']);
+  put(root, '.gitignore', '!/.playwright-report-*.json\n');
+  const plan = planLocalIgnore(root), path = '.playwright-report-real.json';
+  put(root, path, 'artefato local\n');
+  assert.ok(checkLocalIgnore(plan).missing.includes(path));
+  assert.throws(() => applyLocalIgnore(plan), /Regras humanas/);
+  assert.equal(readFileSync(join(root, path), 'utf8'), 'artefato local\n');
+});
+
+test('regras customizadas aninhadas continuam válidas e incluem pais ocultos', t => {
+  const root = fixture(t); git(root, ['init', '-q']);
+  const policy = readFileSync(join(projectRoot, '.pbai4devs/templates/gitignore/agents.ignore'), 'utf8');
+  put(root, '.pbai4devs/templates/gitignore/agents.ignore', `${policy}\n**/reports/cache*/\n`);
+  const path = '.hidden/reports/cache-custom/out.json';
+  put(root, path, 'local\n');
+  put(root, '.gitignore', '!/.hidden/reports/cache-custom/\n!/.hidden/reports/cache-custom/**\n');
+  const plan = planLocalIgnore(root);
+  assert.ok(checkLocalIgnore(plan).missing.includes(path));
+  assert.throws(() => applyLocalIgnore(plan), /Regras humanas/);
+  assert.equal(readFileSync(join(root, path), 'utf8'), 'local\n');
+});
+
+test('chaves literais em padrões Git não viram expansão de glob', t => {
+  const root = fixture(t); git(root, ['init', '-q']);
+  const policy = readFileSync(join(projectRoot, '.pbai4devs/templates/gitignore/agents.ignore'), 'utf8');
+  put(root, '.pbai4devs/templates/gitignore/agents.ignore', `${policy}\n**/cache{keep,archive}/\n`);
+  put(root, 'cachekeep/source.txt', 'código humano\n');
+  put(root, '.gitignore', '!cachekeep/**\n');
+  assert.doesNotThrow(() => applyLocalIgnore(planLocalIgnore(root)));
+  assert.equal(readFileSync(join(root, 'cachekeep/source.txt'), 'utf8'), 'código humano\n');
+});
+
+test('exceção nominal de um ignore ancestral é conferida no subprojeto', t => {
+  const root = fixture(t); git(root, ['init', '-q']);
+  put(root, '.gitignore', '!/modules/app/.playwright-personal/\n!/modules/app/.playwright-personal/**\n');
+  const child = join(root, 'modules/app'); mkdirSync(child, { recursive: true });
+  const plan = planLocalIgnore(child);
+  assert.ok(checkLocalIgnore(plan).missing.some(path => path.startsWith('.playwright-personal/')));
+  assert.throws(() => applyLocalIgnore(plan), /Regras humanas/);
+});
+
+test('escrita de exclusões preserva permissões e detecta alteração concorrente', { skip: process.platform === 'win32' }, t => {
+  const root = fixture(t); git(root, ['init', '-q']);
+  const exclude = join(root, '.git/info/exclude'); chmodSync(exclude, 0o600);
+  applyLocalIgnore(planLocalIgnore(root));
+  assert.equal(statSync(exclude).mode & 0o777, 0o600);
+  const changed = planLocalIgnore(root, { outputs: ['new-generated.md'] });
+  chmodSync(exclude, 0o640);
+  assert.throws(() => applyLocalIgnore(changed), /alterada apos planejar/);
+  assert.equal(statSync(exclude).mode & 0o777, 0o640);
+});
+
+test('fallback e rollback de exclusões mantêm o modo original', { skip: process.platform === 'win32' }, t => {
+  const root = fixture(t), ignore = join(root, '.gitignore');
+  put(root, '.gitignore', '# humano\n'); chmodSync(ignore, 0o600);
+  applyLocalIgnore(planLocalIgnore(root));
+  assert.equal(statSync(ignore).mode & 0o777, 0o600);
+  const original = readFileSync(ignore); git(root, ['init', '-q']);
+  const exclude = join(root, '.git/info/exclude'), before = readFileSync(exclude);
+  chmodSync(exclude, 0o600);
+  const plan = planLocalIgnore(root); assert.equal(plan.edits.length, 2);
+  Object.defineProperty(plan.edits[1], 'after', { get() { throw new Error('injected rollback failure'); } });
+  assert.throws(() => applyLocalIgnore(plan), /injected rollback failure/);
+  assert.deepEqual(readFileSync(exclude), before); assert.equal(statSync(exclude).mode & 0o777, 0o600);
+  assert.deepEqual(readFileSync(ignore), original); assert.equal(statSync(ignore).mode & 0o777, 0o600);
+});
+
+test('rollback restaura exclusão somente leitura com escrita atômica', { skip: process.platform === 'win32' }, t => {
+  const root = fixture(t), ignore = join(root, '.gitignore');
+  put(root, '.gitignore', '# humano\n'); chmodSync(ignore, 0o444);
+  applyLocalIgnore(planLocalIgnore(root));
+  const original = readFileSync(ignore); git(root, ['init', '-q']);
+  const exclude = join(root, '.git/info/exclude'), before = readFileSync(exclude);
+  chmodSync(exclude, 0o444);
+  const plan = planLocalIgnore(root);
+  Object.defineProperty(plan.edits[1], 'after', { get() { throw new Error('readonly rollback probe'); } });
+  assert.throws(() => applyLocalIgnore(plan), /readonly rollback probe/);
+  assert.deepEqual(readFileSync(exclude), before); assert.equal(statSync(exclude).mode & 0o777, 0o444);
+  assert.deepEqual(readFileSync(ignore), original); assert.equal(statSync(ignore).mode & 0o777, 0o444);
+});
+
+test('projeto aninhado não lê gitignore inacessível do projeto irmão', { skip: process.platform === 'win32' }, t => {
+  const root = fixture(t); git(root, ['init', '-q']);
+  const other = join(root, 'other/.gitignore'); put(root, 'other/.gitignore', 'tmp/\n');
+  git(root, ['add', 'other/.gitignore']); chmodSync(other, 0o000);
+  t.after(() => { try { chmodSync(other, 0o600); } catch {} });
+  const child = join(root, 'app'); mkdirSync(child);
+  const plan = planLocalIgnore(child);
+  applyLocalIgnore(plan);
+  assert.equal(checkLocalIgnore(planLocalIgnore(child)).ok, true);
+});
+
+test('falha no cleanup após promoção ainda reverte a exclusão publicada', t => {
+  const root = fixture(t); git(root, ['init', '-q']);
+  const file = join(root, '.git/info/exclude'), original = readFileSync(file);
+  const plan = planLocalIgnore(root), remove = fs.rmSync;
+  const injected = new Error('published cleanup failure'); let failed = false;
+  try {
+    fs.rmSync = (path, options) => {
+      if (!failed && String(path).startsWith(`${file}.agentdevkit-`) && !existsSync(path)) { failed = true; throw injected; }
+      return remove(path, options);
+    };
+    syncBuiltinESMExports();
+    assert.throws(() => applyLocalIgnore(plan), error => error === injected);
+  } finally { fs.rmSync = remove; syncBuiltinESMExports(); }
+  assert.equal(failed, true);
+  assert.deepEqual(readFileSync(file), original);
+});
+
+test('falha irrecuperável de rollback informa também o erro original', t => {
+  const root = fixture(t); git(root, ['init', '-q']);
+  const file = join(root, '.git/info/exclude'), plan = planLocalIgnore(root);
+  const remove = fs.rmSync, rename = fs.renameSync;
+  const original = new Error('original cleanup failure'), rollback = new Error('restore unavailable');
+  let failed = false;
+  try {
+    fs.rmSync = (path, options) => {
+      if (!failed && String(path).startsWith(`${file}.agentdevkit-`) && !existsSync(path)) { failed = true; throw original; }
+      return remove(path, options);
+    };
+    fs.renameSync = (from, to) => { if (failed && to === file) throw rollback; return rename(from, to); };
+    syncBuiltinESMExports();
+    assert.throws(() => applyLocalIgnore(plan), error => error instanceof AggregateError
+      && error.cause === original && error.errors.includes(rollback));
+  } finally { fs.rmSync = remove; fs.renameSync = rename; syncBuiltinESMExports(); }
 });

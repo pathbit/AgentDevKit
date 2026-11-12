@@ -18,7 +18,10 @@ export function parseArgs(argv) {
   const options = { command: null, positionals: [], toolArgs: [], target: null, language: null, clients: undefined, yes: false, json: false, dryRun: false, force: false, check: false };
   for (let index = 0; index < argv.length; index++) {
     const arg = argv[index];
-    if (['--target', '--lang', '--agents', '--clients'].includes(arg)) {
+    if (arg === '--' && options.command === 'tools') {
+      options.toolArgs.push(...argv.slice(index));
+      break;
+    } else if (['--target', '--lang', '--agents', '--clients'].includes(arg)) {
       const value = argv[++index]; if (!value || value.startsWith('-')) usage(`Missing value: ${arg}`);
       if (arg === '--target') options.target = value;
       else if (arg === '--lang') { options.language = normalizeLanguage(value); if (!options.language) usage('Use --lang pt, en or es.'); }
@@ -86,11 +89,14 @@ function print(result, options, output) {
 
 export async function main(argv = process.argv.slice(2), context = {}) {
   const output = context.stdout || process.stdout, input = context.stdin || process.stdin, errorOutput = context.stderr || process.stderr;
-  let options = { json: argv.includes('--json') }, language = normalizeLanguage(argv[argv.indexOf('--lang') + 1]) || 'pt', target = resolve(context.cwd || process.cwd()), clients = ['all'];
+  const separator = argv.indexOf('--'), globalArgs = separator < 0 ? argv : argv.slice(0, separator);
+  let options = { json: globalArgs.includes('--json') }, language = normalizeLanguage(globalArgs[globalArgs.indexOf('--lang') + 1]) || 'pt', target = resolve(context.cwd || process.cwd()), clients = ['all'];
   try {
     options = parseArgs(argv);
-    target = resolveTarget(options.target || (options.command === 'init' ? options.positionals[0] : '.'), context.cwd || process.cwd());
-    const previous = ['help', 'version'].includes(options.command) ? null : loadState(target);
+    const informational = ['help', 'version'].includes(options.command);
+    target = informational ? resolve(context.cwd || process.cwd(), options.target || '.')
+      : resolveTarget(options.target || (options.command === 'init' ? options.positionals[0] : '.'), context.cwd || process.cwd());
+    const previous = informational ? null : loadState(target);
     language = options.language || previous?.language || 'pt';
     clients = options.clients ?? previous?.clients ?? ['all'];
     if (options.command === 'init' && !previous && !options.yes && !options.json && !options.dryRun && input.isTTY && output.isTTY && (!options.language || options.clients === undefined)) {

@@ -4,6 +4,15 @@ description: Alterações verificáveis por versão do AgentDevKit.
 
 # Changelog
 
+## 0.0.8 — 2026-11-11
+
+- Preservação de arquivos humanos que parecem apontamentos gerados.
+- Conflitos de ignore recusados antes das gravações e rollback revisado.
+- Permissões mantidas em atualização, backup e restauração de arquivos.
+- Caminhos simbólicos de ferramentas bloqueados antes de escrita externa.
+- Argumentos de ferramentas preservados após `--`; ajuda sem projeto válido.
+- Verificação de artefatos com nomes próprios, arquivos e regras aninhadas.
+
 ## 0.0.7 — 2026-11-11
 
 - Artefatos de testes e pastas temporárias protegidos em projetos existentes.

@@ -12,6 +12,7 @@ description: Incrementos verificáveis do AgentDevKit.
 - [v0.0.5](v0.0.5/SPEC.md): instalação pelo registro em todos os fluxos.
 - [v0.0.6](v0.0.6/SPEC.md): apresentação pública, licença e atualização segura.
 - [v0.0.7](v0.0.7/SPEC.md): projetos reais e proteção local de artefatos.
+- [v0.0.8](v0.0.8/SPEC.md): preservação, transações e validação aprofundada.
 
 Cada incremento vincula requisitos, critérios, testes e evidências locais.
 
