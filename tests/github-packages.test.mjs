@@ -40,6 +40,7 @@ const failure = code => ({ status: 1, stdout: JSON.stringify({ error: { code, su
 
 function mock(fixture, options = {}) {
   const calls = [], sleeps = [], views = [...(options.views || [null, { integrity: fixture.integrity }])];
+  const downloads = [...(options.downloads || [true])];
   const execute = async (command, args, config) => {
     const action = args[1];
     calls.push({ command, args, config });
@@ -48,6 +49,10 @@ function mock(fixture, options = {}) {
     if (action === 'view') {
       const result = views.length > 1 ? views.shift() : views[0];
       return result === null ? failure('E404') : typeof result === 'string' ? failure(result) : success(result);
+    }
+    if (action === 'cache') {
+      const result = downloads.length > 1 ? downloads.shift() : downloads[0];
+      return result === false ? failure('E404') : typeof result === 'string' ? failure(result) : typeof result === 'object' ? result : success('');
     }
     if (action === 'publish') { options.onPublish?.(); return options.publishResult || success({ id: `${packageName}@${version}` }); }
     if (action === 'exec') {
@@ -69,21 +74,23 @@ test('publica o TGZ aprovado e prova instalação pelo registry em cache novo', 
   assert.deepEqual(result.probe, { status: 'passed', version, commands: ['version', 'init', 'doctor', 'sync --check'], anonymous: true });
   assert.equal(result.url, 'https://www.npmjs.com/package/@pathbit/agentdevkit');
   assert.equal(result.authentication, 'token');
-  assert.deepEqual(m.calls.map(call => call.args[1]), ['pack', 'view', 'publish', 'view', 'exec', 'exec', 'exec', 'exec']);
+  assert.deepEqual(m.calls.map(call => call.args[1]), ['pack', 'view', 'publish', 'view', 'cache', 'exec', 'exec', 'exec', 'exec']);
   assert.deepEqual(m.calls[0].args.slice(1), ['pack', f.path, '--dry-run', '--ignore-scripts', '--json']);
   assert.deepEqual(m.calls[2].args.slice(1), ['publish', f.path, '--registry=https://registry.npmjs.org', '--access=public', '--ignore-scripts', '--json']);
-  assert.deepEqual(m.calls[4].args.slice(1), ['exec', '--yes', '--ignore-scripts', '--registry=https://registry.npmjs.org', `--package=${packageName}@${version}`, '--', 'agentdevkit', '--version', '--json']);
-  const target = join(dirname(m.calls[4].config.cwd), 'consumer');
-  assert.deepEqual(m.calls[5].args.slice(8), ['init', '--target', target, '--agents', 'codex,claude', '--lang', 'en', '--yes', '--json']);
-  assert.deepEqual(m.calls[6].args.slice(8), ['doctor', '--target', target, '--json']);
-  assert.deepEqual(m.calls[7].args.slice(8), ['sync', '--check', '--target', target, '--json']);
-  for (const call of m.calls.slice(4)) {
-    assert.equal(call.config.cwd, m.calls[4].config.cwd);
-    assert.equal(call.config.env.npm_config_cache, m.calls[4].config.env.npm_config_cache);
+  assert.deepEqual(m.calls[4].args.slice(1), ['cache', 'add', `${packageName}@${version}`, '--registry=https://registry.npmjs.org', '--ignore-scripts', '--json']);
+  assert.deepEqual(m.calls[5].args.slice(1), ['exec', '--yes', '--ignore-scripts', '--registry=https://registry.npmjs.org', `--package=${packageName}@${version}`, '--', 'agentdevkit', '--version', '--json']);
+  const target = join(dirname(m.calls[5].config.cwd), 'consumer');
+  assert.deepEqual(m.calls[6].args.slice(8), ['init', '--target', target, '--agents', 'codex,claude', '--lang', 'en', '--yes', '--json']);
+  assert.deepEqual(m.calls[7].args.slice(8), ['doctor', '--target', target, '--json']);
+  assert.deepEqual(m.calls[8].args.slice(8), ['sync', '--check', '--target', target, '--json']);
+  for (const call of m.calls.slice(5)) {
+    assert.equal(call.config.cwd, m.calls[5].config.cwd);
+    assert.equal(call.config.env.npm_config_cache, m.calls[5].config.env.npm_config_cache);
     assert.equal(call.config.shell, false);
   }
-  assert.notEqual(m.calls[0].config.env.npm_config_cache, m.calls[4].config.env.npm_config_cache);
-  assert.equal(m.calls[4].config.env.npm_config_offline, 'false');
+  assert.notEqual(m.calls[0].config.env.npm_config_cache, m.calls[5].config.env.npm_config_cache);
+  assert.notEqual(m.calls[4].config.env.npm_config_cache, m.calls[5].config.env.npm_config_cache);
+  assert.equal(m.calls[5].config.env.npm_config_offline, 'false');
   assert.ok(!existsSync(m.calls[0].config.cwd));
   assert.deepEqual(readFileSync(f.path), f.archive);
 });
@@ -94,7 +101,7 @@ test('versão já publicada com mesmos bytes é idempotente e ainda prova o cons
   const result = await publishRegistryPackage(m.options);
   assert.equal(result.status, 'skipped');
   assert.equal(result.authentication, 'not-needed');
-  assert.deepEqual(m.calls.map(call => call.args[1]), ['pack', 'view', 'exec', 'exec', 'exec', 'exec']);
+  assert.deepEqual(m.calls.map(call => call.args[1]), ['pack', 'view', 'cache', 'exec', 'exec', 'exec', 'exec']);
 });
 
 test('conflito de conteúdo nunca publica nem executa', async t => {
@@ -186,6 +193,58 @@ test('janela padrão expirada informa pendência e nunca tenta publicar novament
   assert.ok(!m.calls.some(call => call.args[1] === 'exec'));
   assert.ok(!existsSync(m.calls[0].config.cwd));
   assert.deepEqual(readFileSync(f.path), f.archive);
+});
+
+test('versão existente espera o tarball sem publicar novamente e usa cache separado', async t => {
+  const f = fixture(t), m = mock(f, { views: [{ integrity: f.integrity }], downloads: [false, false, true] });
+  const result = await publishRegistryPackage(m.options);
+  assert.equal(result.status, 'skipped');
+  assert.equal(result.authentication, 'not-needed');
+  assert.equal(m.calls.filter(call => call.args[1] === 'publish').length, 0);
+  assert.equal(m.calls.filter(call => call.args[1] === 'cache').length, 3);
+  assert.deepEqual(m.sleeps, [1, 1]);
+  const downloads = m.calls.filter(call => call.args[1] === 'cache');
+  for (const call of downloads) {
+    assert.equal(call.config.env.npm_config_cache, downloads[0].config.env.npm_config_cache);
+    assert.deepEqual(Object.keys(call.config.env).filter(key => /token|secret|password|(?:^|_)auth(?:_|$)/i.test(key)), []);
+  }
+  assert.notEqual(downloads[0].config.env.npm_config_cache, m.calls.find(call => call.args[1] === 'exec').config.env.npm_config_cache);
+});
+
+test('versão existente sem tarball usa a mesma janela padrão e reconhece E404 textual', async t => {
+  const f = fixture(t), m = mock(f, { views: [{ integrity: f.integrity }], downloads: [{ status: 1, stdout: '', stderr: `npm error code E404\n${env.NPM_TOKEN}` }] });
+  delete m.options.maxAttempts; delete m.options.pollMs;
+  let elapsed = 0; m.options.sleep = async milliseconds => { elapsed += milliseconds; };
+  await assert.rejects(publishRegistryPackage(m.options), error => {
+    assert.match(error.message, /Pacote já registrado; disponibilidade pendente/);
+    assert.match(error.message, /não republique automaticamente/);
+    assert.ok(!error.message.includes(env.NPM_TOKEN)); return true;
+  });
+  assert.equal(elapsed, 20 * 60 * 1000);
+  assert.equal(m.calls.filter(call => call.args[1] === 'cache').length, 121);
+  assert.equal(m.calls.filter(call => call.args[1] === 'view').length, 121);
+  assert.equal(m.calls.filter(call => call.args[1] === 'publish').length, 0);
+  assert.ok(!m.calls.some(call => call.args[1] === 'exec'));
+  assert.ok(!existsSync(m.calls[0].config.cwd));
+});
+
+test('atraso de metadata e tarball compartilha tentativas após uma publicação', async t => {
+  const f = fixture(t), m = mock(f, { views: [null, null, { integrity: f.integrity }], downloads: [false, true] });
+  assert.equal((await publishRegistryPackage(m.options)).status, 'published');
+  assert.deepEqual(m.sleeps, [1, 1]);
+  assert.equal(m.calls.filter(call => call.args[1] === 'view').length, 4);
+  assert.equal(m.calls.filter(call => call.args[1] === 'cache').length, 2);
+  assert.equal(m.calls.filter(call => call.args[1] === 'publish').length, 1);
+});
+
+test('erro textual diferente de E404 no download interrompe sem expor credenciais', async t => {
+  const f = fixture(t), m = mock(f, { views: [{ integrity: f.integrity }], downloads: [{ status: 1, stdout: '', stderr: `npm ERR! code E403\n${env.NPM_TOKEN}` }] });
+  await assert.rejects(publishRegistryPackage(m.options), error => {
+    assert.match(error.message, /npm cache falhou \(E403\)/);
+    assert.ok(!error.message.includes(env.NPM_TOKEN)); return true;
+  });
+  assert.deepEqual(m.sleeps, []);
+  assert.ok(!m.calls.some(call => ['publish', 'exec'].includes(call.args[1])));
 });
 
 test('falha de publicação ou integridade pós-publicação interrompe a prova de execução', async t => {

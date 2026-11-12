@@ -19,7 +19,8 @@ function json(text) {
 
 function npmError(result) {
   const error = json(result.stdout)?.error || json(result.stderr)?.error;
-  return /^[A-Z][A-Z0-9_]+$/.test(error?.code || '') ? error.code : 'UNKNOWN';
+  if (/^[A-Z][A-Z0-9_]+$/.test(error?.code || '')) return error.code;
+  return `${result.stdout || ''}\n${result.stderr || ''}`.match(/\bnpm (?:error|ERR!) code (E[A-Z0-9_]+)\b/)?.[1] || 'UNKNOWN';
 }
 
 function sameIntegrity(value, expected) {
@@ -119,15 +120,20 @@ export async function publishRegistryPackage({ directory, resolution, env = proc
       authentication = oidc ? 'oidc' : 'token';
       assertArchive();
       await invoke(['publish', archivePath, `--registry=${registry}`, '--access=public', '--ignore-scripts', '--json'], { environment: publishing });
-      let visible = false;
-      // npm scans accepted publications before availability; this can take 15+ minutes.
-      // https://github.blog/changelog/2026-07-28-npm-publish-time-malware-scanning-and-dual-use-metadata/
-      for (let attempt = 0; attempt < maxAttempts; attempt++) {
-        if (await lookup()) { visible = true; break; }
-        if (attempt + 1 < maxAttempts) await sleep(pollMs);
-      }
-      if (!visible) invalid(`Publicação aceita; disponibilidade pendente para ${spec}. Confira o status no npm e consulte a mesma versão; não republique automaticamente.`);
     }
+    let available = false;
+    const availabilityCache = join(temporary, 'availability-cache');
+    // Metadata can appear before the tarball. Both share one availability window.
+    // https://github.blog/changelog/2026-07-28-npm-publish-time-malware-scanning-and-dual-use-metadata/
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const metadata = attempt === 0 && existing ? existing : await lookup();
+      if (metadata && await invoke(['cache', 'add', spec, `--registry=${registry}`, '--ignore-scripts', '--json'], { cache: availabilityCache, allowMissing: true }) !== null) {
+        available = true;
+        break;
+      }
+      if (attempt + 1 < maxAttempts) await sleep(pollMs);
+    }
+    if (!available) invalid(`${existing ? 'Pacote já registrado' : 'Publicação aceita'}; disponibilidade pendente para ${spec}. Confira o status no npm e consulte a mesma versão; não republique automaticamente.`);
     const probe = join(temporary, 'probe');
     const consumer = join(temporary, 'consumer');
     const cache = join(temporary, 'probe-cache');
