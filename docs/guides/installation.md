@@ -44,10 +44,13 @@ Sem escolha explícita ou salva, `all` mantém todos os clientes compatíveis.
 | Índices, manifesto e seleção pessoal | Derivados locais ignorados. |
 | Código, documentos e configurações humanas | Preservados. |
 | Downloads e resultados de testes | Locais e ignorados. |
+| `.pbai4devs/LICENSE` | Licença MIT do kit, copiada do pacote. |
 
 O gerador completo permanece no pacote npm. Ele não copia `bin/`, `src/`,
 `scripts/release/` ou os testes do produto para o projeto atendido.
 Instalar o kit não inicia uma aplicação nem instala todas as ferramentas.
+A licença existente na raiz do projeto não é substituída. A cópia do hub
+identifica a licença dos recursos do AgentDevKit, sem redefinir a do projeto.
 
 ## Git e migração
 
@@ -69,10 +72,15 @@ continua válida; `agents` consulta e `agents codex,claude` altera a seleção.
 `agents all` habilita todos. As pastas compartilhadas permanecem quando
 necessárias para outro cliente, como `.agents` para Codex e Antigravity.
 
+Confira a simulação antes de atualizar um projeto existente. Arquivos
+gerenciados alterados geram conflito; use `--force` somente após revisar o
+backup e o conteúdo que será substituído. Preserve os dados locais, as
+configurações próprias e os commits do projeto.
+
 O [fluxo de trabalho](workflow.md) orienta a próxima etapa do projeto.
 Se houver erro, consulte [solução de problemas](troubleshooting.md).
 
-[Wiki](../README.md) · [Release 0.0.5][release]
+[Wiki](../README.md) · [Spec v0.0.6][spec]
 
 [bootstrap]: ../../.pbai4devs/scripts/preparar-ferramentas/BOOTSTRAP.md
-[release]: https://github.com/pathbit/AgentDevKit/releases/tag/v0.0.5
+[spec]: ../specs/v0.0.6/SPEC.md

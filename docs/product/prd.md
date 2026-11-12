@@ -1,7 +1,7 @@
 ---
 description: Requisitos da distribuição portátil AgentDevKit.
 status: aprovado
-version: 0.0.5
+version: 0.0.6
 ---
 
 # PRD do AgentDevKit
@@ -37,6 +37,9 @@ extraído do projeto de origem como produto independente.
 | FR-015 | Publicar no npm público, instalável via npx sem autenticação. |
 | FR-016 | Organizar código e testes em `src/` e `tests/`, na raiz. |
 | FR-017 | Gerar exemplos isolados e acessíveis por comandos documentados. |
+| FR-018 | Publicar autoria PathBit, palavras-chave e licença MIT no npm. |
+| FR-019 | Exibir README legível no npm sem alterar o Markdown fonte. |
+| FR-020 | Levar a licença do kit ao hub sem alterar a licença do projeto. |
 
 Execuções repetidas devem ser idempotentes; a CLI oferece simulação e JSON.
 As instruções permanecem concisas, com detalhes opcionais em referências.
@@ -54,6 +57,8 @@ A entrega exige testes de projeto vazio e existente, preservação de arquivos,
 atualização, idiomas, catálogos e distribuição sem artefatos locais.
 Os aceites da distribuição ficam na [spec inicial](../specs/v0.0.1/SPEC.md);
 a [spec de seleção](../specs/v0.0.2/SPEC.md) detalha a instalação por agente.
+A [spec v0.0.6](../specs/v0.0.6/SPEC.md) trata a apresentação pública, a licença
+distribuída e a atualização verificada do projeto de origem.
 
 ## Autorização
 
@@ -61,4 +66,5 @@ Escopo autorizado pela solicitação explícita de criação do AgentDevKit.
 Este estado registra requisitos aceitos; testes e publicação têm validação
 própria e não são considerados concluídos por esta aprovação.
 
-[Wiki](../README.md) · [Design](design.md) · [Fluxo de uso](../guides/workflow.md)
+[Wiki](../README.md) · [Design](design.md) ·
+[Fluxo de uso](../guides/workflow.md)

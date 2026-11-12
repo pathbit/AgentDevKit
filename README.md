@@ -7,6 +7,8 @@ language: pt
 
 [English](README.en.md) · [Español](README.es.md) · [Pacote npm][npm-package]
 
+[![npm][npm-badge]][npm-package] [![MIT][license-badge]](LICENSE)
+
 Uma forma de organizar o trabalho com agentes de código, do planejamento à
 verificação. Você mantém skills, regras, comandos e perfis em `.pbai4devs`;
 o kit gera os apontamentos que cada cliente sabe encontrar.
@@ -35,7 +37,7 @@ Depois, abra o projeto no seu agente e peça:
 
 Windows, instalação sem Node, simulação e atualização estão no
 [guia de instalação](docs/guides/installation.md). A distribuição usa a
-versão publicada no [npm público][packages] e na [release v0.0.5][release],
+versão publicada no [npm público][packages] e na [release v0.0.6][release],
 sem instalação global. Instalação e atualização usam o pacote do registro;
 os arquivos da release servem para conferir os artefatos publicados.
 O idioma da CLI pode ser `pt`, `en` ou `es`.
@@ -72,7 +74,14 @@ Instalar o kit prepara instruções. As ferramentas são instaladas por uma aç�
 separada; PRD, design e specs surgem quando você inicia o planejamento.
 Projetos existentes preservam seu código e suas decisões.
 
-[Changelog](CHANGELOG.md) · [Roadmap](docs/product/roadmap.md) · [Licença MIT](LICENSE)
+## Licença e autoria
+
+Mantido pela [PathBit](https://www.pathbit.com.br),
+sob a licença [MIT](LICENSE).
+A instalação inclui a licença do kit em `.pbai4devs/LICENSE` e preserva
+a licença e os arquivos próprios do seu projeto.
+
+[Changelog](CHANGELOG.md) · [Roadmap](docs/product/roadmap.md)
 
 Encontrou um problema ou tem uma ideia? [Abra uma issue][issues] pelos
 [formulários de contribuição](docs/maintainers/community.md).
@@ -85,5 +94,7 @@ ao seu agente para ler `AGENTS.md`.
 [help]: docs/guides/troubleshooting.md
 [issues]: https://github.com/pathbit/AgentDevKit/issues/new/choose
 [packages]: docs/maintainers/packages.md
-[release]: https://github.com/pathbit/AgentDevKit/releases/tag/v0.0.5
+[release]: https://github.com/pathbit/AgentDevKit/releases/tag/v0.0.6
 [npm-package]: https://www.npmjs.com/package/@pathbit/agentdevkit
+[npm-badge]: https://img.shields.io/npm/v/%40pathbit%2Fagentdevkit
+[license-badge]: https://img.shields.io/badge/license-MIT-blue

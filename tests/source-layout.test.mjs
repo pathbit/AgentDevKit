@@ -38,6 +38,56 @@ test('consumidor recebe recursos sem código do gerador e preserva entrada human
   assert.equal(spawnSync('git', ['-C', root, 'check-ignore', '-q', 'CLAUDE.md']).status, 0);
 });
 
+test('init transporta licença canônica sem alterar licença humana e sync a preserva', t => {
+  const root = fixture(t), canonical = readFileSync(join(project, 'LICENSE'));
+  const human = Buffer.from('Licença exclusiva deste projeto.\r\n');
+  write(root, 'LICENSE', human);
+  const preview = cli(root, ['init', '--agents', 'claude', '--dry-run']);
+  assert.ok(preview.plan.some(change => change.path === '.pbai4devs/LICENSE' && change.action === 'create'));
+  assert.equal(existsSync(join(root, '.pbai4devs/LICENSE')), false);
+  cli(root, ['init', '--agents', 'claude']);
+  assert.deepEqual(readFileSync(join(root, '.pbai4devs/LICENSE')), canonical);
+  assert.deepEqual(readFileSync(join(root, 'LICENSE')), human);
+  assert.equal(JSON.parse(read(root, statePath)).files['.pbai4devs/LICENSE'], hash(canonical));
+  for (const args of [['sync'], ['update'], ['doctor']]) assert.equal(cli(root, args).ok, true);
+  const synced = spawnSync(process.execPath, [join(root, '.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs')], { cwd: root, encoding: 'utf8' });
+  assert.equal(synced.status, 0, synced.stdout + synced.stderr);
+  assert.deepEqual(readFileSync(join(root, '.pbai4devs/LICENSE')), canonical);
+  assert.deepEqual(readFileSync(join(root, 'LICENSE')), human);
+  assert.equal(spawnSync('git', ['-C', root, 'check-ignore', '--no-index', '-q', '.pbai4devs/LICENSE']).status, 1);
+});
+
+test('update acrescenta licença em instalação anterior e detecta alteração posterior', t => {
+  const root = fixture(t), licensePath = '.pbai4devs/LICENSE', canonical = readFileSync(join(project, 'LICENSE'));
+  cli(root, ['init', '--agents', 'claude']);
+  const old = JSON.parse(read(root, statePath)); delete old.files[licensePath];
+  write(root, statePath, JSON.stringify(old)); rmSync(join(root, licensePath));
+  cli(root, ['update']);
+  assert.deepEqual(readFileSync(join(root, licensePath)), canonical);
+  assert.equal(JSON.parse(read(root, statePath)).files[licensePath], hash(canonical));
+  const edited = Buffer.concat([canonical, Buffer.from('\nEdição humana.\n')]);
+  write(root, licensePath, edited);
+  const doctor = cli(root, ['doctor'], 1);
+  assert.ok(doctor.issues.some(issue => issue.code === 'modified' && issue.path === licensePath));
+  const blocked = cli(root, ['update'], 1);
+  assert.ok(blocked.conflicts.includes(licensePath));
+  assert.deepEqual(readFileSync(join(root, licensePath)), edited);
+});
+
+test('licença própria dentro do hub gera conflito e force guarda backup sem tocar raiz', t => {
+  const root = fixture(t), licensePath = '.pbai4devs/LICENSE';
+  const rootLicense = 'Licença do produto.\n', hubLicense = 'Licença humana existente.\r\n';
+  write(root, 'LICENSE', rootLicense); write(root, licensePath, hubLicense);
+  const blocked = cli(root, ['init', '--agents', 'claude'], 1);
+  assert.ok(blocked.conflicts.includes(licensePath));
+  assert.equal(read(root, licensePath), hubLicense); assert.equal(read(root, 'LICENSE'), rootLicense);
+  assert.equal(existsSync(join(root, statePath)), false);
+  const applied = cli(root, ['init', '--agents', 'claude', '--force']);
+  assert.equal(read(root, 'LICENSE'), rootLicense);
+  assert.deepEqual(readFileSync(join(root, licensePath)), readFileSync(join(project, 'LICENSE')));
+  assert.equal(read(root, `${applied.backup}/${licensePath}`), hubLicense);
+});
+
 test('update desindexa somente derivados comprovados e mantém fontes e estágio humano', t => {
   const root = fixture(t); cli(root, ['init', '--agents', 'claude']);
   const derived = '.claude/skills/configurar-projeto/SKILL.md';

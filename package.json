@@ -1,12 +1,13 @@
 {
   "name": "@pathbit/agentdevkit",
-  "version": "0.0.5",
-  "description": "PathBit AgentDevKit: specs, skills and workflows for coding agents.",
+  "version": "0.0.6",
+  "description": "Shared skills, specifications and workflows for AI coding agents.",
   "type": "module",
   "license": "MIT",
   "publishConfig": {
     "registry": "https://registry.npmjs.org",
-    "access": "public"
+    "access": "public",
+    "tag": "latest"
   },
   "repository": {
     "type": "git",
@@ -50,5 +51,19 @@
     "ci:full": "node scripts/release/pipeline.mjs full",
     "ci:portable": "node scripts/release/pipeline.mjs portable",
     "ci:smoke": "node scripts/release/pipeline.mjs smoke"
-  }
+  },
+  "author": {
+    "name": "PathBit",
+    "url": "https://www.pathbit.com.br"
+  },
+  "keywords": [
+    "ai",
+    "coding-agents",
+    "agent-skills",
+    "spec-driven-development",
+    "developer-tools",
+    "codex",
+    "claude-code",
+    "github-copilot"
+  ]
 }

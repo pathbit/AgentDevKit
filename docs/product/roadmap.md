@@ -13,11 +13,12 @@ status: vigente
 | Release v0.0.1 | Aceites e revisão | Pacote versionado e changelog. |
 | Seleção de agentes v0.0.2 | CLI e adaptadores | [Spec][selection]. |
 | Fontes e geração local v0.0.3 | Seleção e distribuição | [Spec][source]. |
-| Pacote npm no GitHub Packages | Artefato aprovado da release | [Spec][packages]. |
+| Pacote no GitHub Packages | Artefato aprovado | [Spec][packages]. |
 | Estrutura e exemplos v0.0.4 | CLI, distribuição e gerador | [Spec][layout]. |
 | Instalação pelo registro v0.0.5 | Pacote publicado | [Spec][registry]. |
+| Apresentação e licença v0.0.6 | Distribuição e atualização | [Spec][public]. |
 
-A primeira entrega segue a [spec v0.0.1](../specs/v0.0.1/SPEC.md) e está disponível
+A primeira entrega segue a [spec v0.0.1](../specs/v0.0.1/SPEC.md), disponível
 na [release v0.0.1][release]. Os detalhes de mudanças estão no
 [changelog](../../CHANGELOG.md), e o processo de publicação em
 [manutenção](../maintainers/maintenance.md).
@@ -34,3 +35,4 @@ comportamento existente, sem alterar a versão de uma release já publicada.
 [packages]: ../specs/github-packages/SPEC.md
 [layout]: ../specs/v0.0.4/SPEC.md
 [registry]: ../specs/v0.0.5/SPEC.md
+[public]: ../specs/v0.0.6/SPEC.md

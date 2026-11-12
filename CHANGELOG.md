@@ -4,6 +4,13 @@ description: Alterações verificáveis por versão do AgentDevKit.
 
 # Changelog
 
+## 0.0.6 — 2026-11-11
+
+- Metadados npm com autoria PathBit, palavras-chave e licença MIT.
+- README público sem frontmatter, com links absolutos para o GitHub.
+- Licença canônica instalada no hub, preservando a licença do consumidor.
+- Verificação de versão estável, consumo anônimo e atualização do router.
+
 ## 0.0.5 — 2026-11-11
 
 - Documentação organizada em guias, produto e manutenção, com índices próprios.

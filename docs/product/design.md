@@ -39,6 +39,11 @@ as automações de release ou os testes exclusivos do produto. Os layouts dos
 clientes vêm da [configuração declarativa][clients]. Os arquivos nativos são
 pequenos apontamentos para o hub, sem symlinks.
 
+O `LICENSE` da raiz do pacote é a fonte canônica da licença MIT do kit.
+`init` e `update` copiam seus bytes para `.pbai4devs/LICENSE`; a licença da raiz
+do projeto consumidor permanece intacta. Alterações na licença gerenciada
+seguem a mesma proteção de conflitos e backup dos demais arquivos do hub.
+
 A escolha salva determina as derivações. Atualizações e sincronizações não
 reativam clientes desmarcados. `all` preserva a intenção de usar todos; estados
 antigos sem escolha explícita mantêm esse comportamento.
@@ -73,6 +78,11 @@ Sem Node, o agente usa primeiro o instalador nativo do sistema operacional.
 O CI separa a suíte completa dos testes de portabilidade. A publicação usa um
 artifact aprovado do mesmo commit e verifica versão, origem e checksum.
 Não há novo empacotamento entre teste e publicação.
+
+Antes de empacotar, o estágio de distribuição deriva o README público da
+fonte: remove o frontmatter YAML e resolve links locais para URLs absolutas
+do GitHub. O README versionado mantém seu YAML e seus links de trabalho.
+O pacote identifica PathBit como autor, inclui palavras-chave e declara MIT.
 
 O npm público recebe o mesmo tarball da release, como `@pathbit/agentdevkit`.
 O workflow prioriza o secret `NPMJS_TOKEN` do repositório, recebido pela

@@ -8,6 +8,13 @@ O AgentDevKit é um único pacote: [`@pathbit/agentdevkit`][package]. Ele conté
 a CLI e os recursos compartilhados; a instalação prepara os apontamentos dos
 agentes escolhidos no projeto.
 
+Os metadados identificam PathBit como autor, palavras-chave do kit e licença
+MIT. O README público é gerado sem frontmatter e com links absolutos do GitHub;
+a fonte versionada conserva o YAML. O `LICENSE` canônico acompanha o pacote e
+é instalado em `.pbai4devs/LICENSE`, sem alterar a licença do consumidor.
+Ferramentas de terceiros baixadas à parte mantêm suas próprias licenças e
+não integram o TGZ do AgentDevKit.
+
 ## Instalar no projeto
 
 Com Node.js 18+ e npm, execute na pasta do projeto. Não é necessário login:
@@ -16,7 +23,7 @@ Com Node.js 18+ e npm, execute na pasta do projeto. Não é necessário login:
 npx @pathbit/agentdevkit init
 ```
 
-Para fixar a versão, use `npx @pathbit/agentdevkit@0.0.5 init`.
+Para repetir uma instalação, fixe a versão desejada após o nome do pacote.
 
 Acrescente `--agents codex,claude` para selecionar clientes, `--dry-run` para
 simular ou use `update`, `doctor` e `sync --check` no lugar de `init`.
@@ -57,13 +64,17 @@ existir; a primeira publicação pode usar o secret `NPMJS_TOKEN`.
 Para publicar somente o pacote de uma tag que já tem artefato aprovado:
 
 ```console
-gh workflow run release.yml --ref master -f tag=v0.0.5 -F package_only=true
+gh workflow run release.yml --ref master -f tag=v0.0.6 -F package_only=true
 ```
 
 Se o artefato expirou, reexecute o CI original da tag antes da publicação.
 Depois do envio, o job usa um ambiente sem credenciais e cache novo para
 executar `--version`, `init`, `doctor` e `sync --check` pelo nome e versão
 publicados. Assim, a verificação comprova o acesso de um usuário comum.
+Confirme também que `latest` aponta para a versão estável e que o tarball é
+baixável; metadados visíveis sozinhos não comprovam uma instalação funcional.
+Se o registro ainda não disponibilizar o pacote, aguarde a verificação sem
+republicar automaticamente a mesma versão.
 
 As versões antigas no [GitHub Packages][legacy] permanecem disponíveis;
 o canal de instalação padrão é o npm público.

@@ -52,7 +52,7 @@ export function safePath(root, path) {
 function resourceAllowed(path, directory = false) {
   const parts = path.split('/');
   const folders = new Set(['agents', 'commands', 'external-skills', 'rules', 'scripts', 'skills', 'templates', 'tools', 'estado']);
-  const files = new Set(['README.md', 'INSTRUCTIONS.md', 'COMPATIBILIDADE.md', '.gitignore']);
+  const files = new Set(['README.md', 'INSTRUCTIONS.md', 'COMPATIBILIDADE.md', 'LICENSE', '.gitignore']);
   if (!folders.has(parts[0]) && !(parts.length === 1 && files.has(parts[0]))) return false;
   if (parts[0] === 'estado') return directory && parts.length === 1 || path === 'estado/README.md';
   if (isGeneratedOutput(path, directory) || parts.some(part => ignored.has(part)) || parts[0] === 'adapters' || path === 'estado/agentdevkit.json' || path === '.npmignore') return false;
@@ -178,6 +178,12 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
   try {
     const existing = copyResources(join(target, '.pbai4devs'), join(stage, '.pbai4devs'));
     const bundled = mode === 'init' || mode === 'update' ? copyResources(join(packageRoot, '.pbai4devs'), join(stage, '.pbai4devs')) : [];
+    if (mode === 'init' || mode === 'update') {
+      const license = read(packageRoot, 'LICENSE');
+      if (!license?.length) fail('E_LICENSE', 'The AgentDevKit package is missing its LICENSE.');
+      write(stage, '.pbai4devs/LICENSE', license);
+      bundled.push('LICENSE');
+    }
     const supplied = new Set(bundled);
     const internal = new Set(['catalog.json', 'skills.json', 'agents.json', 'rules.json', 'espelhos.conf', '.gitignore', 'estado/README.md']);
     if (bundled.length) for (const path of Object.keys(previous?.files || {})) {

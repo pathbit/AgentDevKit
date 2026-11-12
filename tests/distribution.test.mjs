@@ -38,7 +38,7 @@ test('pacote real instala, preserva projetos e oferece próximos passos', { time
   t.after(() => { try { verifyArtifact?.(); } finally { rmSync(work, { recursive: true, force: true }); } });
   const stage = join(work, 'package'); mkdirSync(stage);
   const packageJson = json(join(root, 'package.json'));
-  const sourceFiles = [...packageJson.files, 'package.json'];
+  const sourceFiles = [...packageJson.files, 'package.json', 'LICENSE'];
   for (const relative of sourceFiles) {
     const source = join(root, relative);
     if (!existsSync(source)) continue;
@@ -80,6 +80,7 @@ test('pacote real instala, preserva projetos e oferece próximos passos', { time
   };
   assert.ok(packed.files.some(file => file.path === 'bin/agentdevkit.mjs'));
   assert.ok(packed.files.some(file => file.path === 'src/cli.mjs'));
+  assert.ok(packed.files.some(file => file.path === 'LICENSE'));
   assert.ok(packed.files.some(file => file.path === '.pbai4devs/skills/projeto/proximos-passos/SKILL.md'));
   for (const file of packed.files) {
     assert.doesNotMatch(file.path, /(?:^|\/)(?:\.local|\.cache|node_modules|\.agent-tests|tmp|temp)(?:\/|$)/, file.path);
@@ -92,6 +93,8 @@ test('pacote real instala, preserva projetos e oferece próximos passos', { time
   const packageRoot = join(installed, 'node_modules', ...packageJson.name.split('/'));
   const bin = join(packageRoot, 'bin/agentdevkit.mjs');
   assert.ok(existsSync(bin));
+  const canonicalLicense = readFileSync(join(packageRoot, 'LICENSE'));
+  assert.deepEqual(canonicalLicense, readFileSync(join(root, 'LICENSE')));
   for (const relative of readdirSync(packageRoot, { recursive: true })) {
     const file = relative.split(sep).join('/');
     assert.doesNotMatch(file, /(?:^|\/)(?:\.local|\.cache|node_modules|\.agent-tests|tmp|temp)(?:\/|$)/, file);
@@ -124,6 +127,8 @@ test('pacote real instala, preserva projetos e oferece próximos passos', { time
     assert.equal(first.language, 'en'); assert.equal(first.ok, true);
     assert.equal(json(join(target, '.pbai4devs/estado/agentdevkit.json')).language, 'en');
     assert.ok(existsSync(join(target, '.pbai4devs/skills/projeto/proximos-passos/SKILL.md')));
+    assert.deepEqual(readFileSync(join(target, '.pbai4devs/LICENSE')), canonicalLicense);
+    assert.equal(json(join(target, '.pbai4devs/estado/agentdevkit.json')).files['.pbai4devs/LICENSE'], digest(join(target, '.pbai4devs/LICENSE')));
     assert.equal(existsSync(join(target, 'docs')), false);
     for (const folder of ['src', 'bin', 'tests', 'scripts', 'examples']) assert.equal(existsSync(join(target, folder)), false, folder);
     for (const relative of localOnly) assert.equal(existsSync(join(target, relative)), false, relative);
@@ -138,7 +143,7 @@ test('pacote real instala, preserva projetos e oferece próximos passos', { time
 
   await subtest('projeto existente preserva código, instruções e configurações próprias', () => {
     const target = join(work, 'projeto existente');
-    const sentinels = ['src/app.mjs', 'tests/app.test.mjs', 'bin/custom.mjs', 'README.md', '.vscode/settings.json', '.github/workflows/ci.yml', '.claude/skills/custom/SKILL.md', '.env', '.pbai4devs/tools/agent-browser/.local/state.json', '.pbai4devs/tools/.cache/keep.bin'];
+    const sentinels = ['src/app.mjs', 'tests/app.test.mjs', 'bin/custom.mjs', 'README.md', 'LICENSE', '.vscode/settings.json', '.github/workflows/ci.yml', '.claude/skills/custom/SKILL.md', '.env', '.pbai4devs/tools/agent-browser/.local/state.json', '.pbai4devs/tools/.cache/keep.bin'];
     for (const relative of sentinels) write(join(target, relative), `USER_OWNED:${relative}\n`);
     write(join(target, '.vscode/settings.json'), '{"editor.wordWrap":"on"}\n');
     write(join(target, '.github/workflows/ci.yml'), 'name: Meu CI\non: push\njobs: {}\n');
@@ -152,6 +157,7 @@ test('pacote real instala, preserva projetos e oferece próximos passos', { time
     const result = cli(['init', '--target', target, '--yes']);
     assert.equal(result.language, 'pt');
     cli(['update', '--target', target, '--yes']);
+    assert.deepEqual(readFileSync(join(target, '.pbai4devs/LICENSE')), canonicalLicense);
     assert.equal(existsSync(join(target, legacy)), false, 'A pasta da ponte legada deve ser removida quando ficar vazia.');
     assert.ok(existsSync(ownEmpty), 'A pasta vazia própria deve permanecer.');
     for (const relative of sentinels) assert.equal(digest(join(target, relative)), before[relative], relative);
@@ -186,6 +192,8 @@ test('pacote real instala, preserva projetos e oferece próximos passos', { time
     write(join(stage, 'package.json'), JSON.stringify(nextPackage));
     const nextSource = readFileSync(join(stage, '.pbai4devs/README.md'), 'utf8') + '\nNova versão da fixture.\n';
     write(join(stage, '.pbai4devs/README.md'), nextSource);
+    const nextLicense = Buffer.concat([canonicalLicense, Buffer.from('\nAdditional notice in the new release fixture.\n')]);
+    write(join(stage, 'LICENSE'), nextLicense);
     const upgrade = JSON.parse(runNpm(['pack', '--json', '--ignore-scripts', '--pack-destination', work]))[0];
     const upgradeRoot = join(work, 'upgrade-installed');
     runNpm(['install', '--offline', '--ignore-scripts', '--no-audit', '--no-fund', '--prefix', upgradeRoot, join(work, upgrade.filename)], work);
@@ -194,6 +202,7 @@ test('pacote real instala, preserva projetos e oferece próximos passos', { time
     assert.equal(result.version, nextVersion);
     assert.equal(readFileSync(join(target, '.pbai4devs/README.md'), 'utf8'), nextSource);
     assert.equal(digest(join(target, '.claude/skills/custom/SKILL.md')), customHash);
+    assert.deepEqual(readFileSync(join(target, '.pbai4devs/LICENSE')), nextLicense);
   });
 
   await subtest('target simbólico não redireciona a instalação', context => {

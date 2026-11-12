@@ -33,10 +33,13 @@ Somente `SKILL.md`, `AGENT.md`, `COMMAND.md` e `RULE.md` em suas pastas
 têm apontamentos nas ferramentas. A origem é agrupada; os destinos usam o
 layout registrado. Veja a [compatibilidade](COMPATIBILIDADE.md) dos clientes.
 Recursos auxiliares e guias ficam exclusivamente em `.pbai4devs`.
+A licença do kit fica em `LICENSE` dentro deste hub após `init` ou `update`.
+Ela vem do pacote e não substitui a licença do projeto consumidor.
 Os testes das automações ficam em `scripts/<nome>/tests/`; seus resultados são
 ignorados em `.agent-tests/`.
 O `.gitignore` desta pasta controla sua árvore. As saídas nos clientes são
-protegidas por regras locais geradas dos [modelos](templates/gitignore/TEMPLATE.md).
+protegidas por regras locais geradas dos
+[modelos](templates/gitignore/TEMPLATE.md).
 Um `.gitignore` não consegue ignorar irmãos com `../`; o gerador usa o local
 correto do Git e preserva configurações humanas.
 Os modelos acompanham cada fase. Após implementar, use `atualizar-documentacao`
