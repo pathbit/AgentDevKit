@@ -68,6 +68,92 @@ test('check identifica negação humana e outputs rastreados sem alterar o índi
   assert.equal(git(root, ['ls-files', 'generated.md']).trim(), 'generated.md');
 });
 
+test('negação genérica de cache preserva regras humanas e protege caches de clientes', t => {
+  const root = fixture(t); git(root, ['init', '-q']);
+  git(root, ['config', 'core.ignorecase', 'false']);
+  const original = '# Regras do projeto\n!*.[Cc]ache/\n';
+  put(root, '.gitignore', original); git(root, ['add', '.gitignore']);
+  const index = git(root, ['ls-files', '--stage', '-z']);
+  const plan = planLocalIgnore(root);
+  assert.equal(readFileSync(join(root, '.gitignore'), 'utf8'), original);
+  assert.equal(existsSync(join(root, '.cursor')), false);
+  applyLocalIgnore(plan);
+  const updated = readFileSync(join(root, '.gitignore'), 'utf8');
+  assert.ok(updated.startsWith(original));
+  assert.equal(git(root, ['ls-files', '--stage', '-z']), index);
+  assert.equal(existsSync(join(root, '.cursor')), false);
+  assert.equal(checkLocalIgnore(planLocalIgnore(root)).ok, true);
+  put(root, '.cursor/.CACHE/private.json', 'local');
+  put(root, '.cursor/.cache/private.json', 'local');
+  put(root, '.cursor/human.md', 'human');
+  assert.ok(git(root, ['check-ignore', '--no-index', '.cursor/.CACHE/private.json']).includes('.cursor/.CACHE/private.json'));
+  assert.ok(git(root, ['check-ignore', '--no-index', '.cursor/.cache/private.json']).includes('.cursor/.cache/private.json'));
+  const visible = spawnSync('git', ['-C', root, 'check-ignore', '--no-index', '-q', '.cursor/human.md']);
+  assert.equal(visible.status, 1);
+  applyLocalIgnore(planLocalIgnore(root));
+  assert.equal(readFileSync(join(root, '.gitignore'), 'utf8'), updated);
+  put(root, '.gitignore', updated + '# edição humana posterior\n');
+  assert.equal(checkLocalIgnore(planLocalIgnore(root)).ok, true);
+});
+
+test('bloco privado modificado é preservado e recusa atualização', t => {
+  const root = fixture(t); git(root, ['init', '-q']);
+  put(root, '.gitignore', '!*.[Cc]ache/\n');
+  applyLocalIgnore(planLocalIgnore(root));
+  const path = join(root, '.gitignore');
+  const changed = readFileSync(path, 'utf8').replace('# Estado local', '# Estado alterado');
+  // Alter a concrete managed rule, even if the template has no heading here.
+  const edited = changed.replace('/.cursor/', '/.cursor-alterado/');
+  assert.notEqual(edited, readFileSync(path, 'utf8'));
+  writeFileSync(path, edited);
+  assert.throws(() => planLocalIgnore(root), /Bloco privado AgentDevKit alterado/);
+  assert.equal(readFileSync(path, 'utf8'), edited);
+});
+
+test('negação com caixa mista não expõe cache em Git sensível a maiúsculas', t => {
+  const root = fixture(t); git(root, ['init', '-q']);
+  git(root, ['config', 'core.ignorecase', 'false']);
+  put(root, '.gitignore', '!*.CaChE/\n');
+  put(root, '.cursor/.CaChE/private.json', 'local');
+  applyLocalIgnore(planLocalIgnore(root));
+  assert.equal(checkLocalIgnore(planLocalIgnore(root)).ok, true);
+  assert.ok(git(root, ['check-ignore', '--no-index', '.cursor/.CaChE/private.json']).includes('.cursor/.CaChE/private.json'));
+});
+
+test('negações literais e com caixa mista não expõem estado privado', t => {
+  const root = fixture(t); git(root, ['init', '-q']);
+  git(root, ['config', 'core.ignorecase', 'false']);
+  put(root, '.gitignore', '!*.LoCaL/\n!/.cursor/.env.production\n');
+  for (const path of ['.cursor/.LoCaL/private.json', '.cursor/.env.production']) put(root, path, 'privado');
+  applyLocalIgnore(planLocalIgnore(root));
+  for (const path of ['.cursor/.LoCaL/private.json', '.cursor/.env.production']) assert.ok(git(root, ['check-ignore', '--no-index', path]).includes(path));
+  assert.equal(checkLocalIgnore(planLocalIgnore(root)).ok, true);
+});
+
+test('negação na primeira linha com BOM preserva bytes e protege segredos', t => {
+  const root = fixture(t); git(root, ['init', '-q']);
+  const original = '\uFEFF!/.cursor/.env.production\r\n';
+  put(root, '.gitignore', original); put(root, '.cursor/.env.production', 'privado');
+  applyLocalIgnore(planLocalIgnore(root));
+  assert.ok(readFileSync(join(root, '.gitignore'), 'utf8').startsWith(original));
+  assert.ok(git(root, ['check-ignore', '--no-index', '.cursor/.env.production']).includes('.cursor/.env.production'));
+  assert.equal(checkLocalIgnore(planLocalIgnore(root)).ok, true);
+});
+
+test('negação humana acrescentada após o bloco recebe proteção na próxima sincronização', t => {
+  const root = fixture(t); git(root, ['init', '-q']);
+  put(root, '.gitignore', '!*.cache/\n'); applyLocalIgnore(planLocalIgnore(root));
+  const path = join(root, '.gitignore');
+  writeFileSync(path, readFileSync(path, 'utf8') + '!/.cursor/.env.production\n');
+  put(root, '.cursor/.env.production', 'privado');
+  const plan = planLocalIgnore(root);
+  assert.ok(plan.edits.some(edit => edit.path === path));
+  applyLocalIgnore(plan);
+  assert.match(readFileSync(path, 'utf8'), /!\*\.cache\/\n!\/\.cursor\/\.env\.production\n/);
+  assert.ok(git(root, ['check-ignore', '--no-index', '.cursor/.env.production']).includes('.cursor/.env.production'));
+  assert.equal(checkLocalIgnore(planLocalIgnore(root)).ok, true);
+});
+
 test('planejamento é somente leitura e aplicação detecta mudança concorrente', t => {
   const root = fixture(t); put(root, '.gitignore', 'antes\r\n');
   const plan = planLocalIgnore(root, { outputs: ['generated.md'] });
@@ -250,7 +336,7 @@ test('negação humana é detectada antes de aplicar novas exclusões e permanec
   put(root, '.gitignore', '!/AGENTS.md\n');
   const before = readFileSync(join(root, '.git/info/exclude'), 'utf8');
   const plan = planLocalIgnore(root, { outputs: ['AGENTS.md'] });
-  assert.equal(plan.edits.length, 1);
+  assert.ok(plan.edits.some(edit => edit.path === join(root, '.git/info/exclude')));
   assert.deepEqual(checkLocalIgnore(plan).missing, ['AGENTS.md']);
   assert.throws(() => applyLocalIgnore(plan), /Regras humanas/);
   assert.equal(readFileSync(join(root, '.git/info/exclude'), 'utf8'), before);

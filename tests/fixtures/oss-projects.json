@@ -1,6 +1,48 @@
 {
   "projects": [
     {
+      "id": "hibernate",
+      "repository": "https://github.com/hibernate/hibernate-orm.git",
+      "commit": "9cb78708da3efb5cb0211d9a0e7fc0e1d9448ded",
+      "profile": "Java ORM and large multi-module project",
+      "clients": ["codex", "claude", "copilot"]
+    },
+    {
+      "id": "ef6",
+      "repository": "https://github.com/dotnet/ef6.git",
+      "commit": "c5eea05751aba577db8f08e081f344dcff940aa7",
+      "profile": ".NET Entity Framework project",
+      "clients": ["codex", "claude", "copilot"]
+    },
+    {
+      "id": "rust",
+      "repository": "https://github.com/rust-lang/rust.git",
+      "commit": "8eb778d04094d3af4b26580cab327e0413eb1e02",
+      "profile": "Rust compiler and standard library",
+      "clients": ["codex", "claude", "copilot"]
+    },
+    {
+      "id": "go",
+      "repository": "https://github.com/golang/go.git",
+      "commit": "d0f64049b6e3a48f20d130c062c872f162fb8830",
+      "profile": "Go compiler and standard library",
+      "clients": ["codex", "claude", "copilot"]
+    },
+    {
+      "id": "tailcat",
+      "repository": "https://github.com/tailscale/tailcat.git",
+      "commit": "e00cdde6ff787f801361ff85ed085775c775d4c5",
+      "profile": "Go networking project with existing agent guidance",
+      "clients": ["codex", "claude", "copilot"]
+    },
+    {
+      "id": "requests",
+      "repository": "https://github.com/psf/requests.git",
+      "commit": "3c7baaa05ab4aa49cc819ce3a819d260de19c157",
+      "profile": "Python HTTP library",
+      "clients": ["codex", "claude", "copilot"]
+    },
+    {
       "id": "express",
       "repository": "https://github.com/expressjs/express.git",
       "commit": "43fca52d28a422c8be48fd489cbd4f2d6152bab6",

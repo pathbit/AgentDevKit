@@ -11,3 +11,7 @@ Também procura executáveis opcionais no PATH sem iniciar um shell.
 `managed-content.mjs` limita a propriedade do kit aos seus blocos Markdown;
 `managed-toml.mjs` aplica o mesmo contrato ao `prompt` de comandos Gemini.
 Texto externo, nomes existentes e metadados humanos permanecem preservados.
+
+`gitignore.mjs` planeja exclusões locais e detecta regras conflitantes. Com
+exceções na raiz, pode acrescentar um bloco limitado ao estado privado dos
+clientes; alterações no bloco gerenciado impedem sua substituição.

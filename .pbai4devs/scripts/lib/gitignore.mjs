@@ -136,9 +136,11 @@ function privateClientPolicy(templateFile, roots) {
     const negative = pattern.startsWith('!'), rule = pattern.replace(/^!/, '').replace(/^\//, '');
     rules.push(`${negative ? '!' : ''}/${escapePattern(root)}/${rule}`);
     if (negative) continue;
-    const stem = rule.replace(/^\*\*\//, '').replace(/\[([^\]]+)\]/g, (_match, letters) => letters[0]).replace(/\*/g, 'agentdevkit-private-probe').replace(/\?/g, 'x');
-    probes.push(`${root}/${stem}${stem.endsWith('/') ? '.agentdevkit-ignore-probe' : ''}`);
-    if (rule.startsWith('**/')) probes.push(`${root}/.agentdevkit-ignore-probes/${stem}${stem.endsWith('/') ? '.agentdevkit-ignore-probe' : ''}`);
+    const witness = lower => rule.replace(/^\*\*\//, '').replace(/\[([^\]]+)\]/g, (_match, letters) => lower ? letters[0].toLowerCase() : letters[0]).replace(/\*/g, 'agentdevkit-private-probe').replace(/\?/g, 'x');
+    for (const variant of new Set([witness(false), witness(true)])) {
+      probes.push(`${root}/${variant}${variant.endsWith('/') ? '.agentdevkit-ignore-probe' : ''}`);
+      if (rule.startsWith('**/')) probes.push(`${root}/.agentdevkit-ignore-probes/${variant}${variant.endsWith('/') ? '.agentdevkit-ignore-probe' : ''}`);
+    }
   }
   return { rules, probes };
 }
@@ -300,6 +302,17 @@ export function planLocalIgnore(root, { outputs = [], templateRoot } = {}) {
   const edits = before === after ? [] : [{ path: target, before, after, beforeMode: localMode(target) }];
   const probes = [...paths, ...rootProbes(root, roots)];
   const artifactPaths = [...new Set([...artifactProbes(root, artifacts), ...privateClients.probes.filter(path => safeIgnoreProbe(root, path)), ...(location ? visibleArtifactProbes(root, location, artifacts) : [])])];
+  const privateProbes = privateClients.probes.filter(path => safeIgnoreProbe(root, path));
+  const rootOverrideProbes = new Set();
+  const overrideFirst = `# BEGIN AGENTDEVKIT PRIVATE ${id}`, overrideLast = `# END AGENTDEVKIT PRIVATE ${id}`;
+  if (location) {
+    const humanIgnore = localRead(checkedLocalPath(join(root, '.gitignore')));
+    const withoutFallback = localBlock(humanIgnore, first, last, null);
+    const withoutOwned = localBlock(withoutFallback, overrideFirst, overrideLast, null);
+    // Any root negation can match an arbitrary spelling or wildcard value.
+    // Protect private client paths deterministically instead of sampling it.
+    if (withoutOwned.replace(/^\uFEFF/, '').split(/\r?\n/).some(line => line.startsWith('!'))) for (const path of privateProbes) rootOverrideProbes.add(path);
+  }
   const wanted = new Set(probes.map(path => location?.prefix ? `${location.prefix}/${path}` : path));
   if (location && !before?.includes(first) && !localRead(join(root, '.gitignore'))?.includes(first)) {
     const ignored = ignoreMatches(location, [...probes, ...artifactPaths]);
@@ -307,11 +320,19 @@ export function planLocalIgnore(root, { outputs = [], templateRoot } = {}) {
   }
   if (location) {
     const fallback = checkedLocalPath(join(root, '.gitignore'));
-    const old = localRead(fallback), next = localBlock(old, first, last, null);
+    const old = localRead(fallback);
+    let next = localBlock(old, first, last, null);
+    if (rootOverrideProbes.size || old?.includes(overrideFirst) || old?.includes(overrideLast)) {
+      const overrideBody = privateClients.rules.join('\n');
+      if ((old?.includes(overrideFirst) || old?.includes(overrideLast)) && localBlock(old, overrideFirst, overrideLast, overrideBody) !== old) throw new Error('Bloco privado AgentDevKit alterado; conteudo preservado.');
+      const end = next.indexOf(overrideLast);
+      if (end >= 0 && next.slice(end + overrideLast.length).split(/\r?\n/).some(line => line.startsWith('!'))) next = localBlock(next, overrideFirst, overrideLast, null);
+      next = localBlock(next, overrideFirst, overrideLast, overrideBody);
+    }
     if (old !== null && old !== next) edits.push({ path: fallback, before: old, after: next, beforeMode: localMode(fallback) });
   }
   const tracked = location ? gitCommand(location.top, ['ls-files', '-z']).stdout.split('\0').filter(path => wanted.has(path)).map(path => location.prefix ? path.slice(location.prefix.length + 1) : path) : [];
-  return { root, status: location ? 'git' : 'fallback', location, paths, roots, artifactPatterns: artifacts, artifactProbes: artifactPaths, edits, trackedOutputs: tracked, first, last };
+  return { root, status: location ? 'git' : 'fallback', location, paths, roots, artifactPatterns: artifacts, artifactProbes: artifactPaths, edits, trackedOutputs: tracked, first, last, rootOverrideProbes: [...rootOverrideProbes] };
 }
 
 export function checkLocalIgnore(plan, { replacedBlocks = [] } = {}) {
@@ -337,7 +358,8 @@ export function checkLocalIgnore(plan, { replacedBlocks = [] } = {}) {
       const local = match && localIgnoreSource(plan.location, match.source);
       const humanOverride = negative && local && /(?:^|[\\/])\.gitignore$/.test(match.source);
       const replaced = negative && replacements.some(item => item.path === canonicalExisting(resolve(plan.location.top, match.source)) && match.line >= item.firstLine && match.line <= item.lastLine);
-      if (!replaced && ((!plan.edits.length && (!match || negative || !local)) || humanOverride)) missing.push(probes[index]);
+      const pendingRootOverride = humanOverride && plan.rootOverrideProbes?.includes(probes[index]) && plan.edits.some(edit => edit.path === join(plan.root, '.gitignore'));
+      if (!replaced && !pendingRootOverride && ((!plan.edits.length && (!match || negative || !local)) || humanOverride)) missing.push(probes[index]);
     }
   }
   return { ok: plan.edits.length === 0 && missing.length === 0 && plan.trackedOutputs.length === 0, status: plan.status, missing, trackedOutputs: plan.trackedOutputs, changed: plan.edits.length };

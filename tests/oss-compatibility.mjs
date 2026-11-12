@@ -152,7 +152,33 @@ function originalSnapshot(root, paths) {
 }
 
 function checkOriginals(root, baseline, git) {
-  assert.deepEqual(originalSnapshot(root, Object.keys(baseline.files)), baseline.files, 'Arquivo original alterado.');
+  const state = info(join(root, statePath)) ? json(join(root, statePath)) : null;
+  for (const [path, original] of Object.entries(baseline.files)) {
+    const current = fileSnapshot(root, path);
+    if (JSON.stringify(current) === JSON.stringify(original)) continue;
+    assert.equal(original.kind, 'file', `Tipo do arquivo original alterado: ${path}`);
+    assert.equal(current.kind, 'file', `Tipo do arquivo original alterado: ${path}`);
+    assert.equal(current.mode, original.mode, `Permissão do arquivo original alterada: ${path}`);
+    const content = readFileSync(join(root, path));
+    // Existing Markdown receives an appended, kit-owned block. Verify every
+    // original byte by its pre-install hash, including original line endings.
+    const privateIgnore = path === '.gitignore' && content.includes(Buffer.from('# BEGIN AGENTDEVKIT PRIVATE '));
+    const marker = Buffer.from(privateIgnore ? '# BEGIN AGENTDEVKIT PRIVATE ' : '<!-- BEGIN AGENTDEVKIT -->');
+    const position = content.indexOf(marker);
+    assert.ok(position >= 0 && content.indexOf(marker, position + marker.length) < 0, `Arquivo original alterado: ${path}`);
+    const blockEnd = Buffer.from(privateIgnore ? '# END AGENTDEVKIT PRIVATE ' : '<!-- END AGENTDEVKIT -->');
+    const end = content.indexOf(blockEnd, position + marker.length);
+    const suffix = end < 0 ? '' : content.subarray(end + blockEnd.length).toString();
+    assert.ok(end >= 0 && (privateIgnore ? /^[a-f0-9]{16}(?:\r\n|\n|\r)?$/.test(suffix) : /^(?:\r\n|\n|\r)?$/.test(suffix)), `Bloco adicionado inválido: ${path}`);
+    if (!privateIgnore) assert.equal(state?.blocks?.[path], hash(content.subarray(position, end + blockEnd.length)), `Bloco não pertence ao kit: ${path}`);
+    const prefix = content.subarray(0, position);
+    let preserved = hash(prefix) === original.sha256;
+    for (let removed = 1; !preserved && removed <= Math.min(4, prefix.length); removed++) {
+      if (!/^[\r\n]+$/.test(prefix.subarray(prefix.length - removed).toString())) break;
+      preserved = hash(prefix.subarray(0, prefix.length - removed)) === original.sha256;
+    }
+    assert.ok(preserved, `Conteúdo original alterado: ${path}`);
+  }
   const now = gitSnapshot(root, git);
   for (const field of ['head', 'index', 'stagedDiff', 'remotes', 'configSha256']) assert.equal(now[field], baseline.git[field], `Git ${field} alterado.`);
 }
@@ -219,9 +245,9 @@ function testProject(project, options, output, env, npm) {
     checked('dry-run-read-only');
     const installed = cli('init', init);
     result.preserved = installed.preserved;
-    assert.ok(installed.preserved?.some(item => item.path === nativeAgent), 'Agente humano em colisão não foi informado como preservado.');
     const state = json(join(directory, statePath));
-    assert.ok(!Object.hasOwn(state.files, nativeAgent), 'Agente humano foi registrado como propriedade do kit.');
+    assert.ok(!Object.hasOwn(state.files, nativeAgent), 'Agente humano foi registrado como propriedade integral do kit.');
+    assert.ok(state.blocks?.[nativeAgent] || installed.preserved?.some(item => item.path === nativeAgent), 'Agente humano em colisão não foi integrado nem preservado.');
     for (const path of ['CLAUDE.md', 'README.md', '.codex/skills']) if (fileSnapshot(directory, path).kind === 'symlink') {
       assert.ok(installed.preserved.some(item => item.path === path), `Link preservado não foi informado: ${path}`);
       assert.ok(!Object.keys(state.files).some(owned => owned === path || owned.startsWith(path + '/')), `Link humano foi adotado pelo kit: ${path}`);
@@ -326,7 +352,7 @@ export function main(args = process.argv.slice(2)) {
 // Shared by the opt-in documentation exercise; no helper runs on import.
 export {
   parse as parseCompatibilityArgs, outputDirectory, environment, recorder,
-  fileSnapshot, workspace, gitSnapshot, info, put, json, hash, portable,
+  fileSnapshot, workspace, gitSnapshot, checkOriginals, info, put, json, hash, portable,
   repositoryRoot, registry,
 };
 

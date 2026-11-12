@@ -4,6 +4,12 @@ description: Alterações verificáveis por versão do AgentDevKit.
 
 # Changelog
 
+## 0.0.13 — 2026-11-12
+
+- Proteção de caches de agentes mesmo com negações genéricas no `.gitignore`.
+- Matriz de compatibilidade ampliada para os sete projetos públicos solicitados.
+- Dois exemplos reproduzíveis com produto, design e três specs testadas.
+
 ## 0.0.12 — 2026-11-12
 
 - Entradas e recursos existentes recebem referências em blocos próprios do kit.

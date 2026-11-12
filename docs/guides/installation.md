@@ -110,8 +110,10 @@ quando o repositório for iniciado.
 
 O bloco local também protege `.agent-tests`, `tmp`, `temp`, `.playwright*`
 e relatórios de testes, inclusive com letras maiúsculas e em subpastas.
-O `.gitignore` existente e seus arquivos rastreados são preservados;
-uma exceção humana que conflite com essa proteção é informada como conflito.
+O conteúdo do `.gitignore` existente e os arquivos rastreados são preservados.
+Quando há exceções no `.gitignore` da raiz, o kit pode acrescentar um bloco
+limitado ao estado privado dos clientes, sem criar pastas não selecionadas.
+Conflitos detectados nas demais proteções são informados para revisão.
 Nomes próprios de artefatos e arquivos existentes também são conferidos;
 a validação fica restrita ao projeto e aos ignores de seus ancestrais.
 

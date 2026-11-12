@@ -18,6 +18,7 @@ description: Incrementos verificáveis do AgentDevKit.
 - [v0.0.10](v0.0.10/SPEC.md): release com instalação pelos dois registries e pré-requisitos.
 - [Ecossistema de segurança](security-ecosystem/SPEC.md): fluxos e scanners locais.
 - [Integração sem substituição][additive]: acréscimos em arquivos existentes.
+- [Compatibilidade com projetos reais][oss]: projetos públicos e exemplos reproduzíveis.
 
 Cada incremento vincula requisitos, critérios, testes e evidências locais.
 
@@ -28,3 +29,4 @@ projeto, siga o [fluxo](../guides/workflow.md) e use os
 [Wiki](../README.md) · [Roadmap](../product/roadmap.md)
 
 [additive]: additive-integration/SPEC.md
+[oss]: real-projects/SPEC.md

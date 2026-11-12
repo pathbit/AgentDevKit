@@ -12,10 +12,11 @@ Estes testes não são copiados para os projetos atendidos.
 Para verificar o pacote publicado em projetos reais, execute:
 
 ```console
-npm run test:oss -- --version 0.0.12
+npm run test:oss -- --version 0.0.13
 ```
 
-O teste clona os commits de [Express, Zod e Chi](fixtures/oss-projects.json).
+O teste clona os commits fixos da [matriz](fixtures/oss-projects.json):
+Hibernate ORM, EF6, Rust, Go, Tailcat, Express, Requests, Zod e Chi.
 Confere arquivos, permissões, links, staging, instalação, atualização e ignores.
 Inclui uma skill própria, uma referência Markdown curta, configuração local
 e um agente humano com nome igual ao do kit. Confere também a sincronização
@@ -34,7 +35,7 @@ os apontamentos disponíveis são instalados nas demais rotas nativas.
 ## Fluxo documental
 
 ```console
-npm run test:docs -- --version 0.0.12
+npm run test:docs -- --version 0.0.13
 ```
 
 O runner reutiliza a matriz OSS e consulta o inventário do pacote instalado.
