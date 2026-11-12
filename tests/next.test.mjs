@@ -7,6 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import test from 'node:test';
 import { getNextSteps } from '../src/next.mjs';
 import { packageInfo } from '../src/config.mjs';
+import { findNpmCli } from '../.pbai4devs/scripts/lib/npm.mjs';
 import { inspectProject } from '../.pbai4devs/scripts/inspecionar-projeto/SCRIPT.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -86,7 +87,7 @@ test('instalação usa pacote do registry em macOS e Windows com destino literal
     assert.equal(next.command.startsWith('& '), platform === 'win32');
     assert.ok(next.command.includes(target.replaceAll("'", platform === 'win32' ? "''" : "'\\''")));
     assert.ok(next.command.includes('--target '));
-    assert.ok(next.command.includes(`--registry=${packageInfo.publishConfig?.registry || 'https://registry.npmjs.org'}`));
+    assert.equal(next.command.includes('--registry='), false);
     assert.ok(next.command.includes(`--package=${packageInfo.name}@${packageInfo.version}`));
     assert.ok(next.command.includes('--ignore-scripts'));
     assert.doesNotMatch(next.command, /node_modules|_npx|releases\/download|\.tgz|--package=https/);
@@ -95,18 +96,30 @@ test('instalação usa pacote do registry em macOS e Windows com destino literal
   assert.equal(result.status, 0, result.stdout + result.stderr);
   const command = JSON.parse(result.stdout).next[0].command;
   assert.ok(command.includes(`--package=${packageInfo.name}@${packageInfo.version}`));
-  assert.ok(command.includes(`--registry=${packageInfo.publishConfig?.registry || 'https://registry.npmjs.org'}`));
+  assert.equal(command.includes('--registry='), false);
   assert.doesNotMatch(command, /releases\/download|\.tgz|--package=https/);
 });
 
 test('comando respeita metadados do pacote e usa npmjs quando registry está ausente', async t => {
   const { target } = fixture(t);
   const source = readFileSync(join(root, 'src/config.mjs'));
-  for (const [id, registry] of [['github', 'https://npm.pkg.github.com'], ['default', undefined]]) {
+  for (const [id, registry] of [['custom', 'https://registry.example.test'], ['github', 'https://npm.pkg.github.com'], ['npmjs', 'https://registry.npmjs.org/'], ['default', undefined]]) {
     const directory = join(target, id); mkdirSync(join(directory, 'src'), { recursive: true });
     writeFileSync(join(directory, 'src/config.mjs'), source);
     writeFileSync(join(directory, 'package.json'), JSON.stringify({ name: '@fixture/custom-kit', version: '9.8.7', ...(registry ? { publishConfig: { registry } } : {}) }));
     const config = await import(pathToFileURL(join(directory, 'src/config.mjs')).href);
-    assert.equal(config.releaseCommand, `npx --yes --ignore-scripts --registry=${registry || 'https://registry.npmjs.org'} --package=@fixture/custom-kit@9.8.7 agentdevkit`);
+    const option = registry && new URL(registry).hostname !== 'registry.npmjs.org' ? ` --registry=${registry}` : '';
+    assert.equal(config.releaseCommand, `npx --yes --ignore-scripts${option} --package=@fixture/custom-kit@9.8.7 agentdevkit`);
   }
+});
+
+test('repo usa npm público e sobrepõe mapeamento legado do usuário sem editar credenciais', t => {
+  const { target } = fixture(t), userConfig = join(target, 'user.npmrc');
+  writeFileSync(userConfig, '@pathbit:registry=https://npm.pkg.github.com\n');
+  assert.equal(packageInfo.publishConfig.registry, 'https://registry.npmjs.org');
+  assert.equal(packageInfo.publishConfig.access, 'public');
+  const result = spawnSync(process.execPath, [findNpmCli(), 'config', 'get', '@pathbit:registry', `--userconfig=${userConfig}`], { cwd: root, encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.equal(result.stdout.trim().replace(/\/$/, ''), 'https://registry.npmjs.org');
+  assert.equal(readFileSync(userConfig, 'utf8'), '@pathbit:registry=https://npm.pkg.github.com\n');
 });

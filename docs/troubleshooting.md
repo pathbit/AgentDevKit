@@ -29,7 +29,7 @@ agente; arquivos próprios também podem manter uma pasta após a desmarcação.
 | Sintoma ou código | Próxima ação |
 | --- | --- |
 | `node` ou `npx` não encontrado | Siga [sem Node/npm][runtime]. |
-| `E401` ou `E403` no registry | Confira [login e acesso][packages]. |
+| `E401` ou `E403` no registry | Confira se usa o [npm público][packages]. |
 | `E404` ao baixar o pacote | Confira registry, versão e permissão. |
 | `E_ARGS` | Confira comando e aspas com `agentdevkit --help`. |
 | `E_MISSING` | Confirme `--target`; inicialize o projeto correto. |
@@ -95,6 +95,16 @@ extra nas áreas de skills, agents, commands e rules. Prefira a CLI para manter
 a instalação; não trate esses dois comandos como equivalentes.
 
 ## Download, plataforma ou ferramenta falhando
+
+Se uma instalação antiga configurou `@pathbit` para o GitHub Packages,
+atualize somente esse escopo e repita a instalação:
+
+```console
+npm config set @pathbit:registry https://registry.npmjs.org --location=user
+```
+
+O pacote público não exige autenticação para instalar. Publicar uma versão
+exige acesso de mantenedor no npm; são operações diferentes.
 
 Confira acesso ao GitHub, ao registro npm e a `nodejs.org`, conforme a etapa.
 Mantenha a verificação de certificados e hashes; resolva proxy, rede ou

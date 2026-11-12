@@ -21,7 +21,7 @@ pode trocar de agente sem manter várias cópias das mesmas instruções.
 | Contribuir com o kit | [Contribuir][contrib] → [design](design.md) |
 | Desenvolver e experimentar | [Guia rápido](development.md) → [exemplos][examples] |
 | Preparar uma versão | [Manutenção e releases](maintenance.md) |
-| Publicar ou instalar o pacote npm | [GitHub Packages](packages.md) |
+| Publicar ou instalar o pacote npm | [npm público](packages.md) |
 | Relatar um bug ou propor melhoria | [Participar](community.md) |
 
 ## Entenda os termos

@@ -1,75 +1,70 @@
 ---
-description: Publicação e instalação do pacote npm no GitHub Packages.
+description: Instalação e publicação do pacote npm público do AgentDevKit.
 ---
 
-# GitHub Packages
+# Pacote npm público
 
-O AgentDevKit é um único pacote: [`@pathbit/agentdevkit`][package], vinculado
-a este repositório e distribuído pelo registro `https://npm.pkg.github.com`.
-O pacote contém a CLI e os recursos compartilhados. A instalação gera os
-apontamentos dos agentes escolhidos no projeto.
+O AgentDevKit é um único pacote: [`@pathbit/agentdevkit`][package]. Ele contém
+a CLI e os recursos compartilhados; a instalação prepara os apontamentos dos
+agentes escolhidos no projeto.
 
 ## Instalar no projeto
 
-Use Node.js 18+ com npm. Autentique uma vez nesta máquina:
+Com Node.js 18+ e npm, execute na pasta do projeto. Não é necessário login:
 
 ```console
-npm login --scope=@pathbit --auth-type=legacy --registry=https://npm.pkg.github.com
-```
-
-Informe seu usuário GitHub e um token pessoal **classic** com `read:packages`
-e acesso ao pacote. Guarde a credencial na configuração do usuário, nunca
-no repositório. Em seguida, na pasta do projeto:
-
-```console
-npx -y --registry=https://npm.pkg.github.com @pathbit/agentdevkit@0.0.5 init
+npx -y @pathbit/agentdevkit@0.0.5 init
 ```
 
 Acrescente `--agents codex,claude` para selecionar clientes, `--dry-run` para
 simular ou use `update`, `doctor` e `sync --check` no lugar de `init`.
-Não é necessário instalar o kit globalmente nem adicioná-lo às dependências
-da aplicação.
-
-O GitHub exige autenticação também para pacotes npm públicos. O pacote pode
-ser consultado na [página de versões][package]; acesso e visibilidade ficam
-em **Package settings** para administradores.
-
-Para listar as versões disponíveis depois do login:
+Não é necessário instalar globalmente nem adicionar o kit às dependências
+da aplicação. Para conferir as versões:
 
 ```console
-npm view @pathbit/agentdevkit versions --json --registry=https://npm.pkg.github.com
+npm view @pathbit/agentdevkit versions --json
 ```
 
-Use o nome do pacote nos comandos. Não é necessário baixar arquivos da
-release ou clonar o repositório para instalar.
+Se existir um mapeamento antigo para o GitHub Packages, siga a
+[correção de registry](troubleshooting.md#download-plataforma-ou-ferramenta-falhando).
 
 ## Publicar pelo Actions
 
-Uma release publica o mesmo `.tgz` aprovado pelo CI no GitHub Packages.
-O job usa `GITHUB_TOKEN` com `packages: write`; não exige um token pessoal
-salvo nos secrets. Versão, origem e integridade são conferidas antes do envio.
-Uma versão existente só é aceita se contiver os mesmos bytes.
+A publicação usa o mesmo TGZ aprovado pelo CI, com acesso público. O workflow
+confere versão, origem e integridade; uma versão existente só é aceita quando
+contém os mesmos bytes. Não reempacote nem substitua uma versão publicada.
 
-Para adicionar ao registro uma release que já existe:
+O mantenedor configura uma vez o **Trusted Publisher** do npm:
+
+| Campo | Valor |
+| --- | --- |
+| Organization or user | `pathbit` |
+| Repository | `AgentDevKit` |
+| Workflow filename | `release.yml` |
+| Allowed action | Publicação direta com `npm publish` |
+
+O workflow recebe `id-token: write` e publica com OIDC. O npm exige CLI
+11.5.1+ e Node 22.14+; o projeto usa Node 24. A primeira publicação exige uma
+conta npm com acesso ao escopo `@pathbit`. Depois que o pacote existir,
+configure a relação de confiança nas configurações dele. Um `NPM_TOKEN`
+granular nos secrets do repositório é a alternativa para publicação
+automatizada. Credenciais nunca entram nos arquivos versionados.
+
+Para publicar somente o pacote de uma tag que já tem artefato aprovado:
 
 ```console
-gh workflow run release.yml --ref master -f tag=v0.0.3 -F package_only=true
+gh workflow run release.yml --ref master -f tag=v0.0.5 -F package_only=true
 ```
 
-Esse modo reutiliza o artefato do CI da tag. Ele não altera a tag nem recria a
-release. Depois da publicação, o job confere o registro e executa `--version`,
-`init`, `doctor` e `sync --check` por `npm exec`, usando um projeto temporário
-e a autenticação do workflow. O cache começa vazio; todos os comandos usam
-o nome e a versão publicados.
-
 Se o artefato expirou, reexecute o CI original da tag antes da publicação.
-Se a versão já contém bytes diferentes, escolha uma nova versão; não apague
-ou substitua a distribuição existente.
+Depois do envio, o job usa um ambiente sem credenciais e cache novo para
+executar `--version`, `init`, `doctor` e `sync --check` pelo nome e versão
+publicados. Assim, a verificação comprova o acesso de um usuário comum.
+
+As versões antigas no [GitHub Packages][legacy] permanecem disponíveis;
+o canal de instalação padrão é o npm público.
 
 [Wiki](README.md) · [Manutenção](maintenance.md) · [Instalação](installation.md)
 
-Referências: [registro npm do GitHub][npm] e [acesso e visibilidade][access].
-
-[npm]: https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-npm-registry
-[access]: https://docs.github.com/en/packages/learn-github-packages/configuring-a-packages-access-control-and-visibility
-[package]: https://github.com/pathbit/AgentDevKit/pkgs/npm/agentdevkit
+[package]: https://www.npmjs.com/package/@pathbit/agentdevkit
+[legacy]: https://github.com/pathbit/AgentDevKit/pkgs/npm/agentdevkit

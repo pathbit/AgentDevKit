@@ -16,11 +16,10 @@ See the [supported clients][clients].
 
 ## Start in your project
 
-With Node.js 18+ and npm, [sign in to GitHub Packages][packages].
-Then open a terminal in your project and run:
+With Node.js 18+ and npm, run this in your project. No login is required:
 
 ```console
-npx -y --registry=https://npm.pkg.github.com @pathbit/agentdevkit@0.0.5 init
+npx -y @pathbit/agentdevkit@0.0.5 init
 ```
 
 Choose your coding agents when prompted, or pass `--agents codex,claude`.
@@ -32,8 +31,7 @@ Then open the project in your coding agent and ask:
 > Read AGENTS.md and use the proximos-passos skill to guide my next steps.
 
 See [installation](docs/installation.md) for Windows, missing Node, previews
-and updates. GitHub Packages requires authentication, including public npm
-packages. Install and update through the named package; the
+and updates. Install and update through the [public npm package][packages]; the
 [v0.0.5 release][release] retains artifacts and checksums for verification.
 No global installation is required.
 The CLI supports `pt`, `en` and `es`; it saves your selection per project.
@@ -72,7 +70,7 @@ agent to read `AGENTS.md`.
 
 [clients]: .pbai4devs/COMPATIBILIDADE.md
 [release]: https://github.com/pathbit/AgentDevKit/releases/tag/v0.0.5
-[npm-package]: https://github.com/pathbit/AgentDevKit/pkgs/npm/agentdevkit
+[npm-package]: https://www.npmjs.com/package/@pathbit/agentdevkit
 [tests]: docs/tools-and-testing.md
 [cli]: docs/cli.md
 [help]: docs/troubleshooting.md

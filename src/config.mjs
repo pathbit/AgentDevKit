@@ -9,4 +9,6 @@ export const statePath = '.pbai4devs/estado/agentdevkit.json';
 export const entryNames = ['AGENTS.md', 'CLAUDE.md', 'GEMINI.md'];
 export const begin = '<!-- BEGIN AGENTDEVKIT -->';
 export const end = '<!-- END AGENTDEVKIT -->';
-export const releaseCommand = `npx --yes --ignore-scripts --registry=${packageInfo.publishConfig?.registry || 'https://registry.npmjs.org'} --package=${packageInfo.name}@${packageInfo.version} agentdevkit`;
+const registry = packageInfo.publishConfig?.registry || 'https://registry.npmjs.org';
+const registryOption = new URL(registry).hostname === 'registry.npmjs.org' ? '' : ` --registry=${registry}`;
+export const releaseCommand = `npx --yes --ignore-scripts${registryOption} --package=${packageInfo.name}@${packageInfo.version} agentdevkit`;

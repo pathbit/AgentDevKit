@@ -19,11 +19,11 @@ O [guia de preparo][bootstrap] explica as duas situações.
 
 ## Instalar
 
-O pacote `@pathbit/agentdevkit` é publicado no GitHub Packages. Após o
-[login no registro](packages.md#instalar-no-projeto), execute na pasta do projeto:
+O pacote [`@pathbit/agentdevkit`](packages.md) é publicado no npm público.
+Execute na pasta do projeto, sem login:
 
 ```console
-npx -y --registry=https://npm.pkg.github.com @pathbit/agentdevkit@0.0.5 init
+npx -y @pathbit/agentdevkit@0.0.5 init
 ```
 
 Sem comando adicional, o pacote executa `init`. Em terminal interativo,

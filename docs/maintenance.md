@@ -43,7 +43,7 @@ O [CI][ci] roda em pushes e PRs; também pode ser iniciado em **Run workflow**.
 O perfil completo produz `agentdevkit-<versão>.tgz`, `SHA256SUMS`, notas e
 manifesto. O artifact inclui commit, execução e checksum para identificar
 exatamente o que foi testado. Downloads do Actions exigem login e expiram.
-A instalação usa o pacote nomeado no [GitHub Packages](packages.md);
+A instalação usa o pacote nomeado no [npm público](packages.md);
 as releases preservam artefatos e checksums para auditoria.
 
 Para investigar localmente:
@@ -66,7 +66,7 @@ nada. Nunca versione o tarball ou seus relatórios.
 O [workflow de release][release] localiza o CI aprovado de um push na branch
 principal, confere o commit e baixa seu artifact por ID. Verifica procedência,
 versão e checksum antes de publicar. Não repete a suíte nem reempacota.
-Também envia o pacote npm ao [GitHub Packages](packages.md), confere sua
+Também envia o pacote ao [npm público](packages.md), confere sua
 integridade no registro e testa versão, instalação, diagnóstico e sincronização
 com a CLI instalada por ele.
 
@@ -80,17 +80,17 @@ existente, mesmo em rascunho. Remova somente o rascunho incompleto dessa tentati
 após conferir a origem; nunca apague uma release publicada para repetir o fluxo.
 
 Para reiniciar uma publicação que falhou, use **Re-run failed jobs** ou
-`gh workflow run release.yml --ref vX.Y.Z` com a tag real. O token do workflow
-cuida da publicação; não é necessário guardar um token pessoal nos secrets.
+`gh workflow run release.yml --ref vX.Y.Z` com a tag real. Configure o
+publicador OIDC ou `NPM_TOKEN`, conforme [publicação](packages.md).
 
 Se a release já existe e falta somente o pacote no registro, use o modo
-`package_only` descrito em [GitHub Packages](packages.md#publicar-pelo-actions).
+`package_only` descrito em [pacote npm](packages.md#publicar-pelo-actions).
 Ele não tenta recriar a release existente.
 
 ## Conferir a entrega pública
 
 Confira a versão na [página do pacote][package] e instale pelo nome em um
-projeto descartável, seguindo [GitHub Packages](packages.md). Teste seleção,
+projeto descartável, seguindo [pacote npm](packages.md). Teste seleção,
 `doctor` e `sync --check`. Compare a integridade do registro com o artefato
 aprovado; uma aprovação de CI não substitui a instalação real pelo registro.
 
@@ -98,4 +98,4 @@ aprovado; uma aprovação de CI não substitui a instalação real pelo registro
 
 [ci]: https://github.com/pathbit/AgentDevKit/actions/workflows/ci.yml
 [release]: https://github.com/pathbit/AgentDevKit/actions/workflows/release.yml
-[package]: https://github.com/pathbit/AgentDevKit/pkgs/npm/agentdevkit
+[package]: https://www.npmjs.com/package/@pathbit/agentdevkit

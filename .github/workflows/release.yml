@@ -6,12 +6,12 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag existente, por exemplo v0.0.3'
+        description: 'Tag existente, por exemplo v0.0.5'
         type: string
         required: false
         default: ''
       package_only:
-        description: Publicar somente no GitHub Packages
+        description: Publicar somente no npm público
         type: boolean
         required: false
         default: false
@@ -57,7 +57,7 @@ jobs:
     permissions:
       contents: write
       actions: read
-      packages: write
+      id-token: write
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -65,7 +65,7 @@ jobs:
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 24
-          registry-url: https://npm.pkg.github.com
+          registry-url: https://registry.npmjs.org
           scope: '@pathbit'
       - name: Download the immutable CI artifact
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -82,10 +82,10 @@ jobs:
           AGENTDEVKIT_RELEASE_RESOLUTION: ${{ needs.resolve.outputs.resolution }}
           AGENTDEVKIT_ARTIFACT_DIR: ${{ runner.temp }}/agentdevkit-package
         run: node scripts/release/publish.mjs publish
-      - name: Publish the same tarball to GitHub Packages
+      - name: Publish the same tarball to public npm
         env:
           GH_TOKEN: ${{ github.token }}
-          NODE_AUTH_TOKEN: ${{ github.token }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           AGENTDEVKIT_RELEASE_RESOLUTION: ${{ needs.resolve.outputs.resolution }}
           AGENTDEVKIT_ARTIFACT_DIR: ${{ runner.temp }}/agentdevkit-package
         run: node scripts/release/packages.mjs publish

@@ -16,11 +16,10 @@ son locales y no se versionan.
 
 ## Empezar en tu proyecto
 
-Con Node.js 18+ y npm, [inicia sesión en GitHub Packages][packages].
-Después abre una terminal en tu proyecto y ejecuta:
+Con Node.js 18+ y npm, ejecuta en tu proyecto, sin iniciar sesión:
 
 ```console
-npx -y --registry=https://npm.pkg.github.com @pathbit/agentdevkit@0.0.5 init
+npx -y @pathbit/agentdevkit@0.0.5 init
 ```
 
 Elige tus agentes en la pregunta inicial o usa `--agents codex,claude`.
@@ -32,8 +31,8 @@ Después, abre el proyecto en tu agente y pide:
 > Lee AGENTS.md y usa la skill proximos-passos para orientar mi trabajo.
 
 La [guía de instalación](docs/installation.md) incluye Windows, Node ausente,
-simulación y actualización. GitHub Packages exige autenticación incluso para
-paquetes npm públicos. Instala y actualiza mediante el paquete del registro;
+simulación y actualización. Instala y actualiza mediante el
+[paquete npm público][packages];
 la [release v0.0.5][release] conserva artefactos y checksums para verificarlos.
 No requiere instalación global.
 La CLI guarda el idioma `pt`, `en` o `es` por proyecto.
@@ -72,7 +71,7 @@ agente que lea `AGENTS.md`.
 
 [clients]: .pbai4devs/COMPATIBILIDADE.md
 [release]: https://github.com/pathbit/AgentDevKit/releases/tag/v0.0.5
-[npm-package]: https://github.com/pathbit/AgentDevKit/pkgs/npm/agentdevkit
+[npm-package]: https://www.npmjs.com/package/@pathbit/agentdevkit
 [tests]: docs/tools-and-testing.md
 [cli]: docs/cli.md
 [help]: docs/troubleshooting.md

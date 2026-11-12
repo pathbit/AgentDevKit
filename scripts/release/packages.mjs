@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { npmExecutable, releaseRoot, sha256 } from './assets.mjs';
 import { assertApprovedSource, githubRequest, verifyDistribution } from './publish.mjs';
 
-const registry = 'https://npm.pkg.github.com';
+const registry = 'https://registry.npmjs.org';
 const expectedName = '@pathbit/agentdevkit';
 const pause = milliseconds => new Promise(done => setTimeout(done, milliseconds));
 const invalid = message => { throw new Error(message); };
@@ -26,11 +26,12 @@ function sameIntegrity(value, expected) {
   return typeof value === 'string' && value.trim().split(/\s+/).includes(expected);
 }
 
-// npm reads authentication through this temporary file, never an argv token.
+// Public reads and consumer commands never inherit authentication.
 function isolatedEnvironment(environment, directory) {
-  const env = Object.fromEntries(Object.entries(environment).filter(([key]) => !/^npm_config_/i.test(key)));
+  const env = Object.fromEntries(Object.entries(environment).filter(([key]) => !/^npm_config_/i.test(key)
+    && !/token|secret|password|(?:^|_)auth(?:_|$)/i.test(key)));
   const config = join(directory, 'npmrc'), globalConfig = join(directory, 'global-npmrc');
-  writeFileSync(config, `@pathbit:registry=${registry}\n//npm.pkg.github.com/:_authToken=\${NODE_AUTH_TOKEN}\n`, { mode: 0o600 });
+  writeFileSync(config, `@pathbit:registry=${registry}\n`, { mode: 0o600 });
   writeFileSync(globalConfig, '');
   const pathKey = Object.keys(env).find(key => key.toLowerCase() === 'path') || 'PATH';
   env[pathKey] = `${dirname(process.execPath)}${delimiter}${env[pathKey] || ''}`;
@@ -41,12 +42,30 @@ function isolatedEnvironment(environment, directory) {
     npm_config_audit: 'false', npm_config_fund: 'false', npm_config_loglevel: 'error' };
 }
 
+function publicationEnvironment(environment, isolated, directory, oidc) {
+  const token = environment.NPM_TOKEN;
+  if (token && /[\r\n]/.test(token)) invalid('NPM_TOKEN inválido.');
+  if (!oidc && !token) invalid('A publicação exige OIDC configurado no npm ou NPM_TOKEN isolado.');
+  const config = join(directory, 'publish-npmrc');
+  writeFileSync(config, `@pathbit:registry=${registry}\n${token ? '//registry.npmjs.org/:_authToken=${NPM_TOKEN}\n' : ''}`, { mode: 0o600 });
+  return { ...isolated, npm_config_userconfig: config,
+    ...(token ? { NPM_TOKEN: token } : {}),
+    ...(oidc ? { ACTIONS_ID_TOKEN_REQUEST_URL: environment.ACTIONS_ID_TOKEN_REQUEST_URL,
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: environment.ACTIONS_ID_TOKEN_REQUEST_TOKEN } : {}) };
+}
+
+function supportsOidc(value) {
+  const match = /^(\d+)\.(\d+)\.(\d+)\s*$/.exec(value);
+  if (!match) return false;
+  const [major, minor, patch] = match.slice(1).map(Number);
+  return major > 11 || major === 11 && (minor > 5 || minor === 5 && patch >= 1);
+}
+
 export async function publishRegistryPackage({ directory, resolution, env = process.env,
   execute = spawnSync, sleep = pause, maxAttempts = 12, pollMs = 5000,
   packageName = expectedName, request } = {}) {
   if (Number(process.versions.node.split('.')[0]) < 24) invalid('Use Node.js 24+.');
   if (packageName !== expectedName) invalid('Nome do pacote não autorizado.');
-  if (!env.NODE_AUTH_TOKEN || /[\r\n]/.test(env.NODE_AUTH_TOKEN)) invalid('NODE_AUTH_TOKEN válido é obrigatório.');
   if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 30
     || !Number.isInteger(pollMs) || pollMs < 0 || pollMs > 10000) invalid('Limite de tentativas inválido.');
   const verified = verifyDistribution(directory, resolution);
@@ -56,11 +75,11 @@ export async function publishRegistryPackage({ directory, resolution, env = proc
   try {
     const isolated = isolatedEnvironment(env, temporary);
     const npm = npmExecutable(env);
-    const invoke = async (args, { cwd = temporary, cache, allowMissing = false } = {}) => {
+    const invoke = async (args, { cwd = temporary, cache, allowMissing = false, environment = isolated } = {}) => {
       let result;
       try {
         result = await execute(process.execPath, [npm, ...args], {
-          cwd, env: cache ? { ...isolated, npm_config_cache: cache } : isolated,
+          cwd, env: cache ? { ...environment, npm_config_cache: cache } : environment,
           encoding: 'utf8', timeout: 180000, maxBuffer: 16 * 1024 * 1024, shell: false,
         });
       } catch { invalid(`npm ${args[0]} não pôde ser executado.`); }
@@ -89,9 +108,17 @@ export async function publishRegistryPackage({ directory, resolution, env = proc
     };
     await assertApprovedSource(resolution, request || githubRequest({ token: env.GH_TOKEN || env.GITHUB_TOKEN }));
     const existing = await lookup();
+    let authentication = 'not-needed';
     if (!existing) {
+      let oidc = env.GITHUB_ACTIONS === 'true' && Boolean(env.ACTIONS_ID_TOKEN_REQUEST_URL && env.ACTIONS_ID_TOKEN_REQUEST_TOKEN);
+      if (oidc && !supportsOidc((await invoke(['--version'])).trim())) {
+        if (!env.NPM_TOKEN) invalid('OIDC exige npm 11.5.1+; atualize o npm ou forneça NPM_TOKEN.');
+        oidc = false;
+      }
+      const publishing = publicationEnvironment(env, isolated, temporary, oidc);
+      authentication = oidc ? 'oidc' : 'token';
       assertArchive();
-      await invoke(['publish', archivePath, `--registry=${registry}`, '--ignore-scripts', '--json']);
+      await invoke(['publish', archivePath, `--registry=${registry}`, '--access=public', '--ignore-scripts', '--json'], { environment: publishing });
       let visible = false;
       for (let attempt = 0; attempt < maxAttempts; attempt++) {
         if (await lookup()) { visible = true; break; }
@@ -117,9 +144,9 @@ export async function publishRegistryPackage({ directory, resolution, env = proc
     await prove('doctor', ['doctor', '--target', consumer]);
     await prove('sync', ['sync', '--check', '--target', consumer], 'sync --check');
     return { packageName, version: resolution.version, registry,
-      url: `https://github.com/${resolution.repository}/pkgs/npm/agentdevkit`,
+      url: 'https://www.npmjs.com/package/@pathbit/agentdevkit',
       status: existing ? 'skipped' : 'published', sha256: verified.manifest.sha256,
-      integrity, probe: { status: 'passed', version: resolution.version, commands } };
+      integrity, authentication, probe: { status: 'passed', version: resolution.version, commands, anonymous: true } };
   } finally { rmSync(temporary, { recursive: true, force: true }); }
 }
 

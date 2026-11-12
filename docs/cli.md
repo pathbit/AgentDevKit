@@ -4,11 +4,10 @@ description: Comandos, opções e respostas do AgentDevKit.
 
 # Referência da CLI
 
-Use a [instalação](installation.md) para autenticar no registro e executar
-o pacote publicado por `npx`:
+Execute o pacote do npm público por `npx`, sem login:
 
 ```console
-npx -y --registry=https://npm.pkg.github.com @pathbit/agentdevkit@0.0.5 --help
+npx -y @pathbit/agentdevkit@0.0.5 --help
 ```
 
 Nas tabelas, `agentdevkit` representa esse executável. No checkout das fontes,

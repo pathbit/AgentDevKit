@@ -63,7 +63,9 @@ test('release produz quatro arquivos e checksum dos bytes reais do pacote', asyn
     const summary = JSON.parse(result.stdout.split('\n')[0]);
     assert.equal(summary.sha256, digest); assert.equal(summary.file, join(output, archiveName));
     const notes = readFileSync(join(output, 'NOTES.txt'), 'utf8');
-    assert.ok(notes.includes(`npx --yes --ignore-scripts --registry=https://registry.npmjs.org --package=${name}@${version} agentdevkit init`));
+    assert.ok(notes.includes(`npx --yes --ignore-scripts --package=${name}@${version} agentdevkit init`));
+    assert.ok(notes.includes(`https://www.npmjs.com/package/${name}`));
+    assert.ok(notes.includes('A instalação não exige login.'));
     assert.ok(notes.includes(`\`${archiveName}\` e \`SHA256SUMS\``));
     assert.doesNotMatch(notes, /releases\/download|--package=https|npm login/);
     assert.match(notes, /```text\n/);

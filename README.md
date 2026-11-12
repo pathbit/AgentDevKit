@@ -19,11 +19,10 @@ fica em `src/`, os testes em `tests/` e os recursos compartilhados em
 
 ## Começar em um projeto
 
-Com Node.js 18+ e npm, faça o [login no GitHub Packages][packages].
-Na pasta do seu projeto, execute:
+Com Node.js 18+ e npm, execute na pasta do seu projeto, sem login:
 
 ```console
-npx -y --registry=https://npm.pkg.github.com @pathbit/agentdevkit@0.0.5 init
+npx -y @pathbit/agentdevkit@0.0.5 init
 ```
 
 Escolha os agentes na pergunta inicial ou informe `--agents codex,claude`.
@@ -36,7 +35,7 @@ Depois, abra o projeto no seu agente e peça:
 
 Windows, instalação sem Node, simulação e atualização estão no
 [guia de instalação](docs/installation.md). A distribuição usa a
-mesma versão no GitHub Packages e na [release v0.0.5][release],
+versão publicada no [npm público][packages] e na [release v0.0.5][release],
 sem instalação global. Instalação e atualização usam o pacote do registro;
 os arquivos da release servem para conferir os artefatos publicados.
 O idioma da CLI pode ser `pt`, `en` ou `es`.
@@ -86,4 +85,4 @@ agente para ler `AGENTS.md`.
 [issues]: https://github.com/pathbit/AgentDevKit/issues/new/choose
 [packages]: docs/packages.md
 [release]: https://github.com/pathbit/AgentDevKit/releases/tag/v0.0.5
-[npm-package]: https://github.com/pathbit/AgentDevKit/pkgs/npm/agentdevkit
+[npm-package]: https://www.npmjs.com/package/@pathbit/agentdevkit
