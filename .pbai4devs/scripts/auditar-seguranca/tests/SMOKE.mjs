@@ -52,7 +52,7 @@ for (const check of bad.checks) assert.equal(check.status, 'findings', check.too
 assert.equal(digest(join(fixture, 'app/index.js')), before);
 assert.ok(!JSON.stringify(bad).includes(syntheticSecret));
 assert.ok(bad.findings.some(finding => finding.rule === 'TEST-2099-0001'));
-for (const id of ['pbai-eval-input', 'pbai-shell-input', 'pbai-sql-input', 'pbai-tls-verification-disabled']) assert.ok(bad.findings.some(finding => finding.rule.endsWith(id)), id);
+for (const id of ['pbai-eval-input', 'pbai-shell-input', 'pbai-sql-input', 'pbai-tls-verification-disabled']) assert.ok(bad.findings.some(finding => finding.rule === id), id);
 write(join(fixture, 'app/index.js'), `import { execFile } from 'node:child_process';
 function safe(req, db) {
   JSON.parse(req.query.data);

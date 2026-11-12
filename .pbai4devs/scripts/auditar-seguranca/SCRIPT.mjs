@@ -13,6 +13,7 @@ const ecosystemNames = ['npm', 'Go', 'PyPI', 'Maven', 'NuGet', 'Packagist', 'cra
 const ecosystems = new Map(ecosystemNames.map(name => [name.toLowerCase(), name]));
 const discardedDirectories = new Set(['.git', '.agent-tests', 'node_modules', 'tmp', 'temp', '.cache', '.local', 'coverage', '__pycache__']);
 const scannerConfiguration = new Set(['.semgrepignore', '.gitleaksignore', '.gitleaks.toml', 'osv-scanner.toml', '.osv-scanner.toml']);
+const opengrepRules = new Set(['pbai-eval-input', 'pbai-shell-input', 'pbai-sql-input', 'pbai-tls-verification-disabled']);
 const digest = value => createHash('sha256').update(value).digest('hex');
 const portable = value => value.split(sep).join('/');
 const fail = message => { const error = new Error(message); error.publicMessage = message; throw error; };
@@ -204,7 +205,10 @@ export function parseOpengrep(value, status, base) {
   if (!Array.isArray(value.paths?.scanned)) fail('Opengrep nao confirmou os arquivos analisados.');
   const findings = value.results.map(item => {
     if (typeof item?.check_id !== 'string' || typeof item.path !== 'string') fail('Resultado Opengrep incompleto.');
-    return finding('opengrep', item.check_id, findingPath(item.path, base), item.start?.line,
+    // Opengrep prefixes local rule IDs with the dotted absolute config path.
+    const rule = item.check_id.slice(item.check_id.lastIndexOf('.') + 1);
+    if (!opengrepRules.has(rule)) fail('Identificador de regra Opengrep desconhecido.');
+    return finding('opengrep', rule, findingPath(item.path, base), item.start?.line,
       item.extra?.severity === 'ERROR' ? 'high' : 'medium', 'Padrao de codigo exige revisao de seguranca.');
   });
   if (status === 1 && !findings.length) fail('Opengrep falhou sem achados verificaveis.');

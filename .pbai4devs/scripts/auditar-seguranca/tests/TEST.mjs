@@ -80,10 +80,44 @@ test('parsers redigem segredos e recusam saidas invalidas ou falsas aprovacoes',
   assert.equal(parseOsv({ results: [] }, 128, '/tmp').status, 'not-applicable'); assert.throws(() => parseOsv({ results: [] }, 127, '/tmp')); assert.throws(() => parseOsv({ results: [] }, 1, '/tmp'));
   const osv = parseOsv({ results: [{ source: { path: 'package-lock.json' }, packages: [{ package: { name: 'demo', version: '1.0.0', ecosystem: 'npm' }, vulnerabilities: [{ id: 'TEST-1', details: secret }] }] }] }, 1, '/tmp');
   assert.equal(osv.findings.length, 1); assert.ok(!JSON.stringify(osv).includes(secret));
-  const sast = parseOpengrep({ results: [{ check_id: 'unsafe', path: 'a.js', start: { line: 2 }, extra: { lines: secret, message: secret } }], errors: [], paths: { scanned: ['a.js'] } }, 1, '/tmp');
+  const sast = parseOpengrep({ results: [{ check_id: 'pbai-eval-input', path: 'a.js', start: { line: 2 }, extra: { lines: secret, message: secret } }], errors: [], paths: { scanned: ['a.js'] } }, 1, '/tmp');
   assert.equal(sast.findings.length, 1); assert.ok(!JSON.stringify(sast).includes(secret));
   assert.throws(() => parseOpengrep({ results: [], errors: [{}], paths: { scanned: [] } }, 0, '/tmp'));
   assert.throws(() => parseOpengrep({ results: [], errors: [] }, 0, '/tmp'));
+});
+
+test('Opengrep usa IDs e fingerprints estaveis sem caminhos de Linux, Windows ou macOS', () => {
+  const rules = ['pbai-eval-input', 'pbai-shell-input', 'pbai-sql-input', 'pbai-tls-verification-disabled'];
+  const prefixes = ['', 'home.runner.work.AgentDevKit.AgentDevKit..agent-tests.security-smoke.run-eu1Fdm..pbai4devs.scripts.auditar-seguranca.rules.',
+    'D.a.AgentDevKit.AgentDevKit..agent-tests.security-smoke.run-TpubGc..pbai4devs.scripts.auditar-seguranca.rules.',
+    'Users.person.Library.Project..agent-tests.security-smoke.run-macABC..pbai4devs.scripts.auditar-seguranca.rules.'];
+  const reports = prefixes.map(prefix => parseOpengrep({
+    results: rules.map((rule, index) => ({ check_id: `${prefix}${rule}`, path: 'src/handler.js', start: { line: index + 1 }, extra: { severity: 'ERROR' } })),
+    errors: [], paths: { scanned: ['src/handler.js'] },
+  }, 1, '/unused'));
+  for (const report of reports) {
+    assert.deepEqual(report, reports[0]);
+    assert.deepEqual(report.findings.map(item => item.rule), rules);
+    assert.equal(new Set(report.findings.map(item => item.fingerprint)).size, rules.length);
+    assert.doesNotMatch(JSON.stringify(report), /runner|person|run-eu1Fdm|run-TpubGc|run-macABC|AgentDevKit|pbai4devs|D\.a\./);
+  }
+});
+
+test('Opengrep rejeita regras desconhecidas e semelhantes sem divulgar o ID bruto', () => {
+  const unknown = ['unknown', 'pbai-eval-input-extra', 'prefix.pbai-eval-input.extra', 'prefix.pbai-unknown', '/private/person/pbai-eval-input', ''];
+  for (const check_id of unknown) {
+    assert.throws(() => parseOpengrep({ results: [{ check_id, path: 'src/handler.js', start: { line: 1 } }], errors: [], paths: { scanned: ['src/handler.js'] } }, 1, '/unused'),
+      error => error.message === 'Identificador de regra Opengrep desconhecido.' && error.publicMessage === error.message);
+  }
+});
+
+test('regra Opengrep desconhecida torna a auditoria incompleta sem vazar caminho local', async t => {
+  const f = fixture(t), check_id = 'Users.private-person.project.run-private.rules.unrecognized';
+  f.audit.execute = () => ({ status: 1, stdout: JSON.stringify({ results: [{ check_id, path: 'index.js', start: { line: 1 } }], errors: [], paths: { scanned: ['index.js'] } }), stderr: '' });
+  const report = await f.audit.run({ target: 'app', checks: ['sast'] });
+  assert.equal(report.status, 'incomplete'); assert.equal(report.exitCode, 2);
+  assert.deepEqual(report.findings, []); assert.equal(report.checks[0].status, 'not-run');
+  assert.doesNotMatch(JSON.stringify(report), /private-person|run-private|unrecognized/);
 });
 
 test('run usa argumentos locais e fecha incompleto quando ferramenta ou DB falta', async t => {
