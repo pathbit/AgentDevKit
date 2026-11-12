@@ -4,7 +4,7 @@ description: Tipos de recursos, fontes compartilhadas e ciclo de manutenção.
 
 # Recursos compartilhados
 
-[Documentação](README.md) · [Fluxo](workflow.md) ·
+[Documentação](../README.md) · [Fluxo](workflow.md) ·
 [Ferramentas e testes](tools-and-testing.md)
 
 Edite a origem em `.pbai4devs`. As pastas dos clientes contêm referências e
@@ -111,11 +111,11 @@ Mantenha um README conciso ao criar uma pasta de primeiro nível no hub.
 **[ Próximo passo ]** Escolha o criador, edite a fonte e use sync/check.
 Para provas reais, consulte [ferramentas e testes](tools-and-testing.md).
 
-[recurso]: ../.pbai4devs/skills/projeto/criar-recurso/SKILL.md
-[skill]: ../.pbai4devs/skills/projeto/criar-skill/SKILL.md
-[regra]: ../.pbai4devs/skills/projeto/criar-regra/SKILL.md
-[comando]: ../.pbai4devs/skills/projeto/criar-comando/SKILL.md
-[agente]: ../.pbai4devs/skills/projeto/criar-agente/SKILL.md
-[compatibilidade]: ../.pbai4devs/COMPATIBILIDADE.md
-[externas]: ../.pbai4devs/external-skills/README.md
-[ignore]: ../.pbai4devs/templates/gitignore/TEMPLATE.md
+[recurso]: ../../.pbai4devs/skills/projeto/criar-recurso/SKILL.md
+[skill]: ../../.pbai4devs/skills/projeto/criar-skill/SKILL.md
+[regra]: ../../.pbai4devs/skills/projeto/criar-regra/SKILL.md
+[comando]: ../../.pbai4devs/skills/projeto/criar-comando/SKILL.md
+[agente]: ../../.pbai4devs/skills/projeto/criar-agente/SKILL.md
+[compatibilidade]: ../../.pbai4devs/COMPATIBILIDADE.md
+[externas]: ../../.pbai4devs/external-skills/README.md
+[ignore]: ../../.pbai4devs/templates/gitignore/TEMPLATE.md

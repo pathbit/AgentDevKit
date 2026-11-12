@@ -52,8 +52,8 @@ gerar arquivos. Não copia documentos reais de produto para o projeto-alvo.
 
 A entrega exige testes de projeto vazio e existente, preservação de arquivos,
 atualização, idiomas, catálogos e distribuição sem artefatos locais.
-Os aceites da distribuição ficam na [spec inicial](specs/v0.0.1/SPEC.md);
-a [spec de seleção](specs/v0.0.2/SPEC.md) detalha a instalação por agente.
+Os aceites da distribuição ficam na [spec inicial](../specs/v0.0.1/SPEC.md);
+a [spec de seleção](../specs/v0.0.2/SPEC.md) detalha a instalação por agente.
 
 ## Autorização
 
@@ -61,4 +61,4 @@ Escopo autorizado pela solicitação explícita de criação do AgentDevKit.
 Este estado registra requisitos aceitos; testes e publicação têm validação
 própria e não são considerados concluídos por esta aprovação.
 
-[Wiki](README.md) · [Design](design.md) · [Fluxo de uso](workflow.md)
+[Wiki](../README.md) · [Design](design.md) · [Fluxo de uso](../guides/workflow.md)

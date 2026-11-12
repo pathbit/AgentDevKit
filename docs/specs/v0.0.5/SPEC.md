@@ -12,8 +12,8 @@ Instalar o pacote publicado no npm público por nome e versão, sem login.
 O usuário escolheu esse canal para instalar com `npx`, sem baixar a release.
 
 Dependências: [publicação no GitHub Packages](../github-packages/SPEC.md),
-[estrutura padrão](../v0.0.4/SPEC.md), [PRD](../../prd.md) e
-[design](../../design.md). Mudança solicitada e execução autorizada.
+[estrutura padrão](../v0.0.4/SPEC.md), [PRD](../../product/prd.md) e
+[design](../../product/design.md). Mudança solicitada e execução autorizada.
 
 ## Contrato
 
@@ -38,4 +38,4 @@ Dependências: [publicação no GitHub Packages](../github-packages/SPEC.md),
 Evidências em `.agent-tests/registry-installation/`. A CLI e os arquivos são
 o escopo; não há interface web ou desktop para validar nesta mudança.
 
-[Specs](../README.md) · [Pacote npm](../../packages.md)
+[Specs](../README.md) · [Pacote npm](../../maintainers/packages.md)

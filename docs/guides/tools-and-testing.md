@@ -52,7 +52,7 @@ Uma captura isolada não demonstra o funcionamento completo.
 
 No checkout, `npm test` verifica o produto; `npm run test:infra` verifica as
 automações compartilhadas; `npm run check` valida as fontes. Os perfis de
-[CI](maintenance.md) evitam repetir a suíte completa em cada sistema.
+[CI](../maintainers/maintenance.md) evitam repetir a suíte completa em cada sistema.
 
 Os testes do produto ficam em `tests/`, na raiz. Os testes compartilhados
 ficam em `scripts/<nome>/tests/` dentro do hub. Em uma aplicação atendida,
@@ -63,8 +63,8 @@ contratos do kit; não aprova um produto real nem certifica todos os aplicativos
 Os pareceres simulados dessa matriz não substituem revisão independente.
 Use `npm run examples` para preparar as cópias e `npm run test:examples`
 para executá-las em `examples/generated/`. O [guia dos exemplos][examples]
-explica cada cenário; o [guia de desenvolvimento](development.md) reúne as
-verificações do repositório.
+explica cada cenário; o [guia de desenvolvimento](../maintainers/development.md)
+reúne as verificações do repositório.
 
 ## Guardar os resultados
 
@@ -73,13 +73,13 @@ downloads e saídas locais são ignorados, inclusive `.playwright*` em qualquer
 caixa. Registre passou, falhou ou não verificado; não transforme ausência de
 prova em sucesso. Feche a entrega pela [revisão][review].
 
-[Wiki](README.md) · [Recursos](resources.md)
+[Wiki](../README.md) · [Recursos](resources.md)
 
-[tools]: ../.pbai4devs/tools/README.md
-[bootstrap]: ../.pbai4devs/scripts/preparar-ferramentas/BOOTSTRAP.md
-[verify]: ../.pbai4devs/skills/projeto/verificar-trabalho/SKILL.md
-[browser]: ../.pbai4devs/tools/agent-browser/README.md
-[desktop]: ../.pbai4devs/tools/agent-desktop/README.md
-[matrix]: ../.pbai4devs/scripts/testar-maturidade/README.md
-[review]: ../.pbai4devs/commands/revisar-entrega/COMMAND.md
+[tools]: ../../.pbai4devs/tools/README.md
+[bootstrap]: ../../.pbai4devs/scripts/preparar-ferramentas/BOOTSTRAP.md
+[verify]: ../../.pbai4devs/skills/projeto/verificar-trabalho/SKILL.md
+[browser]: ../../.pbai4devs/tools/agent-browser/README.md
+[desktop]: ../../.pbai4devs/tools/agent-desktop/README.md
+[matrix]: ../../.pbai4devs/scripts/testar-maturidade/README.md
+[review]: ../../.pbai4devs/commands/revisar-entrega/COMMAND.md
 [examples]: https://github.com/pathbit/AgentDevKit/tree/master/examples

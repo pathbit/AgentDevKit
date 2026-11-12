@@ -142,10 +142,10 @@ configurações humanas em `.github` e `.vscode` ao migrar arquivos antigos.
 
 Para pedir ajuda, inclua SO/arquitetura, versões de Node/npm/AgentDevKit,
 comando executado, código de saída e trecho relevante do JSON, sem segredos.
-Use as [issues do projeto][issues] ou volte ao [índice](README.md).
+Use as [issues do projeto][issues] ou volte ao [índice](../README.md).
 
 [cli]: cli.md
 [runtime]: installation.md#pré-requisitos
-[tools]: ../.pbai4devs/scripts/preparar-ferramentas/README.md
+[tools]: ../../.pbai4devs/scripts/preparar-ferramentas/README.md
 [issues]: https://github.com/pathbit/AgentDevKit/issues
-[packages]: packages.md#instalar-no-projeto
+[packages]: ../maintainers/packages.md#instalar-no-projeto

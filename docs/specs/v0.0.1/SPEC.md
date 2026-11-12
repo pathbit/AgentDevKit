@@ -9,7 +9,7 @@ version: 0.0.1
 ## Objetivo e escopo
 
 Distribuir o kit independente, instalável em projetos novos e existentes,
-conforme [PRD](../../prd.md), [UX](../../ux-ui.md) e [design](../../design.md).
+conforme [PRD](../../product/prd.md), [UX](../../product/ux-ui.md) e [design](../../product/design.md).
 Inclui CLI, recursos, adaptadores, idiomas e testes. Publicação depende da
 validação da entrega; não inclui backend nem interface gráfica.
 

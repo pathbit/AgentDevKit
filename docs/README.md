@@ -9,20 +9,29 @@ O AgentDevKit organiza instruções de trabalho para agentes de código. A pasta
 `.pbai4devs` guarda a origem; as pastas dos clientes apontam para ela. Você
 pode trocar de agente sem manter várias cópias das mesmas instruções.
 
+## Organização
+
+| Pasta | Conteúdo |
+| --- | --- |
+| [Guias](guides/README.md) | Instalação, uso, comandos e solução de problemas. |
+| [Produto](product/README.md) | Requisitos, experiência, arquitetura e roadmap. |
+| [Manutenção](maintainers/README.md) | Desenvolvimento, comunidade e publicação. |
+| [Specs](specs/README.md) | Escopo e critérios de aceite de cada incremento. |
+
 ## Comece pelo seu objetivo
 
 | Objetivo | Caminho |
 | --- | --- |
-| Primeiro uso | [Instalar](installation.md) → [seguir o fluxo](workflow.md) |
+| Primeiro uso | [Instalar][install] → [seguir o fluxo][flow] |
 | Projeto em andamento | [Instalar com simulação][install] → [retomar][flow] |
-| Personalizar agentes | [Recursos](resources.md) → [compatibilidade][clients] |
-| Executar ou verificar algo | [CLI](cli.md) → [ferramentas e testes][tests] |
-| Corrigir uma dificuldade | [Soluções e recuperação](troubleshooting.md) |
-| Contribuir com o kit | [Contribuir][contrib] → [design](design.md) |
-| Desenvolver e experimentar | [Guia rápido](development.md) → [exemplos][examples] |
-| Preparar uma versão | [Manutenção e releases](maintenance.md) |
-| Publicar ou instalar o pacote npm | [npm público](packages.md) |
-| Relatar um bug ou propor melhoria | [Participar](community.md) |
+| Personalizar agentes | [Recursos][resources] → [compatibilidade][clients] |
+| Executar ou verificar algo | [CLI](guides/cli.md) → [ferramentas e testes][tests] |
+| Corrigir uma dificuldade | [Soluções e recuperação](guides/troubleshooting.md) |
+| Contribuir com o kit | [Contribuir][contrib] → [design](product/design.md) |
+| Desenvolver e experimentar | [Guia rápido][development] → [exemplos][examples] |
+| Preparar uma versão | [Manutenção e releases](maintainers/maintenance.md) |
+| Publicar ou instalar o pacote npm | [npm público](maintainers/packages.md) |
+| Relatar um bug ou propor melhoria | [Participar](maintainers/community.md) |
 
 ## Entenda os termos
 
@@ -44,10 +53,10 @@ não comprova que determinado cliente carregou ou executou a skill.
 
 ## Conheça este produto
 
-- [PRD](prd.md): problema, público, requisitos e limites.
-- [Experiência da CLI](ux-ui.md): interação, idiomas e saídas.
-- [Design técnico](design.md): componentes, estado e preservação de arquivos.
-- [Roadmap](roadmap.md) e [specs](specs/README.md): escopo das entregas.
+- [PRD](product/prd.md): problema, público, requisitos e limites.
+- [Experiência da CLI](product/ux-ui.md): interação, idiomas e saídas.
+- [Design técnico](product/design.md): componentes, estado e preservação de arquivos.
+- [Roadmap](product/roadmap.md) e [specs](specs/README.md): escopo das entregas.
 - [Changelog](../CHANGELOG.md): mudanças por versão.
 
 Esta wiki documenta **o AgentDevKit** e fica versionada junto ao código.
@@ -62,9 +71,11 @@ CLI orienta a comunicação dos agentes, sem traduzir documentos existentes.
 
 [Voltar ao projeto](../README.md)
 
-[install]: installation.md#instalar
-[flow]: workflow.md
+[install]: guides/installation.md#instalar
+[flow]: guides/workflow.md
 [clients]: ../.pbai4devs/COMPATIBILIDADE.md
-[tests]: tools-and-testing.md
+[tests]: guides/tools-and-testing.md
 [contrib]: ../CONTRIBUTING.md
 [examples]: https://github.com/pathbit/AgentDevKit/tree/master/examples
+[resources]: guides/resources.md
+[development]: maintainers/development.md

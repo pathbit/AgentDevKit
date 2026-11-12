@@ -11,7 +11,7 @@ version: 0.0.3
 Manter em `.pbai4devs` as fontes do kit e gerar a estrutura específica de cada
 agente quando necessária. Os derivados e as preferências são locais; código,
 templates, testes e documentação permanecem versionados. Escopo autorizado
-na solicitação atual e vinculado ao [PRD](../../prd.md).
+na solicitação atual e vinculado ao [PRD](../../product/prd.md).
 
 ## Contrato
 

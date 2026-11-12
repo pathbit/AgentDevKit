@@ -9,8 +9,8 @@ status: aprovado
 
 Publicar `@pathbit/agentdevkit` no GitHub Packages, vinculado a este repositório,
 para instalação com `npx`. Escopo confirmado pelo usuário nesta solicitação.
-O [PRD](../../prd.md), o [design](../../design.md) e a
-[UX da CLI](../../ux-ui.md) já definem o produto. Este incremento é um novo
+O [PRD](../../product/prd.md), o [design](../../product/design.md) e a
+[UX da CLI](../../product/ux-ui.md) já definem o produto. Este incremento é um novo
 canal de distribuição do pacote existente, sem mudança da interface da CLI.
 
 ## Contrato
@@ -42,4 +42,4 @@ não modificar tags publicadas. Dependência: [v0.0.3](../v0.0.3/SPEC.md).
 Evidências em `.agent-tests/github-packages/`, fora do Git. A publicação da
 versão 0.0.3 usa o artefato de sua tag existente; futuras versões seguem o CI.
 
-[Specs](../README.md) · [Roadmap](../../roadmap.md)
+[Specs](../README.md) · [Roadmap](../../product/roadmap.md)

@@ -50,7 +50,7 @@ de `lang`; `clients`, de `agents`. O idioma não traduz documentos existentes.
 
 O primeiro uso interativo reúne idioma e clientes. Sem interação, valem as
 opções explícitas, a escolha local salva e, por último, `all`. Confira os
-[IDs e dependências](../.pbai4devs/COMPATIBILIDADE.md).
+[IDs e dependências](../../.pbai4devs/COMPATIBILIDADE.md).
 
 `update` não procura automaticamente a próxima versão: execute o pacote
 da versão desejada. `sync` não atualiza a fonte distribuída.
@@ -78,4 +78,4 @@ Leia os campos estruturados, não dependa da tradução da mensagem.
 `doctor` verifica o kit, não o produto inteiro. `next` pode terminar com
 sucesso enquanto orienta uma etapa ainda pendente.
 
-[Wiki](README.md) · [Solução de problemas](troubleshooting.md)
+[Wiki](../README.md) · [Solução de problemas](troubleshooting.md)

@@ -4,7 +4,7 @@ description: Verificação, pacotes e releases do AgentDevKit.
 
 # Manutenção e releases
 
-Para atualizar o kit em um projeto, use [instalação](installation.md).
+Para atualizar o kit em um projeto, use [instalação](../guides/installation.md).
 Este guia explica como manter e publicar o gerador.
 
 ## Manter fontes e guias
@@ -35,7 +35,7 @@ ser canceladas quando substituídas, sem cancelar uma publicação em andamento.
 `npm run verify` executa o perfil completo. `ci:portable` e `ci:smoke`
 executam os demais perfis localmente. `npm run test:examples` verifica os
 cenários em `examples/generated/` quando a mudança afeta a geração.
-A [contribuição](../CONTRIBUTING.md) explica os checks durante o desenvolvimento.
+A [contribuição](../../CONTRIBUTING.md) explica os checks durante o desenvolvimento.
 
 ## Gerar um pacote
 
@@ -94,7 +94,7 @@ projeto descartável, seguindo [pacote npm](packages.md). Teste seleção,
 `doctor` e `sync --check`. Compare a integridade do registro com o artefato
 aprovado; uma aprovação de CI não substitui a instalação real pelo registro.
 
-[Wiki](README.md) · [Comunidade](community.md)
+[Wiki](../README.md) · [Comunidade](community.md)
 
 [ci]: https://github.com/pathbit/AgentDevKit/actions/workflows/ci.yml
 [release]: https://github.com/pathbit/AgentDevKit/actions/workflows/release.yml

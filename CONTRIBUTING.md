@@ -36,7 +36,7 @@ Os exemplos gerados são locais e ignorados; seu guia fica em
 | Exemplos de uso | `examples/` e gerador compartilhado |
 | Ajuda e exemplos | `docs/` e README do recurso |
 
-Leia o [guia do código-fonte][source] e o [design](docs/design.md).
+Leia o [guia do código-fonte][source] e o [design](docs/product/design.md).
 Modifique fontes e templates, não catálogos, estado ou arquivos dos clientes.
 
 ## Verificar e enviar
@@ -59,14 +59,15 @@ Atualize a documentação e use a [revisão de entrega][review] para reunir
 critérios, evidências e revisão independente. O PR deve explicar problema,
 solução e validação. Siga as [regras Git][git]. A [publicação][release] reutiliza
 o artifact aprovado do CI; não cria um pacote diferente na hora de publicar.
-O mesmo artifact segue para [GitHub Packages](docs/packages.md), usando a
-autenticação do workflow. Nunca inclua tokens no código ou no `.npmrc` versionado.
+O mesmo artifact segue para o [npm público][package], usando a autenticação
+do workflow. Nunca inclua tokens no código ou no `.npmrc` versionado.
 
 [Wiki](docs/README.md) · [Licença MIT](LICENSE)
 
 [issues]: https://github.com/pathbit/AgentDevKit/issues
-[source]: docs/development.md
-[tests]: docs/tools-and-testing.md
+[source]: docs/maintainers/development.md
+[tests]: docs/guides/tools-and-testing.md
 [review]: .pbai4devs/commands/revisar-entrega/COMMAND.md
 [git]: .pbai4devs/rules/git/RULE.md
-[release]: docs/maintenance.md
+[release]: docs/maintainers/maintenance.md
+[package]: docs/maintainers/packages.md

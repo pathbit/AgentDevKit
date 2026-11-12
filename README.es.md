@@ -30,7 +30,7 @@ Después, abre el proyecto en tu agente y pide:
 
 > Lee AGENTS.md y usa la skill proximos-passos para orientar mi trabajo.
 
-La [guía de instalación](docs/installation.md) incluye Windows, Node ausente,
+La [guía de instalación](docs/guides/installation.md) incluye Windows, Node ausente,
 simulación y actualización. Instala y actualiza mediante el
 [paquete npm público][packages];
 la [release v0.0.5][release] conserva artefactos y checksums para verificarlos.
@@ -42,8 +42,8 @@ La CLI guarda el idioma `pt`, `en` o `es` por proyecto.
 | Quiero… | Leer |
 | --- | --- |
 | Entender el kit | [Wiki](docs/README.md) |
-| Planificar o retomar un proyecto | [Flujo](docs/workflow.md) |
-| Crear una skill o comando | [Recursos](docs/resources.md) |
+| Planificar o retomar un proyecto | [Flujo](docs/guides/workflow.md) |
+| Crear una skill o comando | [Recursos](docs/guides/resources.md) |
 | Instalar herramientas y verificar | [Herramientas y pruebas][tests] |
 | Consultar opciones o resolver un error | [CLI][cli] · [Soluciones][help] |
 | Mejorar el kit | [Contribuir](CONTRIBUTING.md) |
@@ -54,26 +54,27 @@ La CLI guarda el idioma `pt`, `en` o `es` por proyecto.
 Usa Node.js 24+ con npm. Ejecuta `npm ci --ignore-scripts`, `npm run check`,
 `npm test` y `npm run examples`. Los ejemplos se generan localmente en
 `examples/generated/`; `npm run test:examples` ejecuta los escenarios.
-Consulta la [guía de desarrollo](docs/development.md) para conocer la estructura.
+Consulta la [guía de desarrollo](docs/maintainers/development.md) para conocer
+la estructura.
 
 Las guías detalladas están en portugués. Instalar el kit prepara instrucciones;
 las herramientas se instalan por separado. Los documentos de producto siguen
 las decisiones de planificación. Los proyectos existentes conservan su código.
 Una referencia no demuestra que un cliente haya cargado la skill.
 
-[Changelog](CHANGELOG.md) · [Roadmap](docs/roadmap.md) · [Licencia MIT](LICENSE)
+[Changelog](CHANGELOG.md) · [Roadmap](docs/product/roadmap.md) · [Licencia MIT](LICENSE)
 
 ¿Encontraste un problema o tienes una idea? [Abre una issue][issues] con los
-formularios. Consulta [cómo participar](docs/community.md).
+formularios. Consulta [cómo participar](docs/maintainers/community.md).
 
-**[ Próximo paso ]** Sigue la [instalación](docs/installation.md) y pide al
-agente que lea `AGENTS.md`.
+**[ Próximo paso ]** Sigue la [instalación](docs/guides/installation.md) y pide
+al agente que lea `AGENTS.md`.
 
 [clients]: .pbai4devs/COMPATIBILIDADE.md
 [release]: https://github.com/pathbit/AgentDevKit/releases/tag/v0.0.5
 [npm-package]: https://www.npmjs.com/package/@pathbit/agentdevkit
-[tests]: docs/tools-and-testing.md
-[cli]: docs/cli.md
-[help]: docs/troubleshooting.md
+[tests]: docs/guides/tools-and-testing.md
+[cli]: docs/guides/cli.md
+[help]: docs/guides/troubleshooting.md
 [issues]: https://github.com/pathbit/AgentDevKit/issues/new/choose
-[packages]: docs/packages.md
+[packages]: docs/maintainers/packages.md

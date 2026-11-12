@@ -19,8 +19,8 @@ O [guia de preparo][bootstrap] explica as duas situações.
 
 ## Instalar
 
-O pacote [`@pathbit/agentdevkit`](packages.md) é publicado no npm público.
-Execute na pasta do projeto, sem login:
+O pacote [`@pathbit/agentdevkit`](../maintainers/packages.md) é publicado no
+npm público. Execute na pasta do projeto, sem login:
 
 ```console
 npx -y @pathbit/agentdevkit@0.0.5 init
@@ -72,7 +72,7 @@ necessárias para outro cliente, como `.agents` para Codex e Antigravity.
 O [fluxo de trabalho](workflow.md) orienta a próxima etapa do projeto.
 Se houver erro, consulte [solução de problemas](troubleshooting.md).
 
-[Wiki](README.md) · [Release 0.0.5][release]
+[Wiki](../README.md) · [Release 0.0.5][release]
 
-[bootstrap]: ../.pbai4devs/scripts/preparar-ferramentas/BOOTSTRAP.md
+[bootstrap]: ../../.pbai4devs/scripts/preparar-ferramentas/BOOTSTRAP.md
 [release]: https://github.com/pathbit/AgentDevKit/releases/tag/v0.0.5

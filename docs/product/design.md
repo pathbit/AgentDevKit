@@ -6,7 +6,7 @@ status: aprovado
 # Design técnico
 
 O repositório contém o gerador. A instalação produz a estrutura usada pelos
-agentes em outro projeto. [PRD](prd.md) e [specs](specs/README.md) definem os
+agentes em outro projeto. [PRD](prd.md) e [specs](../specs/README.md) definem os
 contratos de cada entrega.
 
 ## Fontes no repositório
@@ -29,7 +29,8 @@ parte da fonte versionada.
 `npm run examples` gera as árvores de demonstração em `examples/generated/`.
 Elas contêm `.claude`, `.codex` e os demais clientes, sem misturar exemplos com
 a configuração ativa da raiz. `npm run test:examples` executa os cenários.
-O [guia de desenvolvimento](development.md) reúne os comandos do projeto.
+O [guia de desenvolvimento](../maintainers/development.md) reúne os comandos
+do projeto.
 
 ## Resultado instalado
 
@@ -80,12 +81,12 @@ integridade da versão no registro e testa `--version`, `init`, `doctor` e
 Os comandos sugeridos pela CLI e pelas notas usam o nome e a versão do pacote.
 O modo manual de pacote permite publicar uma tag existente sem alterar sua
 release. A instalação do consumidor é validada sem token ou configuração
-de autenticação, conforme [pacote npm](packages.md).
+de autenticação, conforme [pacote npm](../maintainers/packages.md).
 
 Testes comprovam arquivos e operações executadas. O carregamento em um
 aplicativo específico depende das capacidades desse cliente; gerar uma
 referência não comprova a execução da skill.
 
-[Wiki](README.md) · [Manutenção](maintenance.md) · [Recursos](resources.md)
+[Wiki](../README.md) · [Manutenção](../maintainers/maintenance.md) · [Recursos](../guides/resources.md)
 
-[clients]: ../.pbai4devs/templates/clients/ADAPTERS.json
+[clients]: ../../.pbai4devs/templates/clients/ADAPTERS.json

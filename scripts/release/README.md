@@ -17,7 +17,7 @@ artefato válido exige executar o CI; a publicação não gera outro pacote.
 
 `packages.mjs` publica esse mesmo tarball no npm público e verifica a CLI
 instalada pelo registro. O modo manual `package_only` atende tags já publicadas
-sem recriar a release. Veja [pacote npm](../../docs/packages.md).
+sem recriar a release. Veja [pacote npm](../../docs/maintainers/packages.md).
 
 O workflow fornece o contexto GitHub e OIDC ou `NPM_TOKEN`. Nenhum segredo ou
-resultado é versionado. Veja [manutenção](../../docs/maintenance.md).
+resultado é versionado. Veja [manutenção](../../docs/maintainers/maintenance.md).

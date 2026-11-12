@@ -11,7 +11,7 @@ version: 0.0.2
 Criar apenas os apontamentos dos agentes escolhidos, mantendo a origem única
 em `.pbai4devs`. A seleção funciona no terminal, em agentes desktop e em
 execuções sem interação. Escopo solicitado e autorizado pelo usuário, conforme
-[PRD](../../prd.md), [UX](../../ux-ui.md) e [design](../../design.md).
+[PRD](../../product/prd.md), [UX](../../product/ux-ui.md) e [design](../../product/design.md).
 
 ## Comportamento
 

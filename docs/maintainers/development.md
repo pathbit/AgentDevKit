@@ -16,13 +16,13 @@ npm test
 
 | Pasta | Conteúdo |
 | --- | --- |
-| [`src/`](../src/README.md) | Código da CLI e do instalador. |
-| [`bin/`](../bin/README.md) | Executável do pacote. |
+| [`src/`](../../src/README.md) | Código da CLI e do instalador. |
+| [`bin/`](../../bin/README.md) | Executável do pacote. |
 | [`tests/`][tests] | Testes do produto. |
 | [`scripts/`][scripts] | Verificação, build e publicação. |
 | [`examples/`][examples] | Exemplos para estudar o resultado. |
-| [`.pbai4devs/`](../.pbai4devs/README.md) | Recursos compartilhados dos agentes. |
-| [`docs/`](README.md) | Guias, decisões e especificações. |
+| [`.pbai4devs/`](../../.pbai4devs/README.md) | Recursos compartilhados dos agentes. |
+| [`docs/`](../README.md) | Guias, decisões e especificações. |
 
 ## Escolha a próxima ação
 
@@ -42,13 +42,13 @@ explícita. O projeto não precisa de todas as pastas de clientes na raiz.
 
 Edite fontes e templates, não os arquivos gerados. Testes e fixtures entram
 no Git; relatórios, caches e `examples/generated/` ficam locais. Antes de
-enviar uma alteração, siga [contribuição](../CONTRIBUTING.md) e a
+enviar uma alteração, siga [contribuição](../../CONTRIBUTING.md) e a
 [revisão de entrega][review]. A [publicação](maintenance.md) reaproveita o
 artefato aprovado pelo CI.
 
-[Wiki](README.md) · [Exemplos][examples]
+[Wiki](../README.md) · [Exemplos][examples]
 
-[review]: ../.pbai4devs/commands/revisar-entrega/COMMAND.md
+[review]: ../../.pbai4devs/commands/revisar-entrega/COMMAND.md
 [tests]: https://github.com/pathbit/AgentDevKit/tree/master/tests
 [scripts]: https://github.com/pathbit/AgentDevKit/tree/master/scripts
 [examples]: https://github.com/pathbit/AgentDevKit/tree/master/examples

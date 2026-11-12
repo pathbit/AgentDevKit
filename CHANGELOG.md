@@ -6,6 +6,7 @@ description: Alterações verificáveis por versão do AgentDevKit.
 
 ## 0.0.5 — 2026-11-11
 
+- Documentação organizada em guias, produto e manutenção, com índices próprios.
 - Instalação e próximos passos usam o pacote nomeado no npm público, sem login.
 - Notas e guias apontam para o registro e sua página de versões.
 - Publicação verifica instalação, diagnóstico e sincronização sem autenticação.

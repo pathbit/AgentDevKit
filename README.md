@@ -34,7 +34,7 @@ Depois, abra o projeto no seu agente e peça:
 > Leia AGENTS.md e use a skill proximos-passos para orientar meu trabalho.
 
 Windows, instalação sem Node, simulação e atualização estão no
-[guia de instalação](docs/installation.md). A distribuição usa a
+[guia de instalação](docs/guides/installation.md). A distribuição usa a
 versão publicada no [npm público][packages] e na [release v0.0.5][release],
 sem instalação global. Instalação e atualização usam o pacote do registro;
 os arquivos da release servem para conferir os artefatos publicados.
@@ -45,8 +45,8 @@ O idioma da CLI pode ser `pt`, `en` ou `es`.
 | Quero… | Ler |
 | --- | --- |
 | Entender e começar | [Wiki](docs/README.md) |
-| Planejar ou retomar um projeto | [Fluxo de trabalho](docs/workflow.md) |
-| Criar uma skill ou comando | [Recursos](docs/resources.md) |
+| Planejar ou retomar um projeto | [Fluxo de trabalho](docs/guides/workflow.md) |
+| Criar uma skill ou comando | [Recursos](docs/guides/resources.md) |
 | Instalar ferramentas e comprovar uma entrega | [Ferramentas e testes][tests] |
 | Consultar opções ou resolver um erro | [CLI][cli] · [Soluções][help] |
 | Melhorar o próprio kit | [Contribuir](CONTRIBUTING.md) |
@@ -65,24 +65,25 @@ npm run examples
 
 Os exemplos aparecem em `examples/generated/`. Para testar todos os cenários,
 use `npm run test:examples`; para verificar o pacote, `npm run verify`.
-O [guia de desenvolvimento](docs/development.md) explica a árvore e os comandos.
+O [guia de desenvolvimento](docs/maintainers/development.md) explica a árvore
+e os comandos.
 
 Instalar o kit prepara instruções. As ferramentas são instaladas por uma ação
 separada; PRD, design e specs surgem quando você inicia o planejamento.
 Projetos existentes preservam seu código e suas decisões.
 
-[Changelog](CHANGELOG.md) · [Roadmap](docs/roadmap.md) · [Licença MIT](LICENSE)
+[Changelog](CHANGELOG.md) · [Roadmap](docs/product/roadmap.md) · [Licença MIT](LICENSE)
 
 Encontrou um problema ou tem uma ideia? [Abra uma issue][issues] pelos
-[formulários de contribuição](docs/community.md).
+[formulários de contribuição](docs/maintainers/community.md).
 
-**[ Próximo passo ]** Siga a [instalação](docs/installation.md) e peça ao seu
-agente para ler `AGENTS.md`.
+**[ Próximo passo ]** Siga a [instalação](docs/guides/installation.md) e peça
+ao seu agente para ler `AGENTS.md`.
 
-[tests]: docs/tools-and-testing.md
-[cli]: docs/cli.md
-[help]: docs/troubleshooting.md
+[tests]: docs/guides/tools-and-testing.md
+[cli]: docs/guides/cli.md
+[help]: docs/guides/troubleshooting.md
 [issues]: https://github.com/pathbit/AgentDevKit/issues/new/choose
-[packages]: docs/packages.md
+[packages]: docs/maintainers/packages.md
 [release]: https://github.com/pathbit/AgentDevKit/releases/tag/v0.0.5
 [npm-package]: https://www.npmjs.com/package/@pathbit/agentdevkit

@@ -17,20 +17,20 @@ status: vigente
 | Estrutura e exemplos v0.0.4 | CLI, distribuição e gerador | [Spec][layout]. |
 | Instalação pelo registro v0.0.5 | Pacote publicado | [Spec][registry]. |
 
-A primeira entrega segue a [spec v0.0.1](specs/v0.0.1/SPEC.md) e está disponível
+A primeira entrega segue a [spec v0.0.1](../specs/v0.0.1/SPEC.md) e está disponível
 na [release v0.0.1][release]. Os detalhes de mudanças estão no
-[changelog](../CHANGELOG.md), e o processo de publicação em
-[manutenção](maintenance.md).
+[changelog](../../CHANGELOG.md), e o processo de publicação em
+[manutenção](../maintainers/maintenance.md).
 
 Não há datas ou entregas futuras assumidas. Novos clientes e funcionalidades
 exigem revisão do escopo e specs próprias. Melhorias na wiki acompanham o
 comportamento existente, sem alterar a versão de uma release já publicada.
 
-[Wiki](README.md) · [Specs](specs/README.md)
+[Wiki](../README.md) · [Specs](../specs/README.md)
 
 [release]: https://github.com/pathbit/AgentDevKit/releases/tag/v0.0.1
-[selection]: specs/v0.0.2/SPEC.md
-[source]: specs/v0.0.3/SPEC.md
-[packages]: specs/github-packages/SPEC.md
-[layout]: specs/v0.0.4/SPEC.md
-[registry]: specs/v0.0.5/SPEC.md
+[selection]: ../specs/v0.0.2/SPEC.md
+[source]: ../specs/v0.0.3/SPEC.md
+[packages]: ../specs/github-packages/SPEC.md
+[layout]: ../specs/v0.0.4/SPEC.md
+[registry]: ../specs/v0.0.5/SPEC.md

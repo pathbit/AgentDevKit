@@ -26,7 +26,7 @@ npm view @pathbit/agentdevkit versions --json
 ```
 
 Se existir um mapeamento antigo para o GitHub Packages, siga a
-[correção de registry](troubleshooting.md#download-plataforma-ou-ferramenta-falhando).
+[correção de registry](../guides/troubleshooting.md#download-plataforma-ou-ferramenta-falhando).
 
 ## Publicar pelo Actions
 
@@ -64,7 +64,7 @@ publicados. Assim, a verificação comprova o acesso de um usuário comum.
 As versões antigas no [GitHub Packages][legacy] permanecem disponíveis;
 o canal de instalação padrão é o npm público.
 
-[Wiki](README.md) · [Manutenção](maintenance.md) · [Instalação](installation.md)
+[Wiki](../README.md) · [Manutenção](maintenance.md) · [Instalação](../guides/installation.md)
 
 [package]: https://www.npmjs.com/package/@pathbit/agentdevkit
 [legacy]: https://github.com/pathbit/AgentDevKit/pkgs/npm/agentdevkit

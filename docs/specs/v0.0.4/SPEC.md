@@ -14,8 +14,8 @@ Escopo solicitado pelo usuário: código e testes na raiz, exemplos em pasta
 própria e automações claras. Aprovação geral e execução já autorizadas.
 
 Dependências: [v0.0.3](../v0.0.3/SPEC.md) e
-[GitHub Packages](../github-packages/SPEC.md). O [PRD](../../prd.md), o
-[design](../../design.md) e a [UX](../../ux-ui.md) continuam aplicáveis.
+[GitHub Packages](../github-packages/SPEC.md). O [PRD](../../product/prd.md), o
+[design](../../product/design.md) e a [UX](../../product/ux-ui.md) continuam aplicáveis.
 
 ## Contrato
 
@@ -50,4 +50,4 @@ Dependências: [v0.0.3](../v0.0.3/SPEC.md) e
 Evidências em `.agent-tests/standard-layout/`, fora do versionamento. Testes
 web/desktop não se aplicam: esta entrega altera a CLI, arquivos e automações.
 
-[Desenvolvimento](../../development.md) · [Specs](../README.md)
+[Desenvolvimento](../../maintainers/development.md) · [Specs](../README.md)

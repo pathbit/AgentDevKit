@@ -4,7 +4,7 @@ description: Do preparo do kit à implementação e revisão de uma entrega.
 
 # Fluxo de trabalho
 
-[Documentação](README.md) · [Instalação](installation.md) ·
+[Documentação](../README.md) · [Instalação](installation.md) ·
 [Recursos](resources.md) · [Ferramentas e testes](tools-and-testing.md)
 
 O AgentDevKit organiza o trabalho; ele não substitui decisões do projeto.
@@ -117,14 +117,14 @@ Mesmo uma mudança sem spec exige critérios claros e revisão da entrega.
 **[ Próximo passo ]** Consulte `next` e use a skill indicada, preservando as
 decisões existentes. Consulte [recursos](resources.md) se faltar um fluxo.
 
-[configurar]: ../.pbai4devs/skills/projeto/configurar-projeto/SKILL.md
-[preparar]: ../.pbai4devs/skills/projeto/preparar-dev/SKILL.md
-[prd]: ../.pbai4devs/skills/produto/criar-prd/SKILL.md
-[ux]: ../.pbai4devs/skills/produto/criar-ux-ui/SKILL.md
-[design]: ../.pbai4devs/skills/produto/criar-design-doc/SKILL.md
-[roadmap]: ../.pbai4devs/skills/specs/gerenciar-roadmap/SKILL.md
-[spec]: ../.pbai4devs/skills/specs/criar-spec/SKILL.md
-[implementar]: ../.pbai4devs/skills/specs/implementar-spec/SKILL.md
-[verificar]: ../.pbai4devs/skills/projeto/verificar-trabalho/SKILL.md
-[documentacao]: ../.pbai4devs/skills/projeto/atualizar-documentacao/SKILL.md
-[revisao]: ../.pbai4devs/commands/revisar-entrega/COMMAND.md
+[configurar]: ../../.pbai4devs/skills/projeto/configurar-projeto/SKILL.md
+[preparar]: ../../.pbai4devs/skills/projeto/preparar-dev/SKILL.md
+[prd]: ../../.pbai4devs/skills/produto/criar-prd/SKILL.md
+[ux]: ../../.pbai4devs/skills/produto/criar-ux-ui/SKILL.md
+[design]: ../../.pbai4devs/skills/produto/criar-design-doc/SKILL.md
+[roadmap]: ../../.pbai4devs/skills/specs/gerenciar-roadmap/SKILL.md
+[spec]: ../../.pbai4devs/skills/specs/criar-spec/SKILL.md
+[implementar]: ../../.pbai4devs/skills/specs/implementar-spec/SKILL.md
+[verificar]: ../../.pbai4devs/skills/projeto/verificar-trabalho/SKILL.md
+[documentacao]: ../../.pbai4devs/skills/projeto/atualizar-documentacao/SKILL.md
+[revisao]: ../../.pbai4devs/commands/revisar-entrega/COMMAND.md

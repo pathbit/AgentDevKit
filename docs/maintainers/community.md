@@ -31,7 +31,7 @@ Não há prazo de atendimento prometido.
 
 Os labels `bug`, `enhancement` e `documentation` ajudam a classificar o assunto.
 Mantenedores podem pedir informações, reunir duplicatas e vincular a mudança
-a um PR. Consulte o [roadmap](roadmap.md) para o escopo registrado.
+a um PR. Consulte o [roadmap](../product/roadmap.md) para o escopo registrado.
 
 Para contribuir com código ou documentos, siga [Contribuir][contrib]. O modelo
 de PR pede problema, mudança e verificação. Após a revisão, as mudanças passam
@@ -39,11 +39,11 @@ pelo CI; a publicação segue o [fluxo de releases](maintenance.md).
 
 Issues e anexos de um repositório público são públicos. Não envie tokens,
 senhas, dados pessoais ou acesso a serviços. Resultados locais de testes
-continuam fora do Git, conforme o [guia de ferramentas](tools-and-testing.md).
+continuam fora do Git, conforme o [guia de ferramentas](../guides/tools-and-testing.md).
 
-[Wiki](README.md) · [Solução de problemas](troubleshooting.md)
+[Wiki](../README.md) · [Solução de problemas](../guides/troubleshooting.md)
 
 [issues]: https://github.com/pathbit/AgentDevKit/issues
 [bug]: https://github.com/pathbit/AgentDevKit/issues/new?template=bug_report.yml
 [feature]: https://github.com/pathbit/AgentDevKit/issues/new?template=feature_request.yml
-[contrib]: ../CONTRIBUTING.md
+[contrib]: ../../CONTRIBUTING.md
