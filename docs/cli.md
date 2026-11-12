@@ -4,11 +4,11 @@ description: Comandos, opções e respostas do AgentDevKit.
 
 # Referência da CLI
 
-Use a [instalação](installation.md) para obter o pacote por `npx`. Com Git,
-esta forma curta serve para os exemplos de consulta:
+Use a [instalação](installation.md) para autenticar no registro e executar
+o pacote publicado por `npx`:
 
 ```console
-npx -y --ignore-scripts github:pathbit/AgentDevKit#v0.0.4 --help
+npx -y --registry=https://npm.pkg.github.com @pathbit/agentdevkit@0.0.5 --help
 ```
 
 Nas tabelas, `agentdevkit` representa esse executável. No checkout das fontes,

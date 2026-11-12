@@ -4,6 +4,12 @@ description: Alterações verificáveis por versão do AgentDevKit.
 
 # Changelog
 
+## 0.0.5 — 2026-11-11
+
+- Instalação e próximos passos usam o pacote nomeado no GitHub Packages.
+- Notas e guias apontam para o registro e sua página de versões.
+- Publicação verifica instalação, diagnóstico e sincronização pelo registry.
+
 ## 0.0.4 — 2026-11-11
 
 - Código em `src/`, testes em `tests/` e publicação em `scripts/release/`.

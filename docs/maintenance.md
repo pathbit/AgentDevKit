@@ -42,8 +42,9 @@ A [contribuição](../CONTRIBUTING.md) explica os checks durante o desenvolvimen
 O [CI][ci] roda em pushes e PRs; também pode ser iniciado em **Run workflow**.
 O perfil completo produz `agentdevkit-<versão>.tgz`, `SHA256SUMS`, notas e
 manifesto. O artifact inclui commit, execução e checksum para identificar
-exatamente o que foi testado. Downloads do Actions exigem login e expiram;
-releases são o canal público de instalação.
+exatamente o que foi testado. Downloads do Actions exigem login e expiram.
+A instalação usa o pacote nomeado no [GitHub Packages](packages.md);
+as releases preservam artefatos e checksums para auditoria.
 
 Para investigar localmente:
 
@@ -66,7 +67,8 @@ O [workflow de release][release] localiza o CI aprovado de um push na branch
 principal, confere o commit e baixa seu artifact por ID. Verifica procedência,
 versão e checksum antes de publicar. Não repete a suíte nem reempacota.
 Também envia o pacote npm ao [GitHub Packages](packages.md), confere sua
-integridade no registro e executa a CLI instalada por ele.
+integridade no registro e testa versão, instalação, diagnóstico e sincronização
+com a CLI instalada por ele.
 
 Se o artifact expirou, reexecute o CI original do push e depois a release.
 Uma execução manual de CI serve para diagnóstico, mas não substitui essa
@@ -87,11 +89,13 @@ Ele não tenta recriar a release existente.
 
 ## Conferir a entrega pública
 
-Baixe o pacote e o checksum pela release, confira SHA-256 e instale em um
-projeto descartável por `npx`. Teste seleção, `doctor` e `sync --check`.
-Uma aprovação de CI não substitui a prova de que o arquivo público é utilizável.
+Confira a versão na [página do pacote][package] e instale pelo nome em um
+projeto descartável, seguindo [GitHub Packages](packages.md). Teste seleção,
+`doctor` e `sync --check`. Compare a integridade do registro com o artefato
+aprovado; uma aprovação de CI não substitui a instalação real pelo registro.
 
 [Wiki](README.md) · [Comunidade](community.md)
 
 [ci]: https://github.com/pathbit/AgentDevKit/actions/workflows/ci.yml
 [release]: https://github.com/pathbit/AgentDevKit/actions/workflows/release.yml
+[package]: https://github.com/pathbit/AgentDevKit/pkgs/npm/agentdevkit

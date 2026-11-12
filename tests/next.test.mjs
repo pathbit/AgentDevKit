@@ -3,9 +3,10 @@ import { spawnSync } from 'node:child_process';
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import test from 'node:test';
 import { getNextSteps } from '../src/next.mjs';
+import { packageInfo } from '../src/config.mjs';
 import { inspectProject } from '../.pbai4devs/scripts/inspecionar-projeto/SCRIPT.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -78,11 +79,34 @@ test('manutenção orienta roadmap e não cria um loop de next', t => {
   assert.doesNotMatch(next.command, /'next'/);
 });
 
-test('comandos PowerShell usam literal quotado e chamada explícita', t => {
+test('instalação usa pacote do registry em macOS e Windows com destino literal', t => {
   const { target } = fixture(t);
-  const [next] = getNextSteps({ command: 'next', target, language: 'es', installed: false, platform: 'win32' });
-  assert.ok(next.command.startsWith('& '));
-  assert.ok(next.command.includes(target.replaceAll("'", "''")));
-  assert.ok(next.command.includes('--target '));
-  assert.doesNotMatch(next.command, /node_modules|_npx/);
+  for (const platform of ['darwin', 'win32']) {
+    const [next] = getNextSteps({ command: 'next', target, language: 'es', installed: false, platform });
+    assert.equal(next.command.startsWith('& '), platform === 'win32');
+    assert.ok(next.command.includes(target.replaceAll("'", platform === 'win32' ? "''" : "'\\''")));
+    assert.ok(next.command.includes('--target '));
+    assert.ok(next.command.includes(`--registry=${packageInfo.publishConfig?.registry || 'https://registry.npmjs.org'}`));
+    assert.ok(next.command.includes(`--package=${packageInfo.name}@${packageInfo.version}`));
+    assert.ok(next.command.includes('--ignore-scripts'));
+    assert.doesNotMatch(next.command, /node_modules|_npx|releases\/download|\.tgz|--package=https/);
+  }
+  const result = spawnSync(process.execPath, [join(root, 'bin/agentdevkit.mjs'), 'next', '--target', target, '--json'], { encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  const command = JSON.parse(result.stdout).next[0].command;
+  assert.ok(command.includes(`--package=${packageInfo.name}@${packageInfo.version}`));
+  assert.ok(command.includes(`--registry=${packageInfo.publishConfig?.registry || 'https://registry.npmjs.org'}`));
+  assert.doesNotMatch(command, /releases\/download|\.tgz|--package=https/);
+});
+
+test('comando respeita metadados do pacote e usa npmjs quando registry está ausente', async t => {
+  const { target } = fixture(t);
+  const source = readFileSync(join(root, 'src/config.mjs'));
+  for (const [id, registry] of [['github', 'https://npm.pkg.github.com'], ['default', undefined]]) {
+    const directory = join(target, id); mkdirSync(join(directory, 'src'), { recursive: true });
+    writeFileSync(join(directory, 'src/config.mjs'), source);
+    writeFileSync(join(directory, 'package.json'), JSON.stringify({ name: '@fixture/custom-kit', version: '9.8.7', ...(registry ? { publishConfig: { registry } } : {}) }));
+    const config = await import(pathToFileURL(join(directory, 'src/config.mjs')).href);
+    assert.equal(config.releaseCommand, `npx --yes --ignore-scripts --registry=${registry || 'https://registry.npmjs.org'} --package=@fixture/custom-kit@9.8.7 agentdevkit`);
+  }
 });

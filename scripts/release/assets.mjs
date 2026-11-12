@@ -36,9 +36,15 @@ export function buildRelease(root = releaseRoot, { env = process.env } = {}) {
   if (generated !== file) renameSync(generated, file);
   const digest = sha256(readFileSync(file));
   writeFileSync(join(output, 'SHA256SUMS'), `${digest}  ${basename(file)}\n`);
-  const url = `https://github.com/pathbit/AgentDevKit/releases/download/v${pkg.version}/${basename(file)}`;
-  const command = `npx --yes --ignore-scripts --package=${url} agentdevkit init`;
-  writeFileSync(join(output, 'NOTES.txt'), `# AgentDevKit ${pkg.version}\n\nKit de skills, specs e comandos para agentes de código.\n\n## Instalar\n\n\`\`\`text\n${command}\n\`\`\`\n\nUse Node.js 18+ com npm. O launcher prepara Node.js 24+ local quando necessário; o core usa Node.js 24+. Sem Node/npm, instale-os antes pelo gerenciador do sistema.\n\nPortuguês é o padrão; use \`--lang en\` ou \`--lang es\`. Informe os agentes com \`--agents codex,claude\` ou responda à pergunta inicial.\n\nO arquivo SHA256SUMS permite conferir o pacote publicado.\n\n**[ Próximo passo ]** Execute o comando de instalação na pasta do projeto.\n`);
+  const registry = pkg.publishConfig?.registry || 'https://registry.npmjs.org';
+  const command = `npx --yes --ignore-scripts --registry=${registry} --package=${pkg.name}@${pkg.version} agentdevkit init`;
+  const scopedName = pkg.name.match(/^@([^/]+)\/(.+)$/);
+  const github = new URL(registry).hostname === 'npm.pkg.github.com';
+  const repository = (typeof pkg.repository === 'string' ? pkg.repository : pkg.repository?.url)?.match(/^(?:git\+)?https:\/\/github\.com\/([^/]+)\/([^/#]+?)(?:\.git)?\/?$/);
+  const packageSlug = encodeURIComponent(scopedName?.[2] || pkg.name);
+  const packagePage = repository ? `https://github.com/${repository[1]}/${repository[2]}/pkgs/npm/${packageSlug}` : `https://github.com/orgs/${encodeURIComponent(scopedName?.[1] || 'pathbit')}/packages/npm/package/${packageSlug}`;
+  const authentication = github ? `Pacote: [${pkg.name}](${packagePage}).\n\nAutentique-se uma vez antes de instalar:\n\n\`\`\`text\nnpm login${scopedName ? ` --scope=@${scopedName[1]}` : ''} --auth-type=legacy --registry=${registry}\n\`\`\`\n\nUse um token pessoal classic com \`read:packages\` e acesso ao pacote; mantenha a credencial fora do repositório.\n\n` : '';
+  writeFileSync(join(output, 'NOTES.txt'), `# AgentDevKit ${pkg.version}\n\nKit de skills, specs e comandos para agentes de código.\n\n## Instalar\n\n${authentication}\`\`\`text\n${command}\n\`\`\`\n\nUse Node.js 18+ com npm. O launcher prepara Node.js 24+ local quando necessário; o core usa Node.js 24+. Sem Node/npm, instale-os antes pelo gerenciador do sistema.\n\nPortuguês é o padrão; use \`--lang en\` ou \`--lang es\`. Informe os agentes com \`--agents codex,claude\` ou responda à pergunta inicial.\n\n## Artefatos técnicos\n\n\`${basename(file)}\` e \`SHA256SUMS\` permitem conferir os bytes publicados no registry.\n\n**[ Próximo passo ]** Execute o comando de instalação na pasta do projeto.\n`);
   const manifest = {
     version: pkg.version, file: basename(file), sha256: digest, files: result.files,
     sourceCommit: env.GITHUB_SHA || null,

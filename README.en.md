@@ -5,7 +5,7 @@ language: en
 
 # AgentDevKit
 
-[Português](README.md) · [Español](README.es.md)
+[Português](README.md) · [Español](README.es.md) · [npm package][npm-package]
 
 Organize work with coding agents, from planning to verification. Keep skills,
 rules, commands and agent profiles in `.pbai4devs`; the kit generates the
@@ -20,7 +20,7 @@ With Node.js 18+ and npm, [sign in to GitHub Packages][packages].
 Then open a terminal in your project and run:
 
 ```console
-npx -y --registry=https://npm.pkg.github.com @pathbit/agentdevkit@0.0.4 init
+npx -y --registry=https://npm.pkg.github.com @pathbit/agentdevkit@0.0.5 init
 ```
 
 Choose your coding agents when prompted, or pass `--agents codex,claude`.
@@ -33,8 +33,9 @@ Then open the project in your coding agent and ask:
 
 See [installation](docs/installation.md) for Windows, missing Node, previews
 and updates. GitHub Packages requires authentication, including public npm
-packages. The [v0.0.4 release][release] also offers a tarball without registry
-login. Neither method requires a global installation.
+packages. Install and update through the named package; the
+[v0.0.5 release][release] retains artifacts and checksums for verification.
+No global installation is required.
 The CLI supports `pt`, `en` and `es`; it saves your selection per project.
 
 ## Explore
@@ -70,7 +71,8 @@ forms. See [how to participate](docs/community.md).
 agent to read `AGENTS.md`.
 
 [clients]: .pbai4devs/COMPATIBILIDADE.md
-[release]: https://github.com/pathbit/AgentDevKit/releases/tag/v0.0.4
+[release]: https://github.com/pathbit/AgentDevKit/releases/tag/v0.0.5
+[npm-package]: https://github.com/pathbit/AgentDevKit/pkgs/npm/agentdevkit
 [tests]: docs/tools-and-testing.md
 [cli]: docs/cli.md
 [help]: docs/troubleshooting.md

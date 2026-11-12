@@ -9,6 +9,7 @@ description: Incrementos verificáveis do AgentDevKit.
 - [v0.0.3](v0.0.3/SPEC.md): fontes, saídas locais e automações Node.
 - [GitHub Packages](github-packages/SPEC.md): pacote npm instalável via npx.
 - [v0.0.4](v0.0.4/SPEC.md): estrutura padrão e exemplos na raiz.
+- [v0.0.5](v0.0.5/SPEC.md): instalação pelo registro em todos os fluxos.
 
 Cada incremento vincula requisitos, critérios, testes e evidências locais.
 

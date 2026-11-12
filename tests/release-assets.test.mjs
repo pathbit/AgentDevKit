@@ -13,14 +13,14 @@ const version = '1.2.3';
 const name = '@pathbit/agentdevkit-fixture';
 const sourceMarker = 'AGENTDEVKIT_RELEASE_FIXTURE_SOURCE';
 
-function fixture(t, { packageVersion = version, lockVersion = packageVersion, rootVersion = packageVersion, rootEntry = true } = {}) {
+function fixture(t, { packageVersion = version, lockVersion = packageVersion, rootVersion = packageVersion, rootEntry = true, packageName = name, registry, repository } = {}) {
   const artifacts = join(project, '.agent-tests'); mkdirSync(artifacts, { recursive: true });
   const root = mkdtempSync(join(artifacts, 'release-assets com espaço-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const write = (path, content) => { const file = join(root, path); mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, content); };
-  const pkg = { name, version: packageVersion, type: 'module', files: ['bin/', 'src/', '.pbai4devs/'], bin: { agentdevkit: 'bin/agentdevkit.mjs' } };
+  const pkg = { name: packageName, version: packageVersion, type: 'module', files: ['bin/', 'src/', '.pbai4devs/'], bin: { agentdevkit: 'bin/agentdevkit.mjs' }, ...(registry ? { publishConfig: { registry } } : {}), ...(repository ? { repository } : {}) };
   write('package.json', JSON.stringify(pkg));
-  write('package-lock.json', JSON.stringify({ name, version: lockVersion, lockfileVersion: 3, packages: rootEntry ? { '': { name, version: rootVersion } } : {} }));
+  write('package-lock.json', JSON.stringify({ name: packageName, version: lockVersion, lockfileVersion: 3, packages: rootEntry ? { '': { name: packageName, version: rootVersion } } : {} }));
   write('bin/agentdevkit.mjs', '#!/usr/bin/env node\nconsole.log("fixture");\n');
   write('src/cli.mjs', 'export const fixture = true;\n');
   write('.pbai4devs/skills/example/SKILL.md', `---\nname: example\ndescription: Release fixture.\n---\n\n# Example\n\n${sourceMarker}\n`);
@@ -62,11 +62,26 @@ test('release produz quatro arquivos e checksum dos bytes reais do pacote', asyn
     assert.equal(manifest.provenance.runId, '123');
     const summary = JSON.parse(result.stdout.split('\n')[0]);
     assert.equal(summary.sha256, digest); assert.equal(summary.file, join(output, archiveName));
-    assert.match(readFileSync(join(output, 'NOTES.txt'), 'utf8'), new RegExp(`/v${version.replaceAll('.', '\\.')}/${archiveName.replaceAll('.', '\\.')}`));
-    assert.match(readFileSync(join(output, 'NOTES.txt'), 'utf8'), /```text\n/);
-    assert.match(readFileSync(join(output, 'NOTES.txt'), 'utf8'), /Node\.js 18\+ com npm/);
-    assert.match(readFileSync(join(output, 'NOTES.txt'), 'utf8'), /core usa Node\.js 24\+/);
+    const notes = readFileSync(join(output, 'NOTES.txt'), 'utf8');
+    assert.ok(notes.includes(`npx --yes --ignore-scripts --registry=https://registry.npmjs.org --package=${name}@${version} agentdevkit init`));
+    assert.ok(notes.includes(`\`${archiveName}\` e \`SHA256SUMS\``));
+    assert.doesNotMatch(notes, /releases\/download|--package=https|npm login/);
+    assert.match(notes, /```text\n/);
+    assert.match(notes, /Node\.js 18\+ com npm/);
+    assert.match(notes, /core usa Node\.js 24\+/);
   });
+});
+
+test('notas priorizam GitHub Packages com nome, versão, link e login do registry', t => {
+  const { root, output } = fixture(t, { packageName: '@pathbit/agentdevkit', registry: 'https://npm.pkg.github.com', repository: { url: 'git+https://github.com/pathbit/AgentDevKit.git' } });
+  const result = execute(root);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  const notes = readFileSync(join(output, 'NOTES.txt'), 'utf8');
+  assert.ok(notes.includes(`npx --yes --ignore-scripts --registry=https://npm.pkg.github.com --package=@pathbit/agentdevkit@${version} agentdevkit init`));
+  assert.ok(notes.includes('https://github.com/pathbit/AgentDevKit/pkgs/npm/agentdevkit'));
+  assert.ok(notes.includes('npm login --scope=@pathbit --auth-type=legacy --registry=https://npm.pkg.github.com'));
+  assert.ok(notes.includes('read:packages'));
+  assert.doesNotMatch(notes, /releases\/download|--package=https/);
 });
 
 test('tag inválida ou divergente falha antes de criar artefatos', async t => {

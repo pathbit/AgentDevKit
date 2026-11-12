@@ -100,15 +100,26 @@ export async function publishRegistryPackage({ directory, resolution, env = proc
       if (!visible) invalid('A versão publicada ainda não está visível no registry.');
     }
     const probe = join(temporary, 'probe');
+    const consumer = join(temporary, 'consumer');
+    const cache = join(temporary, 'probe-cache');
+    const commands = [];
     mkdirSync(probe);
-    const output = await invoke(['exec', '--yes', '--ignore-scripts', `--registry=${registry}`,
-      `--package=${spec}`, '--', 'agentdevkit', '--version', '--json'], { cwd: probe, cache: join(temporary, 'probe-cache') });
-    const reported = json(output);
-    if (reported?.ok !== true || reported.command !== 'version' || reported.version !== resolution.version) invalid('A versão executada pelo npm exec difere do artefato.');
-    assertArchive();
+    const prove = async (command, args, label = command) => {
+      const output = await invoke(['exec', '--yes', '--ignore-scripts', `--registry=${registry}`,
+        `--package=${spec}`, '--', 'agentdevkit', ...args, '--json'], { cwd: probe, cache });
+      const reported = json(output);
+      if (reported?.ok !== true || reported.command !== command || reported.version !== resolution.version) invalid(`A prova ${label} pelo npm exec não confirmou o artefato.`);
+      assertArchive();
+      commands.push(label);
+    };
+    await prove('version', ['--version']);
+    await prove('init', ['init', '--target', consumer, '--agents', 'codex,claude', '--lang', 'en', '--yes']);
+    await prove('doctor', ['doctor', '--target', consumer]);
+    await prove('sync', ['sync', '--check', '--target', consumer], 'sync --check');
     return { packageName, version: resolution.version, registry,
+      url: `https://github.com/${resolution.repository}/pkgs/npm/agentdevkit`,
       status: existing ? 'skipped' : 'published', sha256: verified.manifest.sha256,
-      integrity, probe: { status: 'passed', version: resolution.version } };
+      integrity, probe: { status: 'passed', version: resolution.version, commands } };
   } finally { rmSync(temporary, { recursive: true, force: true }); }
 }
 

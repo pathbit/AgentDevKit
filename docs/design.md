@@ -75,7 +75,9 @@ Não há novo empacotamento entre teste e publicação.
 
 O GitHub Packages recebe o mesmo tarball da release, como
 `@pathbit/agentdevkit`. O workflow autentica com `GITHUB_TOKEN`; confirma a
-integridade da versão no registro e testa a CLI instalada via `npm exec`.
+integridade da versão no registro e testa `--version`, `init`, `doctor` e
+`sync --check` via `npm exec`, em projeto temporário com cache novo.
+Os comandos sugeridos pela CLI e pelas notas usam o nome e a versão do pacote.
 O modo manual de pacote permite publicar uma tag existente sem alterar sua
 release. O uso local do registro exige autenticação, conforme
 [GitHub Packages](packages.md).

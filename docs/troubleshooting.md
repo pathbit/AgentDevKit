@@ -29,6 +29,8 @@ agente; arquivos próprios também podem manter uma pasta após a desmarcação.
 | Sintoma ou código | Próxima ação |
 | --- | --- |
 | `node` ou `npx` não encontrado | Siga [sem Node/npm][runtime]. |
+| `E401` ou `E403` no registry | Confira [login e acesso][packages]. |
+| `E404` ao baixar o pacote | Confira registry, versão e permissão. |
 | `E_ARGS` | Confira comando e aspas com `agentdevkit --help`. |
 | `E_MISSING` | Confirme `--target`; inicialize o projeto correto. |
 | `E_TARGET`, `E_SYMLINK` | Use a pasta real, fora dos diretórios reservados. |
@@ -136,3 +138,4 @@ Use as [issues do projeto][issues] ou volte ao [índice](README.md).
 [runtime]: installation.md#pré-requisitos
 [tools]: ../.pbai4devs/scripts/preparar-ferramentas/README.md
 [issues]: https://github.com/pathbit/AgentDevKit/issues
+[packages]: packages.md#instalar-no-projeto
