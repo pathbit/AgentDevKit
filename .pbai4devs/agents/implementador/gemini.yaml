@@ -1,0 +1,6 @@
+---
+name: implementador
+description: Implementa o escopo aprovado e entrega código, testes e evidências.
+kind: local
+tools: [read_file, grep_search, run_shell_command, replace, write_file]
+---

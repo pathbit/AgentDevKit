@@ -24,7 +24,8 @@ instalador compartilhado.
 No preparo inicial, execute `preparar-ferramentas setup` pelo seletor:
 instala e verifica todas as ferramentas compatíveis, sem atualizar as saudáveis.
 Aceita seleção por nome/grupo; relate falhas e itens não aplicáveis.
-Para buscar versões novas, `update` consulta `latest` oficial.
+Para npm, `update` consulta `latest` oficial; ferramentas nativas de segurança
+seguem o pin revisado em `TOOL.json`, sem atualização silenciosa para outro binário.
 `install` reutiliza uma instalação saudável; `check` verifica sem rede;
 `info` mostra a configuração; `run <nome> [argumentos]` executa sem instalar.
 Sem ação, mostre ajuda. Não interprete ausência de argumentos como instalação.
@@ -40,6 +41,9 @@ Em `skills`, use `find` ou `add <origem> --list`; incorporações passam por
 `criar-skill` e `sincronizar-agentes`, sem instalador externo nos espelhos.
 O shell virtual não substitui testes reais. Só ative proxy, certificados,
 serviços ou gravação quando necessários à tarefa e com dependências preparadas.
+
+Para segurança, use [preparar-seguranca](../../../commands/preparar-seguranca/COMMAND.md).
+Preparar o CLI e atualizar bases são operações separadas da análise offline.
 
 Antes de usar agent-desktop, leia `skills get desktop` e `skills get platform`
 da versão instalada e confira `status`. Para agent-browser, leia

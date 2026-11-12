@@ -54,14 +54,20 @@ Locks ativos, de outro host ou sem metadados verificáveis são preservados.
 Não aceita grupos. Um lock ausente não cria arquivos.
 
 O requisito comum é Node.js 24+ com npm. O gerenciador usa o Node atual.
-Downloads usam npm oficial com scripts de instalação desativados e integridade
-conferida.
+Pacotes npm usam o registro oficial com scripts de instalação desativados.
+Scanners nativos usam assets oficiais do GitHub com versão e SHA-256 revisados.
+`update` segue `latest` no npm e o pin do catálogo nos scanners nativos.
+Os dois caminhos conferem integridade antes de executar e preservam a versão
+anterior se a atualização falhar.
 Permissões de binários POSIX são aplicadas somente aos caminhos declarados
 em `executables` no `TOOL.json`, antes do probe.
 Atualizações usam staging e preservam a versão anterior em caso de falha.
 Atalhos locais recusam diretórios e arquivos simbólicos antes de escrever.
 O preparo valida os CLIs. Navegador, permissões desktop e FFmpeg dependem da
 tarefa; ele não inicia aplicações nem concede permissões automaticamente.
+No grupo `security`, a base OSV também é separada do CLI. Use o comando
+[preparar-seguranca](../../commands/preparar-seguranca/COMMAND.md) para orientar
+instalação, atualização explícita dos dados e análise offline.
 
 Testes: `node --test .pbai4devs/scripts/preparar-ferramentas/tests/TEST.mjs`.
 Após instalar `skills`, `just-bash`, `opensrc`, `webreel` e `portless`, execute

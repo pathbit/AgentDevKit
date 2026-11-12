@@ -1,0 +1,6 @@
+---
+name: planejador
+description: Esclarece o pedido e entrega um plano verificável sem implementar.
+kind: local
+tools: [read_file, grep_search]
+---

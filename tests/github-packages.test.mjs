@@ -18,7 +18,8 @@ const run = { head_sha: commit, head_branch: 'master', event: 'push', path: reso
   repository: { full_name: repository }, head_repository: { full_name: repository } };
 const request = async (_method, path) => path.includes('/actions/runs/')
   ? run : { object: { type: 'commit', sha: commit } };
-const env = { ...process.env, GITHUB_ACTIONS: 'false', NPM_TOKEN: 'test-secret-do-not-log', GH_TOKEN: 'test-github-secret' };
+const npmRuntime = { npm_execpath: npmExecutable() };
+const env = { ...process.env, ...npmRuntime, GITHUB_ACTIONS: 'false', NPM_TOKEN: 'test-secret-do-not-log', GH_TOKEN: 'test-github-secret' };
 
 function fixture(t, archive = Buffer.from('exact approved archive bytes'), releaseVersion = version) {
   const base = join(root, '.agent-tests'); mkdirSync(base, { recursive: true });
@@ -97,7 +98,7 @@ test('publica o TGZ aprovado e prova instalação pelo registry em cache novo', 
 
 test('versão já publicada com mesmos bytes é idempotente e ainda prova o consumidor', async t => {
   const f = fixture(t), m = mock(f, { views: [{ integrity: f.integrity }] });
-  m.options.env = { GH_TOKEN: env.GH_TOKEN };
+  m.options.env = { ...npmRuntime, GH_TOKEN: env.GH_TOKEN };
   const result = await publishRegistryPackage(m.options);
   assert.equal(result.status, 'skipped');
   assert.equal(result.authentication, 'not-needed');
@@ -308,7 +309,7 @@ test('leituras e instalação são anônimas; publicação recebe somente seu to
 test('primeira publicação exige NPM_TOKEN ou OIDC válido e nunca usa GITHUB_TOKEN como npm', async t => {
   for (const credentials of [{}, { GITHUB_TOKEN: 'github-only', NODE_AUTH_TOKEN: 'github-mapped-by-mistake' }, { NPM_TOKEN: 'bad\ntoken' }]) {
     const f = fixture(t), m = mock(f);
-    m.options.env = credentials;
+    m.options.env = { ...npmRuntime, ...credentials };
     await assert.rejects(publishRegistryPackage(m.options), /OIDC|NPM_TOKEN/);
     assert.ok(!m.calls.some(call => call.args[1] === 'publish'));
     assert.ok(!existsSync(m.calls[0].config.cwd));
@@ -318,7 +319,7 @@ test('primeira publicação exige NPM_TOKEN ou OIDC válido e nunca usa GITHUB_T
 test('OIDC usa npm 11.5.1+ somente na publicação e mantém consumo anônimo', async t => {
   for (const npmVersion of ['11.5.1', '11.21.2', '12.2.0']) await t.test(npmVersion, async subtest => {
     const f = fixture(subtest), m = mock(f, { npmVersion });
-    m.options.env = { GITHUB_ACTIONS: 'true', ACTIONS_ID_TOKEN_REQUEST_URL: 'https://oidc.example', ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'oidc-secret' };
+    m.options.env = { ...npmRuntime, GITHUB_ACTIONS: 'true', ACTIONS_ID_TOKEN_REQUEST_URL: 'https://oidc.example', ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'oidc-secret' };
     const result = await publishRegistryPackage(m.options);
     assert.equal(result.authentication, 'oidc');
     const published = m.calls.find(call => call.args[1] === 'publish');
@@ -328,7 +329,7 @@ test('OIDC usa npm 11.5.1+ somente na publicação e mantém consumo anônimo', 
   });
   for (const fallback of [false, true]) {
     const f = fixture(t), m = mock(f, { npmVersion: '11.5.0' });
-    m.options.env = { GITHUB_ACTIONS: 'true', ACTIONS_ID_TOKEN_REQUEST_URL: 'https://oidc.example', ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'oidc-secret', ...(fallback ? { NPM_TOKEN: env.NPM_TOKEN } : {}) };
+    m.options.env = { ...npmRuntime, GITHUB_ACTIONS: 'true', ACTIONS_ID_TOKEN_REQUEST_URL: 'https://oidc.example', ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'oidc-secret', ...(fallback ? { NPM_TOKEN: env.NPM_TOKEN } : {}) };
     if (!fallback) await assert.rejects(publishRegistryPackage(m.options), /11\.5\.1/);
     else {
       assert.equal((await publishRegistryPackage(m.options)).authentication, 'token');
@@ -468,7 +469,7 @@ test('GitHub exige token próprio mesmo para pacote público e não usa token np
   for (const credentials of [{}, { NPM_TOKEN: 'npm-only' }, { GITHUB_TOKEN: 'wrong-name' },
     { GITHUB_ACTIONS: 'true', ACTIONS_ID_TOKEN_REQUEST_URL: 'https://oidc.example', ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'oidc-only' },
     { GITHUB_PACKAGES_TOKEN: 'bad\ntoken' }]) {
-    const f = fixture(t), m = githubMock(f, { views: [{ integrity: f.integrity }] });m.options.env = credentials;
+    const f = fixture(t), m = githubMock(f, { views: [{ integrity: f.integrity }] });m.options.env = { ...npmRuntime, ...credentials };
     await assert.rejects(publishRegistryPackage(m.options), /GITHUB_PACKAGES_TOKEN/);
     assert.equal(m.calls.length, 0);
   }

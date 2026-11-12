@@ -1,7 +1,7 @@
 ---
 description: Requisitos da distribuição portátil AgentDevKit.
 status: aprovado
-version: 0.0.10
+version: 0.0.11
 ---
 
 # PRD do AgentDevKit
@@ -43,6 +43,9 @@ extraído do projeto de origem como produto independente.
 | FR-021 | Inventariar documentos existentes antes de propor alterações. |
 | FR-022 | Complementar documentação sem substituir arquivos por templates. |
 | FR-023 | Provar o fluxo documental em projetos reais e em projeto vazio. |
+| FR-024 | Incluir procedimentos de segurança nas instalações do kit. |
+| FR-025 | Compor entregas com agentes, skills, comandos, scripts e regras. |
+| FR-026 | Auditar localmente com ferramentas OSS e relatórios sem segredos. |
 
 Execuções repetidas devem ser idempotentes; a CLI oferece simulação e JSON.
 As instruções permanecem concisas, com detalhes opcionais em referências.

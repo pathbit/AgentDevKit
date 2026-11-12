@@ -44,7 +44,7 @@ Después, abre el proyecto en tu agente y pide:
 La [guía de instalación](docs/guides/installation.md) incluye preparación del
 runtime, simulación y actualización. Los dos [registros][packages] ofrecen
 la misma versión;
-la [release v0.0.10][release] conserva artefactos y checksums para verificarlos.
+la [release v0.0.11][release] conserva artefactos y checksums para verificarlos.
 No requiere instalación global.
 La CLI guarda el idioma `pt`, `en` o `es` por proyecto.
 
@@ -58,6 +58,7 @@ La CLI guarda el idioma `pt`, `en` o `es` por proyecto.
 | Mejorar documentación existente | [Inventario y complementos](docs/guides/documentation.md) |
 | Crear una skill o comando | [Recursos](docs/guides/resources.md) |
 | Instalar herramientas y verificar | [Herramientas y pruebas][tests] |
+| Revisar seguridad con herramientas locales | [Seguridad local](docs/guides/security.md) |
 | Consultar opciones o resolver un error | [CLI][cli] · [Soluciones][help] |
 | Mejorar el kit | [Contribuir](CONTRIBUTING.md) |
 | Probar los escenarios | [Ejemplos](https://github.com/pathbit/AgentDevKit/tree/master/examples) |
@@ -91,7 +92,7 @@ formularios. Consulta [cómo participar](docs/maintainers/community.md).
 al agente que lea `AGENTS.md`.
 
 [clients]: .pbai4devs/COMPATIBILIDADE.md
-[release]: https://github.com/pathbit/AgentDevKit/releases/tag/v0.0.10
+[release]: https://github.com/pathbit/AgentDevKit/releases/tag/v0.0.11
 [npm-package]: https://www.npmjs.com/package/@pathbit/agentdevkit
 [npm-badge]: https://img.shields.io/npm/v/%40pathbit%2Fagentdevkit
 [license-badge]: https://img.shields.io/badge/license-MIT-blue

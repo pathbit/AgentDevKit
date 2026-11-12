@@ -8,6 +8,7 @@ import { hostname } from 'node:os';
 import { ToolManager, platformKey, validateRelease, validateToolConfig, loadCatalog, main, toolEnvironment, binaryInvocation, toolActions, toolWrapper } from '../SCRIPT.mjs';
 import { requireNode } from '../../lib/runtime.mjs';
 import './bootstrap.test.mjs';
+import './native-release.test.mjs';
 
 const project = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
 const tool = (name = 'test-tool', group = 'base') => ({ name, description: 'Ferramenta da fixture.', group, source: `https://github.com/owner/${name}`, download: { provider: 'npm', package: name, registry: 'https://registry.npmjs.org/', repository: `owner/${name}`, channel: 'latest' }, platforms: [platformKey()], scripts: { entry: 'SCRIPT.mjs' }, probe: ['--version'] });
@@ -44,6 +45,7 @@ function fixture(t, catalog = { 'test-tool': tool() }, options = {}) {
   copyFileSync(join(project, '.pbai4devs/scripts/preparar-ferramentas/SCRIPT.mjs'), join(common, 'SCRIPT.mjs'));
   mkdirSync(join(root, '.pbai4devs/scripts/lib'), { recursive: true });
   copyFileSync(join(project, '.pbai4devs/scripts/lib/runtime.mjs'), join(root, '.pbai4devs/scripts/lib/runtime.mjs'));
+  copyFileSync(join(project, '.pbai4devs/scripts/lib/native-release.mjs'), join(root, '.pbai4devs/scripts/lib/native-release.mjs'));
   const state = { version: '1.0.0', installs: 0, fetches: 0, fail: false, tamper: false, broken: false, noBin: false };
   const manager = new ToolManager({ root, catalog, fetchRelease: async name => { state.fetches++; return release(state.version, name); }, install(prefix, name, version) { state.installs++; if (state.fail) throw new Error('download de prova falhou'); packageFiles(prefix, name, version, state); }, ...options });
   return { root, manager, state, local: join(root, '.pbai4devs/tools/test-tool/.local') };

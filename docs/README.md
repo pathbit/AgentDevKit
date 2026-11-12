@@ -27,6 +27,7 @@ pode trocar de agente sem manter várias cópias das mesmas instruções.
 | Projeto em andamento | [Instalar com simulação][install] → [retomar][flow] |
 | Evoluir documentação existente | [Inventariar e complementar](guides/documentation.md) |
 | Personalizar agentes | [Recursos][resources] → [compatibilidade][clients] |
+| Revisar segurança | [Scanners locais e controles](guides/security.md) |
 | Executar ou verificar algo | [CLI](guides/cli.md) → [ferramentas e testes][tests] |
 | Corrigir uma dificuldade | [Soluções e recuperação](guides/troubleshooting.md) |
 | Contribuir com o kit | [Contribuir][contrib] → [design](product/design.md) |
@@ -39,10 +40,10 @@ pode trocar de agente sem manter várias cópias das mesmas instruções.
 
 | Termo | Significado |
 | --- | --- |
-| Skill | Procedimento que o agente segue para uma tarefa. |
+| Skill | Procedimento que orienta decisões e ações de uma tarefa. |
 | Regra | Orientação aplicável a um contexto de trabalho. |
-| Comando | Entrada para executar um caso de uso. |
-| Perfil de agente | Papel especializado, como revisão. |
+| Comando | Entrada de um caso de uso com passos, argumentos e saída. |
+| Perfil de agente | Responsável por uma tarefa completa. |
 | Adaptador | Traduz referências para o formato de cada cliente. |
 | Espelho | Apontamento gerado para um recurso da origem. |
 | Template | Modelo que será preenchido com decisões do projeto. |
@@ -52,6 +53,8 @@ pode trocar de agente sem manter várias cópias das mesmas instruções.
 O agente lê e executa as instruções conforme as capacidades de seu cliente.
 A CLI instala, sincroniza e diagnostica arquivos. Ter um apontamento correto
 não comprova que determinado cliente carregou ou executou a skill.
+O [guia de recursos](guides/resources.md) mostra como esses componentes se
+combinam; não existe uma proporção obrigatória entre suas quantidades.
 
 ## Conheça este produto
 

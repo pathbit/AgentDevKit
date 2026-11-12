@@ -10,6 +10,7 @@ description: Guias de instalação, uso e verificação do AgentDevKit.
 - [Fluxo de trabalho](workflow.md)
 - [Evoluir documentação existente](documentation.md)
 - [Recursos dos agentes](resources.md)
+- [Segurança local](security.md)
 - [Ferramentas e testes](tools-and-testing.md)
 - [Solução de problemas](troubleshooting.md)
 

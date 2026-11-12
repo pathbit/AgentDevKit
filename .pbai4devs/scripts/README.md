@@ -28,6 +28,7 @@ node .pbai4devs/scripts/executar-script/SCRIPT.mjs diagnosticar-ambiente
 | `inspecionar-projeto` | Detecta manifests, comandos e estrutura |
 | `preparar-ferramentas` | Instala/atualiza ferramentas locais |
 | `gerenciar-skills-externas` | Instala/check/read de skills curadas locais |
+| `auditar-seguranca` | Scanners offline, bases locais e relatórios redigidos |
 | `revisar-entrega` | Confere documentação, revisão e provas da mudança |
 | `sincronizar-agentes` | Repara com `--force`; `--check` só confere |
 | `verificar-recursos` | Estrutura Markdown, links e espelhos |

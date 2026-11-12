@@ -29,6 +29,17 @@ As notas de cada entrada registram dependências e conteúdo remoto adicional.
 O pin congela os arquivos copiados; regras buscadas depois em `main` precisam
 de nova leitura antes de uso.
 
+## Segurança local
+
+OpenAI Security Best Practices, OpenAI Security Threat Model e GitHub Security
+Review têm entradas revisadas para leitura local. O catálogo registra seus
+limites: não tratar watchlists antigas como base atual nem incluir segredos nos
+relatórios. O fluxo do kit usa scanners locais e não exige conta externa.
+Trail of Bits Differential Review é uma referência candidata CC-BY-SA-4.0;
+preserve atribuição e licença, sem copiar seu conteúdo para arquivos MIT.
+
+Veja a [curadoria e os critérios de adoção][security].
+
 ## Outras fontes e fluxos
 
 | Fonte | Aplicação |
@@ -46,3 +57,5 @@ As entradas revisadas de Microsoft, Anthropic e OpenAI estão identificadas no
 catálogo. Vercel Writing Guidelines deve contribuir apenas com princípios
 editoriais compatíveis: seus padrões de MDX/TypeScript e atribuição de agentes
 não substituem os padrões locais de Markdown, Node e autoria Git.
+
+[security]: https://github.com/pathbit/AgentDevKit/blob/master/docs/guides/security-references.md

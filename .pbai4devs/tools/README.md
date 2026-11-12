@@ -8,8 +8,9 @@ Cada pasta mantém `TOOL.json`, `SCRIPT.mjs` e um guia.
 O catálogo local `catalog.json` relaciona essas definições aos comandos
 de instalação, atualização, verificação e execução. Ao editar definições,
 rode `sincronizar-agentes` e `--check`; versões instaladas ficam no estado local.
-O instalador comum consulta `latest` na origem oficial e instala com
-`--ignore-scripts`. Pacotes e estado ficam em `<nome>/.local/`; cache em
+Para npm, o instalador consulta `latest` e usa `--ignore-scripts`.
+Scanners nativos usam versões e SHA-256 revisados em `TOOL.json`; `update`
+aplica esse pin. Pacotes e estado ficam em `<nome>/.local/`; cache em
 `.cache/` e atalhos em `bin/`, todos ignorados. Tools ficam só em `.pbai4devs`.
 
 | CLI | Grupo | Uso |
@@ -22,9 +23,14 @@ O instalador comum consulta `latest` na origem oficial e instala com
 | [opensrc][source] | source | Fontes de dependências. |
 | [webreel][video] | video | Roteiros e vídeos do navegador. |
 | [portless][proxy] | proxy | Proxy e URLs locais estáveis. |
+| [gitleaks](gitleaks/README.md) | security | Segredos em arquivos e Git. |
+| [osv-scanner](osv-scanner/README.md) | security | Dependências com base local. |
+| [opengrep](opengrep/README.md) | security | Código com regras locais. |
 
 `setup` instala e verifica todos os CLIs compatíveis. O grupo `base` limita a
-seleção a navegador e lint; outros grupos permitem escolher por tarefa.
+seleção a navegador e lint; `security` seleciona os três scanners.
+As bases de vulnerabilidades são preparadas separadamente; instalar o CLI
+não transforma uma base ausente em resultado limpo.
 Confira Node/npm pelo [primeiro uso][manager] antes de executar os scripts.
 O instalador usa o mesmo Node 24+ com npm em todos os sistemas. Plataformas aceitas
 ficam em cada `TOOL.json`; ausência de restrição npm não comprova teste do SO.
@@ -45,6 +51,8 @@ O [instalador comum][manager] aceita nomes ou grupos, como `setup`, `install bas
 `update video`, `check source` e `list`.
 
 O preparo verifica o CLI; fluxos de aplicação precisam de provas específicas.
+O [fluxo de segurança](../commands/auditar-seguranca/COMMAND.md) usa análise
+offline e relatórios redigidos. Downloads públicos exigem rede, não conta.
 Skills usa descoberta sem importação automática ou symlinks. Portless é opt-in:
 o preparo não inicia proxy. Webreel exige executáveis explícitos para gravar
 sem baixar recursos em `~/.webreel`; seu guia lista os overrides. Use caminhos

@@ -32,6 +32,12 @@ A distribuição real é testada uma vez no perfil completo. Os outros perfis
 validam seus riscos específicos. Execuções antigas da mesma referência podem
 ser canceladas quando substituídas, sem cancelar uma publicação em andamento.
 
+O workflow [Security tools smoke][security-ci] instala os três scanners com
+pins revisados em Linux, macOS e Windows. Depois analisa fixtures locais sem
+rede, com casos inseguros e corrigidos. Essa prova valida o funcionamento das
+ferramentas; não certifica a segurança de uma aplicação. Relatórios normalizados
+são guardados como artifacts, sem binários ou fontes das fixtures.
+
 `npm run verify` executa o perfil completo. `ci:portable` e `ci:smoke`
 executam os demais perfis localmente. `npm run test:examples` verifica os
 cenários em `examples/generated/` quando a mudança afeta a geração.
@@ -106,3 +112,4 @@ aprovado; uma aprovação de CI não substitui a instalação real pelo registro
 [ci]: https://github.com/pathbit/AgentDevKit/actions/workflows/ci.yml
 [release]: https://github.com/pathbit/AgentDevKit/actions/workflows/release.yml
 [package]: https://www.npmjs.com/package/@pathbit/agentdevkit
+[security-ci]: https://github.com/pathbit/AgentDevKit/actions/workflows/security-tools.yml

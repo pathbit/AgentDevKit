@@ -1,0 +1,6 @@
+---
+name: auditor-seguranca
+description: Revisa riscos, interpreta scanners locais e valida controles de segurança.
+kind: local
+tools: [read_file, grep_search, run_shell_command]
+---

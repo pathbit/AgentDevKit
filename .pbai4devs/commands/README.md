@@ -21,6 +21,17 @@ instruções ou implementação. Pastas indicam onde ler ou salvar arquivos.
 - [status-roadmap](status-roadmap/COMMAND.md): consultar o andamento.
 - [proximos-passos](proximos-passos/COMMAND.md): orientar a próxima ação útil.
 
+## Fluxos de entrega e segurança
+
+- [planejar-entrega](planejar-entrega/COMMAND.md): reunir dúvidas e planejar.
+- [implementar-entrega](implementar-entrega/COMMAND.md): executar o plano aprovado.
+- [validar-entrega](validar-entrega/COMMAND.md): produzir provas por critério.
+- [atualizar-documentacao](atualizar-documentacao/COMMAND.md): manter os guias.
+- [preparar-seguranca](preparar-seguranca/COMMAND.md): preparar scanners e bases.
+- [auditar-seguranca](auditar-seguranca/COMMAND.md): executar e triar a análise.
+- [verificar-segredos](verificar-segredos/COMMAND.md): limitar a busca a segredos.
+- [verificar-dependencias](verificar-dependencias/COMMAND.md): conferir pacotes.
+
 Use `criar-comando` e o [modelo](../templates/comando/TEMPLATE.md) para novos
 casos. Para automações, use [executar-script](../skills/projeto/executar-script/SKILL.md)
 com o nome do script e seus argumentos, conforme o [guia](../scripts/README.md).
@@ -28,3 +39,5 @@ Argumentos vêm do usuário; `$ARGUMENTS` só existe quando a ferramenta o ofere
 
 O Markdown orienta o agente; não executa scripts sozinho. Peça a leitura pelo
 caminho ou use o atalho nativo quando descoberto pela ferramenta.
+Cada comando tem entrada e saída; não precisa corresponder a uma skill nova.
+Um fluxo pode combinar vários perfis e procedimentos sem duplicar conteúdo.

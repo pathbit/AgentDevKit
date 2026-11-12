@@ -54,6 +54,9 @@ Node 24+. Sem Node/npm, instale primeiro pelo mecanismo nativo do SO.
 Use Node.js 24+ com npm e os comandos de [scripts](scripts/README.md).
 `executar-script` reutiliza as automações `.mjs`, iguais em todos os sistemas.
 `verificar-trabalho` orienta as provas; alterações web exigem navegador.
+Mudanças em acesso, dados, entradas e dependências usam `revisar-seguranca`.
+O [fluxo de segurança](commands/auditar-seguranca/COMMAND.md) combina scanners
+locais e análise de contexto; as skills já acompanham a instalação do kit.
 Após qualquer implementação, conclua o [comando de revisão][revisao]:
 documentação afetada, provas por critério e revisor independente. O relatório
 fica ignorado em `.agent-tests/`; achados e provas pendentes impedem concluir.

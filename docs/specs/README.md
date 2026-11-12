@@ -16,6 +16,7 @@ description: Incrementos verificáveis do AgentDevKit.
 - [v0.0.9](v0.0.9/SPEC.md): coexistência e evolução documental sem perdas.
 - [Dois registries](dual-registry/SPEC.md): versão e bytes iguais no npm e GitHub.
 - [v0.0.10](v0.0.10/SPEC.md): release com instalação pelos dois registries e pré-requisitos.
+- [Ecossistema de segurança](security-ecosystem/SPEC.md): fluxos e scanners locais.
 
 Cada incremento vincula requisitos, critérios, testes e evidências locais.
 

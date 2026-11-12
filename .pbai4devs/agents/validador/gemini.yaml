@@ -1,0 +1,6 @@
+---
+name: validador
+description: Executa verificações reais e registra provas por critério de aceite.
+kind: local
+tools: [read_file, grep_search, run_shell_command]
+---

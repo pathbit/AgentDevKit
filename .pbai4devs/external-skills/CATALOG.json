@@ -8,7 +8,9 @@
     "oracle/skills",
     "anthropics/skills",
     "openai/skills",
-    "tech-leads-club/agent-skills"
+    "tech-leads-club/agent-skills",
+    "github/awesome-copilot",
+    "trailofbits/skills"
   ],
   "skills": [
     {
@@ -116,6 +118,42 @@
       "use": "Avaliar implementação contra critérios de aceite.",
       "status": "candidate",
       "notes": "Fonte comunitária com atribuição. Revisar licença e adaptar destino de relatórios para .agent-tests; a origem grava junto da spec."
+    },
+    {
+      "id": "openai-security-threat-model",
+      "repository": "openai/skills",
+      "commit": "49f948faa9258a0c61caceaf225e179651397431",
+      "path": "skills/.curated/security-threat-model/SKILL.md",
+      "name": "security-threat-model",
+      "license": "Apache-2.0",
+      "use": "Modelar ameacas e fronteiras de confianca com evidencias locais do projeto.",
+      "status": "reviewed",
+      "notes": "Procedimento textual, sem conta ou scanner remoto obrigatorio. Carregar referencias da pasta conforme necessario; resultados e hipoteses ficam em .agent-tests. As perguntas de contexto continuam necessarias quando a arquitetura nao responder.",
+      "licenseSource": "https://github.com/openai/skills/blob/49f948faa9258a0c61caceaf225e179651397431/skills/.curated/security-threat-model/LICENSE.txt"
+    },
+    {
+      "id": "github-security-review",
+      "repository": "github/awesome-copilot",
+      "commit": "30a0d7465b14b05e05949d6588b99f7af0c537b4",
+      "path": "skills/security-review/SKILL.md",
+      "name": "security-review",
+      "license": "MIT",
+      "use": "Revisar fluxos de dados e controles entre arquivos, com triagem dos achados locais.",
+      "status": "reviewed",
+      "notes": "Aplicar raciocinio de revisao, sem SaaS. Watchlists estaticas de CVEs nao substituem bases locais atualizadas. Nao copiar segredos/snippets sensiveis nos relatorios; preservar o escopo, as aprovacoes existentes e a politica do projeto.",
+      "licenseSource": "https://github.com/github/awesome-copilot/blob/30a0d7465b14b05e05949d6588b99f7af0c537b4/LICENSE"
+    },
+    {
+      "id": "trailofbits-differential-review",
+      "repository": "trailofbits/skills",
+      "commit": "e4dd0bb5b15535f7c5a0834187dffba6ac37e4ff",
+      "path": "plugins/differential-review/skills/differential-review/SKILL.md",
+      "name": "differential-review",
+      "license": "CC-BY-SA-4.0",
+      "use": "Referencia de revisao de mudancas com contexto e cobertura de testes.",
+      "status": "candidate",
+      "notes": "Preservar atribuicao e share-alike; nao copiar para fontes MIT. Revisar dependencias e recursos auxiliares antes da instalacao. Nao adotar scripts que exijam Python, conta ou servico remoto no fluxo local.",
+      "licenseSource": "https://github.com/trailofbits/skills/blob/e4dd0bb5b15535f7c5a0834187dffba6ac37e4ff/LICENSE"
     }
   ]
 }

@@ -4,6 +4,15 @@ description: Alterações verificáveis por versão do AgentDevKit.
 
 # Changelog
 
+## 0.0.11 — 2026-11-12
+
+- Skills de segurança incluídas nas instalações, com revisão e correção guiadas.
+- Agentes, comandos e regras conectados em fluxos de entrega e auditoria.
+- Gitleaks, OSV-Scanner e Opengrep locais, com versões e hashes revisados.
+- Auditoria offline e preparo explícito de bases, sem conta de análise externa.
+- Relatórios redigidos, testes reais dos scanners e preservação de recursos próprios.
+- Curadoria de ferramentas e skills com licenças, fontes e limites documentados.
+
 ## 0.0.10 — 2026-11-12
 
 - Mesmo pacote publicado no npm e GitHub Packages, com versão e bytes iguais.

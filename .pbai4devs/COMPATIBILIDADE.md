@@ -66,6 +66,12 @@ Os caminhos são relativos à pasta do cliente, exceto onde indicado.
 - MiMo: `skills/grupo/nome/SKILL.md`, agentes e comandos diretos;
   regras como referências.
 
+Os novos perfis OpenCode usam `permissions` do formato V2, com ações como
+`shell` e `edit`. O revisor anterior conserva seu formato legado; confira a
+[migração de permissões](https://opencode.ai/docs/permissions/) na versão usada.
+Permissão de terminal não isola caminhos por si só: o perfil e os scripts
+continuam responsáveis por respeitar o escopo autorizado.
+
 Claude documenta skills no nível `skills/nome`; sua descoberta de arquivos
 `.claude` em subprojetos não confirma grupos dentro de `skills/`. Gemini,
 MiniMax, Copilot CLI/SDK e DeepSeek usam filhos imediatos. ZCode exige skills

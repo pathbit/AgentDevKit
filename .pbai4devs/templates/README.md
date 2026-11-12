@@ -28,6 +28,7 @@ enquanto o usuário estiver preparando somente a estrutura dos agentes.
 | [Revisão de entrega][revisao] | Implementação | Antes de commit/merge. |
 | [Release][release], [CHANGELOG][changelog] | Primeira entrega | Publicar. |
 | [SECURITY][security] | Suporte público | Política/suporte mudar. |
+| [Revisão de segurança][security-review] | Análise autorizada | Ameaças e provas. |
 | [Comando][comando] | Recurso agêntico | Entrada ou fluxo mudar. |
 
 Antes, inventarie e leia os documentos existentes com `atualizar-documentacao`.
@@ -65,4 +66,5 @@ Modelos, configurações e relatórios não são espelhados nas pastas dos agent
 [release]: release/TEMPLATE.md
 [changelog]: changelog/TEMPLATE.md
 [security]: seguranca/TEMPLATE.md
+[security-review]: revisao-seguranca/TEMPLATE.md
 [comando]: comando/TEMPLATE.md

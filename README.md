@@ -47,7 +47,7 @@ Depois, abra o projeto no seu agente e peça:
 
 Windows, instalação sem Node, simulação e atualização estão no
 [guia de instalação](docs/guides/installation.md). A distribuição usa a
-versão publicada no [npm e GitHub Packages][packages] e na [release v0.0.10][release],
+versão publicada no [npm e GitHub Packages][packages] e na [release v0.0.11][release],
 sem instalação global. Instalação e atualização usam o pacote do registro;
 os arquivos da release servem para conferir os artefatos publicados.
 O idioma da CLI pode ser `pt`, `en` ou `es`.
@@ -62,6 +62,7 @@ O idioma da CLI pode ser `pt`, `en` ou `es`.
 | Evoluir documentos existentes | [Inventário e complementos](docs/guides/documentation.md) |
 | Criar uma skill ou comando | [Recursos](docs/guides/resources.md) |
 | Instalar ferramentas e comprovar uma entrega | [Ferramentas e testes][tests] |
+| Revisar segurança sem serviços externos | [Segurança local](docs/guides/security.md) |
 | Consultar opções ou resolver um erro | [CLI][cli] · [Soluções][help] |
 | Melhorar o próprio kit | [Contribuir](CONTRIBUTING.md) |
 | Experimentar os cenários | [Exemplos](https://github.com/pathbit/AgentDevKit/tree/master/examples) |
@@ -106,7 +107,7 @@ ao seu agente para ler `AGENTS.md`.
 [help]: docs/guides/troubleshooting.md
 [issues]: https://github.com/pathbit/AgentDevKit/issues/new/choose
 [packages]: docs/maintainers/packages.md
-[release]: https://github.com/pathbit/AgentDevKit/releases/tag/v0.0.10
+[release]: https://github.com/pathbit/AgentDevKit/releases/tag/v0.0.11
 [npm-package]: https://www.npmjs.com/package/@pathbit/agentdevkit
 [npm-badge]: https://img.shields.io/npm/v/%40pathbit%2Fagentdevkit
 [license-badge]: https://img.shields.io/badge/license-MIT-blue

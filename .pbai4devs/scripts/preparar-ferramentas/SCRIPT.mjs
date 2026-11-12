@@ -6,6 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { hostname } from 'node:os';
 import { projectRoot, requireNode, isMain } from '../lib/runtime.mjs';
+import { validateNativeDownload, nativeRelease, validateNativeRelease, installNative, checkNative, assertNativeVersion } from '../lib/native-release.mjs';
 
 const registry = 'https://registry.npmjs.org/';
 const versionPattern = /^\d+\.\d+\.\d+(?:-[\w.-]+)?$/;
@@ -29,9 +30,13 @@ export function validateToolConfig(name, value) {
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name) || value?.name !== name) fail(`Nome de ferramenta invalido: ${name}`);
   if (typeof value.description !== 'string' || !value.description.trim() || value.description.includes('\0')) fail(`Descricao ausente ou invalida: ${name}`);
   const download = value.download;
-  if (download?.provider !== 'npm' || download.registry !== registry || download.channel !== 'latest') fail(`Download nao suportado: ${name}`);
-  if (!/^(?:@[a-z0-9._-]+\/)?[a-z0-9._-]+$/.test(download.package || '') || !/^[\w.-]+\/[\w.-]+$/.test(download.repository || '')) fail(`Origem invalida: ${name}`);
+  if (!['npm', 'github-release'].includes(download?.provider)) fail(`Download nao suportado: ${name}`);
+  if (download.provider === 'npm') {
+    if (download.registry !== registry || download.channel !== 'latest') fail(`Download nao suportado: ${name}`);
+    if (!/^(?:@[a-z0-9._-]+\/)?[a-z0-9._-]+$/.test(download.package || '') || !/^[\w.-]+\/[\w.-]+$/.test(download.repository || '')) fail(`Origem invalida: ${name}`);
+  }
   if (!/^[a-z][a-z0-9-]*$/.test(value.group || '') || !Array.isArray(value.platforms) || !value.platforms.length || new Set(value.platforms).size !== value.platforms.length || value.platforms.some(item => !/^(?:darwin|linux|win32)-(?:arm64|x64)$/.test(item))) fail(`Grupo/plataformas invalidos: ${name}`);
+  if (download.provider === 'github-release') validateNativeDownload(download, value.platforms);
   if (!Array.isArray(value.probe) || !value.probe.length || value.probe.some(item => typeof item !== 'string' || item.includes('\0')) || (value.probeInput !== undefined && (typeof value.probeInput !== 'string' || value.probeInput.includes('\0')))) fail(`Verificacao invalida: ${name}`);
   if (value.binary !== undefined && (typeof value.binary !== 'string' || !/^[\w.-]+$/.test(value.binary))) fail(`Executavel invalido: ${name}`);
   if (value.executables !== undefined) {
@@ -72,7 +77,7 @@ export function toolActions(name, entry) {
   validateToolConfig(name, entry);
   const descriptions = {
     install: 'Instala ou reutiliza uma instalacao saudavel.',
-    update: 'Consulta latest e atualiza com rollback em caso de falha.',
+    update: entry.download.provider === 'github-release' ? 'Aplica a versao revisada do catalogo com rollback.' : 'Consulta latest e atualiza com rollback em caso de falha.',
     check: 'Executa o probe local sem instalar nem consultar latest.',
     info: 'Mostra configuracao, plataforma, runtime e versao registrada.',
     run: 'Executa o CLI instalado com os argumentos informados.',
@@ -128,7 +133,8 @@ export function loadCatalog(root = projectRoot) {
   return catalog;
 }
 
-export function validateRelease(name, entry, release) {
+export function validateRelease(name, entry, release, platform = platformKey()) {
+  if (entry.download.provider === 'github-release') return validateNativeRelease(entry, release, platform);
   const expected = entry.download.package;
   const repository = typeof release.repository === 'string' ? release.repository : release.repository?.url;
   if (release.name !== expected || !versionPattern.test(release.version || '')) fail(`Nome/versao invalido no registro: ${name}`);
@@ -165,6 +171,9 @@ export function binaryInvocation(prefix, name, args = [], binaryName = name.spli
 
 export function toolEnvironment(entry, local, runtime) {
   const environment = Object.assign(Object.create(null), process.env);
+  if (entry.download?.provider === 'github-release') {
+    for (const key of Object.keys(environment)) if (/token|secret|password|(?:^|_)auth(?:_|$)|^(?:semgrep|opengrep)_/i.test(key)) delete environment[key];
+  }
   const set = (key, value) => {
     if (process.platform === 'win32') for (const existing of Object.keys(environment)) if (existing.toUpperCase() === key.toUpperCase()) delete environment[existing];
     environment[key] = value;
@@ -184,10 +193,13 @@ export function toolEnvironment(entry, local, runtime) {
 }
 
 function execute(prefix, entry, args, capture = false, input, environment, runtime) {
-  const [file, options] = binaryInvocation(prefix, entry.download.package, args, entry.binary || entry.name, runtime.file);
+  const native = entry.download.provider === 'github-release';
+  const [file, options] = native ? [checkNative(prefix, entry, runtime.platform || platformKey()).file, args]
+    : binaryInvocation(prefix, entry.download.package, args, entry.binary || entry.name, runtime.file);
   const result = spawnSync(file, options, { stdio: capture ? 'pipe' : 'inherit', cwd: capture ? prefix : undefined, input, env: environment, encoding: 'utf8', timeout: capture ? 30000 : undefined, windowsHide: true });
   if (result.error) throw result.error;
   if (capture && result.status !== 0) fail(`${entry.name}: ${result.stderr?.trim().slice(0, 400) || result.stdout?.trim().slice(0, 400) || `falha ${result.status}`}`, result.status ?? 1);
+  if (capture && native) assertNativeVersion(`${result.stdout || ''}\n${result.stderr || ''}`, entry.download.version);
   return result.status ?? 1;
 }
 
@@ -215,11 +227,13 @@ export class ToolManager {
     this.catalog = catalog ?? loadCatalog(this.root);
     for (const [name, entry] of Object.entries(this.catalog)) validateToolConfig(name, entry);
     this.fetchRelease = fetchRelease || (async (name, entry) => {
+      if (entry.download.provider === 'github-release') return nativeRelease(entry, this.target);
       const response = await fetch(`${entry.download.registry}${encodeURIComponent(entry.download.package)}/${entry.download.channel}`, { signal: AbortSignal.timeout(20000) });
       if (!response.ok) fail(`Registro indisponivel: HTTP ${response.status}`);
       return response.json();
     });
-    this.installPackage = install || ((prefix, packageName, version, entry, runtime) => {
+    this.installPackage = install || (async (prefix, packageName, version, entry, runtime) => {
+      if (entry.download.provider === 'github-release') return installNative(prefix, entry, this.target);
       const environment = toolEnvironment(entry, this.local(entry.name), runtime);
       const result = spawnSync(runtime.file, [this.npm(runtime, environment), 'install', '--prefix', prefix, '--cache', join(this.home, '.cache/npm'), '--registry', entry.download.registry, '--ignore-scripts', '--omit=dev', '--no-audit', '--no-fund', '--save-exact', `${packageName}@${version}`], {
         cwd: prefix, encoding: 'utf8', timeout: 180000,
@@ -236,7 +250,7 @@ export class ToolManager {
     const entry = this.entry(name);
     if (!entry.platforms.includes(this.target)) fail(`Plataforma nao suportada por ${name}: ${this.target}`);
     requireNode(24, this.nodeVersion);
-    return { file: process.execPath, version: process.version };
+    return { file: process.execPath, version: process.version, platform: this.target };
   }
   preflight(names) {
     const issues = [];
@@ -298,8 +312,13 @@ export class ToolManager {
   }
   check(name) {
     const entry = this.entry(name); const runtime = this.runtime(name); const info = this.current(name);
-    const pkg = json(join(info.prefix, 'node_modules', entry.download.package, 'package.json'));
-    if (pkg.name !== entry.download.package || pkg.version !== info.version) fail(`Versao local divergente: ${name}`);
+    if (entry.download.provider === 'github-release') {
+      const receipt = checkNative(info.prefix, entry, this.target);
+      if (receipt.version !== info.version || receipt.binarySha256 !== info.binarySha256) fail(`Versao local divergente: ${name}`);
+    } else {
+      const pkg = json(join(info.prefix, 'node_modules', entry.download.package, 'package.json'));
+      if (pkg.name !== entry.download.package || pkg.version !== info.version) fail(`Versao local divergente: ${name}`);
+    }
     execute(info.prefix, entry, entry.probe, true, entry.probeInput, toolEnvironment(entry, this.local(name), runtime), runtime);
     return info;
   }
@@ -399,7 +418,7 @@ export class ToolManager {
     renameSync(storagePath(this.root, temporary, 'file'), storagePath(this.root, join(local, 'CURRENT.json'), 'file'));
   }
   async updateLocked(name) {
-    const entry = this.entry(name); const runtime = this.runtime(name); const release = validateRelease(name, entry, await this.fetchRelease(name, entry));
+    const entry = this.entry(name); const runtime = this.runtime(name); const release = validateRelease(name, entry, await this.fetchRelease(name, entry), this.target);
     const { local } = this.storage(name);
     const target = storagePath(this.root, join(local, 'versions', `${release.version}-${this.target}`), 'directory');
     let installed;
@@ -409,14 +428,21 @@ export class ToolManager {
     const stage = mkdtempSync(join(local, '.stage-'));
     const temporary = storagePath(this.root, join(local, `CURRENT.${randomUUID()}.json`), 'file'); let previous; let moved = false;
     try {
-      this.installPackage(stage, entry.download.package, release.version, entry, runtime);
+      if (entry.download.provider === 'github-release') {
+        for (const location of Object.values(entry.envPaths || {})) mkdirSync(storagePath(this.root, join(local, location), 'directory'), { recursive: true });
+      }
+      await this.installPackage(stage, entry.download.package, release.version, entry, runtime);
       this.storage(name); storagePath(this.root, stage, 'directory');
-      const pkg = json(join(stage, 'node_modules', entry.download.package, 'package.json')); const lock = json(join(stage, 'package-lock.json'));
-      if (pkg.name !== entry.download.package || pkg.version !== release.version || lock.packages?.[`node_modules/${entry.download.package}`]?.integrity !== release.dist.integrity) fail('Pacote instalado nao corresponde ao registro.');
-      prepareExecutables(stage, entry, this.target);
+      let receipt;
+      if (entry.download.provider === 'github-release') receipt = checkNative(stage, entry, this.target);
+      else {
+        const pkg = json(join(stage, 'node_modules', entry.download.package, 'package.json')); const lock = json(join(stage, 'package-lock.json'));
+        if (pkg.name !== entry.download.package || pkg.version !== release.version || lock.packages?.[`node_modules/${entry.download.package}`]?.integrity !== release.dist.integrity) fail('Pacote instalado nao corresponde ao registro.');
+        prepareExecutables(stage, entry, this.target);
+      }
       execute(stage, entry, entry.probe, true, entry.probeInput, toolEnvironment(entry, local, runtime), runtime);
       this.storage(name); storagePath(this.root, target, 'directory');
-      const info = { name, package: entry.download.package, version: release.version, platform: this.target, node: runtime.version, nodePath: runtime.file, source: entry.source, tarball: release.dist.tarball, integrity: release.dist.integrity, checkedAt: new Date().toISOString() };
+      const info = { name, ...(receipt ? { provider: 'github-release', binarySha256: receipt.binarySha256, archiveSha256: receipt.archiveSha256 } : { package: entry.download.package }), version: release.version, platform: this.target, node: runtime.version, nodePath: runtime.file, source: entry.source, tarball: receipt ? release.url : release.dist.tarball, integrity: receipt ? `sha256-${Buffer.from(receipt.archiveSha256, 'hex').toString('base64')}` : release.dist.integrity, checkedAt: new Date().toISOString() };
       writeFileSync(storagePath(this.root, temporary, 'file'), `${JSON.stringify(info, null, 2)}\n`, { flag: 'wx' });
       this.launchers(name);
       if (existsSync(target)) { previous = storagePath(this.root, `${target}.previous-${randomUUID()}`, 'directory'); renameSync(storagePath(this.root, target, 'directory'), previous); }
@@ -425,7 +451,11 @@ export class ToolManager {
       return { ...info, layout: 'local', prefix: target, changed: true };
     } finally { rmSync(storagePath(this.root, stage, 'directory'), { recursive: true, force: true }); rmSync(storagePath(this.root, temporary, 'file'), { force: true }); }
   }
-  run(name, args) { const entry = this.entry(name); const runtime = this.runtime(name); return execute(this.current(name).prefix, entry, args, false, undefined, toolEnvironment(entry, this.local(name), runtime), runtime); }
+  run(name, args) {
+    const entry = this.entry(name), runtime = this.runtime(name), current = this.current(name);
+    if (entry.download.provider === 'github-release' && checkNative(current.prefix, entry, this.target).binarySha256 !== current.binarySha256) fail(`Recibo local divergente: ${name}`);
+    return execute(current.prefix, entry, args, false, undefined, toolEnvironment(entry, this.local(name), runtime), runtime);
+  }
 }
 
 const help = 'Uso: setup [all|grupo|nome]; [install|update|check|info] [base|all|grupo|nome]; list; unlock <nome>; run <nome> [argumentos]; --tool <nome> <acao> [argumentos].';

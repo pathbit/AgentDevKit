@@ -23,7 +23,7 @@ Os caminhos abaixo são relativos a `.pbai4devs/`.
 | Skill | Procedimento e decisões. | `skills/<grupo>/<nome>/SKILL.md` |
 | Regra | Convenção aplicada a um contexto. | `rules/<nome>/RULE.md` |
 | Comando | Entrada de um caso de uso. | `commands/<nome>/COMMAND.md` |
-| Agente | Papel, ferramentas e limites. | `agents/<nome>/AGENT.md` |
+| Agente | Responsável por uma tarefa. | `agents/<nome>/AGENT.md` |
 | Modelo | Base a preencher. | `templates/<nome>/TEMPLATE.md` |
 | Tool | Configuração e entrada de uma CLI. | `tools/<nome>/TOOL.json` |
 | Script | Automação executável reutilizável. | `scripts/<nome>/SCRIPT.mjs` |
@@ -31,6 +31,53 @@ Os caminhos abaixo são relativos a `.pbai4devs/`.
 Uma skill explica como decidir; um script executa a operação. Um comando
 encaminha a essas fontes, sem repetir suas instruções. Uma regra mantém uma
 convenção recorrente; um agente define quem revisa ou executa determinado papel.
+
+Uma skill pode orientar o uso de outras skills, comandos e agentes. Quem faz
+essas chamadas é o cliente de IA, dentro das ferramentas e permissões disponíveis.
+Um workflow é a sequência de passos e entregas descrita no comando; não precisa
+ser outro tipo de arquivo ou um agendamento em segundo plano.
+
+```mermaid
+flowchart LR
+  pedido["Pedido"] --> comando["Comando"]
+  comando --> agente["Agente responsável"]
+  regras["Regras"] -.-> agente
+  agente --> skill["Skill"]
+  skill --> script["Script quando necessário"]
+  script --> tool["Ferramenta local"]
+  tool --> prova["Evidências"]
+  prova --> revisao["Revisão independente"]
+```
+
+O agente principal reúne resultados e mantém o contexto. Quando um cliente
+não permite delegação aninhada, o especialista devolve o próximo passo ao
+principal. Markdown e links não criam processos nem executam código sozinhos.
+
+## Três fluxos completos
+
+| Etapa | Comando | Resultado |
+| --- | --- | --- |
+| Planejar | `planejar-entrega` | Dúvidas, plano e aceites. |
+| Implementar | `implementar-entrega` | Código, testes e documentos. |
+| Auditar | `auditar-seguranca` | Sinais locais e triagem. |
+
+O planejador combina as skills da fase para reunir as decisões. O implementador
+executa o plano aprovado. O auditor interpreta os scanners preparados por
+`preparar-seguranca` e verifica os controles que exigem contexto.
+
+No fluxo de implementação, `validar-entrega` executa as provas e
+`atualizar-documentacao` aciona o documentador. O revisor recebe a entrega
+final por `revisar-entrega`; quem implementou não substitui a revisão independente.
+Falhas retornam ao responsável com evidência e escopo de correção.
+
+Na segurança, scanners e análise manual se complementam. Achados confirmados
+seguem `corrigir-vulnerabilidade`; depois são testados de novo. O
+[guia de segurança](security.md) define preparação, limites e resultados.
+
+Não busque quantidades iguais por tipo: uma skill atende vários comandos,
+um perfil usa várias skills e uma regra vale em diferentes fluxos. Crie um
+perfil quando houver responsabilidade recorrente e contexto próprio; use
+skill para um procedimento e comando para uma entrada de trabalho clara.
 
 Modelos não são documentos aprovados do produto. Ferramentas usam um
 `SCRIPT.mjs` fino para delegar ao instalador comum; não precisam de cópias em

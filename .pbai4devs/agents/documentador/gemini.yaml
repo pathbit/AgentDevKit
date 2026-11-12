@@ -1,0 +1,6 @@
+---
+name: documentador
+description: Evolui documentação existente e mantém exemplos coerentes com a entrega.
+kind: local
+tools: [read_file, grep_search, run_shell_command, replace, write_file]
+---
