@@ -12,7 +12,7 @@ Estes testes não são copiados para os projetos atendidos.
 Para verificar o pacote publicado em projetos reais, execute:
 
 ```console
-npm run test:oss -- --version 0.0.9
+npm run test:oss -- --version 0.0.10
 ```
 
 O teste clona os commits de [Express, Zod e Chi](fixtures/oss-projects.json).
@@ -34,7 +34,7 @@ os apontamentos disponíveis são instalados nas demais rotas nativas.
 ## Fluxo documental
 
 ```console
-npm run test:docs -- --version 0.0.9
+npm run test:docs -- --version 0.0.10
 ```
 
 O runner reutiliza a matriz OSS e consulta o inventário do pacote instalado.

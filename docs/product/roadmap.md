@@ -20,6 +20,7 @@ status: vigente
 | Compatibilidade real v0.0.7 | Testes em clones existentes | [Spec][oss]. |
 | Preservação v0.0.8 | Auditoria e regressões | [Spec][robustness]. |
 | Coexistência v0.0.9 | Agentes, documentos e projetos reais | [Spec][coexistence]. |
+| Instalação nos dois registries v0.0.10 | Pacote e guias de pré-requisitos | [Spec][dual-install]. |
 
 A primeira entrega segue a [spec v0.0.1](../specs/v0.0.1/SPEC.md), disponível
 na [release v0.0.1][release]. Os detalhes de mudanças estão no
@@ -42,3 +43,4 @@ comportamento existente, sem alterar a versão de uma release já publicada.
 [oss]: ../specs/v0.0.7/SPEC.md
 [robustness]: ../specs/v0.0.8/SPEC.md
 [coexistence]: ../specs/v0.0.9/SPEC.md
+[dual-install]: ../specs/v0.0.10/SPEC.md

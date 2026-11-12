@@ -42,7 +42,7 @@ npx --registry=https://npm.pkg.github.com @pathbit/agentdevkit init
 ```
 
 Para repetir uma instalação, fixe a versão após o nome, como
-`@pathbit/agentdevkit@0.0.9`, nos dois destinos.
+`@pathbit/agentdevkit@0.0.10`, nos dois destinos.
 
 Acrescente `--agents codex,claude` para selecionar clientes, `--dry-run` para
 simular ou use `update`, `doctor` e `sync --check` no lugar de `init`.
@@ -89,7 +89,7 @@ Por padrão, uma tag publica nos dois destinos. Para completar o GitHub
 Packages de uma tag existente, preservando a release e o npm:
 
 ```console
-gh workflow run release.yml --ref master -f tag=v0.0.9 -F package_only=true -f registry=github
+gh workflow run Release -f tag=v0.0.10 -F package_only=true -f registry=github
 ```
 
 Se o artefato expirou, reexecute o CI original da tag antes da publicação.

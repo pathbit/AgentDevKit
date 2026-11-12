@@ -1,7 +1,7 @@
 ---
 description: Requisitos da distribuição portátil AgentDevKit.
 status: aprovado
-version: 0.0.9
+version: 0.0.10
 ---
 
 # PRD do AgentDevKit

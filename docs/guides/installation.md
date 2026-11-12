@@ -79,7 +79,7 @@ npx @pathbit/agentdevkit sync --check
 
 Se escolheu GitHub Packages, use o mesmo prefixo
 `npx --registry=https://npm.pkg.github.com` nesses comandos. Para fixar a versão,
-use `@pathbit/agentdevkit@0.0.9` no lugar do nome sem versão, em qualquer destino.
+use `@pathbit/agentdevkit@0.0.10` no lugar do nome sem versão, em qualquer destino.
 O próximo passo é [preparar as ferramentas](prerequisites.md#depois-de-instalar-o-kit).
 
 ## O que fica no projeto
@@ -150,9 +150,9 @@ e restauração após falha.
 O [fluxo de trabalho](workflow.md) orienta a próxima etapa do projeto.
 Se houver erro, consulte [solução de problemas](troubleshooting.md).
 
-[Wiki](../README.md) · [Spec v0.0.9][spec]
+[Wiki](../README.md) · [Spec v0.0.10][spec]
 
 [bootstrap]: ../../.pbai4devs/scripts/preparar-ferramentas/BOOTSTRAP.md
-[spec]: ../specs/v0.0.9/SPEC.md
+[spec]: ../specs/v0.0.10/SPEC.md
 [tokens]: https://github.com/settings/tokens
 [github-auth]: https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-npm-registry#authenticating-to-github-packages

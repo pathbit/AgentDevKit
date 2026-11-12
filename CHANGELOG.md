@@ -4,6 +4,14 @@ description: Alterações verificáveis por versão do AgentDevKit.
 
 # Changelog
 
+## 0.0.10 — 2026-11-12
+
+- Mesmo pacote publicado no npm e GitHub Packages, com versão e bytes iguais.
+- Instalação via npx nos dois registries, com credenciais isoladas por destino.
+- Guias de pré-requisitos para Windows, macOS e Linux, incluindo Node/npm.
+- README, wiki e notas de release com os dois caminhos de instalação.
+- Diagnóstico de mapeamentos antigos de registry sem apagar configurações.
+
 ## 0.0.9 — 2026-11-12
 
 - Links e configurações humanos preservados na instalação dos agentes.

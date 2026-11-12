@@ -92,12 +92,21 @@ test('release produz quatro arquivos e checksum dos bytes reais do pacote', asyn
     const notes = readFileSync(join(output, 'NOTES.txt'), 'utf8');
     assert.ok(notes.includes(`npx --yes --ignore-scripts --package=${name}@${version} agentdevkit init`));
     assert.ok(notes.includes(`https://www.npmjs.com/package/${name}`));
-    assert.ok(notes.includes('A instalação não exige login.'));
+    const npmNotes = notes.split('### npm público\n')[1].split('### GitHub Packages\n')[0];
+    const githubNotes = notes.split('### GitHub Packages\n')[1].split('\nUse Node.js')[0];
+    assert.ok(npmNotes.includes('A instalação não exige login.'));
+    assert.doesNotMatch(npmNotes, /npm login|--registry=https:\/\/npm\.pkg\.github\.com/);
+    assert.ok(githubNotes.includes(`npx --yes --ignore-scripts --registry=https://npm.pkg.github.com --package=${name}@${version} agentdevkit init`));
+    assert.ok(githubNotes.includes('npm login --registry=https://npm.pkg.github.com --auth-type=legacy --scope='));
+    assert.match(githubNotes, /read:packages/);
+    assert.doesNotMatch(githubNotes, /--scope=@|npm login.*registry\.npmjs\.org/);
     assert.ok(notes.includes(`\`${archiveName}\` e \`SHA256SUMS\``));
-    assert.doesNotMatch(notes, /releases\/download|--package=https|npm login/);
+    assert.doesNotMatch(notes, /releases\/download|--package=https/);
     assert.match(notes, /```text\n/);
-    assert.match(notes, /Node\.js 18\+ com npm/);
-    assert.match(notes, /core usa Node\.js 24\+/);
+    assert.match(notes, /Use Node\.js 24\+ com npm/);
+    assert.match(notes, /Com Node 18–23 existente/);
+    assert.ok(notes.includes('https://github.com/pathbit/AgentDevKit/blob/master/docs/guides/installation.md'));
+    assert.ok(notes.includes('https://github.com/pathbit/AgentDevKit/blob/master/docs/guides/prerequisites.md'));
   });
 });
 
@@ -181,16 +190,19 @@ test('falha do npm final limpa o staging e preserva as fontes', t => {
   assert.deepEqual(readdirSync(output), []);
 });
 
-test('notas priorizam GitHub Packages com nome, versão, link e login do registry', t => {
+test('notas incluem os dois destinos e respeitam a prioridade GitHub configurada', t => {
   const { root, output } = fixture(t, { packageName: '@pathbit/agentdevkit', registry: 'https://npm.pkg.github.com', repository: { url: 'git+https://github.com/pathbit/AgentDevKit.git' } });
   const result = execute(root);
   assert.equal(result.status, 0, result.stdout + result.stderr);
   const notes = readFileSync(join(output, 'NOTES.txt'), 'utf8');
   assert.ok(notes.includes(`npx --yes --ignore-scripts --registry=https://npm.pkg.github.com --package=@pathbit/agentdevkit@${version} agentdevkit init`));
   assert.ok(notes.includes('https://github.com/pathbit/AgentDevKit/pkgs/npm/agentdevkit'));
-  assert.ok(notes.includes('npm login --scope=@pathbit --auth-type=legacy --registry=https://npm.pkg.github.com'));
+  assert.ok(notes.includes('npm login --registry=https://npm.pkg.github.com --auth-type=legacy --scope='));
+  assert.ok(notes.includes(`npx --yes --ignore-scripts --package=@pathbit/agentdevkit@${version} agentdevkit init`));
+  assert.ok(notes.includes('https://www.npmjs.com/package/@pathbit/agentdevkit'));
+  assert.ok(notes.indexOf('### GitHub Packages') < notes.indexOf('### npm público'));
   assert.ok(notes.includes('read:packages'));
-  assert.doesNotMatch(notes, /releases\/download|--package=https/);
+  assert.doesNotMatch(notes, /releases\/download|--package=https|--scope=@/);
 });
 
 test('tag inválida ou divergente falha antes de criar artefatos', async t => {

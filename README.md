@@ -47,7 +47,7 @@ Depois, abra o projeto no seu agente e peça:
 
 Windows, instalação sem Node, simulação e atualização estão no
 [guia de instalação](docs/guides/installation.md). A distribuição usa a
-versão publicada no [npm e GitHub Packages][packages] e na [release v0.0.9][release],
+versão publicada no [npm e GitHub Packages][packages] e na [release v0.0.10][release],
 sem instalação global. Instalação e atualização usam o pacote do registro;
 os arquivos da release servem para conferir os artefatos publicados.
 O idioma da CLI pode ser `pt`, `en` ou `es`.
@@ -106,7 +106,7 @@ ao seu agente para ler `AGENTS.md`.
 [help]: docs/guides/troubleshooting.md
 [issues]: https://github.com/pathbit/AgentDevKit/issues/new/choose
 [packages]: docs/maintainers/packages.md
-[release]: https://github.com/pathbit/AgentDevKit/releases/tag/v0.0.9
+[release]: https://github.com/pathbit/AgentDevKit/releases/tag/v0.0.10
 [npm-package]: https://www.npmjs.com/package/@pathbit/agentdevkit
 [npm-badge]: https://img.shields.io/npm/v/%40pathbit%2Fagentdevkit
 [license-badge]: https://img.shields.io/badge/license-MIT-blue

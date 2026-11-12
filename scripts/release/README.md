@@ -7,6 +7,8 @@ description: >-
 
 `assets.mjs` gera o tarball, checksum, notas e manifesto em
 `.agent-tests/release/<versão>/`. Requer Node.js 24+ e npm.
+As notas incluem comandos npx versionados para npm e GitHub Packages,
+autenticação por host e links para instalação e pré-requisitos.
 
 `pipeline.mjs full` verifica produto, infraestrutura, Markdown e o tarball
 exato uma vez. `portable` cobre CLI, arquivos e runtime em Windows/macOS;
@@ -16,10 +18,13 @@ exato uma vez. `portable` cobre CLI, arquivos e runtime em Windows/macOS;
 `publish` confere procedência e hashes, e publica os mesmos bytes. Ausência de
 artefato válido exige executar o CI; a publicação não gera outro pacote.
 
-`packages.mjs` publica esse mesmo tarball no npm público e verifica a CLI
-instalada pelo registro. O modo manual `package_only` atende tags já publicadas
-sem recriar a release. Veja [pacote npm](../../docs/maintainers/packages.md).
+`packages.mjs` publica esse mesmo tarball no npm público e no GitHub Packages,
+e verifica a CLI instalada por cada registro. O consumo do npm é anônimo;
+no GitHub, autenticado. O modo manual `package_only` atende tags já publicadas
+sem recriar a release. Veja [os dois registries](../../docs/maintainers/packages.md).
 
 O workflow prioriza o secret `NPMJS_TOKEN`, recebido como `NPM_TOKEN` na
-publicação; sem ele, usa OIDC. Nenhum segredo ou resultado é versionado.
+publicação npm; sem ele, usa OIDC. GitHub Packages usa seu próprio token do
+workflow, sem compartilhar credenciais entre os hosts. Nenhum segredo ou
+resultado é versionado.
 Veja [manutenção](../../docs/maintainers/maintenance.md).
