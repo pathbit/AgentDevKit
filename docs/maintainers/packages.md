@@ -13,8 +13,10 @@ agentes escolhidos no projeto.
 Com Node.js 18+ e npm, execute na pasta do projeto. Não é necessário login:
 
 ```console
-npx -y @pathbit/agentdevkit@0.0.5 init
+npx @pathbit/agentdevkit init
 ```
+
+Para fixar a versão, use `npx @pathbit/agentdevkit@0.0.5 init`.
 
 Acrescente `--agents codex,claude` para selecionar clientes, `--dry-run` para
 simular ou use `update`, `doctor` e `sync --check` no lugar de `init`.
@@ -26,7 +28,7 @@ npm view @pathbit/agentdevkit versions --json
 ```
 
 Se existir um mapeamento antigo para o GitHub Packages, siga a
-[correção de registry](../guides/troubleshooting.md#download-plataforma-ou-ferramenta-falhando).
+[correção de registry][fix].
 
 ## Publicar pelo Actions
 
@@ -34,7 +36,12 @@ A publicação usa o mesmo TGZ aprovado pelo CI, com acesso público. O workflow
 confere versão, origem e integridade; uma versão existente só é aceita quando
 contém os mesmos bytes. Não reempacote nem substitua uma versão publicada.
 
-O mantenedor configura uma vez o **Trusted Publisher** do npm:
+O workflow prioriza o secret do repositório `NPMJS_TOKEN`, recebido pela
+variável interna `NPM_TOKEN` somente na publicação. O token precisa permitir
+publicar no escopo `@pathbit`; credenciais nunca entram nos arquivos
+versionados.
+
+Sem esse secret, o workflow usa OIDC. Configure o **Trusted Publisher** do npm:
 
 | Campo | Valor |
 | --- | --- |
@@ -43,12 +50,9 @@ O mantenedor configura uma vez o **Trusted Publisher** do npm:
 | Workflow filename | `release.yml` |
 | Allowed action | Publicação direta com `npm publish` |
 
-O workflow recebe `id-token: write` e publica com OIDC. O npm exige CLI
-11.5.1+ e Node 22.14+; o projeto usa Node 24. A primeira publicação exige uma
-conta npm com acesso ao escopo `@pathbit`. Depois que o pacote existir,
-configure a relação de confiança nas configurações dele. Um `NPM_TOKEN`
-granular nos secrets do repositório é a alternativa para publicação
-automatizada. Credenciais nunca entram nos arquivos versionados.
+O fallback recebe `id-token: write`. O npm exige CLI 11.5.1+ e Node 22.14+;
+o projeto usa Node 24. Configure a relação de confiança depois que o pacote
+existir; a primeira publicação pode usar o secret `NPMJS_TOKEN`.
 
 Para publicar somente o pacote de uma tag que já tem artefato aprovado:
 
@@ -64,7 +68,9 @@ publicados. Assim, a verificação comprova o acesso de um usuário comum.
 As versões antigas no [GitHub Packages][legacy] permanecem disponíveis;
 o canal de instalação padrão é o npm público.
 
-[Wiki](../README.md) · [Manutenção](maintenance.md) · [Instalação](../guides/installation.md)
+[Wiki](../README.md) · [Manutenção](maintenance.md) ·
+[Instalação](../guides/installation.md)
 
 [package]: https://www.npmjs.com/package/@pathbit/agentdevkit
 [legacy]: https://github.com/pathbit/AgentDevKit/pkgs/npm/agentdevkit
+[fix]: ../guides/troubleshooting.md#download-plataforma-ou-ferramenta-falhando

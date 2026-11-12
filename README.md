@@ -22,7 +22,7 @@ fica em `src/`, os testes em `tests/` e os recursos compartilhados em
 Com Node.js 18+ e npm, execute na pasta do seu projeto, sem login:
 
 ```console
-npx -y @pathbit/agentdevkit@0.0.5 init
+npx @pathbit/agentdevkit init
 ```
 
 Escolha os agentes na pergunta inicial ou informe `--agents codex,claude`.

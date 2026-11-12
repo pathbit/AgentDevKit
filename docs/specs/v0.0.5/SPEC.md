@@ -22,7 +22,8 @@ Dependências: [publicação no GitHub Packages](../github-packages/SPEC.md),
 - Manter o TGZ como artefato técnico aprovado, com checksum e procedência.
 - Depois de publicar, instalar pelo registro em projeto temporário e testar
   versão, `init`, `doctor` e `sync --check` em cache novo, sem credenciais.
-- Publicar por OIDC ou `NPM_TOKEN`; autenticação é só para o mantenedor.
+- Priorizar o secret `NPMJS_TOKEN`, mapeado para `NPM_TOKEN` na publicação;
+  usar OIDC quando ele estiver ausente. Autenticação é só para o mantenedor.
 - Preservar credenciais fora do Git, arquivos humanos e versões anteriores.
 
 ## Critérios de aceite

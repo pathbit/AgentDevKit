@@ -110,10 +110,10 @@ export async function publishRegistryPackage({ directory, resolution, env = proc
     const existing = await lookup();
     let authentication = 'not-needed';
     if (!existing) {
-      let oidc = env.GITHUB_ACTIONS === 'true' && Boolean(env.ACTIONS_ID_TOKEN_REQUEST_URL && env.ACTIONS_ID_TOKEN_REQUEST_TOKEN);
+      const oidc = !env.NPM_TOKEN && env.GITHUB_ACTIONS === 'true'
+        && Boolean(env.ACTIONS_ID_TOKEN_REQUEST_URL && env.ACTIONS_ID_TOKEN_REQUEST_TOKEN);
       if (oidc && !supportsOidc((await invoke(['--version'])).trim())) {
-        if (!env.NPM_TOKEN) invalid('OIDC exige npm 11.5.1+; atualize o npm ou forneça NPM_TOKEN.');
-        oidc = false;
+        invalid('OIDC exige npm 11.5.1+; atualize o npm ou forneça NPM_TOKEN.');
       }
       const publishing = publicationEnvironment(env, isolated, temporary, oidc);
       authentication = oidc ? 'oidc' : 'token';

@@ -7,7 +7,7 @@ description: Comandos, opções e respostas do AgentDevKit.
 Execute o pacote do npm público por `npx`, sem login:
 
 ```console
-npx -y @pathbit/agentdevkit@0.0.5 --help
+npx @pathbit/agentdevkit --help
 ```
 
 Nas tabelas, `agentdevkit` representa esse executável. No checkout das fontes,

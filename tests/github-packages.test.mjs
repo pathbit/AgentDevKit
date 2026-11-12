@@ -243,6 +243,23 @@ test('OIDC usa npm 11.5.1+ somente na publicação e mantém consumo anônimo', 
   }
 });
 
+test('token configurado tem prioridade e não tenta OIDC', async t => {
+  for (const npmVersion of ['11.5.0', '11.21.2']) await t.test(npmVersion, async subtest => {
+    const f = fixture(subtest), m = mock(f, { npmVersion });
+    m.options.env = { ...env, GITHUB_ACTIONS: 'true',
+      ACTIONS_ID_TOKEN_REQUEST_URL: 'https://oidc.example',
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'oidc-not-configured' };
+    const result = await publishRegistryPackage(m.options);
+    assert.equal(result.authentication, 'token');
+    const published = m.calls.find(call => call.args[1] === 'publish');
+    assert.equal(published.config.env.NPM_TOKEN, env.NPM_TOKEN);
+    assert.equal(published.config.env.ACTIONS_ID_TOKEN_REQUEST_URL, undefined);
+    assert.equal(published.config.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN, undefined);
+    assert.ok(!m.calls.some(call => call.args[1] === '--version'));
+    assert.equal(result.probe.anonymous, true);
+  });
+});
+
 test('inspeção real preserva TGZ antigo e atual sem presumir o caminho do executável', async t => {
   for (const release of [{ version: '0.0.3', bin: '.pbai4devs/bin/agentdevkit.mjs' }, { version, bin: 'bin/agentdevkit.mjs' }]) await t.test(release.version, async subtest => {
     const f = fixture(subtest), source = join(f.directory, 'source'); mkdirSync(source);

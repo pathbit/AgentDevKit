@@ -23,7 +23,7 @@ O pacote [`@pathbit/agentdevkit`](../maintainers/packages.md) é publicado no
 npm público. Execute na pasta do projeto, sem login:
 
 ```console
-npx -y @pathbit/agentdevkit@0.0.5 init
+npx @pathbit/agentdevkit init
 ```
 
 Sem comando adicional, o pacote executa `init`. Em terminal interativo,

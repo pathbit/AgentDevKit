@@ -75,9 +75,10 @@ artifact aprovado do mesmo commit e verifica versão, origem e checksum.
 Não há novo empacotamento entre teste e publicação.
 
 O npm público recebe o mesmo tarball da release, como `@pathbit/agentdevkit`.
-O workflow publica por OIDC ou um segredo `NPM_TOKEN`; confirma a
-integridade da versão no registro e testa `--version`, `init`, `doctor` e
-`sync --check` via `npm exec`, em projeto temporário com cache novo.
+O workflow prioriza o secret `NPMJS_TOKEN` do repositório, recebido pela
+variável interna `NPM_TOKEN`; sem token, usa OIDC. Confirma a integridade da
+versão no registro e testa `--version`, `init`, `doctor` e `sync --check` via
+`npm exec`, em projeto temporário com cache novo.
 Os comandos sugeridos pela CLI e pelas notas usam o nome e a versão do pacote.
 O modo manual de pacote permite publicar uma tag existente sem alterar sua
 release. A instalação do consumidor é validada sem token ou configuração
@@ -87,6 +88,7 @@ Testes comprovam arquivos e operações executadas. O carregamento em um
 aplicativo específico depende das capacidades desse cliente; gerar uma
 referência não comprova a execução da skill.
 
-[Wiki](../README.md) · [Manutenção](../maintainers/maintenance.md) · [Recursos](../guides/resources.md)
+[Wiki](../README.md) · [Manutenção](../maintainers/maintenance.md) ·
+[Recursos](../guides/resources.md)
 
 [clients]: ../../.pbai4devs/templates/clients/ADAPTERS.json

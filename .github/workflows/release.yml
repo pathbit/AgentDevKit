@@ -85,7 +85,7 @@ jobs:
       - name: Publish the same tarball to public npm
         env:
           GH_TOKEN: ${{ github.token }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPMJS_TOKEN }}
           AGENTDEVKIT_RELEASE_RESOLUTION: ${{ needs.resolve.outputs.resolution }}
           AGENTDEVKIT_ARTIFACT_DIR: ${{ runner.temp }}/agentdevkit-package
         run: node scripts/release/packages.mjs publish

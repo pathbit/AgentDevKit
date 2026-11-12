@@ -1,5 +1,6 @@
 ---
-description: Empacotamento, verificações do CI e publicação do artefato aprovado.
+description: >-
+  Empacotamento, verificações do CI e publicação do artefato aprovado.
 ---
 
 # Release
@@ -19,5 +20,6 @@ artefato válido exige executar o CI; a publicação não gera outro pacote.
 instalada pelo registro. O modo manual `package_only` atende tags já publicadas
 sem recriar a release. Veja [pacote npm](../../docs/maintainers/packages.md).
 
-O workflow fornece o contexto GitHub e OIDC ou `NPM_TOKEN`. Nenhum segredo ou
-resultado é versionado. Veja [manutenção](../../docs/maintainers/maintenance.md).
+O workflow prioriza o secret `NPMJS_TOKEN`, recebido como `NPM_TOKEN` na
+publicação; sem ele, usa OIDC. Nenhum segredo ou resultado é versionado.
+Veja [manutenção](../../docs/maintainers/maintenance.md).

@@ -10,6 +10,7 @@ description: Alterações verificáveis por versão do AgentDevKit.
 - Instalação e próximos passos usam o pacote nomeado no npm público, sem login.
 - Notas e guias apontam para o registro e sua página de versões.
 - Publicação verifica instalação, diagnóstico e sincronização sem autenticação.
+- Publicação prioriza o secret `NPMJS_TOKEN`; sem token, usa OIDC.
 
 ## 0.0.4 — 2026-11-11
 

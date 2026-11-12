@@ -19,7 +19,7 @@ See the [supported clients][clients].
 With Node.js 18+ and npm, run this in your project. No login is required:
 
 ```console
-npx -y @pathbit/agentdevkit@0.0.5 init
+npx @pathbit/agentdevkit init
 ```
 
 Choose your coding agents when prompted, or pass `--agents codex,claude`.

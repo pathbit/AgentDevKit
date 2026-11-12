@@ -35,7 +35,8 @@ ser canceladas quando substituídas, sem cancelar uma publicação em andamento.
 `npm run verify` executa o perfil completo. `ci:portable` e `ci:smoke`
 executam os demais perfis localmente. `npm run test:examples` verifica os
 cenários em `examples/generated/` quando a mudança afeta a geração.
-A [contribuição](../../CONTRIBUTING.md) explica os checks durante o desenvolvimento.
+A [contribuição](../../CONTRIBUTING.md) explica os checks durante o
+desenvolvimento.
 
 ## Gerar um pacote
 
@@ -76,12 +77,14 @@ procedência. Uma release existente não é sobrescrita.
 
 Se o upload falhar após a criação do rascunho, ele permanece privado. Confira
 o rascunho antes de tentar novamente: o publicador não substitui uma release
-existente, mesmo em rascunho. Remova somente o rascunho incompleto dessa tentativa
-após conferir a origem; nunca apague uma release publicada para repetir o fluxo.
+existente, mesmo em rascunho. Remova somente o rascunho incompleto dessa
+tentativa após conferir a origem; nunca apague uma release publicada para
+repetir o fluxo.
 
 Para reiniciar uma publicação que falhou, use **Re-run failed jobs** ou
-`gh workflow run release.yml --ref vX.Y.Z` com a tag real. Configure o
-publicador OIDC ou `NPM_TOKEN`, conforme [publicação](packages.md).
+`gh workflow run release.yml --ref vX.Y.Z` com a tag real. A publicação prioriza
+o secret `NPMJS_TOKEN` do repositório; sem ele, usa OIDC, conforme
+[publicação](packages.md).
 
 Se a release já existe e falta somente o pacote no registro, use o modo
 `package_only` descrito em [pacote npm](packages.md#publicar-pelo-actions).

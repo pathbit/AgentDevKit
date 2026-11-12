@@ -19,7 +19,7 @@ son locales y no se versionan.
 Con Node.js 18+ y npm, ejecuta en tu proyecto, sin iniciar sesión:
 
 ```console
-npx -y @pathbit/agentdevkit@0.0.5 init
+npx @pathbit/agentdevkit init
 ```
 
 Elige tus agentes en la pregunta inicial o usa `--agents codex,claude`.
