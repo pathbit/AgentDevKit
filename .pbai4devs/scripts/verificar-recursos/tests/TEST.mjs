@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { join, relative } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
@@ -39,6 +40,16 @@ function resourceFixture(t) {
   return context;
 }
 const verify = root => verifyResources({ root, synchronize() {}, catalogCheck() {}, lint: () => ['lint=fixture'] });
+
+function installedFixture(t) {
+  const context = resourceFixture(t);
+  context.file('.pbai4devs/estado/README.md');
+  const generated = '.agents/skills/managed/SKILL.md';
+  context.file(generated, document('# Gerado\n'));
+  const files = { [generated]: createHash('sha256').update(readFileSync(join(context.root, generated))).digest('hex') };
+  context.file('.pbai4devs/estado/agentdevkit.json', JSON.stringify({ schemaVersion: 1, version: '0.0.9', language: 'pt', files, blocks: {} }));
+  return { ...context, generated };
+}
 
 function writeCatalog(root) {
   for (const [path, content] of buildCatalog(root).outputs) { mkdirSync(join(root, path, '..'), { recursive: true }); writeFileSync(join(root, path), content); }
@@ -94,6 +105,86 @@ test('coleta source-only ignora exemplos gerados e clientes, sem exigir Git', t 
   const result = verifyResources({ root, sourceOnly: true, lint: () => ['lint=fixture'] });
   assert.ok(result.files.includes(guide));
   for (const path of result.files) assert.doesNotMatch(relative(root, path), /examples[\\/]generated|node_modules|TEST-RESULTS|\.github[\\/]skills|\.codex/);
+});
+
+test('instalação valida somente fontes e Markdown próprio, preservando conteúdo humano', t => {
+  const { root, file, generated } = installedFixture(t);
+  const own = ['README.md', 'AGENTS.md', 'docs/product.md', 'src/README.md', '.codex/README.md', '.codex/templates/custom.md', '.codex/skills/human/SKILL.md'];
+  for (const path of own) file(path, '# Texto humano sem frontmatter\n\n[Link próprio](missing-human-file.md)\n');
+  let linted;
+  const result = verifyResources({ root, synchronize() {}, catalogCheck() {}, lint(_root, files) { linted = files; return ['lint=fixture']; } });
+  assert.ok(result.files.includes(join(root, generated)));
+  assert.ok(result.files.includes(join(root, '.pbai4devs/skills/exemplo/SKILL.md')));
+  for (const path of own) assert.equal(result.files.includes(join(root, path)), false, path);
+  assert.deepEqual(linted, result.files);
+  file('.pbai4devs/skills/exemplo/SKILL.md', '# Fonte do kit inválida\n');
+  assert.throws(() => verify(root), /Frontmatter\/H1 invalido: .pbai4devs\/skills\/exemplo\/SKILL.md/);
+});
+
+test('instalação não atravessa links humanos de entradas e skills', t => {
+  const { root, file } = installedFixture(t);
+  file('AGENTS.md', '# Instrução humana sem frontmatter\n');
+  file('own-docs/README.md', '# README humano\n');
+  file('own-skills/human/SKILL.md', '# Skill humana\n');
+  rmSync(join(root, '.codex/skills'), { recursive: true });
+  const links = [['CLAUDE.md', 'AGENTS.md', 'file'], ['README.md', 'own-docs/README.md', 'file'], ['.codex/skills', '../own-skills', 'dir']];
+  for (const [path, target, type] of links) {
+    try { symlinkSync(type === 'dir' && process.platform === 'win32' ? join(root, 'own-skills') : target, join(root, path), process.platform === 'win32' && type === 'dir' ? 'junction' : type); }
+    catch (error) {
+      if (process.platform === 'win32' && ['EPERM', 'EACCES'].includes(error.code)) { t.skip('Sem permissão para criar links no Windows.'); return; }
+      throw error;
+    }
+  }
+  const before = links.map(([path]) => readlinkSync(join(root, path)));
+  const result = verify(root);
+  for (const [path] of links) {
+    assert.equal(lstatSync(join(root, path)).isSymbolicLink(), true);
+    assert.equal(result.files.includes(join(root, path)), false);
+  }
+  assert.deepEqual(links.map(([path]) => readlinkSync(join(root, path))), before);
+});
+
+test('instalação recusa caminho gerenciado substituído por link', t => {
+  const { root, file, generated } = installedFixture(t);
+  const target = file('external.md', '# Conteúdo externo\n');
+  rmSync(join(root, generated));
+  try { symlinkSync(target, join(root, generated), 'file'); }
+  catch (error) {
+    if (process.platform === 'win32' && ['EPERM', 'EACCES'].includes(error.code)) { t.skip('Sem permissão para criar links no Windows.'); return; }
+    throw error;
+  }
+  assert.throws(() => verify(root), /Link simbolico: .agents\/skills\/managed\/SKILL.md/);
+  assert.equal(readFileSync(target, 'utf8'), '# Conteúdo externo\n');
+});
+
+test('instalação confere entradas derivadas sem aplicar lint a blocos humanos', t => {
+  const { root, file } = installedFixture(t);
+  const contents = document('# Entrada gerada\n');
+  file('GEMINI.md', contents);
+  file('.pbai4devs/estado/derived.json', JSON.stringify({ schemaVersion: 1, entries: { 'GEMINI.md': createHash('sha256').update(contents).digest('hex') } }));
+  file('AGENTS.md', '# Instruções humanas sem frontmatter\n\n<!-- BEGIN AGENTDEVKIT -->\nLeia as fontes.\n<!-- END AGENTDEVKIT -->\n');
+  const statePath = join(root, '.pbai4devs/estado/agentdevkit.json');
+  const state = JSON.parse(readFileSync(statePath, 'utf8'));
+  state.blocks['AGENTS.md'] = createHash('sha256').update('bloco registrado').digest('hex');
+  state.files['.pbai4devs/skills/exemplo/SKILL.md'] = createHash('sha256').update('fonte anterior').digest('hex');
+  writeFileSync(statePath, JSON.stringify(state));
+  const result = verify(root);
+  assert.ok(result.files.includes(join(root, 'GEMINI.md')));
+  assert.equal(result.files.includes(join(root, 'AGENTS.md')), false);
+  assert.ok(result.files.includes(join(root, '.pbai4devs/skills/exemplo/SKILL.md')));
+  file('GEMINI.md', document('# Fonte sincronizada com hash de instalação anterior\n'));
+  assert.ok(verify(root).files.includes(join(root, 'GEMINI.md')));
+});
+
+test('instalação também protege manifestos registrados em derived.outputs', t => {
+  const { root, file } = installedFixture(t);
+  const manifest = '.agents/skills.json';
+  const contents = '{"entries":[]}\n';
+  file(manifest, contents);
+  file('.pbai4devs/estado/derived.json', JSON.stringify({ schemaVersion: 1, entries: {}, outputs: { [manifest]: createHash('sha256').update(contents).digest('hex') } }));
+  assert.ok(!verify(root).files.includes(join(root, manifest)));
+  rmSync(join(root, manifest));
+  assert.throws(() => verify(root), /Arquivo gerenciado ausente: .agents\/skills.json/);
 });
 
 test('catalogo derivado cobre recursos e detecta JSON editado sem reescrever', t => {

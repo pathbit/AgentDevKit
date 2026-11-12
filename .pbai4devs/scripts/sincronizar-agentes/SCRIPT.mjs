@@ -7,6 +7,7 @@ import { requireNode, projectRoot, isMain } from '../lib/runtime.mjs';
 import { buildCatalog } from '../lib/catalog.mjs';
 import { resourcePath } from '../lib/resource-path.mjs';
 import { adapterManifest, resolveAdapters } from '../lib/adapters.mjs';
+import { nativePathBoundary } from '../lib/native-paths.mjs';
 import { mergeGitignore, validateIgnoreClients, renderClientIgnore, isGeneratedOutput, planLocalIgnore, applyLocalIgnore, checkLocalIgnore, assertLocalIgnoreUnchanged, ignoreBegin, ignoreEnd } from '../lib/gitignore.mjs';
 
 const marker = '<!-- gerado: sincronizar-agentes -->';
@@ -90,6 +91,7 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
     return current;
   }
   function scan(value, { markdownOnly = false, prune = false } = {}) {
+    if (preserveBoundary(value)) return [];
     const path = safe(value);
     const item = stat(path);
     if (!item) return [];
@@ -99,6 +101,7 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
     function visit(folder) {
       for (const name of readdirSync(safe(folder)).sort(compare)) {
         const child = `${folder}/${name}`;
+        if (preserveBoundary(child)) continue;
         const info = stat(safe(child));
         if (prune && isGeneratedOutput(child, info.isDirectory())) continue;
         if (info.isDirectory()) {
@@ -119,7 +122,7 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
     const marked = text.split('\n').includes(marker) || text.startsWith(tomlMarker + '\n');
     return isReference(text) && (marked || recorded);
   };
-  const onlyReferences = value => { const files = scan(value); return files.length > 0 && files.every(file => /\.(md|mdc|toml)$/.test(file) && referenceFile(file)); };
+  const onlyReferences = value => { const files = scan(value); return files.length > 0 && ![...preserved.keys()].some(path => path === value || path.startsWith(`${value}/`)) && files.every(file => /\.(md|mdc|toml)$/.test(file) && referenceFile(file)); };
   const protectedPath = value => /^(workflows(?:\/|$)|settings\.json$|extensions\.json$)/.test(value.slice(value.indexOf('/') + 1).toLowerCase());
   const agents = new Map();
   const formats = new Map();
@@ -133,10 +136,41 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
   const installed = stat(safe(stateFile)) ? JSON.parse(read(safe(stateFile))) : null;
   const configText = configExists ? read(safe(config)) : adapterManifest(root, { clients: installed?.clients });
   const rows = configText.split('\n');
+  const entryRegistry = '.pbai4devs/estado/derived.json';
+  const previousEntries = stat(safe(entryRegistry)) ? JSON.parse(read(safe(entryRegistry))) : { schemaVersion: 1, entries: {} };
+  if (previousEntries?.schemaVersion !== 1 || !previousEntries.entries || typeof previousEntries.entries !== 'object' || Array.isArray(previousEntries.entries) || Object.entries(previousEntries.entries).some(([name, hash]) => !['AGENTS.md', 'CLAUDE.md', 'GEMINI.md'].includes(name) || !/^[a-f0-9]{64}$/.test(hash))) fail('Registro de entradas derivadas invalido.');
+  const previousOutputs = previousEntries.outputs ?? {};
+  if (!previousOutputs || typeof previousOutputs !== 'object' || Array.isArray(previousOutputs) || Object.entries(previousOutputs).some(([path, hash]) => !/^\.[A-Za-z0-9][A-Za-z0-9._-]*\/(skills|rules|agents)\.json$/.test(path) || reserved.has(path.split('/')[0].toLowerCase()) || !/^[a-f0-9]{64}$/.test(hash))) fail('Registro de saidas derivadas invalido.');
+  const ownedPaths = new Set([...Object.keys(installed?.files || {}), ...Object.keys(installed?.blocks || {}), ...Object.keys(previousEntries.entries), ...Object.keys(previousOutputs)]);
+  const nativeRoots = new Set(rows.map(row => row.split('|')).filter(([type]) => ['agente', 'gitignore'].includes(type)).map(([, target]) => target));
+  const preserved = new Map();
+  const remember = (path, reason = 'user-owned') => { preserved.set(path, { path, reason }); return true; };
+  function preserveBoundary(value) {
+    if (!nativeRoots.has(value.split('/')[0]) && !['AGENTS.md', 'CLAUDE.md', 'GEMINI.md', 'README.md'].includes(value)) return false;
+    const boundary = nativePathBoundary(root, value, ownedPaths, { preserveRootAliases: true });
+    return boundary ? remember(boundary.path, boundary.reason) : false;
+  }
+  function claimed(value) {
+    if (ownedPaths.has(value)) return true;
+    const info = stat(safe(value));
+    if (!info?.isFile() || info.size > 1024 * 1024) return false;
+    const text = read(safe(value));
+    return text.split('\n').includes(marker) || text.startsWith(tomlMarker + '\n');
+  }
+  function preserveUnknown(value) {
+    if (preserveBoundary(value)) return true;
+    const info = stat(safe(value));
+    return info && !referenceFile(value) && !claimed(value) ? remember(value) : false;
+  }
+  function preserveNativeType(value, info, type) {
+    if (!info || info[type]()) return false;
+    if ([...ownedPaths].some(path => path === value || path.startsWith(`${value}/`))) fail(`Tipo alterado em caminho gerenciado: ${value}`);
+    return remember(value, info.isDirectory() ? 'existing-directory' : info.isFile() ? 'existing-file' : 'existing-other');
+  }
   function ignoreRoot(target) {
     if (!/^\.[^/]+$/.test(target) || reserved.has(target.toLowerCase())) fail(`Pasta de agente invalida: ${target}`);
-    const info = stat(absolute(target));
-    if (info && !info.isDirectory()) fail(`Pasta de agente nao e diretorio: ${target}`);
+    const info = preserveBoundary(target) ? null : stat(safe(target));
+    preserveNativeType(target, info, 'isDirectory');
     for (const known of ignoreRoots) if (known !== target && known.toLowerCase() === target.toLowerCase()) fail('Raizes de agentes diferem somente por maiusculas/minusculas.');
     ignoreRoots.add(target);
   }
@@ -145,7 +179,7 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
     const fields = row.split('|');
     if (fields.length < 2 || fields.length > 4) fail('Campos invalidos no manifesto.');
     const [type, target, source = '', metadata = ''] = fields;
-    safe(target);
+    if (!preserveBoundary(target)) safe(target);
     if (type === 'agente') {
       if (fields.length > 3) fail(`Pasta de agente invalida: ${target}`);
       ignoreRoot(target);
@@ -191,6 +225,7 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
   const entries = new Map();
   const folded = new Map();
   function add(target, source, metadata = '') {
+    if (preserveUnknown(target)) return;
     safe(target);
     const alias = folded.get(target.toLowerCase());
     if (alias && alias !== target) fail(`Destinos diferem somente por maiusculas/minusculas: ${target}`);
@@ -240,14 +275,15 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
     if (custom) backup.add(value);
   }
   function cleanScope(value) {
+    if (preserveBoundary(value)) return;
     if (!stat(safe(value))) return;
     if (stat(safe(value)).isDirectory() && !scan(value).length) return;
-    if (force && value.split('/')[1] === 'external-skills') planRemove(value, true);
-    else if (onlyReferences(value)) planRemove(value);
-    else if (force) planRemove(value, true);
-    else conflicts.add(value);
+    if (onlyReferences(value)) planRemove(value);
+    else if (claimed(value)) { if (force) planRemove(value, true); else conflicts.add(value); }
+    else remember(value);
   }
   const registries = new Map();
+  const discoveryOutputs = {};
   for (const [target, content] of built.outputs) {
     const info = stat(safe(target));
     if (info && !info.isFile()) fail(`Registro nao e arquivo: ${target}`);
@@ -259,22 +295,22 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
   for (const agent of discoveries) {
     for (const kind of ['skills', 'rules', 'agents']) {
       const manifest = `${agent}/${kind}.json`;
+      if (preserveBoundary(manifest)) continue;
       const paths = [...entries].filter(([target, value]) => target.startsWith(`${agent}/`) && sources.get(value.source) === kind)
         .map(([target]) => kind === 'skills' ? posix.dirname(target) : target).sort(compare);
       const content = JSON.stringify({ entries: paths.map(path => ({ path })) }, null, 2) + '\n';
       const info = stat(safe(manifest));
+      if (preserveNativeType(manifest, info, 'isFile')) continue;
       if (info && !info.isFile()) fail(`Registro nao e arquivo: ${manifest}`);
+      if (info && !ownedPaths.has(manifest)) { remember(manifest); continue; }
+      const current = info ? readFileSync(absolute(manifest)) : null;
+      const priorHashes = [previousOutputs[manifest], installed?.files?.[manifest]];
+      const unchanged = current === null || priorHashes.includes(createHash('sha256').update(current).digest('hex'));
+      if (!unchanged && !force) conflicts.add(manifest);
+      if (!unchanged && force) backup.add(manifest);
+      const nextHash = createHash('sha256').update(content).digest('hex');
+      if (installed?.files?.[manifest] !== nextHash) discoveryOutputs[manifest] = nextHash;
       if (!info || readFileSync(absolute(manifest), 'utf8') !== content) {
-        let managedManifest = false;
-        if (info) {
-          try {
-            const previous = JSON.parse(read(absolute(manifest)));
-            managedManifest = Object.keys(previous).length === 1 && Array.isArray(previous.entries) && previous.entries.every(entry =>
-              entry && Object.keys(entry).length === 1 && typeof entry.path === 'string' && entry.path.startsWith(`${agent}/${kind}/`) && !entry.path.split('/').some(part => !part || part === '..' || part === '.')
-            );
-          } catch { /* Um manifesto customizado ou corrompido requer --force e backup. */ }
-        }
-        if (info && !managedManifest && !force) conflicts.add(manifest);
         if (info && force) backup.add(manifest);
         registries.set(manifest, content);
       }
@@ -289,11 +325,14 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
     ...sorted(ignoreRoots).map(folder => [`${folder}/.gitignore`, '.pbai4devs/templates/gitignore/agents.ignore']),
   ]);
   for (const [target, template] of ignoreTemplates) {
+    if (preserveBoundary(target)) continue;
     if (!stat(safe(template))?.isFile()) fail(`Template .gitignore ausente ou invalido: ${template}`);
     const info = stat(safe(target));
+    if (target !== '.pbai4devs/.gitignore' && preserveNativeType(target, info, 'isFile')) continue;
     if (info && !info.isFile()) fail(`.gitignore nao e arquivo: ${target}`);
     let merged;
     const current = info ? readFileSync(absolute(target), 'utf8') : '';
+    if (target !== '.pbai4devs/.gitignore' && info && !ownedPaths.has(target) && !current.split(/\r?\n/).some(line => [ignoreBegin, ignoreEnd].includes(line))) { remember(target); continue; }
     try {
       let patterns = readFileSync(absolute(template), 'utf8');
       if (target !== '.pbai4devs/.gitignore') patterns = renderClientIgnore(patterns, ignoreClients[posix.dirname(target)]);
@@ -349,18 +388,20 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
     for (const kind of [...auxiliary, 'README.md', 'INSTRUCTIONS.md']) cleanScope(`${agent}/${kind}`);
     for (const kind of Object.keys(principals)) {
       const scope = `${agent}/${kind}`;
+      if (preserveBoundary(scope)) continue;
       const info = stat(safe(scope));
       if (!info) continue;
       const files = scan(scope);
-      if (!info.isDirectory()) { if (force) planRemove(scope, true); else conflicts.add(scope); continue; }
+      if (!info.isDirectory()) { if (claimed(scope)) { if (force) planRemove(scope, true); else conflicts.add(scope); } else remember(scope); continue; }
       for (const file of files) if (!expected.has(file)) {
         if (referenceFile(file)) planRemove(file);
-        else if (force) planRemove(file, true);
-        else conflicts.add(file);
+        else if (claimed(file)) { if (force) planRemove(file, true); else conflicts.add(file); }
+        else remember(file);
       }
       function directories(value) {
         for (const name of readdirSync(safe(value))) {
           const child = `${value}/${name}`;
+          if (preserveBoundary(child)) continue;
           if (!stat(safe(child))?.isDirectory()) continue;
           if (![...expected.keys()].some(target => target.startsWith(child + '/'))) cleanScope(child);
           directories(child);
@@ -377,18 +418,19 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
   }
   for (const { target } of missing) cleanScope(target);
   const rootEntries = new Map();
-  const entryRegistry = '.pbai4devs/estado/derived.json';
   if (generateEntrypoints) {
-    const previous = stat(safe(entryRegistry)) ? JSON.parse(read(safe(entryRegistry))) : { schemaVersion: 1, entries: {} };
-    if (previous?.schemaVersion !== 1 || !previous.entries || typeof previous.entries !== 'object' || Array.isArray(previous.entries) || Object.entries(previous.entries).some(([name, hash]) => !['AGENTS.md', 'CLAUDE.md', 'GEMINI.md'].includes(name) || !/^[a-f0-9]{64}$/.test(hash))) fail('Registro de entradas derivadas invalido.');
+    const previous = previousEntries;
     const next = { schemaVersion: 1, entries: {} };
+    if (Object.keys(discoveryOutputs).length) next.outputs = discoveryOutputs;
     for (const name of resolveAdapters(installed?.clients).entrypoints) {
       const template = `.pbai4devs/templates/entrypoints/${name}`;
       if (!stat(safe(template))?.isFile()) continue;
+      if (preserveBoundary(name)) continue;
       const info = stat(safe(name));
+      if (preserveNativeType(name, info, 'isFile')) continue;
       const current = info?.isFile() ? readFileSync(absolute(name)) : null;
       const previousHash = previous.entries[name] ?? installed?.files?.[name];
-      if (info && (!current || createHash('sha256').update(current).digest('hex') !== previousHash)) continue;
+      if (info && (!current || createHash('sha256').update(current).digest('hex') !== previousHash)) { remember(name); continue; }
       if (current && createHash('sha256').update(current).digest('hex') === installed?.files?.[name]) {
         rootEntries.set(name, current.toString('utf8'));
         continue;
@@ -399,17 +441,18 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
       rootEntries.set(name, content);
     }
     const content = JSON.stringify(next, null, 2) + '\n';
-    if ((Object.keys(next.entries).length || stat(safe(entryRegistry))) && (!stat(safe(entryRegistry)) || readFileSync(absolute(entryRegistry), 'utf8') !== content)) registries.set(entryRegistry, content);
+    if ((Object.keys(next.entries).length || Object.keys(discoveryOutputs).length || stat(safe(entryRegistry))) && (!stat(safe(entryRegistry)) || readFileSync(absolute(entryRegistry), 'utf8') !== content)) registries.set(entryRegistry, content);
   }
   const ownedOutputs = sorted([...targets, ...built.outputs.keys(), '.pbai4devs/espelhos.conf', ...rootEntries.keys(), ...(generateEntrypoints && (stat(safe(entryRegistry)) || registries.has(entryRegistry)) ? [entryRegistry] : []),
     ...[...discoveries].flatMap(agent => ['skills', 'rules', 'agents'].map(kind => `${agent}/${kind}.json`)),
     ...[...ignoreTemplates.keys()].filter(target => {
       if (target === '.pbai4devs/.gitignore') return false;
+      if (preserved.has(target) || preserveBoundary(target)) return false;
       const content = ignoreFiles.get(target) ?? readFileSync(absolute(target), 'utf8');
       const start = content.indexOf(ignoreBegin), finish = content.indexOf(ignoreEnd);
       return start >= 0 && finish > start && !(content.slice(0, start) + content.slice(finish + ignoreEnd.length)).trim();
     }),
-  ]);
+  ]).filter(path => ![...preserved.keys()].some(value => path === value || path.startsWith(`${value}/`)));
   const localPlan = localIgnores ? planLocalIgnore(root, { outputs: ownedOutputs }) : null;
   const localStatus = localPlan ? checkLocalIgnore(localPlan) : { changed: 0, missing: [], trackedOutputs: [] };
   const removals = topPaths(remove);
@@ -442,7 +485,8 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
   const summary = { changed: changed.length + rootEntryChanges.length, stale: removals.length, conflicts: conflicts.size, missing: missing.length, legacy: legacy.length, registries: registries.size, gitignores: ignoreFiles.size, manifests: configExists ? 0 : 1, localIgnores: localStatus.changed + localStatus.missing.length + localStatus.trackedOutputs.length };
   const dirty = Object.values(summary).some(Boolean);
   output(`${summary.changed} desatualizadas; ${summary.stale} obsoletas; ${summary.conflicts} conflitos; ${summary.missing} origens nativas ausentes; ${summary.legacy} documentos antigos; ${summary.registries} indices derivados; ${summary.gitignores} gitignores; ${summary.localIgnores} exclusoes locais.`);
-  if (check) return { ...summary, ownedOutputs, exitCode: dirty ? 1 : 0 };
+  const preservedPaths = sorted(preserved.keys()).map(path => preserved.get(path));
+  if (check) return { ...summary, ownedOutputs, preserved: preservedPaths, exitCode: dirty ? 1 : 0 };
   if (conflicts.size) fail(`Use --force para reconstruir somente os caminhos gerenciados: ${sorted(conflicts).join(', ')}`);
   if (localStatus.missing.length) fail(`Regras humanas reabrem derivados locais: ${localStatus.missing.join(', ')}`);
   if (localPlan) assertLocalIgnoreUnchanged(localPlan);
@@ -548,7 +592,7 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
     if (failures.length) throw new AggregateError([error, ...failures], `${error.message}; rollback incompleto: ${failures.map(failure => failure.message).join('; ')}`);
     throw error;
   }
-  return { ...summary, ownedOutputs, exitCode: 0, ...(backupRoot ? { backupRoot } : {}) };
+  return { ...summary, ownedOutputs, preserved: preservedPaths, exitCode: 0, ...(backupRoot ? { backupRoot } : {}) };
 }
 
 export function main(args = process.argv.slice(2)) {

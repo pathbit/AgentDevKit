@@ -77,6 +77,8 @@ do separador. `--help` e `--version` do kit não exigem um projeto instalado.
 As respostas incluem `ok`, `command`, `version`, `language`, `target` e
 `next`. Conforme a operação, há seleção, plano, conflitos, backup e erros.
 Leia os campos estruturados, não dependa da tradução da mensagem.
+`preserved` lista caminhos nativos humanos mantidos pelo projeto, com o motivo.
+Eles não integram os arquivos gerenciados e não são substituídos por `--force`.
 
 | Código | Significado |
 | --- | --- |

@@ -44,9 +44,15 @@ test('texto humano com formato de referência nunca comprova propriedade', t => 
     const before = snapshot(root);
     assert.equal(isReference(human), true, 'O parser de formato continua independente da propriedade.');
     assert.equal(run(root, { check: true }).exitCode, 1);
-    assert.throws(() => run(root), /--force/);
-    assert.deepEqual(snapshot(root), before);
+    const result = run(root);
+    assert.ok(result.preserved.some(item => item.path === path));
+    assert.ok(!result.ownedOutputs.includes(path));
     assert.equal(fs.readFileSync(join(root, path), 'utf8'), human);
+    assert.equal(snapshot(root)[path], before[path]);
+    assert.equal(run(root, { check: true }).exitCode, 0);
+    const stable = snapshot(root);
+    run(root, { force: true });
+    assert.deepEqual(snapshot(root), stable);
   }
 });
 

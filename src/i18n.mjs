@@ -7,6 +7,7 @@ export function normalizeLanguage(value) {
 
 const messages = {
   pt: {
+    preserved: 'Caminhos existentes preservados', preservedDetails: 'Use --json para consultar os caminhos e motivos.',
     help: 'AgentDevKit: init [diretório], update, doctor, sync [--check], lang [pt|en|es], agents [lista], next, tools <ação>.\nOpções: --target <diretório>, --lang <idioma>, --agents <lista>, --yes, --dry-run, --force, --json.\nAliases: --clients e clients.',
     clientsCurrent: 'Agentes selecionados', clientsAvailable: 'Agentes disponíveis', clientsSelect: 'Agentes (IDs separados por vírgula ou all) [all]: ', agents: 'Seleção de agentes atualizada.',
     next: 'Próximo passo', init: 'Estrutura instalada.', update: 'Estrutura atualizada.', sync: 'Apontamentos sincronizados.', lang: 'Idioma configurado.', unchanged: 'Estrutura já atualizada.', plan: 'Plano calculado; nenhum arquivo alterado.', conflict: 'Há arquivos próprios ou alterados em conflito. Revise o plano; --force salva backup antes de substituir.',
@@ -15,6 +16,7 @@ const messages = {
     agentLanguage: 'Responda em português, salvo quando o usuário solicitar outro idioma.', inspect: 'Verifique a instalação', workflow: 'Consulte a próxima etapa', install: 'Inicialize este projeto', repair: 'Confira a sincronização', review: 'Revise os arquivos em conflito', tools: 'Resultado da ferramenta',
   },
   en: {
+    preserved: 'Existing paths preserved', preservedDetails: 'Use --json to inspect paths and reasons.',
     help: 'AgentDevKit: init [directory], update, doctor, sync [--check], lang [pt|en|es], agents [list], next, tools <action>.\nOptions: --target <directory>, --lang <language>, --agents <list>, --yes, --dry-run, --force, --json.\nAliases: --clients and clients.',
     clientsCurrent: 'Selected agents', clientsAvailable: 'Available agents', clientsSelect: 'Agents (comma-separated IDs or all) [all]: ', agents: 'Agent selection updated.',
     next: 'Next step', init: 'Structure installed.', update: 'Structure updated.', sync: 'Pointers synchronized.', lang: 'Language configured.', unchanged: 'Structure is already current.', plan: 'Plan calculated; no files changed.', conflict: 'User files or edits conflict with this plan. Review it; --force backs them up before replacement.',
@@ -23,6 +25,7 @@ const messages = {
     agentLanguage: 'Respond in English unless the user requests another language.', inspect: 'Check the installation', workflow: 'Review the next stage', install: 'Initialize this project', repair: 'Check synchronization', review: 'Review conflicting files', tools: 'Tool result',
   },
   es: {
+    preserved: 'Rutas existentes preservadas', preservedDetails: 'Use --json para consultar las rutas y los motivos.',
     help: 'AgentDevKit: init [directorio], update, doctor, sync [--check], lang [pt|en|es], agents [lista], next, tools <acción>.\nOpciones: --target <directorio>, --lang <idioma>, --agents <lista>, --yes, --dry-run, --force, --json.\nAlias: --clients y clients.',
     clientsCurrent: 'Agentes seleccionados', clientsAvailable: 'Agentes disponibles', clientsSelect: 'Agentes (IDs separados por coma o all) [all]: ', agents: 'Selección de agentes actualizada.',
     next: 'Próximo paso', init: 'Estructura instalada.', update: 'Estructura actualizada.', sync: 'Referencias sincronizadas.', lang: 'Idioma configurado.', unchanged: 'La estructura ya está actualizada.', plan: 'Plan calculado; ningún archivo modificado.', conflict: 'Hay archivos propios o cambios en conflicto. Revise el plan; --force guarda una copia antes de reemplazarlos.',

@@ -143,6 +143,7 @@ function gitSnapshot(root, git) {
   return { head: git('rev-parse', 'HEAD').trim(), index: git('ls-files', '--stage', '-z'),
     stagedDiff: git('diff', '--cached', '--binary', '--no-ext-diff', '--no-color'),
     remotes: git('config', '--get-regexp', '^remote\\..*\\.(url|pushurl)$'),
+    configSha256: hash(readFileSync(join(root, '.git/config'))),
     exclude: info(join(root, '.git/info/exclude')) ? hash(readFileSync(join(root, '.git/info/exclude'))) : null };
 }
 
@@ -153,7 +154,7 @@ function originalSnapshot(root, paths) {
 function checkOriginals(root, baseline, git) {
   assert.deepEqual(originalSnapshot(root, Object.keys(baseline.files)), baseline.files, 'Arquivo original alterado.');
   const now = gitSnapshot(root, git);
-  for (const field of ['head', 'index', 'stagedDiff', 'remotes']) assert.equal(now[field], baseline.git[field], `Git ${field} alterado.`);
+  for (const field of ['head', 'index', 'stagedDiff', 'remotes', 'configSha256']) assert.equal(now[field], baseline.git[field], `Git ${field} alterado.`);
 }
 
 function testProject(project, options, output, env, npm) {
@@ -175,11 +176,17 @@ function testProject(project, options, output, env, npm) {
     git('checkout', '--quiet', '--detach', project.commit);
     assert.equal(git('rev-parse', 'HEAD').trim().toLowerCase(), project.commit.toLowerCase());
     const trackedPaths = git('ls-files', '-z').split('\0').filter(Boolean);
-    const nativeSkill = `.claude/skills/oss-preexisting-${project.id}/SKILL.md`;
-    const nativeReference = `.claude/skills/oss-preexisting-${project.id}/REFERENCE.md`;
+    const nativeRoot = project.clients.some(client => ['all', 'claude'].includes(client)) ? '.claude' : '.opencode';
+    const nativeSkill = `${nativeRoot}/skills/oss-preexisting-${project.id}/SKILL.md`;
+    const nativeReference = `${nativeRoot}/skills/oss-preexisting-${project.id}/REFERENCE.md`;
+    const nativeAgent = `${nativeRoot}/agents/revisor.md`;
+    const nativeConfig = `${nativeRoot}/settings.local.json`;
     assert.ok(!existsSync(join(directory, nativeSkill)) && !existsSync(join(directory, nativeReference)), 'Sentinela nativa já existe.');
     writeClone(directory, nativeSkill, `---\nname: oss-preexisting-${project.id}\ndescription: Existing user-owned native skill.\n---\n\n# Existing native skill\n\nPreserve this file.\n`);
     writeClone(directory, nativeReference, '# Project reference\n\nLeia [manual](https://example.com/manual).\n');
+    assert.ok(!info(join(directory, nativeAgent)) && !info(join(directory, nativeConfig)), 'Configuração sentinela já existe.');
+    writeClone(directory, nativeAgent, `---\nname: revisor\ndescription: Existing project reviewer.\n---\n\n# Project reviewer\n\nPreserve this project-specific agent and its instructions.\n`);
+    writeClone(directory, nativeConfig, '{"projectSetting":"preserve-existing-configuration"}\n');
     if (project.dirty) {
       const path = project.dirtyFile || 'README.md';
       assert.equal(fileSnapshot(directory, path).kind, 'file', `dirty exige ${path} regular.`);
@@ -187,7 +194,7 @@ function testProject(project, options, output, env, npm) {
       writeClone(directory, path, Buffer.concat([readFileSync(join(directory, path)), Buffer.from(comment)]));
       git('add', '--', path);
     }
-    paths = [...trackedPaths, nativeSkill, nativeReference];
+    paths = [...trackedPaths, nativeSkill, nativeReference, nativeAgent, nativeConfig];
     baseline = { files: originalSnapshot(directory, paths), git: gitSnapshot(directory, git), trackedPaths, nativeSentinel: nativeSkill, nativeReference };
     put(join(evidence, 'baseline.json'), JSON.stringify(baseline, null, 2) + '\n');
     result.originalFiles = trackedPaths.length; result.nativeSentinel = nativeSkill; result.nativeReference = nativeReference; result.checkout = baseline.git.head; checked('checkout-pinned');
@@ -210,7 +217,19 @@ function testProject(project, options, output, env, npm) {
       assert.deepEqual(after, dryBefore, 'Dry-run alterou o clone.'); result.dryRunPreserved = true;
     }
     checked('dry-run-read-only');
-    cli('init', init); checkOriginals(directory, baseline, git); checked('init-preserves-originals');
+    const installed = cli('init', init);
+    result.preserved = installed.preserved;
+    assert.ok(installed.preserved?.some(item => item.path === nativeAgent), 'Agente humano em colisão não foi informado como preservado.');
+    const state = json(join(directory, statePath));
+    assert.ok(!Object.hasOwn(state.files, nativeAgent), 'Agente humano foi registrado como propriedade do kit.');
+    for (const path of ['CLAUDE.md', 'README.md', '.codex/skills']) if (fileSnapshot(directory, path).kind === 'symlink') {
+      assert.ok(installed.preserved.some(item => item.path === path), `Link preservado não foi informado: ${path}`);
+      assert.ok(!Object.keys(state.files).some(owned => owned === path || owned.startsWith(path + '/')), `Link humano foi adotado pelo kit: ${path}`);
+    }
+    if (project.clients.includes('all') || project.clients.includes('codex')) {
+      assert.equal(fileSnapshot(directory, '.agents/skills/projeto/configurar-projeto/SKILL.md').kind, 'file', 'Rota nativa do Codex não recebeu a skill.');
+    }
+    checkOriginals(directory, baseline, git); checked('init-preserves-originals');
     result.ignoreChecks = [];
     for (const path of ['.agent-tests/probe', 'tmp/probe', '.PlAyWrIgHt-McP/probe', 'playwright-report/probe', 'test-results/probe']) {
       run('ignore-check', 'git', [...gitPrefix, 'check-ignore', '--no-index', '--quiet', '--', path], output, null);
@@ -222,10 +241,17 @@ function testProject(project, options, output, env, npm) {
     checked('artifact-ignore-checks', result.failures.length ? 'failed' : 'passed');
     cli('doctor', ['doctor', '--target', directory]);
     cli('sync-check', ['sync', '--check', '--target', directory]); checked('doctor-and-sync');
+    run('standalone-sync-check', process.execPath, ['.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs', '--check'], directory);
+    run('installed-resource-check', process.execPath, ['.pbai4devs/scripts/verificar-recursos/SCRIPT.mjs'], directory);
+    checkOriginals(directory, baseline, git); checked('standalone-sync-preserves-agents');
     const stable = workspace(directory);
     cli('init-repeat', init); cli('update-repeat', ['update', '--target', directory, '--yes']);
     assert.deepEqual(workspace(directory), stable, 'Repetição alterou a instalação.');
     checkOriginals(directory, baseline, git); checked('idempotent');
+    cli('update-force-preservation', ['update', '--target', directory, '--yes', '--force']);
+    run('standalone-force-preservation', process.execPath, ['.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs', '--force'], directory);
+    assert.deepEqual(workspace(directory), stable, 'Sincronização forçada alterou configuração preservada ou instalação estável.');
+    checkOriginals(directory, baseline, git); checked('force-preserves-existing-agents');
     const skillPath = `.pbai4devs/skills/projeto/oss-user-${project.id}/SKILL.md`;
     assert.ok(!existsSync(join(directory, skillPath)), 'Skill de teste já existe.');
     const skill = `---\nname: oss-user-${project.id}\ndescription: User-owned OSS compatibility fixture.\n---\n\n# OSS user skill\n\nPreserve this user-owned resource.\n`;

@@ -84,9 +84,16 @@ gerenciados alterados geram conflito; use `--force` somente após revisar o
 backup e o conteúdo que será substituído. Preserve os dados locais, as
 configurações próprias e os commits do projeto.
 
-Links simbólicos em caminhos usados pela instalação podem bloquear a operação.
-O kit informa o caminho e não converte nem remove o link automaticamente.
-Use a simulação para identificar esse caso antes de aplicar.
+Entradas, configurações, skills e agentes humanos permanecem intactos, mesmo
+quando seus nomes coincidem com os do kit. Links simbólicos preexistentes nas
+entradas ou nos clientes são preservados sem leitura ou escrita pelo link.
+O campo `preserved` do JSON informa os caminhos que o kit deixou sob controle
+do projeto; os apontamentos são gerados nas demais rotas disponíveis.
+
+Essa preservação não autoriza trocar arquivos gerenciados por links. Links
+em caminhos já pertencentes ao kit, no hub, no estado ou em ferramentas
+continuam sujeitos à recusa de segurança. Nenhum link humano é adotado como
+propriedade do kit, e `--force` não o substitui.
 
 Arquivos humanos não se tornam gerenciados apenas por conterem um link.
 As alterações de arquivos existentes preservam permissões, inclusive em backup
@@ -95,7 +102,7 @@ e restauração após falha.
 O [fluxo de trabalho](workflow.md) orienta a próxima etapa do projeto.
 Se houver erro, consulte [solução de problemas](troubleshooting.md).
 
-[Wiki](../README.md) · [Spec v0.0.8][spec]
+[Wiki](../README.md) · [Spec v0.0.9][spec]
 
 [bootstrap]: ../../.pbai4devs/scripts/preparar-ferramentas/BOOTSTRAP.md
-[spec]: ../specs/v0.0.8/SPEC.md
+[spec]: ../specs/v0.0.9/SPEC.md

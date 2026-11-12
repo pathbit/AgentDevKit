@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { synchronize, isReference } from '../.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs';
 import { isGeneratedOutput, planLocalIgnore, checkLocalIgnore, assertLocalIgnoreUnchanged, applyLocalIgnore, planUntrack, applyUntrack, restoreUntrack } from '../.pbai4devs/scripts/lib/gitignore.mjs';
+import { nativePathBoundary } from '../.pbai4devs/scripts/lib/native-paths.mjs';
 import { writeAdapterManifest, adapterRoots, normalizeClients, resolveAdapters } from './adapters/index.mjs';
 import { packageRoot, packageInfo, statePath, entryNames, begin, end } from './config.mjs';
 import { normalizeLanguage, text } from './i18n.mjs';
@@ -173,6 +174,24 @@ function copyResources(source, destination) {
   return files;
 }
 
+function readDerivedState(target) {
+  let entries = {}, outputs = {};
+  const derived = read(target, '.pbai4devs/estado/derived.json');
+  if (derived) {
+    try {
+      const value = JSON.parse(derived);
+      if (value.schemaVersion !== 1 || !value.entries || typeof value.entries !== 'object' || Array.isArray(value.entries)
+        || value.outputs !== undefined && (!value.outputs || typeof value.outputs !== 'object' || Array.isArray(value.outputs))) fail('E_STATE', 'Invalid derived entrypoint state.');
+      entries = value.entries; outputs = value.outputs ?? {};
+      for (const [path, digest] of Object.entries(entries)) if (!entryNames.includes(path) || !/^[a-f0-9]{64}$/.test(digest)) fail('E_STATE', 'Invalid derived entrypoint state.');
+      for (const [path, digest] of Object.entries(outputs)) if (!allowedManaged(path) || !/^\.[^/]+\/(?:skills|agents|rules)\.json$/.test(path) || !/^[a-f0-9]{64}$/.test(digest)) fail('E_STATE', 'Invalid derived output state.');
+    }
+    catch { fail('E_STATE', 'Invalid derived entrypoint state.'); }
+    for (const path of [...Object.keys(entries), ...Object.keys(outputs)]) safePath(target, path);
+  }
+  return { entries, outputs };
+}
+
 export function planInstallation({ target, language = 'pt', mode = 'init', force = false, clients }) {
   const previous = loadState(target);
   if (mode !== 'init' && !previous) fail('E_MISSING', text(language, 'missing'));
@@ -180,15 +199,36 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
   const active = resolveAdapters(selected);
   const changingClients = clients !== undefined || mode === 'agents';
   const protectedEntries = new Set(), entryConflicts = [], ownedEntrypoints = new Set();
+  const { entries: derivedEntries, outputs: derivedOutputs } = readDerivedState(target);
+  const ownedPaths = [...Object.keys(previous?.files || {}), ...Object.keys(previous?.blocks || {}), ...Object.keys(derivedEntries), ...Object.keys(derivedOutputs)];
+  const preserved = new Map();
+  const recordPreserved = (path, reason) => { preserved.set(path, { path, reason }); return true; };
+  const native = path => entryNames.includes(path) || path === 'README.md' || adapterRoots.some(root => path === root || path.startsWith(`${root}/`));
+  const boundary = path => {
+    if (!native(path)) return false;
+    const found = nativePathBoundary(target, path, ownedPaths, { preserveRootAliases: path === 'README.md' || entryNames.includes(path) });
+    return found ? recordPreserved(found.path, found.reason) : false;
+  };
+  const owned = path => ownedPaths.includes(path);
+  const generatedReference = content => Boolean(content && isReference(content.toString('utf8'))
+    && (content.toString('utf8').split(/\r?\n/).includes('<!-- gerado: sincronizar-agentes -->') || content.toString('utf8').startsWith('# gerado: sincronizar-agentes\n')));
+  const preserveNative = path => {
+    if (!native(path)) return false;
+    if (boundary(path)) return true;
+    const item = stat(safePath(target, path));
+    if (!item || owned(path)) return false;
+    if (!item.isFile() && ownedPaths.some(value => value.startsWith(`${path}/`))) fail('E_PATH', `Managed subtree occupies a file destination: ${path}`);
+    if (item.isFile()) {
+      const current = read(target, path);
+      if (generatedReference(current)) return false;
+      if (path.endsWith('/.gitignore') && current.toString('utf8').split(/\r?\n/).some(line => ['# BEGIN AGENT IGNORE', '# END AGENT IGNORE'].includes(line))) return false;
+    }
+    return recordPreserved(path, item.isFile() ? 'existing-file' : 'existing-directory');
+  };
   for (const name of entryNames) {
+    if (preserveNative(name)) continue;
     const current = read(target, name);
     if (current && previous?.files[name] && previous.files[name] !== hash(current)) { protectedEntries.add(name); entryConflicts.push(name); }
-  }
-  let derivedEntries = {};
-  const derived = read(target, '.pbai4devs/estado/derived.json');
-  if (derived) {
-    try { const value = JSON.parse(derived); if (value.schemaVersion === 1 && value.entries && typeof value.entries === 'object') derivedEntries = value.entries; }
-    catch { fail('E_STATE', 'Invalid derived entrypoint state.'); }
   }
   const stage = realpathSync(mkdtempSync(join(tmpdir(), 'agentdevkit-')));
   try {
@@ -206,6 +246,7 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
       if (path.startsWith('.pbai4devs/') && !supplied.has(path.slice(11)) && !internal.has(path.slice(11))) rmSync(safePath(stage, path), { force: true });
     }
     for (const root of active.roots) {
+      if (preserveNative(`${root}/.gitignore`)) continue;
       const content = read(target, `${root}/.gitignore`);
       if (content) write(stage, `${root}/.gitignore`, content);
     }
@@ -214,7 +255,7 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
     writeAdapterManifest(stage, { clients: selected });
     const synchronized = synchronize({ root: stage, force: true, localIgnores: false, generateEntrypoints: false, output() {} });
     for (const name of active.entrypoints) {
-      if (protectedEntries.has(name)) continue;
+      if (protectedEntries.has(name) || preserveNative(name)) continue;
       const current = read(target, name), template = readFileSync(join(packageRoot, '.pbai4devs/templates/entrypoints', name), 'utf8');
       const legacy = entryContent(null, template, language, name);
       const content = legacy.replace(`${begin}\n`, '').replace(`\n${end}`, '');
@@ -222,11 +263,18 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
       const knownLegacy = current && previous?.blocks[name] && current.toString('utf8') === entryContent(null, template, previous.language, name);
       if (!current || knownFile || knownLegacy) { write(stage, name, content); ownedEntrypoints.add(name); }
     }
-    if (!read(target, 'README.md')) write(stage, 'README.md', `---\ndescription: ${JSON.stringify(text(language, 'readme'))}\nlanguage: ${language}\n---\n\n# ${text(language, 'project')}\n\n${text(language, 'readme')}\n`);
+    if (!preserveNative('README.md') && !read(target, 'README.md')) write(stage, 'README.md', `---\ndescription: ${JSON.stringify(text(language, 'readme'))}\nlanguage: ${language}\n---\n\n# ${text(language, 'project')}\n\n${text(language, 'readme')}\n`);
     if (!existsSync(join(stage, '.pbai4devs/estado/README.md'))) write(stage, '.pbai4devs/estado/README.md', `---\ndescription: AgentDevKit state.\n---\n\n# AgentDevKit\n\n${text(language, 'state')}\n`);
     const unknown = new Set(existing.filter(path => !supplied.has(path) && !previous?.files[`.pbai4devs/${path}`] && !internal.has(path)));
     const paths = walk(stage, '', path => !path.split('/').includes('.agent-tests')).filter(path => !path.startsWith('.pbai4devs/') || !unknown.has(path.slice(11)));
-    const desired = new Map(paths.map(path => [path, readFileSync(join(stage, path))]));
+    const desired = new Map(paths.filter(path => !preserveNative(path)).map(path => [path, readFileSync(join(stage, path))]));
+    // Native discovery manifests must not advertise resources omitted at a human boundary.
+    const overlapsPreserved = path => [...preserved.keys()].some(kept => path === kept || path.startsWith(`${kept}/`) || kept.startsWith(`${path}/`));
+    for (const [path, content] of desired) if (/^\.agents\/(skills|rules|agents)\.json$/.test(path)) {
+      const discovery = JSON.parse(content);
+      discovery.entries = discovery.entries.filter(entry => !overlapsPreserved(entry.path));
+      desired.set(path, Buffer.from(`${JSON.stringify(discovery, null, 2)}\n`));
+    }
     const manifest = { schemaVersion: 1, version: bundled.length ? packageInfo.version : previous.version, language, files: {}, blocks: {} };
     if (mode !== 'sync' || clients !== undefined || previous?.clients !== undefined) manifest.clients = selected;
     for (const [path, content] of desired) {
@@ -240,7 +288,8 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
     for (const [path, content] of desired) {
       const current = read(target, path);
       if (current?.equals(content)) continue;
-      const managed = previous?.blocks[path] ? blockDigest(path, current || Buffer.alloc(0)) === previous.blocks[path] : previous?.files[path] ? hash(current || '') === previous.files[path] : false;
+      const managed = previous?.blocks[path] ? blockDigest(path, current || Buffer.alloc(0)) === previous.blocks[path]
+        : [previous?.files[path], derivedOutputs[path], derivedEntries[path]].some(digest => digest && hash(current || '') === digest);
       const appendBlock = entryNames.includes(path) || path === '.gitignore' || path.endsWith('/.gitignore');
       const conflict = current && path !== statePath && !managed && !appendBlock;
       const changedBlock = current && previous?.blocks[path] && !managed;
@@ -270,11 +319,29 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
       }
       changes.push({ path, action: content.trim() ? 'update' : 'remove', content: content.trim() ? Buffer.from(content) : null, beforeHash: hash(current) });
     }
-    for (const root of changingClients ? [] : active.roots) for (const path of walk(join(target, root), '', path => !path.split('/').some(part => ignored.has(part)))) {
+    function nativeFiles(root) {
+      if (boundary(root)) return [];
+      const directory = stat(safePath(target, root));
+      if (!directory?.isDirectory()) return [];
+      const files = [];
+      const visit = folder => {
+        for (const name of readdirSync(safePath(target, folder)).sort()) {
+          const path = `${folder}/${name}`;
+          if (boundary(path)) continue;
+          const info = stat(safePath(target, path));
+          if (path.split('/').some(part => ignored.has(part))) continue;
+          if (info?.isDirectory()) visit(path);
+          else if (info?.isFile()) files.push(path);
+        }
+      };
+      visit(root); return files;
+    }
+    for (const root of changingClients ? [] : active.roots) for (const full of nativeFiles(root)) {
+      const path = full.slice(root.length + 1);
       if (!['skills', 'agents', 'commands', 'rules', 'instructions', 'prompts'].includes(path.split('/')[0])) continue;
-      const full = `${root}/${path}`; if (desired.has(full) || changes.some(change => change.path === full)) continue;
+      if (desired.has(full) || changes.some(change => change.path === full)) continue;
       const current = read(target, full), source = current.toString('utf8');
-      if (!(source.includes('<!-- gerado: sincronizar-agentes -->') || source.startsWith('# gerado: sincronizar-agentes\n'))) continue;
+      if (!(source.includes('<!-- gerado: sincronizar-agentes -->') || source.startsWith('# gerado: sincronizar-agentes\n'))) { recordPreserved(full, 'existing-file'); continue; }
       if (!isReference(source)) conflicts.push(full);
       changes.push({ path: full, action: 'remove', content: null, beforeHash: hash(current) });
     }
@@ -285,7 +352,7 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
       changes.push({ path: legacy, action: 'remove', content: null, beforeHash: hash(legacyContent) });
     }
     const retiredRoots = adapterRoots.filter(root => !active.roots.includes(root) && changes.some(change => change.action === 'remove' && change.path.startsWith(`${root}/`) && (previous?.files[change.path] || previous?.blocks[change.path])));
-    const ownedOutputs = [...new Set([...synchronized.ownedOutputs, ...ownedEntrypoints, statePath])];
+    const ownedOutputs = [...new Set([...synchronized.ownedOutputs, ...ownedEntrypoints, statePath])].filter(path => !overlapsPreserved(path));
     const hashes = {};
     for (const [path, digest] of Object.entries(previous?.files || {})) if ((ownedOutputs.includes(path) || !path.startsWith('.pbai4devs/')) && !protectedEntries.has(path)) hashes[path] = digest;
     for (const path of ownedEntrypoints) { const current = read(target, path); if (current && (previous?.blocks[path] || derivedEntries[path] === hash(current))) hashes[path] = hash(current); }
@@ -298,7 +365,7 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
     const localIgnore = planLocalIgnore(target, { outputs: ownedOutputs, templateRoot: stage });
     const localIgnoreCheck = checkLocalIgnore(localIgnore, { replacedBlocks: replacedIgnoreBlocks(target, changes, previous) });
     conflicts.push(...(untrack?.conflicts || []), ...localIgnoreCheck.missing);
-    return { target, language, mode, changes, conflicts: [...new Set(conflicts)].sort(), canApply: (!conflicts.length || force) && !untrack?.conflicts?.length && !localIgnoreCheck.missing.length, manifest, retiredRoots, ownedOutputs, untrack, localIgnore, localIgnoreCheck };
+    return { target, language, mode, changes, conflicts: [...new Set(conflicts)].sort(), canApply: (!conflicts.length || force) && !untrack?.conflicts?.length && !localIgnoreCheck.missing.length, manifest, retiredRoots, ownedOutputs, untrack, localIgnore, localIgnoreCheck, preserved: [...preserved.values()].sort((a, b) => a.path.localeCompare(b.path)) };
   } finally { rmSync(stage, { recursive: true, force: true }); }
 }
 
@@ -399,10 +466,11 @@ function pruneRemovedDirectories(plan, onRemoved) {
 export function inspect(target) {
   const state = loadState(target);
   if (!state) return { installed: false, issues: [{ code: 'missing', path: statePath }] };
+  const derived = readDerivedState(target);
   const issues = [];
   for (const [path, digest] of Object.entries(state.files)) {
     const content = read(target, path);
-    if (!content || hash(content) !== digest) issues.push({ code: content ? 'modified' : 'missing', path });
+    if (!content || hash(content) !== digest && hash(content) !== derived.outputs[path]) issues.push({ code: content ? 'modified' : 'missing', path });
   }
   for (const [path, digest] of Object.entries(state.blocks)) {
     const content = read(target, path);

@@ -35,7 +35,7 @@ Después, abre el proyecto en tu agente y pide:
 La [guía de instalación](docs/guides/installation.md) incluye Windows, Node ausente,
 simulación y actualización. Instala y actualiza mediante el
 [paquete npm público][packages];
-la [release v0.0.8][release] conserva artefactos y checksums para verificarlos.
+la [release v0.0.9][release] conserva artefactos y checksums para verificarlos.
 No requiere instalación global.
 La CLI guarda el idioma `pt`, `en` o `es` por proyecto.
 
@@ -80,7 +80,7 @@ formularios. Consulta [cómo participar](docs/maintainers/community.md).
 al agente que lea `AGENTS.md`.
 
 [clients]: .pbai4devs/COMPATIBILIDADE.md
-[release]: https://github.com/pathbit/AgentDevKit/releases/tag/v0.0.8
+[release]: https://github.com/pathbit/AgentDevKit/releases/tag/v0.0.9
 [npm-package]: https://www.npmjs.com/package/@pathbit/agentdevkit
 [npm-badge]: https://img.shields.io/npm/v/%40pathbit%2Fagentdevkit
 [license-badge]: https://img.shields.io/badge/license-MIT-blue

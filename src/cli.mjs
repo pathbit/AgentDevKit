@@ -62,6 +62,7 @@ function print(result, options, output) {
   if (result.clients) output.write(`${text(result.language, 'clientsCurrent')}: ${result.clients.join(', ')}\n`);
   if (result.availableClients) output.write(`${text(result.language, 'clientsAvailable')}: ${result.availableClients.map(client => client.id).join(', ')}\n`);
   if (result.toolOutput) output.write(`${result.toolOutput.trimEnd()}\n`);
+  if (result.preserved?.length) output.write(`${text(result.language, 'preserved')}: ${result.preserved.length}. ${text(result.language, 'preservedDetails')}\n`);
   if (result.plan?.length) {
     const names = { pt: { create: 'criar', update: 'atualizar', remove: 'remover' }, en: { create: 'create', update: 'update', remove: 'remove' }, es: { create: 'crear', update: 'actualizar', remove: 'eliminar' } };
     const labels = {
@@ -123,6 +124,7 @@ export async function main(argv = process.argv.slice(2), context = {}) {
       const found = inspect(target);
       if (found.installed && !found.issues.length) {
         const plan = planInstallation({ target, language, mode: 'sync' });
+        result.preserved = plan.preserved;
         found.issues.push(...plan.changes.map(change => ({ code: 'outdated', path: change.path })));
         found.issues.push(...plan.localIgnoreCheck.missing.map(path => ({ code: 'unignored', path })));
         if (plan.localIgnore.edits.length || plan.untrack?.paths.length) found.issues.push({ code: 'local-ignore', path: '.gitignore / Git info/exclude' });
@@ -144,6 +146,7 @@ export async function main(argv = process.argv.slice(2), context = {}) {
         result.next = getNextSteps({ command: options.command, language, target, installed: Boolean(previous) });
       }
       const plan = planInstallation({ target, language, mode: options.command, force: options.force, clients: options.clients });
+      result.preserved = plan.preserved;
       result.plan = plan.changes.map(({ path, action }) => ({ path, action, conflict: plan.conflicts.includes(path) }));
       result.untrackedPaths = [...(plan.untrack?.paths || [])];
       result.localIgnore = { status: plan.localIgnore.status, edits: plan.localIgnore.edits.map(({ path, before }) => ({ path, action: before === null ? 'create' : 'update' })), missing: plan.localIgnoreCheck.missing };

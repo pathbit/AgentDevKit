@@ -12,6 +12,9 @@ node --test .pbai4devs/scripts/sincronizar-agentes/tests/TEST.mjs
 
 `--check` só confere; a execução normal atualiza os recursos. `--force` salva
 conflitos em `.agent-tests/` antes de reparar os caminhos gerenciados.
+Recursos nativos humanos e seus links permanecem intactos, inclusive com
+`--force`. O retorno inclui `preserved`; esses caminhos não contam como
+derivados pendentes nem passam a pertencer ao kit.
 
 Metadados vêm da fonte ou do YAML nativo declarado no manifesto. Regras exigem
 `trigger` válido; `glob` exige `globs`. Origens nativas precisam pertencer ao

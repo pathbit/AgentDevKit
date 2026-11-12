@@ -21,8 +21,9 @@ com as fontes, detectando inclusões, alterações, remoções e links inválido
 Os `.gitignore` de `.pbai4devs` e dos clientes também são gerados dos
 [modelos](../../../templates/gitignore/TEMPLATE.md). Preserve regras próprias
 fora do bloco gerenciado; `--check` identifica blocos ausentes ou divergentes.
-`--force` repara os destinos gerenciados, sobrescreve conflitos e limpa extras
-nesses destinos, com backup local do conteúdo próprio em `.agent-tests/`.
+`--force` repara conflitos gerenciados com backup local em `.agent-tests/`.
+Preserve recursos nativos humanos, inclusive colisões de nomes; links humanos
+são opacos e nunca devem ser atravessados. Confira `preserved` no JSON da CLI.
 Não apague raízes inteiras: workflows, configurações nativas e a origem ficam
 fora da limpeza. `--check` só confere, sem corrigir nem criar backups.
 

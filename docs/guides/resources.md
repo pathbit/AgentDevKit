@@ -88,14 +88,15 @@ Conflitos de conteúdo próprio exigem revisão. Quando a substituição for
 intencional, `--force` faz backup local antes de reparar caminhos gerenciados.
 Não apague pastas inteiras para contornar um conflito.
 
-O `--force` desse script pode limpar extras nas quatro áreas dos clientes,
-com backup. Ele não equivale a `agentdevkit sync --force`: a CLI controla sua
-própria lista de arquivos e preserva recursos locais não registrados por ela.
-Escolha a operação pelo escopo; não prometa preservação indistinta.
+Recursos nativos humanos são preservados, inclusive com `--force` e nomes
+iguais aos do kit. Links humanos são tratados como caminhos opacos; o gerador
+não os atravessa. A CLI informa essas rotas em `preserved` no JSON.
 
 Não edite ou versione `catalog.json`, `skills.json`, `rules.json` ou
 `agents.json`: são derivados locais. Configurações nativas e documentos
 do projeto não devem ser substituídos por cópias desses índices.
+Em uma instalação existente, `verificar-recursos` confere o hub e as derivações
+registradas, sem exigir frontmatter nos documentos humanos do projeto.
 
 ## O que permanece fora dos espelhos
 

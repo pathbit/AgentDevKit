@@ -73,8 +73,8 @@ export function runPipeline(profile, { root = releaseRoot, env = process.env, ru
     return;
   }
   if (profile === 'portable') {
-    test(['adapters.test.mjs', 'cli.test.mjs', 'client-selection.test.mjs', 'next.test.mjs']);
-    for (const name of ['preparar-ferramentas', 'sincronizar-agentes', 'executar-script']) run(root, ['--test', `${hub}/scripts/${name}/tests/TEST.mjs`], env);
+    test(['adapters.test.mjs', 'cli.test.mjs', 'client-selection.test.mjs', 'native-coexistence.test.mjs', 'next.test.mjs']);
+    for (const name of ['preparar-ferramentas', 'sincronizar-agentes', 'verificar-recursos', 'executar-script']) run(root, ['--test', `${hub}/scripts/${name}/tests/TEST.mjs`], env);
     return;
   }
   if (profile === 'smoke') {

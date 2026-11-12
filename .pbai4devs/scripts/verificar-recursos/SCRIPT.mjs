@@ -20,6 +20,39 @@ function checkedStat(root, location) {
   return item;
 }
 
+function checkedPath(root, path) {
+  if (typeof path !== 'string' || !path || isAbsolute(path) || /[\\\x00-\x1f\x7f:]/.test(path) || path.split('/').some(part => !part || part === '.' || part === '..')) fail(`Caminho gerenciado invalido: ${path}`);
+  let location = root;
+  for (const part of path.split('/')) { location = join(location, part); checkedStat(root, location); }
+  return location;
+}
+
+function ownership(root) {
+  const file = checkedPath(root, '.pbai4devs/estado/agentdevkit.json');
+  if (!checkedStat(root, file)) return null;
+  const readState = location => {
+    try { return JSON.parse(readFileSync(location, 'utf8')); }
+    catch { fail(`Estado invalido: ${normalize(relative(root, location))}`); }
+  };
+  const state = readState(file);
+  const validMap = value => value && typeof value === 'object' && !Array.isArray(value)
+    && Object.values(value).every(hash => typeof hash === 'string' && /^[a-f0-9]{64}$/.test(hash));
+  if (state?.schemaVersion !== 1 || !validMap(state.files) || !validMap(state.blocks)) fail('Estado de propriedade invalido.');
+  const files = { ...state.files };
+  const derivedFile = checkedPath(root, '.pbai4devs/estado/derived.json');
+  if (checkedStat(root, derivedFile)) {
+    const derived = readState(derivedFile);
+    if (derived?.schemaVersion !== 1 || !validMap(derived.entries) || Object.keys(derived.entries).some(path => !['AGENTS.md', 'CLAUDE.md', 'GEMINI.md'].includes(path))
+      || !validMap(derived.outputs ?? {}) || Object.keys(derived.outputs ?? {}).some(path => !/^\.[a-z0-9][a-z0-9-]*\/(?:skills|rules|agents)\.json$/.test(path))) fail('Estado de entradas derivadas invalido.');
+    Object.assign(files, derived.entries, derived.outputs);
+  }
+  for (const path of [...Object.keys(files), ...Object.keys(state.blocks)]) {
+    const location = checkedPath(root, path);
+    if (!checkedStat(root, location)?.isFile()) fail(`Arquivo gerenciado ausente: ${path}`);
+  }
+  return { files, blocks: state.blocks };
+}
+
 export function registryRoots(root) {
   checkedStat(root, join(root, '.pbai4devs'));
   const file = join(root, '.pbai4devs/espelhos.conf');
@@ -44,7 +77,7 @@ function walk(root, location, files, { skipTools = true } = {}) {
   } else if (item.isFile() && ['.md', '.mdc'].includes(extname(location).toLowerCase())) files.add(location);
 }
 
-export function collectMarkdown(root, registry = registryRoots(root)) {
+export function collectMarkdown(root, registry = registryRoots(root), { installed = ownership(root) } = {}) {
   const agents = join(root, '.pbai4devs');
   checkedStat(root, agents);
   for (const directory of readdirSync(agents, { withFileTypes: true })) {
@@ -54,10 +87,18 @@ export function collectMarkdown(root, registry = registryRoots(root)) {
     if (item?.isDirectory() && !checkedStat(root, join(location, 'README.md'))?.isFile()) fail(`README ausente: .pbai4devs/${directory.name}/`);
   }
   const files = new Set();
-  const rootMarkdown = readdirSync(root).filter(name => ['.md', '.mdc'].includes(extname(name).toLowerCase()));
-  const sources = ['.pbai4devs', 'docs', 'src', 'bin', 'tests', 'scripts', 'examples',
-    '.github/PULL_REQUEST_TEMPLATE.md', '.github/ISSUE_TEMPLATE', ...rootMarkdown];
-  for (const name of [...sources, ...registry.paths]) walk(root, resolve(root, name), files);
+  if (installed) {
+    walk(root, agents, files);
+    for (const path of Object.keys(installed.files)) {
+      const file = checkedPath(root, path);
+      if (['.md', '.mdc'].includes(extname(path).toLowerCase())) files.add(file);
+    }
+  } else {
+    const rootMarkdown = readdirSync(root).filter(name => ['.md', '.mdc'].includes(extname(name).toLowerCase()));
+    const sources = ['.pbai4devs', 'docs', 'src', 'bin', 'tests', 'scripts', 'examples',
+      '.github/PULL_REQUEST_TEMPLATE.md', '.github/ISSUE_TEMPLATE', ...rootMarkdown];
+    for (const name of [...sources, ...registry.paths]) walk(root, resolve(root, name), files);
+  }
   const tools = join(agents, 'tools');
   if (checkedStat(root, tools)) {
     const guide = join(tools, 'README.md');
@@ -154,8 +195,14 @@ export function checkCatalog(root, build = buildCatalog) {
   return result.catalog;
 }
 
-export function checkAgentExtras(root, agents) {
+export function checkAgentExtras(root, agents, { installed = null } = {}) {
   for (const agent of agents) {
+    if (installed) {
+      const files = Object.keys(installed.files).filter(path => path.startsWith(`${agent}/`));
+      if (files.some(path => auxiliary.some(name => path === `${agent}/${name}` || path.startsWith(`${agent}/${name}/`)))) fail(`Auxiliar gerenciado indevido em ${agent}`);
+      if (files.some(path => ['README.md', 'INSTRUCTIONS.md'].includes(basename(path)))) fail(`Guia gerenciado indevido em ${agent}`);
+      continue;
+    }
     for (const name of auxiliary) if (existsSync(join(root, agent, name))) fail(`Auxiliar indevido em ${agent}/${name}`);
     const files = new Set();
     walk(root, join(root, agent), files);
@@ -183,14 +230,15 @@ export function checkLint(root, files, run = spawnSync) {
 
 export function verifyResources({ root = projectRoot, sourceOnly = false, synchronize = checkSynchronization, lint = checkLint, catalogCheck = checkCatalog } = {}) {
   requireNode();
+  const installed = sourceOnly ? null : ownership(root);
   const built = sourceOnly ? buildCatalog(root) : null;
   if (!sourceOnly) { synchronize(root); catalogCheck(root); }
   const registry = sourceOnly ? { agents: [], paths: [] } : registryRoots(root);
-  const files = collectMarkdown(root, registry);
+  const files = collectMarkdown(root, registry, { installed });
   const virtualPaths = new Set(sourceOnly ? [...built.outputs.keys(), '.pbai4devs/espelhos.conf'] : []);
   checkMarkdown(root, files, { virtualPaths });
   checkResourceReferences(root, files);
-  checkAgentExtras(root, registry.agents);
+  checkAgentExtras(root, registry.agents, { installed });
   return { files, messages: [...lint(root, files), 'recursos=passed'] };
 }
 

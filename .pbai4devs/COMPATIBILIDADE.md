@@ -87,8 +87,10 @@ remoção em fevereiro de 2027. No Copilot, use skills para rotinas invocáveis.
 
 O instalador gera a seleção e a política em `espelhos.conf`; `sincronizar`
 reconstrói os apontamentos somente com Node e os arquivos do hub instalado.
-`--check` não altera arquivos. `--force` faz backup ignorado antes de substituir
-conteúdo próprio que conflite com caminhos gerenciados.
+`--check` não altera arquivos. `--force` faz backup ignorado ao reparar
+conflitos gerenciados. Recursos e links humanos dos clientes são preservados;
+uma rota preservada não recebe apontamentos novos. No Zod, `.codex/skills`
+continua apontando para suas skills e o Codex recebe o kit em `.agents/skills`.
 
 As fontes confirmam formatos, não execução de cada cliente. Valide descoberta,
 invocação e resultado no cliente escolhido antes de considerar uma integração

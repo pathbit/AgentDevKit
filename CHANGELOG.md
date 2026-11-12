@@ -4,6 +4,14 @@ description: Alterações verificáveis por versão do AgentDevKit.
 
 # Changelog
 
+## 0.0.9 — 2026-11-12
+
+- Links e configurações humanos preservados na instalação dos agentes.
+- Colisões com recursos nativos próprios não são sobrescritas pelo kit.
+- Sincronização mantém recursos humanos, inclusive com `--force`.
+- Caminhos preservados são informados sem registrar propriedade indevida.
+- Matriz OSS verifica agentes preexistentes e sincronização independente.
+
 ## 0.0.8 — 2026-11-11
 
 - Preservação de arquivos humanos que parecem apontamentos gerados.

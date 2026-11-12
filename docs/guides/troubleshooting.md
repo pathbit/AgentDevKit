@@ -84,15 +84,15 @@ peça ao agente para comparar as fontes e planejar o reparo com `init`/`sync`.
 Entradas humanas permanecem separadas das geradas. Na migração de versões
 antigas, o kit retira somente seu bloco reconhecido e preserva o texto humano.
 Não altere os marcadores dos blocos que ainda serão migrados.
-Não transforme diretórios de agentes ou o hub em links simbólicos.
+Links humanos preexistentes nas entradas e nos clientes são mantidos sem
+atravessá-los. Consulte `preserved` no JSON para ver as rotas que não receberam
+apontamentos. Não transforme o hub ou caminhos já gerenciados em links.
 Destinos dentro de `.git`, `node_modules` ou `.pbai4devs` são recusados,
 inclusive com variações de maiúsculas/minúsculas.
 
-Na CLI, `sync --force` substitui conflitos identificados, com backup, e
-preserva arquivos nativos próprios que não são do kit. O script compartilhado
-`sincronizar-agentes` tem um modo `--force` mais amplo: pode limpar conteúdo
-extra nas áreas de skills, agents, commands e rules. Prefira a CLI para manter
-a instalação; não trate esses dois comandos como equivalentes.
+Na CLI e no script `sincronizar-agentes`, `--force` repara conflitos gerenciados
+com backup. Recursos nativos humanos e links preservados continuam intactos.
+Para manter a instalação e sua seleção de clientes, prefira a CLI.
 
 ## Download, plataforma ou ferramenta falhando
 

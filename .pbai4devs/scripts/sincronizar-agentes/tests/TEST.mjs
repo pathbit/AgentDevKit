@@ -11,6 +11,7 @@ import { toolWrapper } from '../../preparar-ferramentas/SCRIPT.mjs';
 import { mergeGitignore, ignoreBegin, ignoreEnd, validateIgnoreClients } from '../../lib/gitignore.mjs';
 import './LOCAL_IGNORE.mjs';
 import './HUMAN_OWNERSHIP.mjs';
+import './COEXISTENCE.mjs';
 import { validateCatalog as validateExternalCatalog } from '../../gerenciar-skills-externas/SCRIPT.mjs';
 
 const project = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
@@ -21,6 +22,7 @@ const source = '.pbai4devs/skills/projeto/demo/SKILL.md';
 const read = (root, path) => readFileSync(join(root, path), 'utf8');
 const write = (root, path, content) => { mkdirSync(dirname(join(root, path)), { recursive: true }); writeFileSync(join(root, path), content); };
 const pointer = (origin = 'origem.md', title = 'Referencia') => `---\ndescription: Referencia.\n---\n\n# ${title}\n\n${marker}\nLeia e siga [origem](${origin}).\n`;
+const recordOwned = (root, paths) => write(root, '.pbai4devs/estado/agentdevkit.json', JSON.stringify({ schemaVersion: 1, files: Object.fromEntries(paths.map(path => [path, createHash('sha256').update(readFileSync(join(root, path))).digest('hex')])), blocks: {} }));
 const toolConfig = (name = 'demo') => ({ name, description: `Ferramenta ${name}.`, group: 'base', source: `https://github.com/fixture/${name}`, download: { provider: 'npm', package: name, registry: 'https://registry.npmjs.org/', repository: `fixture/${name}`, channel: 'latest' }, platforms: [`${process.platform}-${process.arch}`], scripts: { entry: 'SCRIPT.mjs' }, probe: ['--version'] });
 const externalConfig = () => ({ schemaVersion: 1, allowlist: ['fixture/skills'], skills: [{ id: 'external-demo', repository: 'fixture/skills', commit: 'a'.repeat(40), path: 'skills/demo/SKILL.md', name: 'external-demo', license: 'MIT', use: 'Revisar exemplo externo.', status: 'reviewed', notes: 'Sem execução automática.' }] });
 const run = (root, options = {}) => synchronize({ root, localIgnores: false, generateEntrypoints: false, output() {}, ...options });
@@ -334,7 +336,7 @@ test('registros são derivados, determinísticos e --check nunca os corrige', t 
   assertCheckReadonly(empty, {}, 0);
 });
 
-test('skills externas baixadas não entram nos índices; --force salva e limpa cópias indevidas', t => {
+test('skills externas baixadas não entram nos índices; cópias humanas permanecem intactas', t => {
   const root = fixture(t);
   write(root, '.pbai4devs/external-skills/README.md', '# Catálogo externo\n');
   write(root, '.pbai4devs/external-skills/CATALOG.json', JSON.stringify(externalConfig()));
@@ -348,38 +350,34 @@ test('skills externas baixadas não entram nos índices; --force salva e limpa c
   write(root, '.codex/external-skills/.local/upstream-0/SKILL.md', '# Cópia indevida\n');
   write(root, '.claude/external-skills/README.md', pointer('../../.pbai4devs/external-skills/README.md'));
   assertCheckReadonly(root);
-  rejected(root, {}, /--force/);
   const result = run(root, { force: true });
-  for (const client of ['.codex', '.claude']) {
-    assert.equal(existsSync(join(root, client, 'external-skills')), false);
-    assert.ok(existsSync(join(result.backupRoot, client, 'external-skills')));
-  }
+  assert.equal(existsSync(join(root, '.claude/external-skills')), false);
+  assert.ok(result.preserved.some(item => item.path === '.codex/external-skills'));
   assert.equal(read(root, '.pbai4devs/external-skills/.local/upstream-0/SKILL.md'), sourceBefore);
-  assert.equal(read(result.backupRoot, '.codex/external-skills/.local/upstream-0/SKILL.md'), '# Cópia indevida\n');
+  assert.equal(read(root, '.codex/external-skills/.local/upstream-0/SKILL.md'), '# Cópia indevida\n');
   assertCheckReadonly(root, {}, 0);
 });
 
-test('--force salva conteúdo próprio, repara ancestrais e preserva arquivos fora do escopo', t => {
+test('--force repara conteúdo registrado e preserva recursos humanos sem propriedade', t => {
   const root = fixture(t);
   run(root);
+  recordOwned(root, ['.claude/skills/projeto/demo/SKILL.md', '.kimi-code/agents/revisor.md']);
   write(root, '.claude/scripts/local.sh', 'script humano\n');
   write(root, '.claude/tools/program.exe', Buffer.from([1, 2, 3]));
   write(root, '.claude/docs/plain.md', '# Documento auxiliar\n');
   write(root, '.claude/skills/local.bin', 'custom\n');
   write(root, '.claude/skills/projeto/demo/SKILL.md', 'corrompido\n');
   write(root, '.kimi-code/agents/revisor.md', 'corrompido\n');
-  rmSync(join(root, '.codex/skills/outro'), { recursive: true });
-  write(root, '.codex/skills/outro', 'ancestral arquivo\n');
   write(root, '.github/prompts/edited.prompt.md', pointer() + '\nRevisar [manual](bar).\n');
   assertCheckReadonly(root);
   assertCheckReadonly(root, { force: true });
   rejected(root, {}, /--force/);
   const result = run(root, { force: true });
   assert.ok(result.backupRoot.startsWith(join(root, '.agent-tests')));
-  for (const path of ['.claude/scripts/local.sh', '.claude/tools/program.exe', '.claude/docs/plain.md', '.claude/skills/local.bin', '.claude/skills/projeto/demo/SKILL.md', '.kimi-code/agents/revisor.md', '.codex/skills/outro', '.github/prompts/edited.prompt.md']) assert.ok(existsSync(join(result.backupRoot, path)), `Backup ausente: ${path}`);
-  assert.deepEqual(readFileSync(join(result.backupRoot, '.claude/tools/program.exe')), Buffer.from([1, 2, 3]));
-  assert.equal(existsSync(join(root, '.claude/scripts')), false);
-  assert.equal(existsSync(join(root, '.claude/skills/local.bin')), false);
+  for (const path of ['.claude/skills/projeto/demo/SKILL.md', '.kimi-code/agents/revisor.md', '.github/prompts/edited.prompt.md']) assert.ok(existsSync(join(result.backupRoot, path)), `Backup ausente: ${path}`);
+  assert.deepEqual(readFileSync(join(root, '.claude/tools/program.exe')), Buffer.from([1, 2, 3]));
+  assert.equal(read(root, '.claude/scripts/local.sh'), 'script humano\n');
+  assert.equal(read(root, '.claude/skills/local.bin'), 'custom\n');
   assert.equal(existsSync(join(root, '.github/prompts/edited.prompt.md')), false);
   assert.match(read(root, '.codex/skills/outro/SKILL.md'), /name: outro/);
   assert.match(read(root, '.github/workflows/ci.yml'), /workflow-preservado/);
@@ -466,8 +464,8 @@ test('metadados incompletos, ausentes e com corpo são rejeitados antes de alter
   rejected(root, { force: true }, /Titulo/);
 });
 
-test('symlinks são rejeitados sem efeitos quando o sistema permite criá-los', t => {
-  for (const location of ['.claude/tools', '.pbai4devs/skills/projeto/demo/external.md', '.pbai4devs/skills.json', '.pbai4devs/espelhos.conf']) {
+test('symlinks canônicos são rejeitados sem efeitos quando o sistema permite criá-los', t => {
+  for (const location of ['.pbai4devs/skills/projeto/demo/external.md', '.pbai4devs/skills.json', '.pbai4devs/espelhos.conf']) {
     const root = fixture(t);
     rmSync(join(root, location), { recursive: true, force: true });
     try { symlinkSync(join(root, 'missing-target'), join(root, location)); }
@@ -500,6 +498,8 @@ test('registros não regulares são rejeitados sem efeitos', t => {
 test('backup recusa raiz simbólica antes de remover conteúdo próprio', t => {
   const root = fixture(t);
   run(root);
+  recordOwned(root, ['.claude/skills/projeto/demo/SKILL.md']);
+  write(root, '.claude/skills/projeto/demo/SKILL.md', 'registrado alterado\n');
   write(root, '.claude/scripts/own.sh', 'preservar\n');
   const outside = join(root, 'outside');
   mkdirSync(outside);
@@ -824,33 +824,33 @@ test('manifestos Antigravity acompanham skills, regras e agentes agrupados', t =
   write(root, '.pbai4devs/agents/review/security/AGENT.md', '---\nname: security\ndescription: Perfil.\n---\n\n# Perfil\n');
   write(root, '.pbai4devs/espelhos.conf', 'agente|.agents|agrupado\ndescoberta|.agents|antigravity\n');
   const before = snapshot(root);
-  assert.equal(run(root, { check: true }).exitCode, 1);
+  assert.equal(run(root, { check: true, generateEntrypoints: true }).exitCode, 1);
   assert.deepEqual(snapshot(root), before);
-  run(root);
+  run(root, { generateEntrypoints: true });
   assert.deepEqual(JSON.parse(read(root, '.agents/skills.json')).entries, [{ path: '.agents/skills/projeto/demo' }]);
   assert.deepEqual(JSON.parse(read(root, '.agents/rules.json')).entries, [{ path: '.agents/rules/projeto/style/RULE.md' }]);
   assert.deepEqual(JSON.parse(read(root, '.agents/agents.json')).entries, [{ path: '.agents/agents/review/security/AGENT.md' }]);
   write(root, '.pbai4devs/skills/projeto/new-skill/SKILL.md', skill.replace('name: demo', 'name: new-skill'));
-  run(root);
+  run(root, { generateEntrypoints: true });
   assert.equal(JSON.parse(read(root, '.agents/skills.json')).entries.length, 2);
   rmSync(join(root, '.pbai4devs/skills/projeto/demo'), { recursive: true });
-  run(root);
+  run(root, { generateEntrypoints: true });
   assert.deepEqual(JSON.parse(read(root, '.agents/skills.json')).entries, [{ path: '.agents/skills/projeto/new-skill' }]);
   assert.equal(existsSync(join(root, '.agents/skills/projeto/demo')), false);
-  assertCheckReadonly(root, {}, 0);
+  assertCheckReadonly(root, { generateEntrypoints: true }, 0);
 });
 
-test('manifesto de descoberta customizado exige force e recebe backup', t => {
+test('manifesto de descoberta humano permanece intacto mesmo com force', t => {
   const root = fixture(t, true);
   write(root, source, skill);
   write(root, '.pbai4devs/espelhos.conf', 'agente|.agents|agrupado\ndescoberta|.agents|antigravity\n');
-  run(root);
-  const custom = '{"entries":[{"path":"custom/skill"}]}\n';
+  const custom = '{"entries":[{"path":".agents/skills/custom"}]}\n';
   write(root, '.agents/skills.json', custom);
-  rejected(root, {}, /force/);
-  const result = run(root, { force: true });
-  assert.equal(readFileSync(join(result.backupRoot, '.agents/skills.json'), 'utf8'), custom);
-  assertCheckReadonly(root, {}, 0);
+  const result = run(root, { force: true, generateEntrypoints: true });
+  assert.equal(read(root, '.agents/skills.json'), custom);
+  assert.ok(result.preserved.some(item => item.path === '.agents/skills.json'));
+  assert.ok(!result.ownedOutputs.includes('.agents/skills.json'));
+  assertCheckReadonly(root, { generateEntrypoints: true }, 0);
 });
 
 test('formatos desconhecidos ou fora do cliente falham antes de mutar', t => {
