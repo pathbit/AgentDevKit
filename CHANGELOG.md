@@ -4,6 +4,13 @@ description: Alterações verificáveis por versão do AgentDevKit.
 
 # Changelog
 
+## 0.0.7 — 2026-11-11
+
+- Artefatos de testes e pastas temporárias protegidos em projetos existentes.
+- Regras locais respeitam o escopo do projeto e as exceções do usuário.
+- Teste opt-in em clones reais, com commits fixos e comparação de arquivos.
+- Relato explícito de bloqueios por links simbólicos preexistentes.
+
 ## 0.0.6 — 2026-11-11
 
 - Metadados npm com autoria PathBit, palavras-chave e licença MIT.

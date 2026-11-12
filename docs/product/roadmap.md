@@ -17,6 +17,7 @@ status: vigente
 | Estrutura e exemplos v0.0.4 | CLI, distribuição e gerador | [Spec][layout]. |
 | Instalação pelo registro v0.0.5 | Pacote publicado | [Spec][registry]. |
 | Apresentação e licença v0.0.6 | Distribuição e atualização | [Spec][public]. |
+| Compatibilidade real v0.0.7 | Testes em clones existentes | [Spec][oss]. |
 
 A primeira entrega segue a [spec v0.0.1](../specs/v0.0.1/SPEC.md), disponível
 na [release v0.0.1][release]. Os detalhes de mudanças estão no
@@ -36,3 +37,4 @@ comportamento existente, sem alterar a versão de uma release já publicada.
 [layout]: ../specs/v0.0.4/SPEC.md
 [registry]: ../specs/v0.0.5/SPEC.md
 [public]: ../specs/v0.0.6/SPEC.md
+[oss]: ../specs/v0.0.7/SPEC.md

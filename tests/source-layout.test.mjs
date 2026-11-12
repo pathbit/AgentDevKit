@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
 import { applyPlan, planInstallation } from '../src/install.mjs';
 
 const project = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -55,6 +56,59 @@ test('init transporta licença canônica sem alterar licença humana e sync a pr
   assert.deepEqual(readFileSync(join(root, '.pbai4devs/LICENSE')), canonical);
   assert.deepEqual(readFileSync(join(root, 'LICENSE')), human);
   assert.equal(spawnSync('git', ['-C', root, 'check-ignore', '--no-index', '-q', '.pbai4devs/LICENSE']).status, 1);
+});
+
+test('instalação em Git vazio ignora artefatos sem modificar README, licença ou evidência rastreada', t => {
+  const root = fixture(t), readme = '# Produto existente\n', license = 'Licença do produto\r\n';
+  write(root, 'README.md', readme); write(root, 'LICENSE', license);
+  write(root, '.agent-tests/human.txt', 'evidência própria\n');
+  git(root, 'add', '-f', '.agent-tests/human.txt');
+  const preview = cli(root, ['init', '--agents', 'claude', '--dry-run']);
+  assert.ok(!preview.untrackedPaths.includes('.agent-tests/human.txt'));
+  cli(root, ['init', '--agents', 'claude']);
+  const exclude = read(root, '.git/info/exclude');
+  for (const path of ['.agent-tests/x', 'tmp/x', 'deep/TEMP/x', '.PlAyWrIgHt-McP/x', 'nested/Playwright-report/x', 'test-results/x', 'sub/TESTRESULTS/x']) {
+    assert.equal(git(root, 'check-ignore', '--no-index', path).trim(), path);
+  }
+  assert.equal(read(root, 'README.md'), readme); assert.equal(read(root, 'LICENSE'), license);
+  assert.equal(git(root, 'ls-files', '.agent-tests/human.txt').trim(), '.agent-tests/human.txt');
+  assert.equal(read(root, '.agent-tests/human.txt'), 'evidência própria\n');
+  assert.equal(cli(root, ['sync', '--check']).ok, true);
+  assert.equal(cli(root, ['init', '--agents', 'claude']).changed, false);
+  assert.equal(read(root, '.git/info/exclude'), exclude);
+  write(root, '.git/info/exclude', exclude.replace(/\n# Resultados e arquivos temporarios\n[\s\S]*?(?=# END AGENTDEVKIT LOCAL)/, '\n'));
+  assert.ok(cli(root, ['doctor'], 1).issues.some(issue => issue.code === 'local-ignore'));
+  assert.equal(cli(root, ['sync', '--check'], 1).ok, false);
+  cli(root, ['sync']);
+  assert.equal(read(root, '.git/info/exclude'), exclude);
+});
+
+test('negação humana de artefatos impede init mesmo com force', t => {
+  const root = fixture(t), human = '!/.agent-tests/**\n'; write(root, '.gitignore', human);
+  const exclude = read(root, '.git/info/exclude');
+  for (const option of ['--dry-run', '--force']) {
+    const result = cli(root, ['init', '--agents', 'claude', option], 1);
+    assert.ok(result.conflicts.some(path => path.startsWith('.agent-tests/')));
+    assert.equal(existsSync(join(root, '.pbai4devs')), false);
+    assert.equal(read(root, '.gitignore'), human); assert.equal(read(root, '.git/info/exclude'), exclude);
+  }
+});
+
+test('fallback sem Git carrega artefatos e migra sem tocar as regras humanas', t => {
+  const root = mkdtempSync(join(tmpdir(), 'agentdevkit-no-git-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const human = '# Regra do produto\ndist/\n'; write(root, '.gitignore', human);
+  write(root, 'README.md', '# Meu produto\n'); write(root, 'LICENSE', 'Minha licença\n');
+  cli(root, ['init', '--agents', 'claude']);
+  const fallback = read(root, '.gitignore'); assert.ok(fallback.startsWith(human));
+  assert.match(fallback, /Resultados e arquivos temporarios/);
+  assert.equal(cli(root, ['sync', '--check']).ok, true);
+  git(root, 'init', '--quiet'); cli(root, ['sync']);
+  assert.equal(read(root, '.gitignore'), human);
+  for (const path of ['.agent-tests/x', 'nested/TmP/x', '.PLAYWRIGHT-MCP/x', 'sub/playwright-report/x', 'test-results/x']) {
+    assert.equal(git(root, 'check-ignore', '--no-index', path).trim(), path);
+  }
+  assert.equal(read(root, 'README.md'), '# Meu produto\n'); assert.equal(read(root, 'LICENSE'), 'Minha licença\n');
 });
 
 test('update acrescenta licença em instalação anterior e detecta alteração posterior', t => {

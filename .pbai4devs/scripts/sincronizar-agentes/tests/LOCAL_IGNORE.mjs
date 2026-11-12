@@ -129,6 +129,72 @@ test('raízes dedicadas são locais, enquanto configurações de GitHub e VS Cod
   assert.ok(tracked.includes('.github/settings.json')); assert.ok(tracked.includes('.vscode/settings.json'));
 });
 
+test('artefatos vêm da política compartilhada e não entram na lista de outputs', t => {
+  const root = fixture(t); git(root, ['init', '-q']);
+  put(root, '.agent-tests/human.txt', 'evidência humana'); git(root, ['add', '-f', '.agent-tests/human.txt']);
+  const plan = planLocalIgnore(root, { outputs: ['AGENTS.md'] });
+  assert.ok(plan.artifactProbes.some(path => path.startsWith('.agent-tests/')));
+  assert.ok(plan.artifactProbes.some(path => path.startsWith('.agentdevkit-ignore-probes/')));
+  assert.ok(plan.paths.every(path => !plan.artifactProbes.includes(path)));
+  assert.ok(!plan.trackedOutputs.includes('.agent-tests/human.txt'));
+  applyLocalIgnore(plan);
+  for (const path of ['.agent-tests/x', 'TMP/x', 'nested/TeMp/x', '.PlAyWrIgHt-McP/x', 'nested/playwright-report/x', 'TEST-RESULTS/x', 'nested/TestResults/x', 'BLOB-REPORT/x']) {
+    assert.equal(git(root, ['check-ignore', '--no-index', path]).trim(), path);
+  }
+  assert.equal(git(root, ['ls-files', '.agent-tests/human.txt']).trim(), '.agent-tests/human.txt');
+  assert.equal(readFileSync(join(root, '.agent-tests/human.txt'), 'utf8'), 'evidência humana');
+  assert.equal(checkLocalIgnore(planLocalIgnore(root, { outputs: ['AGENTS.md'] })).ok, true);
+});
+
+test('regras de artefatos são limitadas ao projeto dentro do monorepo', t => {
+  const root = fixture(t); git(root, ['init', '-q']);
+  const child = join(root, 'apps', 'my project'); mkdirSync(child, { recursive: true });
+  applyLocalIgnore(planLocalIgnore(child, { outputs: ['AGENTS.md'] }));
+  for (const path of ['apps/my project/.agent-tests/x', 'apps/my project/nested/.Playwright-MCP/x', 'apps/my project/sub/test-results/x']) {
+    assert.equal(git(root, ['check-ignore', '--no-index', path]).trim(), path);
+  }
+  for (const path of ['apps/other/.agent-tests/x', 'apps/other/tmp/x', '.agent-tests/x']) {
+    const result = spawnSync('git', ['-C', root, 'check-ignore', '--no-index', path], { encoding: 'utf8' });
+    assert.equal(result.status, 1, path + result.stderr);
+  }
+});
+
+test('ignore global não mascara a ausência das regras locais de artefatos', t => {
+  const root = fixture(t), outside = fixture(t); git(root, ['init', '-q']);
+  put(outside, 'global.ignore', '*\n');
+  git(root, ['config', 'core.excludesFile', join(outside, 'global.ignore')]);
+  const plan = planLocalIgnore(root, { outputs: ['AGENTS.md'] });
+  assert.equal(plan.edits.length, 1);
+  const missing = checkLocalIgnore({ ...plan, edits: [] });
+  assert.ok(missing.missing.some(path => path.startsWith('.agent-tests/')));
+  applyLocalIgnore(plan);
+  assert.equal(checkLocalIgnore(planLocalIgnore(root, { outputs: ['AGENTS.md'] })).ok, true);
+});
+
+test('negação humana de artefatos bloqueia aplicação sem modificar regras ou índice', t => {
+  const root = fixture(t); git(root, ['init', '-q']);
+  const human = '!/.agent-tests/**\n'; put(root, '.gitignore', human);
+  const exclude = readFileSync(join(root, '.git/info/exclude'));
+  const plan = planLocalIgnore(root, { outputs: ['AGENTS.md'] });
+  assert.ok(checkLocalIgnore(plan).missing.some(path => path.startsWith('.agent-tests/')));
+  assert.throws(() => applyLocalIgnore(plan), /Regras humanas/);
+  assert.deepEqual(readFileSync(join(root, '.git/info/exclude')), exclude);
+  assert.equal(readFileSync(join(root, '.gitignore'), 'utf8'), human);
+});
+
+test('probes reconhecem exceções humanas para nomes reais de Playwright', async t => {
+  for (const path of ['.playwright-mcp', 'playwright-report', 'playwright/.cache']) await t.test(path, subtest => {
+    const root = fixture(subtest); git(root, ['init', '-q']);
+    const prefixes = path.split('/').map((_part, index, parts) => '!/' + parts.slice(0, index + 1).join('/') + '/');
+    const human = [...prefixes, `!/${path}/**`, ''].join('\n'); put(root, '.gitignore', human);
+    const before = readFileSync(join(root, '.git/info/exclude'));
+    const plan = planLocalIgnore(root, { outputs: ['AGENTS.md'] });
+    assert.ok(checkLocalIgnore(plan).missing.some(probe => probe.startsWith(path + '/')));
+    assert.throws(() => applyLocalIgnore(plan), /Regras humanas/);
+    assert.deepEqual(readFileSync(join(root, '.git/info/exclude')), before);
+  });
+});
+
 test('milhares de caminhos usam stdin e não ampliam metadata de área já ignorada', t => {
   const root = fixture(t); git(root, ['init', '-q']); put(root, '.gitignore', '/ignored/\n');
   const before = readFileSync(join(root, '.git/info/exclude'), 'utf8');

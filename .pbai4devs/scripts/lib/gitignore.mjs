@@ -114,6 +114,52 @@ function rootProbes(root, roots) {
   return roots.filter(path => { const item = localStat(join(root, path)); return !item || item.isDirectory(); }).map(path => `${path}/.agentdevkit-ignore-probe`);
 }
 
+function artifactPolicy(templateFile) {
+  const adjacent = join(dirname(templateFile), 'agents.ignore');
+  const source = checkedLocalPath(localStat(adjacent) ? adjacent : fileURLToPath(new URL('../../templates/gitignore/agents.ignore', import.meta.url)));
+  const content = readFileSync(source, 'utf8');
+  const section = content.split(/^## Resultados e arquivos temporarios\r?$/m)[1]?.split(/^## /m)[0];
+  const patterns = section?.split(/\r?\n/).map(line => line.trim()).filter(line => line && !line.startsWith('#'));
+  if (!patterns?.length || patterns.some(pattern => !pattern.startsWith('**/') || /[!\\\x00-\x1f]/.test(pattern) || pattern.split('/').includes('..'))) throw new Error('Secao de artefatos invalida em agents.ignore.');
+  return patterns;
+}
+
+function artifactProbes(root, patterns) {
+  const probes = new Set();
+  for (const pattern of patterns) {
+    const stem = pattern.slice(3).replace(/\/$/, '').replace(/\[([^\]]+)\]/g, (_match, letters) => letters[0]).replace(/\?/g, 'x');
+    const names = stem.includes('*') ? ['', '-mcp', '-report', '-cache', '-agentdevkit'].map(suffix => stem.replace(/\*/g, suffix)) : [stem];
+    for (const name of names) for (const variant of new Set([name, name.toLowerCase()])) {
+      const leaves = stem.includes('*') ? ['.agentdevkit-artifact-probe', '.cache/.agentdevkit-artifact-probe'] : ['.agentdevkit-artifact-probe'];
+      for (const leaf of leaves) for (const path of [`${variant}/${leaf}`, `.agentdevkit-ignore-probes/${variant}/${leaf}`]) {
+        let parent = root, safe = true;
+        for (const part of path.split('/').slice(0, -1)) {
+          parent = join(parent, part); const item = localStat(parent);
+          if (item && !item.isDirectory()) { safe = false; break; }
+        }
+        if (safe) probes.add(path);
+      }
+    }
+  }
+  return [...probes];
+}
+
+function localIgnoreSource(location, source) {
+  const path = resolve(location.top, source);
+  if (path === location.exclude) return true;
+  const inside = relative(location.top, path);
+  return basename(path) === '.gitignore' && !isAbsolute(inside) && inside !== '..' && !inside.startsWith(`..${sep}`);
+}
+
+function ignoreMatches(location, probes) {
+  const paths = probes.map(path => location.prefix ? `${location.prefix}/${path}` : path);
+  const result = gitCommand(location.top, ['-c', 'core.excludesFile=', 'check-ignore', '--verbose', '--no-index', '--stdin', '-z'], paths.join('\0') + '\0');
+  if (result.error || ![0, 1].includes(result.status)) throw new Error(result.error?.message || result.stderr || 'Falha ao conferir exclusoes Git.');
+  const values = result.stdout.split('\0'), matches = new Map();
+  for (let index = 0; index + 3 < values.length; index += 4) matches.set(values[index + 3], { source: values[index], line: Number(values[index + 1]), pattern: values[index + 2] });
+  return { paths, matches };
+}
+
 function localRoot(value) {
   const missing = []; let parent = resolve(value);
   while (!localStat(parent)) { missing.unshift(parent.slice(dirname(parent).length + 1)); parent = dirname(parent); }
@@ -128,6 +174,7 @@ export function planLocalIgnore(root, { outputs = [], templateRoot } = {}) {
   const localTemplate = join(root, '.pbai4devs/templates/gitignore/local.ignore');
   const templateFile = checkedLocalPath(templateRoot ? join(templateRoot, '.pbai4devs/templates/gitignore/local.ignore') : localStat(localTemplate) ? localTemplate : fileURLToPath(new URL('../../templates/gitignore/local.ignore', import.meta.url)));
   const template = readFileSync(templateFile, 'utf8');
+  const artifacts = artifactPolicy(templateFile);
   if (template.split('{{OUTPUTS}}').length !== 2) throw new Error('local.ignore exige um unico {{OUTPUTS}}.');
   if (template.split('{{ROOTS}}').length > 2) throw new Error('local.ignore permite um unico {{ROOTS}}.');
   const localPolicy = join(templateRoot || root, '.pbai4devs/templates/clients/ADAPTERS.json');
@@ -152,16 +199,18 @@ export function planLocalIgnore(root, { outputs = [], templateRoot } = {}) {
   }
   const id = createHash('sha256').update(root).digest('hex').slice(0, 16);
   const first = `# BEGIN AGENTDEVKIT LOCAL ${id}`, last = `# END AGENTDEVKIT LOCAL ${id}`;
-  const fixed = template.replace('{{ROOTS}}', roots.map(path => `/${path}/`).join('\n')).replace('{{OUTPUTS}}', paths.filter(path => !roots.some(root => path === root || path.startsWith(root + '/'))).map(path => `/${escapePattern(path)}`).join('\n'));
+  const fixed = template.replace('{{ROOTS}}', roots.map(path => `/${path}/`).join('\n')).replace('{{OUTPUTS}}', paths.filter(path => !roots.some(root => path === root || path.startsWith(root + '/'))).map(path => `/${escapePattern(path)}`).join('\n'))
+    + '\n# Resultados e arquivos temporarios\n' + artifacts.map(pattern => `/${pattern}`).join('\n') + '\n';
   const body = fixed.split(/\r?\n/).map(line => location?.prefix && line.startsWith('/') ? `/${escapePattern(location.prefix)}${line}` : line).join('\n');
   const target = location?.exclude ?? checkedLocalPath(join(root, '.gitignore'));
   const before = localRead(target), after = localBlock(before, first, last, body);
   const edits = before === after ? [] : [{ path: target, before, after }];
   const probes = [...paths, ...rootProbes(root, roots)];
+  const artifactPaths = artifactProbes(root, artifacts);
   const wanted = new Set(probes.map(path => location?.prefix ? `${location.prefix}/${path}` : path));
   if (location && !before?.includes(first) && !localRead(join(root, '.gitignore'))?.includes(first)) {
-    const ignored = gitCommand(location.top, ['check-ignore', '--no-index', '--stdin', '-z'], [...wanted].join('\0') + '\0');
-    if (!ignored.error && [0, 1].includes(ignored.status) && ignored.stdout.split('\0').filter(Boolean).length === wanted.size) edits.length = 0;
+    const ignored = ignoreMatches(location, [...probes, ...artifactPaths]);
+    if (ignored.paths.every(path => { const match = ignored.matches.get(path); return match && !match.pattern.startsWith('!') && localIgnoreSource(location, match.source); })) edits.length = 0;
   }
   if (location) {
     const fallback = checkedLocalPath(join(root, '.gitignore'));
@@ -169,7 +218,7 @@ export function planLocalIgnore(root, { outputs = [], templateRoot } = {}) {
     if (old !== null && old !== next) edits.push({ path: fallback, before: old, after: next });
   }
   const tracked = location ? gitCommand(location.top, ['ls-files', '-z']).stdout.split('\0').filter(path => wanted.has(path)).map(path => location.prefix ? path.slice(location.prefix.length + 1) : path) : [];
-  return { root, status: location ? 'git' : 'fallback', location, paths, roots, edits, trackedOutputs: tracked, first, last };
+  return { root, status: location ? 'git' : 'fallback', location, paths, roots, artifactProbes: artifactPaths, edits, trackedOutputs: tracked, first, last };
 }
 
 export function checkLocalIgnore(plan, { replacedBlocks = [] } = {}) {
@@ -185,19 +234,16 @@ export function checkLocalIgnore(plan, { replacedBlocks = [] } = {}) {
     if (createHash('sha256').update(block).digest('hex') !== item.sha256) throw new Error('Bloco de ignore mudou antes da verificacao.');
     return { ...item, path };
   });
-  if (plan.location && plan.paths.length) {
-    const probes = [...plan.paths, ...rootProbes(plan.root, plan.roots || [])];
-    const relativePaths = probes.map(path => plan.location.prefix ? `${plan.location.prefix}/${path}` : path);
-    const result = gitCommand(plan.location.top, ['check-ignore', '--verbose', '--no-index', '--stdin', '-z'], relativePaths.join('\0') + '\0');
-    if (result.error || ![0, 1].includes(result.status)) throw new Error(result.error?.message || result.stderr || 'Falha ao conferir exclusoes Git.');
-    const values = result.stdout.split('\0'), matches = new Map();
-    for (let index = 0; index + 3 < values.length; index += 4) matches.set(values[index + 3], { source: values[index], line: Number(values[index + 1]), pattern: values[index + 2] });
+  if (plan.location && (plan.paths.length || plan.artifactProbes?.length)) {
+    const probes = [...plan.paths, ...rootProbes(plan.root, plan.roots || []), ...(plan.artifactProbes || [])];
+    const { paths: relativePaths, matches } = ignoreMatches(plan.location, probes);
     for (let index = 0; index < relativePaths.length; index++) {
       const match = matches.get(relativePaths[index]);
       const negative = match?.pattern.startsWith('!');
-      const humanOverride = negative && /(?:^|[\\/])\.gitignore$/.test(match.source);
+      const local = match && localIgnoreSource(plan.location, match.source);
+      const humanOverride = negative && local && /(?:^|[\\/])\.gitignore$/.test(match.source);
       const replaced = negative && replacements.some(item => item.path === canonicalExisting(resolve(plan.location.top, match.source)) && match.line >= item.firstLine && match.line <= item.lastLine);
-      if (!replaced && ((!plan.edits.length && (!match || negative)) || humanOverride)) missing.push(probes[index]);
+      if (!replaced && ((!plan.edits.length && (!match || negative || !local)) || humanOverride)) missing.push(probes[index]);
     }
   }
   return { ok: plan.edits.length === 0 && missing.length === 0 && plan.trackedOutputs.length === 0, status: plan.status, missing, trackedOutputs: plan.trackedOutputs, changed: plan.edits.length };
@@ -212,6 +258,8 @@ export function assertLocalIgnoreUnchanged(plan) {
 
 export function applyLocalIgnore(plan) {
   assertLocalIgnoreUnchanged(plan);
+  const before = checkLocalIgnore(plan);
+  if (before.missing.length) throw new Error(`Regras humanas reabrem derivados locais: ${before.missing.join(', ')}`);
   const written = [];
   try {
     for (const edit of plan.edits) {

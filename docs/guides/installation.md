@@ -60,6 +60,11 @@ workflows, formulários de issues ou configurações humanas em `.github`.
 Sem Git, uma proteção no `.gitignore` da raiz evita incluir os derivados
 quando o repositório for iniciado.
 
+O bloco local também protege `.agent-tests`, `tmp`, `temp`, `.playwright*`
+e relatórios de testes, inclusive com letras maiúsculas e em subpastas.
+O `.gitignore` existente e seus arquivos rastreados são preservados;
+uma exceção humana que conflite com essa proteção é informada como conflito.
+
 Arquivos já rastreados exigem migração do índice: apenas saídas identificadas
 do kit podem deixar de ser rastreadas, preservando seus bytes no disco.
 Revise o plano e os conflitos em um projeto existente; use `--dry-run` antes
@@ -77,10 +82,14 @@ gerenciados alterados geram conflito; use `--force` somente após revisar o
 backup e o conteúdo que será substituído. Preserve os dados locais, as
 configurações próprias e os commits do projeto.
 
+Links simbólicos em caminhos usados pela instalação podem bloquear a operação.
+O kit informa o caminho e não converte nem remove o link automaticamente.
+Use a simulação para identificar esse caso antes de aplicar.
+
 O [fluxo de trabalho](workflow.md) orienta a próxima etapa do projeto.
 Se houver erro, consulte [solução de problemas](troubleshooting.md).
 
-[Wiki](../README.md) · [Spec v0.0.6][spec]
+[Wiki](../README.md) · [Spec v0.0.7][spec]
 
 [bootstrap]: ../../.pbai4devs/scripts/preparar-ferramentas/BOOTSTRAP.md
-[spec]: ../specs/v0.0.6/SPEC.md
+[spec]: ../specs/v0.0.7/SPEC.md

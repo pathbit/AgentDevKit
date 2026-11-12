@@ -1,0 +1,27 @@
+{
+  "projects": [
+    {
+      "id": "express",
+      "repository": "https://github.com/expressjs/express.git",
+      "commit": "43fca52d28a422c8be48fd489cbd4f2d6152bab6",
+      "profile": "JavaScript/CommonJS, application tests and existing GitHub configuration",
+      "clients": ["codex", "claude", "copilot"]
+    },
+    {
+      "id": "zod",
+      "repository": "https://github.com/colinhacks/zod.git",
+      "commit": "19c40d2072288b4cafec851e9d056a72a88e5973",
+      "profile": "TypeScript monorepo with workspaces and staged user changes",
+      "clients": ["all"],
+      "dirty": true,
+      "dirtyFile": ".gitignore"
+    },
+    {
+      "id": "chi",
+      "repository": "https://github.com/go-chi/chi.git",
+      "commit": "c64ed7d6635f33a8b2feaff7dcfa55677023ac7d",
+      "profile": "Go project without package.json",
+      "clients": ["opencode", "cursor", "gemini"]
+    }
+  ]
+}

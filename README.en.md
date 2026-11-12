@@ -34,7 +34,7 @@ Then open the project in your coding agent and ask:
 
 See [installation](docs/guides/installation.md) for Windows, missing Node, previews
 and updates. Install and update through the [public npm package][packages]; the
-[v0.0.6 release][release] retains artifacts and checksums for verification.
+[v0.0.7 release][release] retains artifacts and checksums for verification.
 No global installation is required.
 The CLI supports `pt`, `en` and `es`; it saves your selection per project.
 
@@ -78,7 +78,7 @@ forms. See [how to participate](docs/maintainers/community.md).
 agent to read `AGENTS.md`.
 
 [clients]: .pbai4devs/COMPATIBILIDADE.md
-[release]: https://github.com/pathbit/AgentDevKit/releases/tag/v0.0.6
+[release]: https://github.com/pathbit/AgentDevKit/releases/tag/v0.0.7
 [npm-package]: https://www.npmjs.com/package/@pathbit/agentdevkit
 [npm-badge]: https://img.shields.io/npm/v/%40pathbit%2Fagentdevkit
 [license-badge]: https://img.shields.io/badge/license-MIT-blue

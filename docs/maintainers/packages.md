@@ -64,7 +64,7 @@ existir; a primeira publicação pode usar o secret `NPMJS_TOKEN`.
 Para publicar somente o pacote de uma tag que já tem artefato aprovado:
 
 ```console
-gh workflow run release.yml --ref master -f tag=v0.0.6 -F package_only=true
+gh workflow run release.yml --ref master -f tag=v0.0.7 -F package_only=true
 ```
 
 Se o artefato expirou, reexecute o CI original da tag antes da publicação.
