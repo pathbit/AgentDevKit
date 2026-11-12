@@ -547,9 +547,9 @@ export function inspect(target) {
     if (!content || hash(content) !== digest && hash(content) !== derived.outputs[path] && hash(content) !== derived.files[path] && hash(content) !== derived.entries[path]) issues.push({ code: content ? 'modified' : 'missing', path });
   }
   for (const [path, digest] of Object.entries({ ...state.blocks, ...derived.blocks })) {
+    if (derived.removedBlocks.includes(path) && !Object.hasOwn(derived.blocks, path)) continue;
     const content = read(target, path);
     if (content && [derived.entries[path], derived.files[path]].some(value => value && hash(content) === value)) continue;
-    if (derived.removedBlocks.includes(path) && content && blockDigest(path, content) === null) continue;
     if (!content || blockDigest(path, content) !== digest) issues.push({ code: content ? 'modified' : 'missing', path });
   }
   return { installed: true, version: state.version, language: state.language, issues };

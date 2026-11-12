@@ -46,6 +46,22 @@ test('entradas novas e geradas importam o nome real de agents.md', async t => {
   await cli(root, ['doctor']);
 });
 
+test('diagnostico deixa de exigir arquivo humano depois de retirar seu bloco', async t => {
+  const { root, put } = fixture(t);
+  const path = '.claude/skills/local-retire/SKILL.md';
+  const source = '.pbai4devs/skills/projeto/local-retire/SKILL.md';
+  await cli(root, ['init', '--agents', 'claude']);
+  put(source, '---\nname: local-retire\ndescription: Recurso local para retirada.\n---\n\n# Recurso local\n');
+  put(path, '# Minha revisao\n');
+  await cli(root, ['sync']);
+  fs.rmSync(join(root, source));
+  synchronize({ root, output() {} });
+  const derived = JSON.parse(readFileSync(join(root, '.pbai4devs/estado/derived.json'), 'utf8'));
+  assert.ok(derived.removedBlocks.includes(path));
+  fs.rmSync(join(root, path));
+  assert.equal(inspect(root).issues.some(issue => issue.path === path), false);
+});
+
 test('entradas humanas em caixa original recebem apenas o bloco e mantêm índice, CRLF e alterações futuras', async t => {
   const { root, git, put, read } = fixture(t);
   const entries = {
