@@ -3,7 +3,7 @@ description: Instruções e fluxo de trabalho para agentes de código.
 language: pt
 ---
 
-# AgentDevKit
+# Pathbit AI - AgentDevKit
 
 [English](README.en.md) · [Español](README.es.md) · [Pacote npm][npm-package]
 
