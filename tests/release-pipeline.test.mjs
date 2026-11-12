@@ -36,6 +36,25 @@ test('tag manual permite backfill sem alterar a seleção dos eventos push', () 
   assert.throws(() => releaseTag({ GITHUB_EVENT_NAME: 'push', GITHUB_REF_TYPE: 'branch', GITHUB_REF_NAME: 'master', AGENTDEVKIT_RELEASE_TAG: 'v0.0.3' }), /vX.Y.Z/);
 });
 
+test('workflow mantém registries separados e permite completar uma tag sem recriar a release', () => {
+  const workflow = readFileSync(join(root, '.github/workflows/release.yml'), 'utf8');
+  const step = name => workflow.split(`      - name: ${name}\n`)[1]?.split('\n      - name: ')[0];
+  const npm = step('Publish the same tarball to public npm');
+  const github = step('Publish the same tarball to GitHub Packages');
+  assert.ok(npm && github);
+  assert.match(workflow, /options: \[both, npm, github\]/);
+  assert.match(workflow, /packages: write/);
+  assert.match(npm, /inputs\.registry != 'github'/);
+  assert.match(npm, /NPM_TOKEN: \$\{\{ secrets\.NPMJS_TOKEN \}\}/);
+  assert.doesNotMatch(npm, /GITHUB_PACKAGES_TOKEN/);
+  assert.match(github, /inputs\.registry != 'npm'/);
+  assert.match(github, /GITHUB_PACKAGES_TOKEN: \$\{\{ github\.token \}\}/);
+  assert.match(github, /packages\.mjs publish --registry github/);
+  assert.doesNotMatch(github, /NPM_TOKEN|NPMJS_TOKEN/);
+  assert.match(step('Verify provenance and publish'), /!inputs\.package_only/);
+  assert.doesNotMatch(npm + github, /!inputs\.package_only/);
+});
+
 test('npm é localizado por Path quando Node não inclui npm, sem chamar wrappers', t => {
   const directory = fixture(t), bin = join(directory, 'npm-prefix');
   const executable = join(bin, 'node_modules/npm/bin/npm-cli.js');

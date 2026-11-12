@@ -2,11 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { npmExecutable, sha256 } from '../scripts/release/assets.mjs';
-import { publishRegistryPackage } from '../scripts/release/packages.mjs';
+import { parseRegistryArgs, publishRegistryPackage } from '../scripts/release/packages.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const version = '1.2.3', packageName = '@pathbit/agentdevkit';
@@ -386,4 +386,135 @@ test('inspeção real preserva TGZ antigo e atual sem presumir o caminho do exec
     assert.equal((await publishRegistryPackage(m.options)).status, 'skipped');
     assert.deepEqual(readFileSync(real.path), archive);
   });
+});
+
+function githubMock(f, options = {}) {
+  const m = mock(f, options), requests = [];
+  m.options.target = 'github';
+  m.options.env = { ...env, GITHUB_PACKAGES_TOKEN: 'github-package-secret',
+    GITHUB_ACTIONS: 'true', ACTIONS_ID_TOKEN_REQUEST_URL: 'https://unused-oidc.example', ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'unused-oidc-secret' };
+  m.options.request = async (method, path) => {
+    requests.push({ method, path });
+    if (path === '/orgs/pathbit/packages/npm/agentdevkit') return options.packageMetadata === undefined
+      ? { name: 'agentdevkit', package_type: 'npm', visibility: 'public', repository: { full_name: repository } }
+      : options.packageMetadata;
+    return request(method, path);
+  };
+  return { ...m, requests };
+}
+
+test('registry é um perfil validado, sem hosts arbitrários ou argumentos extras', async t => {
+  assert.equal(parseRegistryArgs([]), 'npm');
+  assert.equal(parseRegistryArgs(['publish']), 'npm');
+  assert.equal(parseRegistryArgs(['publish', '--registry', 'npm']), 'npm');
+  assert.equal(parseRegistryArgs(['publish', '--registry', 'github']), 'github');
+  for (const args of [['publish', '--registry', 'https://npm.pkg.github.com'], ['github'], ['publish', '--registry'],
+    ['publish', '--registry', '__proto__'], ['publish', '--registry', { toString: () => 'github' }],
+    ['publish', '--registry', 'github', '--force']]) assert.throws(() => parseRegistryArgs(args), /Use publish/);
+  const f = fixture(t), m = mock(f);
+  for (const target of ['https://untrusted.example', null, { toString: () => 'github' }]) {
+    await assert.rejects(publishRegistryPackage({ ...m.options, target }), /Registry não autorizado/);
+  }
+  assert.equal(m.calls.length, 0);
+});
+
+test('GitHub publica os mesmos bytes e autentica consultas e consumo somente nesse host', async t => {
+  const f = fixture(t), m = githubMock(f), delegate = m.options.execute, configs = [];
+  m.options.execute = async (command, args, config) => {
+    const npmrc = readFileSync(config.env.npm_config_userconfig, 'utf8'); configs.push(npmrc);
+    assert.equal(config.env.npm_config_registry, 'https://npm.pkg.github.com');
+    assert.equal(config.env.NPM_TOKEN, undefined); assert.equal(config.env.GH_TOKEN, undefined);
+    assert.equal(config.env.GITHUB_TOKEN, undefined); assert.equal(config.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN, undefined);
+    assert.equal(config.env.ACTIONS_ID_TOKEN_REQUEST_URL, undefined);
+    assert.ok(!args.join(' ').includes('github-package-secret'));
+    assert.ok(!npmrc.includes('github-package-secret')); assert.ok(!npmrc.includes(env.NPM_TOKEN));
+    if (args[1] === 'pack') {
+      assert.equal(config.env.GITHUB_PACKAGES_TOKEN, undefined); assert.doesNotMatch(npmrc, /authToken/);
+    } else {
+      assert.equal(config.env.GITHUB_PACKAGES_TOKEN, 'github-package-secret');
+      assert.match(npmrc, /\/\/npm\.pkg\.github\.com\/:_authToken=\$\{GITHUB_PACKAGES_TOKEN\}/);
+      assert.doesNotMatch(npmrc, /registry\.npmjs\.org/);
+      if (process.platform !== 'win32') assert.equal(lstatSync(config.env.npm_config_userconfig).mode & 0o777, 0o600);
+    }
+    return delegate(command, args, config);
+  };
+  const result = await publishRegistryPackage(m.options);
+  assert.equal(result.status, 'published'); assert.equal(result.registry, 'https://npm.pkg.github.com');
+  assert.equal(result.authentication, 'github-token'); assert.equal(result.sha256, sha256(f.archive));
+  assert.equal(result.url, 'https://github.com/pathbit/AgentDevKit/pkgs/npm/agentdevkit');
+  assert.deepEqual(result.githubPackage, { visibility: 'public', repository });
+  assert.equal(result.probe.anonymous, false);
+  assert.deepEqual(result.probe.commands, ['version', 'init', 'doctor', 'sync --check']);
+  assert.deepEqual(m.calls.find(c => c.args[1] === 'publish').args.slice(1),
+    ['publish', f.path, '--registry=https://npm.pkg.github.com', '--access=public', '--ignore-scripts', '--json']);
+  assert.ok(m.requests.some(r => r.path === '/orgs/pathbit/packages/npm/agentdevkit'));
+  assert.ok(!m.calls.some(c => c.args[1] === '--version'));
+  assert.ok(configs.length > 4); assert.ok(!existsSync(m.calls[0].config.cwd));
+  assert.deepEqual(readFileSync(f.path), f.archive);
+  assert.ok(!JSON.stringify(result).includes('secret'));
+});
+
+test('GitHub já publicado mantém versão e tarball sem outra publicação', async t => {
+  const f = fixture(t), m = githubMock(f, { views: [{ integrity: f.integrity }] });
+  const result = await publishRegistryPackage(m.options);
+  assert.equal(result.status, 'skipped'); assert.equal(result.authentication, 'github-token');
+  assert.equal(result.probe.anonymous, false);
+  assert.ok(!m.calls.some(call => call.args[1] === 'publish'));
+  assert.equal(m.calls.filter(call => call.args[1] === 'exec').length, 4);
+  assert.deepEqual(readFileSync(f.path), f.archive);
+});
+
+test('GitHub exige token próprio mesmo para pacote público e não usa token npm ou OIDC', async t => {
+  for (const credentials of [{}, { NPM_TOKEN: 'npm-only' }, { GITHUB_TOKEN: 'wrong-name' },
+    { GITHUB_ACTIONS: 'true', ACTIONS_ID_TOKEN_REQUEST_URL: 'https://oidc.example', ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'oidc-only' },
+    { GITHUB_PACKAGES_TOKEN: 'bad\ntoken' }]) {
+    const f = fixture(t), m = githubMock(f, { views: [{ integrity: f.integrity }] });m.options.env = credentials;
+    await assert.rejects(publishRegistryPackage(m.options), /GITHUB_PACKAGES_TOKEN/);
+    assert.equal(m.calls.length, 0);
+  }
+});
+
+test('GitHub não trata autenticação negada como versão ausente e não vaza segredos', async t => {
+  for (const code of ['E401', 'E403', 'ENETUNREACH']) {
+    const f = fixture(t), m = githubMock(f, { views: [code] });
+    await assert.rejects(publishRegistryPackage(m.options), error => {
+      assert.match(error.message, new RegExp(code)); assert.doesNotMatch(error.message, /github-package-secret|test-secret/); return true;
+    });
+    assert.ok(!m.calls.some(c => ['publish', 'exec'].includes(c.args[1])));
+  }
+});
+
+test('GitHub recusa integridade diferente e exige visibilidade pública associada ao repo', async t => {
+  const bad = fixture(t), mismatch = githubMock(bad, { views: [{ integrity: 'sha512-other' }] });
+  await assert.rejects(publishRegistryPackage(mismatch.options), /tarball diferente/);
+  assert.ok(!mismatch.calls.some(c => ['publish', 'exec'].includes(c.args[1])));
+  for (const packageMetadata of [null, { name: 'other', package_type: 'npm', visibility: 'public', repository: { full_name: repository } },
+    { name: 'agentdevkit', package_type: 'npm', visibility: 'private', repository: { full_name: repository } },
+    { name: 'agentdevkit', package_type: 'npm', visibility: 'public', repository: { full_name: 'other/repo' } }]) {
+    const f = fixture(t), m = githubMock(f, { views: [{ integrity: f.integrity }], packageMetadata });
+    await assert.rejects(publishRegistryPackage(m.options), /GitHub Packages/);
+    assert.ok(!m.calls.some(c => c.args[1] === 'exec'));
+    assert.ok(m.requests.every(r => r.method === 'GET'));
+    assert.deepEqual(readFileSync(f.path), f.archive);
+  }
+});
+
+test('CLI registry GitHub prevalece sobre publishConfig npm sem reempacotar', async t => {
+  const f = fixture(t), source = join(f.directory, 'source'); mkdirSync(source);
+  writeFileSync(join(source, 'package.json'), JSON.stringify({ name: packageName, version,
+    publishConfig: { registry: 'https://registry.npmjs.org', access: 'public' }, bin: { agentdevkit: 'cli.mjs' } }));
+  writeFileSync(join(source, 'cli.mjs'), '#!/usr/bin/env node\nconsole.log("fixture");\n');
+  const npm = npmExecutable();
+  const packed = spawnSync(process.execPath, [npm, 'pack', '--ignore-scripts', '--json', '--pack-destination', f.directory], {
+    cwd: source, env: { ...env, npm_config_cache: join(f.directory, 'pack-cache'), npm_config_offline: 'true' }, encoding: 'utf8', shell: false,
+  });
+  assert.equal(packed.status, 0, packed.stderr);
+  const path = join(f.directory, JSON.parse(packed.stdout)[0].filename), before = readFileSync(path);
+  const result = spawnSync(process.execPath, [npm, 'publish', path, '--registry=https://npm.pkg.github.com', '--access=public', '--ignore-scripts', '--dry-run', '--json'], {
+    cwd: source, env: { ...env, npm_config_cache: join(f.directory, 'publish-cache'), npm_config_offline: 'true' }, encoding: 'utf8', shell: false,
+  });
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stderr, /Publishing to https:\/\/npm\.pkg\.github\.com/);
+  assert.doesNotMatch(result.stderr, /Publishing to https:\/\/registry\.npmjs\.org/);
+  assert.deepEqual(readFileSync(path), before);
 });

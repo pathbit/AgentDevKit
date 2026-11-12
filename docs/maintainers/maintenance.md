@@ -67,9 +67,9 @@ nada. Nunca versione o tarball ou seus relatórios.
 O [workflow de release][release] localiza o CI aprovado de um push na branch
 principal, confere o commit e baixa seu artifact por ID. Verifica procedência,
 versão e checksum antes de publicar. Não repete a suíte nem reempacota.
-Também envia o pacote ao [npm público](packages.md), confere sua
-integridade no registro e testa versão, instalação, diagnóstico e sincronização
-com a CLI instalada por ele.
+Também envia o mesmo pacote ao [npm público e GitHub Packages](packages.md),
+confere a integridade nos dois destinos e testa versão, instalação, diagnóstico
+e sincronização. O consumo pelo npm é anônimo; pelo GitHub, autenticado.
 
 Se o artifact expirou, reexecute o CI original do push e depois a release.
 Uma execução manual de CI serve para diagnóstico, mas não substitui essa
@@ -86,9 +86,13 @@ Para reiniciar uma publicação que falhou, use **Re-run failed jobs** ou
 o secret `NPMJS_TOKEN` do repositório; sem ele, usa OIDC, conforme
 [publicação](packages.md).
 
-Se a release já existe e falta somente o pacote no registro, use o modo
+Se a release já existe e falta somente o pacote em um registro, use o modo
 `package_only` descrito em [pacote npm](packages.md#publicar-pelo-actions).
 Ele não tenta recriar a release existente.
+
+Execuções concluídas com falha podem ser removidas mediante solicitação,
+sem apagar execuções aprovadas, tags ou releases. Confira a lista e preserve
+os identificadores das execuções e releases mantidas antes da limpeza.
 
 ## Conferir a entrega pública
 

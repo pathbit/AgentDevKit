@@ -11,10 +11,16 @@ on:
         required: false
         default: ''
       package_only:
-        description: Publicar somente no npm público
+        description: Publicar pacotes sem alterar a release existente
         type: boolean
         required: false
         default: false
+      registry:
+        description: Destino dos pacotes
+        type: choice
+        options: [both, npm, github]
+        required: false
+        default: both
 
 concurrency:
   group: release-${{ inputs.tag || github.ref_name }}
@@ -58,6 +64,7 @@ jobs:
       contents: write
       actions: read
       id-token: write
+      packages: write
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -83,9 +90,18 @@ jobs:
           AGENTDEVKIT_ARTIFACT_DIR: ${{ runner.temp }}/agentdevkit-package
         run: node scripts/release/publish.mjs publish
       - name: Publish the same tarball to public npm
+        if: ${{ inputs.registry != 'github' }}
         env:
           GH_TOKEN: ${{ github.token }}
           NPM_TOKEN: ${{ secrets.NPMJS_TOKEN }}
           AGENTDEVKIT_RELEASE_RESOLUTION: ${{ needs.resolve.outputs.resolution }}
           AGENTDEVKIT_ARTIFACT_DIR: ${{ runner.temp }}/agentdevkit-package
         run: node scripts/release/packages.mjs publish
+      - name: Publish the same tarball to GitHub Packages
+        if: ${{ inputs.registry != 'npm' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_PACKAGES_TOKEN: ${{ github.token }}
+          AGENTDEVKIT_RELEASE_RESOLUTION: ${{ needs.resolve.outputs.resolution }}
+          AGENTDEVKIT_ARTIFACT_DIR: ${{ runner.temp }}/agentdevkit-package
+        run: node scripts/release/packages.mjs publish --registry github
