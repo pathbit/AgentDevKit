@@ -28,6 +28,10 @@ O CI tem quatro perfis:
 | macOS / Node 24 | Portabilidade da CLI, arquivos e runtime. |
 | Linux / Node 26 | Smoke de compatibilidade. |
 
+O perfil macOS usa o runner padrão `macos-15-intel`. O label `macos-latest`
+usa ARM64 e pode ter filas diferentes; confira os [runners disponíveis][runners]
+antes de mudar a arquitetura. Provas locais devem informar a arquitetura usada.
+
 A distribuição real é testada uma vez no perfil completo. Os outros perfis
 validam seus riscos específicos. Execuções antigas da mesma referência podem
 ser canceladas quando substituídas, sem cancelar uma publicação em andamento.
@@ -113,3 +117,4 @@ aprovado; uma aprovação de CI não substitui a instalação real pelo registro
 [release]: https://github.com/pathbit/AgentDevKit/actions/workflows/release.yml
 [package]: https://www.npmjs.com/package/@pathbit/agentdevkit
 [security-ci]: https://github.com/pathbit/AgentDevKit/actions/workflows/security-tools.yml
+[runners]: https://docs.github.com/en/actions/reference/runners/github-hosted-runners

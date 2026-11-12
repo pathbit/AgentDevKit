@@ -30,7 +30,7 @@ jobs:
             node: 24
             profile: portable
             label: Windows / Node 24 / portability
-          - os: macos-latest
+          - os: macos-15-intel
             node: 24
             profile: portable
             label: macOS / Node 24 / portability
