@@ -147,10 +147,45 @@ test('visibilidade após publicar tem retentativas limitadas', async t => {
   assert.equal((await publishRegistryPackage(m.options)).status, 'published');
   assert.deepEqual(m.sleeps, [1, 1]);
   const timeout = mock(f, { views: [null] });
-  await assert.rejects(publishRegistryPackage(timeout.options), /não está visível/);
+  await assert.rejects(publishRegistryPackage(timeout.options), /Publicação aceita; disponibilidade pendente/);
   assert.equal(timeout.calls.filter(call => call.args[1] === 'view').length, 4);
   assert.equal(timeout.calls.filter(call => call.args[1] === 'publish').length, 1);
   assert.deepEqual(timeout.sleeps, [1, 1]);
+});
+
+test('janela padrão tolera vinte minutos de análise com uma única publicação', async t => {
+  const f = fixture(t), m = mock(f, { views: [...Array(121).fill(null), { integrity: f.integrity }] });
+  delete m.options.maxAttempts; delete m.options.pollMs;
+  let elapsed = 0;
+  m.options.sleep = async milliseconds => { elapsed += milliseconds; m.sleeps.push(milliseconds); };
+  const result = await publishRegistryPackage(m.options);
+  assert.equal(result.status, 'published');
+  assert.equal(elapsed, 20 * 60 * 1000);
+  assert.equal(m.sleeps.length, 120);
+  assert.ok(m.sleeps.every(milliseconds => milliseconds === 10000));
+  assert.equal(m.calls.filter(call => call.args[1] === 'publish').length, 1);
+  const lookups = m.calls.filter(call => call.args[1] === 'view');
+  assert.equal(lookups.length, 122);
+  for (const call of lookups) assert.deepEqual(Object.keys(call.config.env).filter(key => /token|secret|password|(?:^|_)auth(?:_|$)/i.test(key)), []);
+  assert.equal(result.probe.anonymous, true);
+});
+
+test('janela padrão expirada informa pendência e nunca tenta publicar novamente', async t => {
+  const f = fixture(t), m = mock(f, { views: [null] });
+  delete m.options.maxAttempts; delete m.options.pollMs;
+  let elapsed = 0; m.options.sleep = async milliseconds => { elapsed += milliseconds; };
+  await assert.rejects(publishRegistryPackage(m.options), error => {
+    assert.match(error.message, /Publicação aceita; disponibilidade pendente/);
+    assert.match(error.message, /não republique automaticamente/);
+    assert.ok(error.message.includes(`${packageName}@${version}`));
+    return true;
+  });
+  assert.equal(elapsed, 20 * 60 * 1000);
+  assert.equal(m.calls.filter(call => call.args[1] === 'publish').length, 1);
+  assert.equal(m.calls.filter(call => call.args[1] === 'view').length, 122);
+  assert.ok(!m.calls.some(call => call.args[1] === 'exec'));
+  assert.ok(!existsSync(m.calls[0].config.cwd));
+  assert.deepEqual(readFileSync(f.path), f.archive);
 });
 
 test('falha de publicação ou integridade pós-publicação interrompe a prova de execução', async t => {

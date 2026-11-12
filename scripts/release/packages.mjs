@@ -62,11 +62,11 @@ function supportsOidc(value) {
 }
 
 export async function publishRegistryPackage({ directory, resolution, env = process.env,
-  execute = spawnSync, sleep = pause, maxAttempts = 12, pollMs = 5000,
+  execute = spawnSync, sleep = pause, maxAttempts = 121, pollMs = 10000,
   packageName = expectedName, request } = {}) {
   if (Number(process.versions.node.split('.')[0]) < 24) invalid('Use Node.js 24+.');
   if (packageName !== expectedName) invalid('Nome do pacote não autorizado.');
-  if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 30
+  if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 180
     || !Number.isInteger(pollMs) || pollMs < 0 || pollMs > 10000) invalid('Limite de tentativas inválido.');
   const verified = verifyDistribution(directory, resolution);
   const archivePath = resolve(directory, verified.manifest.file);
@@ -120,11 +120,13 @@ export async function publishRegistryPackage({ directory, resolution, env = proc
       assertArchive();
       await invoke(['publish', archivePath, `--registry=${registry}`, '--access=public', '--ignore-scripts', '--json'], { environment: publishing });
       let visible = false;
+      // npm scans accepted publications before availability; this can take 15+ minutes.
+      // https://github.blog/changelog/2026-07-28-npm-publish-time-malware-scanning-and-dual-use-metadata/
       for (let attempt = 0; attempt < maxAttempts; attempt++) {
         if (await lookup()) { visible = true; break; }
         if (attempt + 1 < maxAttempts) await sleep(pollMs);
       }
-      if (!visible) invalid('A versão publicada ainda não está visível no registry.');
+      if (!visible) invalid(`Publicação aceita; disponibilidade pendente para ${spec}. Confira o status no npm e consulte a mesma versão; não republique automaticamente.`);
     }
     const probe = join(temporary, 'probe');
     const consumer = join(temporary, 'consumer');

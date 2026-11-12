@@ -53,7 +53,7 @@ jobs:
     name: Publish the verified bytes
     needs: resolve
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 30
     permissions:
       contents: write
       actions: read
