@@ -22,6 +22,7 @@ status: vigente
 | Coexistência v0.0.9 | Agentes, documentos e projetos reais | [Spec][coexistence]. |
 | Instalação nos dois registries v0.0.10 | Pacote e guias de pré-requisitos | [Spec][dual-install]. |
 | Segurança local v0.0.11 | Ferramentas e papéis especializados | [Spec][security]. |
+| Integração v0.0.12 | Preservação e propriedade por bloco | [Spec][additive]. |
 
 A primeira entrega segue a [spec v0.0.1](../specs/v0.0.1/SPEC.md), disponível
 na [release v0.0.1][release]. Os detalhes de mudanças estão no
@@ -46,3 +47,4 @@ comportamento existente, sem alterar a versão de uma release já publicada.
 [coexistence]: ../specs/v0.0.9/SPEC.md
 [dual-install]: ../specs/v0.0.10/SPEC.md
 [security]: ../specs/security-ecosystem/SPEC.md
+[additive]: ../specs/additive-integration/SPEC.md

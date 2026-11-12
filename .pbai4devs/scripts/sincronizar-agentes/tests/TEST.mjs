@@ -12,6 +12,7 @@ import { mergeGitignore, ignoreBegin, ignoreEnd, validateIgnoreClients } from '.
 import './LOCAL_IGNORE.mjs';
 import './HUMAN_OWNERSHIP.mjs';
 import './COEXISTENCE.mjs';
+import './MANAGED_CONTENT.mjs';
 import { validateCatalog as validateExternalCatalog } from '../../gerenciar-skills-externas/SCRIPT.mjs';
 
 const project = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
@@ -22,7 +23,11 @@ const source = '.pbai4devs/skills/projeto/demo/SKILL.md';
 const read = (root, path) => readFileSync(join(root, path), 'utf8');
 const write = (root, path, content) => { mkdirSync(dirname(join(root, path)), { recursive: true }); writeFileSync(join(root, path), content); };
 const pointer = (origin = 'origem.md', title = 'Referencia') => `---\ndescription: Referencia.\n---\n\n# ${title}\n\n${marker}\nLeia e siga [origem](${origin}).\n`;
-const recordOwned = (root, paths) => write(root, '.pbai4devs/estado/agentdevkit.json', JSON.stringify({ schemaVersion: 1, files: Object.fromEntries(paths.map(path => [path, createHash('sha256').update(readFileSync(join(root, path))).digest('hex')])), blocks: {} }));
+const recordOwned = (root, paths) => {
+  const statePath = '.pbai4devs/estado/agentdevkit.json';
+  const previous = existsSync(join(root, statePath)) ? JSON.parse(read(root, statePath)) : {};
+  write(root, statePath, JSON.stringify({ schemaVersion: 1, files: { ...previous.files, ...Object.fromEntries(paths.map(path => [path, createHash('sha256').update(readFileSync(join(root, path))).digest('hex')])) }, blocks: previous.blocks ?? {} }));
+};
 const toolConfig = (name = 'demo') => ({ name, description: `Ferramenta ${name}.`, group: 'base', source: `https://github.com/fixture/${name}`, download: { provider: 'npm', package: name, registry: 'https://registry.npmjs.org/', repository: `fixture/${name}`, channel: 'latest' }, platforms: [`${process.platform}-${process.arch}`], scripts: { entry: 'SCRIPT.mjs' }, probe: ['--version'] });
 const externalConfig = () => ({ schemaVersion: 1, allowlist: ['fixture/skills'], skills: [{ id: 'external-demo', repository: 'fixture/skills', commit: 'a'.repeat(40), path: 'skills/demo/SKILL.md', name: 'external-demo', license: 'MIT', use: 'Revisar exemplo externo.', status: 'reviewed', notes: 'Sem execução automática.' }] });
 const run = (root, options = {}) => synchronize({ root, localIgnores: false, generateEntrypoints: false, output() {}, ...options });
@@ -53,6 +58,7 @@ function fixture(t, minimal = false) {
     'nativo|.opencode/agents/revisor/AGENT.md|.pbai4devs/agents/revisor/AGENT.md|.pbai4devs/agents/revisor/opencode.yaml',
   ].join('\n') + '\n');
   if (minimal) return root;
+  const ownedLegacy = ['.opencode/agents/revisor/AGENT.md'];
   write(root, source, skill);
   write(root, '.pbai4devs/skills/grupo com espaço/outro/SKILL.md', '---\nname: outro\ndescription: Outro.\n---\n\n# Outro\n');
   write(root, '.pbai4devs/agents/revisor/AGENT.md', '---\nname: revisor\ndescription: Perfil.\n---\n\n# Revisor\n');
@@ -71,14 +77,19 @@ function fixture(t, minimal = false) {
   write(root, 'README.md', 'README raiz preservado\n');
   for (const kind of ['templates', 'scripts', 'tools', 'external-skills', 'estado', 'tests', 'docs', 'adapters', 'extra']) {
     write(root, `.pbai4devs/${kind}/demo/REFERENCE.md`, '---\ndescription: Exclusivo.\n---\n\n# Exclusivo\n');
-    if (kind !== 'extra') write(root, `.claude/${kind}/demo/REFERENCE.md`, pointer(`../../../.pbai4devs/${kind}/demo/REFERENCE.md`));
+    if (kind !== 'extra') {
+      const target = `.claude/${kind}/demo/REFERENCE.md`;
+      write(root, target, pointer(`../../../.pbai4devs/${kind}/demo/REFERENCE.md`)); ownedLegacy.push(target);
+    }
   }
   write(root, '.pbai4devs/tools/demo/TOOL.json', JSON.stringify(toolConfig()));
   write(root, '.pbai4devs/tools/demo/SCRIPT.mjs', toolWrapper('demo'));
   for (const file of ['README.md', 'INSTRUCTIONS.md']) {
     write(root, `.pbai4devs/${file}`, '---\ndescription: Guia.\n---\n\n# Guia\n');
     write(root, `.claude/${file}`, pointer(`../.pbai4devs/${file}`, 'Guia'));
+    ownedLegacy.push(`.claude/${file}`);
   }
+  recordOwned(root, ownedLegacy);
   return root;
 }
 function rejected(root, options = {}, pattern) {
@@ -120,7 +131,7 @@ test('sincroniza somente principais, preserva metadados e usa referências UTF-8
   assert.deepEqual(snapshot(root), before, 'A segunda sincronização deve ser idempotente.');
 });
 
-test('metadados genericos seguem a origem e overrides nativos ficam no YAML central', t => {
+test('metadados gerados seguem a origem e metadados editados pelo humano permanecem', t => {
   const root = fixture(t); run(root);
   write(root, '.pbai4devs/commands/check/COMMAND.md', '---\nname: check-novo\ndescription: Comando atualizado.\n---\n\n# Comando\n');
   write(root, '.pbai4devs/rules/example/RULE.md', '---\ntrigger: glob\nglobs: "**/*.ts"\ndescription: Regra atualizada.\n---\n\n# Regra\n');
@@ -128,8 +139,8 @@ test('metadados genericos seguem a origem e overrides nativos ficam no YAML cent
   write(root, '.codex/commands/check.md', read(root, '.codex/commands/check.md').replace('description: Comando.', 'description: Obsoleto.\nlocal-only: true'));
   assertCheckReadonly(root);
   run(root);
-  assert.match(read(root, '.codex/commands/check.md'), /name: check-novo\ndescription: Comando atualizado\./);
-  assert.doesNotMatch(read(root, '.codex/commands/check.md'), /Obsoleto|local-only/);
+  assert.match(read(root, '.codex/commands/check.md'), /description: Obsoleto\.\nlocal-only: true/);
+  assert.match(read(root, '.codex/commands/check.md'), /<!-- BEGIN AGENTDEVKIT -->/);
   assert.match(read(root, '.codex/rules/example.md'), /trigger: glob\nglobs: "\*\*\/\*\.ts"/);
   assert.match(read(root, '.codex/agents/revisor.md'), /Perfil atualizado\./);
   assert.match(read(root, '.opencode/agents/revisor/AGENT.md'), /edit: deny/);
@@ -174,6 +185,7 @@ test('Gemini usa TOML com inclusao relativa ao workspace e argumentos, sem Markd
   const root = fixture(t);
   write(root, '.pbai4devs/commands/check/COMMAND.md', '---\ndescription: "Verifica \\"aspas\\" e regras."\n---\n\n# Check\n');
   write(root, '.gemini/commands/check.md', pointer('../../.pbai4devs/commands/check/COMMAND.md'));
+  recordOwned(root, ['.gemini/commands/check.md']);
   run(root);
   const target = '.gemini/commands/check.toml';
   const text = read(root, target); const lines = text.trimEnd().split('\n');
@@ -182,12 +194,18 @@ test('Gemini usa TOML com inclusao relativa ao workspace e argumentos, sem Markd
   assert.equal(JSON.parse(lines[2].slice('prompt = '.length)), '@{.pbai4devs/commands/check/COMMAND.md}\n\n{{args}}');
   assert.ok(isReference(text)); assert.equal(existsSync(join(root, '.gemini/commands/check.md')), false);
   write(root, target, text + '# instrucao propria\n');
-  assertCheckReadonly(root); rejected(root, {}, /--force/);
+  assertCheckReadonly(root);
   const repaired = run(root, { force: true });
-  assert.equal(read(repaired.backupRoot, target), text + '# instrucao propria\n');
-  assert.equal(read(root, target), text);
+  assert.ok(repaired.managedBlocks[target]);
+  assert.match(read(root, target), /# instrucao propria/);
+  assert.match(read(root, target), /BEGIN AGENTDEVKIT/);
   rmSync(join(root, '.pbai4devs/commands/check'), { recursive: true });
-  run(root); assert.equal(existsSync(join(root, target)), false);
+  run(root);
+  const stripped = read(root, target).split('\n');
+  assert.equal(stripped[0], '# gerado: sincronizar-agentes');
+  assert.equal(stripped[1], lines[1]);
+  assert.equal(JSON.parse(stripped[2].slice('prompt = '.length)).trimEnd(), '@{.pbai4devs/commands/check/COMMAND.md}\n\n{{args}}');
+  assert.equal(stripped[3], '# instrucao propria');
   assert.match(read(root, '.github/workflows/ci.yml'), /workflow-preservado/);
 });
 
@@ -349,16 +367,16 @@ test('skills externas baixadas não entram nos índices; cópias humanas permane
   const sourceBefore = read(root, '.pbai4devs/external-skills/.local/upstream-0/SKILL.md');
   write(root, '.codex/external-skills/.local/upstream-0/SKILL.md', '# Cópia indevida\n');
   write(root, '.claude/external-skills/README.md', pointer('../../.pbai4devs/external-skills/README.md'));
-  assertCheckReadonly(root);
+  assertCheckReadonly(root, {}, 0);
   const result = run(root, { force: true });
-  assert.equal(existsSync(join(root, '.claude/external-skills')), false);
+  assert.equal(read(root, '.claude/external-skills/README.md'), pointer('../../.pbai4devs/external-skills/README.md'));
   assert.ok(result.preserved.some(item => item.path === '.codex/external-skills'));
   assert.equal(read(root, '.pbai4devs/external-skills/.local/upstream-0/SKILL.md'), sourceBefore);
   assert.equal(read(root, '.codex/external-skills/.local/upstream-0/SKILL.md'), '# Cópia indevida\n');
   assertCheckReadonly(root, {}, 0);
 });
 
-test('--force repara conteúdo registrado e preserva recursos humanos sem propriedade', t => {
+test('--force complementa conteúdo editado e preserva recursos humanos', t => {
   const root = fixture(t);
   run(root);
   recordOwned(root, ['.claude/skills/projeto/demo/SKILL.md', '.kimi-code/agents/revisor.md']);
@@ -371,14 +389,16 @@ test('--force repara conteúdo registrado e preserva recursos humanos sem propri
   write(root, '.github/prompts/edited.prompt.md', pointer() + '\nRevisar [manual](bar).\n');
   assertCheckReadonly(root);
   assertCheckReadonly(root, { force: true });
-  rejected(root, {}, /--force/);
   const result = run(root, { force: true });
-  assert.ok(result.backupRoot.startsWith(join(root, '.agent-tests')));
-  for (const path of ['.claude/skills/projeto/demo/SKILL.md', '.kimi-code/agents/revisor.md', '.github/prompts/edited.prompt.md']) assert.ok(existsSync(join(result.backupRoot, path)), `Backup ausente: ${path}`);
+  for (const path of ['.claude/skills/projeto/demo/SKILL.md', '.kimi-code/agents/revisor.md']) {
+    assert.ok(read(root, path).startsWith('corrompido\n'));
+    assert.ok(result.managedBlocks[path]);
+    assert.ok(!result.ownedOutputs.includes(path));
+  }
   assert.deepEqual(readFileSync(join(root, '.claude/tools/program.exe')), Buffer.from([1, 2, 3]));
   assert.equal(read(root, '.claude/scripts/local.sh'), 'script humano\n');
   assert.equal(read(root, '.claude/skills/local.bin'), 'custom\n');
-  assert.equal(existsSync(join(root, '.github/prompts/edited.prompt.md')), false);
+  assert.match(read(root, '.github/prompts/edited.prompt.md'), /Revisar \[manual\]/);
   assert.match(read(root, '.codex/skills/outro/SKILL.md'), /name: outro/);
   assert.match(read(root, '.github/workflows/ci.yml'), /workflow-preservado/);
   assert.match(read(root, '.codex/config.toml'), /config-native-preservada/);
@@ -403,7 +423,7 @@ test('atualiza fontes, adiciona clientes, remove recursos e migra agrupado para 
   assertCheckReadonly(root, {}, 0);
 });
 
-test('remove linhas legadas e origens nativas ausentes sem replicar documentos', t => {
+test('remove linhas legadas e preserva arquivos sem prova de propriedade', t => {
   const root = fixture(t);
   run(root);
   write(root, 'docs/produto/prd/demo/PRD.md', '# Produto real\n');
@@ -414,8 +434,8 @@ test('remove linhas legadas e origens nativas ausentes sem replicar documentos',
   assertCheckReadonly(root);
   run(root);
   assert.doesNotMatch(read(root, '.pbai4devs/espelhos.conf'), /documento\||missing/);
-  assert.equal(existsSync(join(root, '.claude/manual/DOC.md')), false);
-  assert.equal(existsSync(join(root, '.github/prompts/missing.prompt.md')), false);
+  assert.equal(existsSync(join(root, '.claude/manual/DOC.md')), true);
+  assert.equal(existsSync(join(root, '.github/prompts/missing.prompt.md')), true);
   assert.ok(existsSync(join(root, 'docs/produto/prd/demo/PRD.md')));
   assert.ok(existsSync(join(root, 'manual/guia com espaço/DOC.md')));
   assertCheckReadonly(root, {}, 0);
@@ -441,8 +461,8 @@ test('colisões de destino, ancestral, metadados e slugs não são resolvidas po
     let extra;
     if (variant === 'slug') write(root, '.pbai4devs/skills/duplicado/demo/SKILL.md', skill);
     if (variant === 'source') extra = 'nativo|.codex/skills/demo/SKILL.md|.pbai4devs/commands/check/COMMAND.md';
-    if (variant === 'ancestor') extra = [`nativo|.github/custom.md|${source}`, `nativo|.github/custom.md/child.md|${source}`].join('\n');
-    if (variant === 'target-case') extra = [`nativo|.github/custom.md|${source}`, `nativo|.github/CUSTOM.md|${source}`].join('\n');
+    if (variant === 'ancestor') extra = [`nativo|.github/prompts/custom.md|${source}`, `nativo|.github/prompts/custom.md/child.md|${source}`].join('\n');
+    if (variant === 'target-case') extra = [`nativo|.github/prompts/custom.md|${source}`, `nativo|.github/prompts/CUSTOM.md|${source}`].join('\n');
     if (variant === 'metadata') {
       write(root, '.pbai4devs/agents/revisor/other.yaml', '---\nname: other\n---\n');
       extra = 'nativo|.kimi-code/agents/revisor.md|.pbai4devs/agents/revisor/AGENT.md|.pbai4devs/agents/revisor/other.yaml';
@@ -498,8 +518,7 @@ test('registros não regulares são rejeitados sem efeitos', t => {
 test('backup recusa raiz simbólica antes de remover conteúdo próprio', t => {
   const root = fixture(t);
   run(root);
-  recordOwned(root, ['.claude/skills/projeto/demo/SKILL.md']);
-  write(root, '.claude/skills/projeto/demo/SKILL.md', 'registrado alterado\n');
+  write(root, '.pbai4devs/templates/gitignore/shared.ignore', read(root, '.pbai4devs/templates/gitignore/shared.ignore') + '*.extra-local\n');
   write(root, '.claude/scripts/own.sh', 'preservar\n');
   const outside = join(root, 'outside');
   mkdirSync(outside);
@@ -550,7 +569,8 @@ test('gera manifesto e entradas sem estado e atualiza apenas entradas integralme
   const first = run(root, { generateEntrypoints: true });
   assert.ok(first.ownedOutputs.includes('AGENTS.md'));
   assert.equal(first.ownedOutputs.includes('CLAUDE.md'), false);
-  assert.equal(read(root, 'CLAUDE.md'), '# Instruções humanas\n');
+  assert.ok(read(root, 'CLAUDE.md').startsWith('# Instruções humanas\n'));
+  assert.match(read(root, 'CLAUDE.md'), /<!-- BEGIN AGENTDEVKIT -->/);
   assert.ok(existsSync(join(root, '.agents/skills/projeto/demo/SKILL.md')));
   assertCheckReadonly(root, { generateEntrypoints: true }, 0);
   write(root, '.pbai4devs/templates/entrypoints/AGENTS.md', '---\ndescription: Entrada.\n---\n\n# Atualizada\n');
@@ -562,7 +582,7 @@ test('gera manifesto e entradas sem estado e atualiza apenas entradas integralme
   assert.match(read(root, 'AGENTS.md'), /Texto humano/);
 });
 
-test('entradas da CLI usam ownership integral sem criar registro derivado redundante', t => {
+test('entradas da CLI mantêm ownership integral e recursos têm proveniência derivada', t => {
   const root = fixture(t, true);
   const template = '---\ndescription: Entrada.\n---\n\n# Agentes\n';
   const entry = template + '\nResponda em português.\n';
@@ -573,7 +593,8 @@ test('entradas da CLI usam ownership integral sem criar registro derivado redund
   const result = run(root, { generateEntrypoints: true });
   assert.ok(result.ownedOutputs.includes('AGENTS.md'));
   assert.equal(read(root, 'AGENTS.md'), entry);
-  assert.equal(existsSync(join(root, '.pbai4devs/estado/derived.json')), false);
+  assert.equal(JSON.parse(read(root, '.pbai4devs/estado/derived.json')).entries['AGENTS.md'], undefined);
+  assert.ok(JSON.parse(read(root, '.pbai4devs/estado/derived.json')).files['.codex/skills/demo/SKILL.md']);
   assertCheckReadonly(root, { generateEntrypoints: true }, 0);
 });
 

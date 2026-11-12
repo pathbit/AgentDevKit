@@ -8,6 +8,8 @@ import { buildCatalog } from '../lib/catalog.mjs';
 import { resourcePath } from '../lib/resource-path.mjs';
 import { adapterManifest, resolveAdapters } from '../lib/adapters.mjs';
 import { nativePathBoundary } from '../lib/native-paths.mjs';
+import { canonicalEntrypoint, resolveEntrypoint, entrypointReference, renderEntrypointImports, mergeManagedContent, stripManagedContent } from '../lib/managed-content.mjs';
+import { mergeTomlContent, stripTomlContent } from '../lib/managed-toml.mjs';
 import { mergeGitignore, validateIgnoreClients, renderClientIgnore, isGeneratedOutput, planLocalIgnore, applyLocalIgnore, checkLocalIgnore, assertLocalIgnoreUnchanged, ignoreBegin, ignoreEnd } from '../lib/gitignore.mjs';
 
 const marker = '<!-- gerado: sincronizar-agentes -->';
@@ -72,7 +74,7 @@ function link(target, source) {
 
 export { resourcePath } from '../lib/resource-path.mjs';
 
-export function synchronize({ root = projectRoot, check = false, force = false, localIgnores = true, generateEntrypoints = true, output = console.log } = {}) {
+export function synchronize({ root = projectRoot, check = false, force = false, localIgnores = true, generateEntrypoints = true, recordDerivedState = true, output = console.log } = {}) {
   requireNode();
   root = realpathSync(resolve(root));
   const absolute = value => join(root, ...value.split('/'));
@@ -95,7 +97,7 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
     const path = safe(value);
     const item = stat(path);
     if (!item) return [];
-    if (item.isFile()) return !markdownOnly || value.endsWith('.md') ? [value] : [];
+    if (item.isFile()) return !markdownOnly || /\.md$/i.test(value) ? [value] : [];
     if (!item.isDirectory()) fail(`Tipo de arquivo nao suportado: ${value}`);
     const files = [];
     function visit(folder) {
@@ -107,22 +109,27 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
         if (info.isDirectory()) {
           files.push(...scan(child, { markdownOnly, prune }));
         } else if (info.isFile()) {
-          if (!markdownOnly || name.endsWith('.md')) files.push(child);
+          if (!markdownOnly || /\.md$/i.test(name)) files.push(child);
         } else fail(`Tipo de arquivo nao suportado: ${child}`);
       }
     }
     visit(value);
     return files;
   }
-  const referenceFile = value => {
+  const mergedInputs = new Map();
+  const captureInput = (path, bytes) => { if (!mergedInputs.has(path)) mergedInputs.set(path, bytes); };
+  const referenceFile = (value, supplied) => {
     const info = stat(safe(value));
     if (!info?.isFile() || info.size > 1024 * 1024) return false;
-    const bytes = readFileSync(absolute(value)), text = normalize(bytes.toString('utf8'));
-    const recorded = installed?.files?.[value] === createHash('sha256').update(bytes).digest('hex');
-    const marked = text.split('\n').includes(marker) || text.startsWith(tomlMarker + '\n');
-    return isReference(text) && (marked || recorded);
+    const bytes = supplied ?? readFileSync(absolute(value)), text = normalize(bytes.toString('utf8'));
+    captureInput(value, bytes);
+    const digest = createHash('sha256').update(bytes).digest('hex');
+    const recordedHash = priorFiles[value];
+    if (recordedHash && recordedHash !== digest) return false;
+    const recorded = recordedHash === digest;
+    return isReference(text) && recorded;
   };
-  const onlyReferences = value => { const files = scan(value); return files.length > 0 && ![...preserved.keys()].some(path => path === value || path.startsWith(`${value}/`)) && files.every(file => /\.(md|mdc|toml)$/.test(file) && referenceFile(file)); };
+  const onlyReferences = value => { const files = scan(value); return files.length > 0 && ![...preserved.keys()].some(path => path === value || path.startsWith(`${value}/`)) && files.every(file => /\.(md|mdc|toml)$/i.test(file) && referenceFile(file)); };
   const protectedPath = value => /^(workflows(?:\/|$)|settings\.json$|extensions\.json$)/.test(value.slice(value.indexOf('/') + 1).toLowerCase());
   const agents = new Map();
   const formats = new Map();
@@ -132,21 +139,40 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
   const legacy = [];
   const config = '.pbai4devs/espelhos.conf';
   const configExists = stat(safe(config));
+  captureInput(config, configExists ? readFileSync(absolute(config)) : null);
   const stateFile = '.pbai4devs/estado/agentdevkit.json';
   const installed = stat(safe(stateFile)) ? JSON.parse(read(safe(stateFile))) : null;
   const configText = configExists ? read(safe(config)) : adapterManifest(root, { clients: installed?.clients });
   const rows = configText.split('\n');
   const entryRegistry = '.pbai4devs/estado/derived.json';
-  const previousEntries = stat(safe(entryRegistry)) ? JSON.parse(read(safe(entryRegistry))) : { schemaVersion: 1, entries: {} };
-  if (previousEntries?.schemaVersion !== 1 || !previousEntries.entries || typeof previousEntries.entries !== 'object' || Array.isArray(previousEntries.entries) || Object.entries(previousEntries.entries).some(([name, hash]) => !['AGENTS.md', 'CLAUDE.md', 'GEMINI.md'].includes(name) || !/^[a-f0-9]{64}$/.test(hash))) fail('Registro de entradas derivadas invalido.');
+  const registryBytes = stat(safe(entryRegistry)) ? readFileSync(absolute(entryRegistry)) : null;
+  captureInput(entryRegistry, registryBytes);
+  const previousEntries = registryBytes ? JSON.parse(registryBytes.toString('utf8')) : { schemaVersion: 1, entries: {} };
+  if (previousEntries?.schemaVersion !== 1 || !previousEntries.entries || typeof previousEntries.entries !== 'object' || Array.isArray(previousEntries.entries) || Object.entries(previousEntries.entries).some(([name, hash]) => !canonicalEntrypoint(name) || !/^[a-f0-9]{64}$/.test(hash))) fail('Registro de entradas derivadas invalido.');
   const previousOutputs = previousEntries.outputs ?? {};
   if (!previousOutputs || typeof previousOutputs !== 'object' || Array.isArray(previousOutputs) || Object.entries(previousOutputs).some(([path, hash]) => !/^\.[A-Za-z0-9][A-Za-z0-9._-]*\/(skills|rules|agents)\.json$/.test(path) || reserved.has(path.split('/')[0].toLowerCase()) || !/^[a-f0-9]{64}$/.test(hash))) fail('Registro de saidas derivadas invalido.');
-  const ownedPaths = new Set([...Object.keys(installed?.files || {}), ...Object.keys(installed?.blocks || {}), ...Object.keys(previousEntries.entries), ...Object.keys(previousOutputs)]);
+  const validResourcePath = path => {
+    if (typeof path !== 'string' || !/^\.[A-Za-z0-9][A-Za-z0-9._-]*\/.+/.test(path)) return false;
+    const [root, scope] = path.split('/');
+    return !reserved.has(root.toLowerCase()) && ![...auxiliary, 'workflows'].includes(scope.toLowerCase())
+      && !['readme.md', 'instructions.md'].includes(posix.basename(path).toLowerCase())
+      && (/\.(md|mdc)$/i.test(path) || path.startsWith('.gemini/commands/') && path.endsWith('.toml'));
+  };
+  for (const [name, values] of [['files', previousEntries.files ?? {}], ['blocks', previousEntries.blocks ?? {}]]) {
+    if (!values || typeof values !== 'object' || Array.isArray(values) || Object.entries(values).some(([path, hash]) => !(validResourcePath(path) || name === 'blocks' && canonicalEntrypoint(path)) || !/^[a-f0-9]{64}$/.test(hash))) fail(`Registro de ${name} derivados invalido.`);
+    for (const path of Object.keys(values)) safe(canonicalEntrypoint(path) ? resolveEntrypoint(root, canonicalEntrypoint(path)) : path);
+  }
+  const removedBlocks = new Set(previousEntries.removedBlocks ?? []);
+  if (!Array.isArray(previousEntries.removedBlocks ?? []) || [...removedBlocks].some(path => typeof path !== 'string' || !(validResourcePath(path) || canonicalEntrypoint(path)))) fail('Registro de blocos removidos invalido.');
+  for (const path of removedBlocks) safe(canonicalEntrypoint(path) ? resolveEntrypoint(root, canonicalEntrypoint(path)) : path);
+  const priorFiles = { ...installed?.files, ...previousEntries.files };
+  const priorBlocks = { ...Object.fromEntries(Object.entries(installed?.blocks ?? {}).filter(([path]) => !removedBlocks.has(path))), ...previousEntries.blocks };
+  const ownedPaths = new Set([...Object.keys(priorFiles), ...Object.keys(priorBlocks), ...Object.keys(previousEntries.entries), ...Object.keys(previousOutputs)]);
   const nativeRoots = new Set(rows.map(row => row.split('|')).filter(([type]) => ['agente', 'gitignore'].includes(type)).map(([, target]) => target));
   const preserved = new Map();
   const remember = (path, reason = 'user-owned') => { preserved.set(path, { path, reason }); return true; };
   function preserveBoundary(value) {
-    if (!nativeRoots.has(value.split('/')[0]) && !['AGENTS.md', 'CLAUDE.md', 'GEMINI.md', 'README.md'].includes(value)) return false;
+    if (!nativeRoots.has(value.split('/')[0]) && !canonicalEntrypoint(value) && value !== 'README.md') return false;
     const boundary = nativePathBoundary(root, value, ownedPaths, { preserveRootAliases: true });
     return boundary ? remember(boundary.path, boundary.reason) : false;
   }
@@ -160,6 +186,7 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
   function preserveUnknown(value) {
     if (preserveBoundary(value)) return true;
     const info = stat(safe(value));
+    if (info?.isFile() && (/\.(md|mdc)$/i.test(value) || value.startsWith('.gemini/commands/') && value.endsWith('.toml'))) return false;
     return info && !referenceFile(value) && !claimed(value) ? remember(value) : false;
   }
   function preserveNativeType(value, info, type) {
@@ -267,6 +294,13 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
   const backup = new Set();
   const conflicts = new Set();
   const expected = new Map();
+  const managedBlocks = {};
+  const generatedFiles = {};
+  const rememberGenerated = (target, content) => {
+    const hash = createHash('sha256').update(content).digest('hex');
+    if (installed?.files?.[target] !== hash || Object.hasOwn(previousEntries.files ?? {}, target)) generatedFiles[target] = hash;
+  };
+  const retiredBlocks = new Set();
   const changed = [];
   function planRemove(value, custom = false) {
     safe(value);
@@ -278,8 +312,9 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
     if (preserveBoundary(value)) return;
     if (!stat(safe(value))) return;
     if (stat(safe(value)).isDirectory() && !scan(value).length) return;
+    if (Object.keys(priorBlocks).some(path => path === value || path.startsWith(value + '/'))) return;
     if (onlyReferences(value)) planRemove(value);
-    else if (claimed(value)) { if (force) planRemove(value, true); else conflicts.add(value); }
+    else if (claimed(value)) remember(value, 'edited-generated-file');
     else remember(value);
   }
   const registries = new Map();
@@ -287,7 +322,9 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
   for (const [target, content] of built.outputs) {
     const info = stat(safe(target));
     if (info && !info.isFile()) fail(`Registro nao e arquivo: ${target}`);
-    if (!info || readFileSync(absolute(target), 'utf8') !== content) {
+    const current = info ? readFileSync(absolute(target)) : null;
+    captureInput(target, current);
+    if (!current || current.toString('utf8') !== content) {
       registries.set(target, content);
       if (force && info) backup.add(target);
     }
@@ -304,10 +341,10 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
       if (info && !info.isFile()) fail(`Registro nao e arquivo: ${manifest}`);
       if (info && !ownedPaths.has(manifest)) { remember(manifest); continue; }
       const current = info ? readFileSync(absolute(manifest)) : null;
+      captureInput(manifest, current);
       const priorHashes = [previousOutputs[manifest], installed?.files?.[manifest]];
       const unchanged = current === null || priorHashes.includes(createHash('sha256').update(current).digest('hex'));
-      if (!unchanged && !force) conflicts.add(manifest);
-      if (!unchanged && force) backup.add(manifest);
+      if (!unchanged) { remember(manifest, 'edited-generated-file'); continue; }
       const nextHash = createHash('sha256').update(content).digest('hex');
       if (installed?.files?.[manifest] !== nextHash) discoveryOutputs[manifest] = nextHash;
       if (!info || readFileSync(absolute(manifest), 'utf8') !== content) {
@@ -332,6 +369,7 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
     if (info && !info.isFile()) fail(`.gitignore nao e arquivo: ${target}`);
     let merged;
     const current = info ? readFileSync(absolute(target), 'utf8') : '';
+    captureInput(target, info ? Buffer.from(current) : null);
     if (target !== '.pbai4devs/.gitignore' && info && !ownedPaths.has(target) && !current.split(/\r?\n/).some(line => [ignoreBegin, ignoreEnd].includes(line))) { remember(target); continue; }
     try {
       let patterns = readFileSync(absolute(template), 'utf8');
@@ -355,7 +393,11 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
       ancestor = posix.dirname(ancestor);
     }
     const info = stat(safe(target));
-    if (info && (!info.isFile() || !referenceFile(target))) {
+    const targetBytes = info?.isFile() ? readFileSync(absolute(target)) : null;
+    captureInput(target, targetBytes);
+    const reference = targetBytes && referenceFile(target, targetBytes);
+    const mixed = info?.isFile() && /\.(md|mdc|toml)$/i.test(target) && (priorBlocks[target] || !reference);
+    if (info && !mixed && (!info.isFile() || !reference)) {
       scan(target);
       if (force) planRemove(target, true); else conflicts.add(target);
     }
@@ -364,7 +406,11 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
       if (/[{}]/.test(source)) fail(`Caminho incompativel com inclusao Gemini: ${source}`);
       const command = built.catalog.commands.find(entry => entry.path === source);
       if (!command) fail(`Comando Gemini exige COMMAND.md: ${source}`);
-      const content = `${tomlMarker}\ndescription = ${JSON.stringify(command.description)}\nprompt = ${JSON.stringify(`@{${source}}\n\n{{args}}`)}\n`;
+      const current = mixed ? targetBytes : null;
+      const merged = mixed ? mergeTomlContent(current, `@{${source}}`, { expectedHash: priorBlocks[target] }) : null;
+      const content = merged ? merged.text : `${tomlMarker}\ndescription = ${JSON.stringify(command.description)}\nprompt = ${JSON.stringify(`@{${source}}\n\n{{args}}`)}\n`;
+      if (mixed) { captureInput(target, current); managedBlocks[target] = merged.sha256; remember(target, 'existing-file-extended'); }
+      else rememberGenerated(target, content);
       expected.set(target, content);
       if (!info?.isFile() || readFileSync(absolute(target), 'utf8') !== content) changed.push(target);
       continue;
@@ -380,7 +426,11 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
     if (!title) fail(`Titulo ausente: ${source}`);
     const ruleInclusion = /^\.(?:agents|agent)\/rules\//.test(target);
     const inclusion = ruleInclusion ? `@[origem](${link(target, source)})` : `Leia e siga [origem](${link(target, source)}).`;
-    const content = `${frontmatter}\n${title}\n\n${marker}\n${inclusion}\n`;
+    const current = mixed ? targetBytes : null;
+    const merged = mixed ? mergeManagedContent(current, inclusion, { expectedHash: priorBlocks[target] }) : null;
+    const content = merged ? merged.text : `${frontmatter}\n${title}\n\n${marker}\n${inclusion}\n`;
+    if (mixed) { captureInput(target, current); managedBlocks[target] = merged.sha256; remember(target, 'existing-file-extended'); }
+    else rememberGenerated(target, content);
     expected.set(target, content);
     if (!info?.isFile() || readFileSync(absolute(target), 'utf8') !== content) changed.push(target);
   }
@@ -394,8 +444,9 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
       const files = scan(scope);
       if (!info.isDirectory()) { if (claimed(scope)) { if (force) planRemove(scope, true); else conflicts.add(scope); } else remember(scope); continue; }
       for (const file of files) if (!expected.has(file)) {
+        if (priorBlocks[file]) continue;
         if (referenceFile(file)) planRemove(file);
-        else if (claimed(file)) { if (force) planRemove(file, true); else conflicts.add(file); }
+        else if (claimed(file)) remember(file, 'edited-generated-file');
         else remember(file);
       }
       function directories(value) {
@@ -410,40 +461,77 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
       directories(scope);
     }
     for (const file of scan(agent, { markdownOnly: true, prune: true })) {
-      if (protectedPath(file) || expected.has(file) || !read(absolute(file)).includes(marker)) continue;
+      if (protectedPath(file) || expected.has(file) || priorBlocks[file] || !read(absolute(file)).includes(marker)) continue;
       if (referenceFile(file)) planRemove(file);
-      else if (force) planRemove(file, true);
-      else conflicts.add(file);
+      else remember(file, 'edited-generated-file');
     }
   }
   for (const { target } of missing) cleanScope(target);
   const rootEntries = new Map();
+  const nextEntries = generateEntrypoints ? {} : { ...previousEntries.entries };
   if (generateEntrypoints) {
     const previous = previousEntries;
-    const next = { schemaVersion: 1, entries: {} };
-    if (Object.keys(discoveryOutputs).length) next.outputs = discoveryOutputs;
-    for (const name of resolveAdapters(installed?.clients).entrypoints) {
-      const template = `.pbai4devs/templates/entrypoints/${name}`;
+    for (const canonical of resolveAdapters(installed?.clients).entrypoints) {
+      const name = resolveEntrypoint(root, canonical);
+      const template = `.pbai4devs/templates/entrypoints/${canonical}`;
       if (!stat(safe(template))?.isFile()) continue;
       if (preserveBoundary(name)) continue;
       const info = stat(safe(name));
       if (preserveNativeType(name, info, 'isFile')) continue;
       const current = info?.isFile() ? readFileSync(absolute(name)) : null;
+      captureInput(name, current);
       const previousHash = previous.entries[name] ?? installed?.files?.[name];
-      if (info && (!current || createHash('sha256').update(current).digest('hex') !== previousHash)) { remember(name); continue; }
-      if (current && createHash('sha256').update(current).digest('hex') === installed?.files?.[name]) {
-        rootEntries.set(name, current.toString('utf8'));
+      const previousBlockHash = priorBlocks[name] ?? Object.entries(priorBlocks).find(([path]) => canonicalEntrypoint(path) === canonical)?.[1];
+      if (current && (previousBlockHash || createHash('sha256').update(current).digest('hex') !== previousHash)) {
+        const merged = mergeManagedContent(current, entrypointReference(root, canonical), { expectedHash: previousBlockHash });
+        captureInput(name, current);
+        managedBlocks[name] = merged.sha256;
+        rootEntries.set(name, merged.text);
+        remember(name, 'existing-file-extended');
         continue;
       }
-      const content = readFileSync(absolute(template), 'utf8');
+      if (current && createHash('sha256').update(current).digest('hex') === installed?.files?.[name]) {
+        const content = renderEntrypointImports(root, current.toString('utf8'));
+        rootEntries.set(name, content);
+        const nextHash = createHash('sha256').update(content).digest('hex');
+        if (nextHash !== installed.files[name]) nextEntries[name] = nextHash;
+        continue;
+      }
+      const content = renderEntrypointImports(root, readFileSync(absolute(template), 'utf8'));
       const nextHash = createHash('sha256').update(content).digest('hex');
-      next.entries[name] = nextHash;
+      nextEntries[name] = nextHash;
       rootEntries.set(name, content);
     }
-    const content = JSON.stringify(next, null, 2) + '\n';
-    if ((Object.keys(next.entries).length || Object.keys(discoveryOutputs).length || stat(safe(entryRegistry))) && (!stat(safe(entryRegistry)) || readFileSync(absolute(entryRegistry), 'utf8') !== content)) registries.set(entryRegistry, content);
   }
-  const ownedOutputs = sorted([...targets, ...built.outputs.keys(), '.pbai4devs/espelhos.conf', ...rootEntries.keys(), ...(generateEntrypoints && (stat(safe(entryRegistry)) || registries.has(entryRegistry)) ? [entryRegistry] : []),
+  for (const [target, digest] of Object.entries(priorBlocks)) {
+    if (!(validResourcePath(target) || canonicalEntrypoint(target))) continue;
+    if (managedBlocks[target]) continue;
+    if (canonicalEntrypoint(target) && Object.keys(managedBlocks).some(path => canonicalEntrypoint(path) === canonicalEntrypoint(target))) { removedBlocks.add(target); continue; }
+    if (!generateEntrypoints && canonicalEntrypoint(target)) { managedBlocks[target] = digest; continue; }
+    if (generatedFiles[target] || nextEntries[target]) { removedBlocks.add(target); continue; }
+    if (expected.has(target) || rootEntries.has(target) || preserveBoundary(target)) continue;
+    const info = stat(safe(target));
+    if (!info) continue;
+    if (!info.isFile()) fail(`Tipo alterado em caminho gerenciado: ${target}`);
+    const current = readFileSync(absolute(target));
+    const content = target.endsWith('.toml') ? stripTomlContent(current, digest) : stripManagedContent(current, digest);
+    captureInput(target, current);
+    expected.set(target, content);
+    if (readFileSync(absolute(target), 'utf8') !== content) changed.push(target);
+    retiredBlocks.add(target);
+    removedBlocks.add(target);
+    remember(target, 'existing-file-extended');
+  }
+  const next = { schemaVersion: 1, entries: nextEntries };
+  if (Object.keys(discoveryOutputs).length) next.outputs = discoveryOutputs;
+  if (Object.keys(generatedFiles).length) next.files = generatedFiles;
+  const derivedBlocks = Object.fromEntries(Object.entries(managedBlocks).filter(([path, hash]) => installed?.blocks?.[path] !== hash || Object.hasOwn(previousEntries.blocks ?? {}, path)));
+  if (Object.keys(derivedBlocks).length) next.blocks = derivedBlocks;
+  for (const path of Object.keys(managedBlocks)) removedBlocks.delete(path);
+  if (removedBlocks.size) next.removedBlocks = sorted(removedBlocks);
+  const registryContent = JSON.stringify(next, null, 2) + '\n';
+  if (recordDerivedState && (Object.keys(nextEntries).length || Object.keys(discoveryOutputs).length || Object.keys(generatedFiles).length || Object.keys(derivedBlocks).length || removedBlocks.size || stat(safe(entryRegistry))) && (!stat(safe(entryRegistry)) || readFileSync(absolute(entryRegistry), 'utf8') !== registryContent)) registries.set(entryRegistry, registryContent);
+  const ownedOutputs = sorted([...targets, ...built.outputs.keys(), '.pbai4devs/espelhos.conf', ...rootEntries.keys(), ...(recordDerivedState && (stat(safe(entryRegistry)) || registries.has(entryRegistry)) ? [entryRegistry] : []),
     ...[...discoveries].flatMap(agent => ['skills', 'rules', 'agents'].map(kind => `${agent}/${kind}.json`)),
     ...[...ignoreTemplates.keys()].filter(target => {
       if (target === '.pbai4devs/.gitignore') return false;
@@ -452,7 +540,7 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
       const start = content.indexOf(ignoreBegin), finish = content.indexOf(ignoreEnd);
       return start >= 0 && finish > start && !(content.slice(0, start) + content.slice(finish + ignoreEnd.length)).trim();
     }),
-  ]).filter(path => ![...preserved.keys()].some(value => path === value || path.startsWith(`${value}/`)));
+  ]).filter(path => !managedBlocks[path] && !retiredBlocks.has(path) && ![...preserved.keys()].some(value => path === value || path.startsWith(`${value}/`)));
   const localPlan = localIgnores ? planLocalIgnore(root, { outputs: ownedOutputs }) : null;
   const localStatus = localPlan ? checkLocalIgnore(localPlan) : { changed: 0, missing: [], trackedOutputs: [] };
   const removals = topPaths(remove);
@@ -473,6 +561,13 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
   }
   const transactionRoots = topPaths([...removals, ...changed, ...registries.keys(), ...ignoreFiles.keys(), ...rootEntryChanges.map(([name]) => name), ...(configChanged ? [config] : [])]);
   const originals = new Map(transactionRoots.map(value => [value, capture(value)]));
+  for (const [path, bytes] of mergedInputs) {
+    const boundary = transactionRoots.find(root => path === root || path.startsWith(root + '/'));
+    if (!boundary) continue;
+    let snapshot = originals.get(boundary);
+    for (const segment of path.slice(boundary.length).split('/').filter(Boolean)) snapshot = snapshot?.children?.[segment];
+    if (bytes === null ? snapshot != null : !snapshot?.data?.equals(bytes)) fail(`Arquivo mudou apos planejar: ${path}`);
+  }
   const currentHashes = new Map([...originals].map(([value, content]) => [value, fingerprint(content)]));
   const originalDirectories = new Set();
   for (const value of transactionRoots) {
@@ -486,7 +581,7 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
   const dirty = Object.values(summary).some(Boolean);
   output(`${summary.changed} desatualizadas; ${summary.stale} obsoletas; ${summary.conflicts} conflitos; ${summary.missing} origens nativas ausentes; ${summary.legacy} documentos antigos; ${summary.registries} indices derivados; ${summary.gitignores} gitignores; ${summary.localIgnores} exclusoes locais.`);
   const preservedPaths = sorted(preserved.keys()).map(path => preserved.get(path));
-  if (check) return { ...summary, ownedOutputs, preserved: preservedPaths, exitCode: dirty ? 1 : 0 };
+  if (check) return { ...summary, ownedOutputs, managedBlocks, preserved: preservedPaths, exitCode: dirty ? 1 : 0 };
   if (conflicts.size) fail(`Use --force para reconstruir somente os caminhos gerenciados: ${sorted(conflicts).join(', ')}`);
   if (localStatus.missing.length) fail(`Regras humanas reabrem derivados locais: ${localStatus.missing.join(', ')}`);
   if (localPlan) assertLocalIgnoreUnchanged(localPlan);
@@ -592,7 +687,7 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
     if (failures.length) throw new AggregateError([error, ...failures], `${error.message}; rollback incompleto: ${failures.map(failure => failure.message).join('; ')}`);
     throw error;
   }
-  return { ...summary, ownedOutputs, preserved: preservedPaths, exitCode: 0, ...(backupRoot ? { backupRoot } : {}) };
+  return { ...summary, ownedOutputs, managedBlocks, preserved: preservedPaths, exitCode: 0, ...(backupRoot ? { backupRoot } : {}) };
 }
 
 export function main(args = process.argv.slice(2)) {

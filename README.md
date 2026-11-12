@@ -19,6 +19,10 @@ cada cliente conserva seu formato de descoberta. No repositório, o código
 fica em `src/`, os testes em `tests/` e os recursos compartilhados em
 `.pbai4devs/`. Pastas nativas, entradas e preferências são geradas localmente.
 
+Já tem instruções ou skills no projeto? O kit acrescenta suas referências em
+blocos delimitados e preserva o conteúdo humano, inclusive em nomes iguais.
+Veja a [integração em projetos existentes](docs/guides/installation.md).
+
 ## Começar em um projeto
 
 Prepare [Node.js 24+ e npm](docs/guides/prerequisites.md) no Windows, macOS ou
@@ -47,7 +51,7 @@ Depois, abra o projeto no seu agente e peça:
 
 Windows, instalação sem Node, simulação e atualização estão no
 [guia de instalação](docs/guides/installation.md). A distribuição usa a
-versão publicada no [npm e GitHub Packages][packages] e na [release v0.0.11][release],
+versão publicada no [npm e GitHub Packages][packages] e na [release v0.0.12][release],
 sem instalação global. Instalação e atualização usam o pacote do registro;
 os arquivos da release servem para conferir os artefatos publicados.
 O idioma da CLI pode ser `pt`, `en` ou `es`.
@@ -107,7 +111,7 @@ ao seu agente para ler `AGENTS.md`.
 [help]: docs/guides/troubleshooting.md
 [issues]: https://github.com/pathbit/AgentDevKit/issues/new/choose
 [packages]: docs/maintainers/packages.md
-[release]: https://github.com/pathbit/AgentDevKit/releases/tag/v0.0.11
+[release]: https://github.com/pathbit/AgentDevKit/releases/tag/v0.0.12
 [npm-package]: https://www.npmjs.com/package/@pathbit/agentdevkit
 [npm-badge]: https://img.shields.io/npm/v/%40pathbit%2Fagentdevkit
 [license-badge]: https://img.shields.io/badge/license-MIT-blue

@@ -2,9 +2,12 @@
 import { existsSync, lstatSync, readFileSync, readdirSync } from 'node:fs';
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { isMain, projectRoot, requireNode } from '../lib/runtime.mjs';
 import { buildCatalog } from '../lib/catalog.mjs';
 import { isGeneratedOutput } from '../lib/gitignore.mjs';
+import { canonicalEntrypoint, extractManagedBlock, managedBlockDigest } from '../lib/managed-content.mjs';
+import { extractTomlManagedBlock, tomlManagedBlockDigest } from '../lib/managed-toml.mjs';
 
 const fail = message => { throw new Error(message); };
 const normalize = value => value.split(sep).join('/');
@@ -29,28 +32,38 @@ function checkedPath(root, path) {
 
 function ownership(root) {
   const file = checkedPath(root, '.pbai4devs/estado/agentdevkit.json');
-  if (!checkedStat(root, file)) return null;
+  const derivedFile = checkedPath(root, '.pbai4devs/estado/derived.json');
+  if (!checkedStat(root, file) && !checkedStat(root, derivedFile)) return null;
   const readState = location => {
     try { return JSON.parse(readFileSync(location, 'utf8')); }
     catch { fail(`Estado invalido: ${normalize(relative(root, location))}`); }
   };
-  const state = readState(file);
+  const state = checkedStat(root, file) ? readState(file) : { schemaVersion: 1, files: {}, blocks: {} };
   const validMap = value => value && typeof value === 'object' && !Array.isArray(value)
     && Object.values(value).every(hash => typeof hash === 'string' && /^[a-f0-9]{64}$/.test(hash));
   if (state?.schemaVersion !== 1 || !validMap(state.files) || !validMap(state.blocks)) fail('Estado de propriedade invalido.');
   const files = { ...state.files };
-  const derivedFile = checkedPath(root, '.pbai4devs/estado/derived.json');
+  const blocks = { ...state.blocks };
   if (checkedStat(root, derivedFile)) {
     const derived = readState(derivedFile);
-    if (derived?.schemaVersion !== 1 || !validMap(derived.entries) || Object.keys(derived.entries).some(path => !['AGENTS.md', 'CLAUDE.md', 'GEMINI.md'].includes(path))
+    if (derived?.schemaVersion !== 1 || !validMap(derived.entries) || Object.keys(derived.entries).some(path => !canonicalEntrypoint(path))
+      || !validMap(derived.files ?? {}) || !validMap(derived.blocks ?? {})
+      || !Array.isArray(derived.removedBlocks ?? []) || (derived.removedBlocks ?? []).some(path => typeof path !== 'string')
       || !validMap(derived.outputs ?? {}) || Object.keys(derived.outputs ?? {}).some(path => !/^\.[a-z0-9][a-z0-9-]*\/(?:skills|rules|agents)\.json$/.test(path))) fail('Estado de entradas derivadas invalido.');
-    Object.assign(files, derived.entries, derived.outputs);
+    Object.assign(files, derived.entries, derived.outputs, derived.files);
+    for (const [path, hash] of Object.entries({ ...derived.entries, ...derived.files })) {
+      const location = checkedPath(root, path);
+      if (checkedStat(root, location)?.isFile() && createHash('sha256').update(readFileSync(location)).digest('hex') === hash) delete blocks[path];
+    }
+    for (const path of derived.removedBlocks ?? []) { checkedPath(root, path); delete blocks[path]; }
+    Object.assign(blocks, derived.blocks);
   }
-  for (const path of [...Object.keys(files), ...Object.keys(state.blocks)]) {
+  for (const path of Object.keys(blocks)) delete files[path];
+  for (const path of [...Object.keys(files), ...Object.keys(blocks)]) {
     const location = checkedPath(root, path);
     if (!checkedStat(root, location)?.isFile()) fail(`Arquivo gerenciado ausente: ${path}`);
   }
-  return { files, blocks: state.blocks };
+  return { files, blocks };
 }
 
 export function registryRoots(root) {
@@ -151,6 +164,28 @@ export function localLinkTargets(text) {
   }).filter(Boolean);
 }
 
+export function checkManagedBlocks(root, blocks) {
+  for (const [path, expected] of Object.entries(blocks)) {
+    const toml = extname(path).toLowerCase() === '.toml';
+    if (!toml && !['.md', '.mdc'].includes(extname(path).toLowerCase())) continue;
+    const file = checkedPath(root, path), bytes = readFileSync(file);
+    if ((toml ? tomlManagedBlockDigest(bytes) : managedBlockDigest(bytes)) !== expected) fail(`Bloco AgentDevKit alterado ou ausente: ${path}`);
+    const block = toml ? extractTomlManagedBlock(bytes) : extractManagedBlock(bytes);
+    const imports = [...block.matchAll(/^@(?:\{([^}\r\n]+)\}|([^\r\n]+))$/gm)]
+      .filter(match => !match[2]?.startsWith('['))
+      .map(match => ({ target: match[1] || match[2], base: match[1] ? root : dirname(file) }));
+    for (const { target, base } of [...localLinkTargets(block).map(target => ({ target, base: dirname(file) })), ...imports]) {
+      const destination = resolve(base, target), local = normalize(relative(root, destination));
+      if (!local || isAbsolute(local) || local === '..' || local.startsWith('../')) fail(`Referencia fora do projeto: ${path}`);
+      if (canonicalEntrypoint(local)) {
+        // The user's root entry may be an existing link; do not follow it.
+        const item = lstatSync(destination);
+        if (!item.isFile() && !item.isSymbolicLink()) fail(`Referencia indisponivel: ${path}`);
+      } else if (!checkedStat(root, checkedPath(root, local))?.isFile()) fail(`Referencia indisponivel: ${path}`);
+    }
+  }
+}
+
 export function checkMarkdown(root, files, { virtualPaths = new Set() } = {}) {
   for (const file of files) {
     const label = normalize(relative(root, file));
@@ -237,6 +272,7 @@ export function verifyResources({ root = projectRoot, sourceOnly = false, synchr
   const files = collectMarkdown(root, registry, { installed });
   const virtualPaths = new Set(sourceOnly ? [...built.outputs.keys(), '.pbai4devs/espelhos.conf'] : []);
   checkMarkdown(root, files, { virtualPaths });
+  if (installed) checkManagedBlocks(root, installed.blocks);
   checkResourceReferences(root, files);
   checkAgentExtras(root, registry.agents, { installed });
   return { files, messages: [...lint(root, files), 'recursos=passed'] };

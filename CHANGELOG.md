@@ -4,6 +4,14 @@ description: Alterações verificáveis por versão do AgentDevKit.
 
 # Changelog
 
+## 0.0.12 — 2026-11-12
+
+- Entradas e recursos existentes recebem referências em blocos próprios do kit.
+- Texto, metadados e alterações humanas são preservados nas atualizações.
+- Comandos Gemini recebem complementos dentro do prompt TOML.
+- Arquivos mistos não são desindexados nem ignorados como se fossem do kit.
+- Título principal do README: Pathbit AI - AgentDevKit.
+
 ## 0.0.11 — 2026-11-12
 
 - Skills de segurança incluídas nas instalações, com revisão e correção guiadas.

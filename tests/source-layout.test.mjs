@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { applyPlan, planInstallation } from '../src/install.mjs';
+import { stripManagedContent } from '../.pbai4devs/scripts/lib/managed-content.mjs';
 
 const project = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const bin = join(project, 'bin/agentdevkit.mjs');
@@ -31,7 +32,8 @@ function cli(root, args, status = 0) {
 test('consumidor recebe recursos sem código do gerador e preserva entrada humana', t => {
   const root = fixture(t), human = '# Meu projeto\n\nInstruções próprias.\n';
   write(root, 'AGENTS.md', human); cli(root, ['init', '--agents', 'claude']);
-  assert.equal(read(root, 'AGENTS.md'), human);
+  assert.ok(read(root, 'AGENTS.md').startsWith(human));
+  assert.match(read(root, 'AGENTS.md'), /<!-- BEGIN AGENTDEVKIT -->/);
   for (const folder of ['src', 'bin', 'tests', 'release', 'docs']) assert.equal(existsSync(join(root, '.pbai4devs', folder)), false, folder);
   assert.ok(existsSync(join(root, '.pbai4devs/skills/projeto/configurar-projeto/SKILL.md')));
   assert.equal(Object.hasOwn(JSON.parse(read(root, statePath)).files, 'AGENTS.md'), false);
@@ -165,7 +167,7 @@ test('conteúdo humano diferente no índice bloqueia desindexação mesmo com fo
   assert.equal(read(root, derived), original);
 });
 
-test('migração retira somente bloco legado de uma entrada humana rastreada', t => {
+test('migração atualiza somente bloco legado de uma entrada humana rastreada', t => {
   const root = fixture(t); cli(root, ['init', '--agents', 'claude']);
   const block = '<!-- BEGIN AGENTDEVKIT -->\nInstrução gerada antiga.\n<!-- END AGENTDEVKIT -->';
   const mixed = `# Instruções humanas\n\n${block}\n\nPreserve este texto.\n`;
@@ -173,7 +175,8 @@ test('migração retira somente bloco legado de uma entrada humana rastreada', t
   const state = JSON.parse(read(root, statePath)); delete state.files['AGENTS.md']; state.blocks['AGENTS.md'] = hash(block);
   write(root, statePath, JSON.stringify(state, null, 2) + '\n'); git(root, 'add', '-f', 'AGENTS.md');
   cli(root, ['update']);
-  assert.equal(read(root, 'AGENTS.md'), mixed.replace(block, ''));
+  const updated = JSON.parse(read(root, statePath));
+  assert.equal(stripManagedContent(read(root, 'AGENTS.md'), updated.blocks['AGENTS.md']), mixed.replace(block, ''));
   assert.ok(git(root, 'ls-files', 'AGENTS.md').includes('AGENTS.md'));
   assert.equal(spawnSync('git', ['-C', root, 'check-ignore', '--no-index', '-q', 'AGENTS.md']).status, 1);
 });

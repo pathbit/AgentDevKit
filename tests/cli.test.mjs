@@ -115,7 +115,7 @@ test('arquivo gerenciado alterado exige force e recebe backup antes da substitui
   assert.notEqual(readFileSync(join(root, path), 'utf8'), custom);
 });
 
-test('migracao plana remove somente ancestrais vazios dos apontamentos removidos', t => {
+test('migração preserva apontamentos sem ownership e limpa apenas o legado comprovado', t => {
   const root = fixture(t); cli(root, ['init', '--yes']);
   const grouped = '.codex/skills/projeto/configurar-projeto/SKILL.md';
   const pointer = readFileSync(join(root, grouped), 'utf8').replace('../../../../.pbai4devs/', '../../../.pbai4devs/');
@@ -127,10 +127,10 @@ test('migracao plana remove somente ancestrais vazios dos apontamentos removidos
   put(root, '.pbai4devs/adapters/README.md', '# Adaptadores\n\nAntigravity\n');
   mkdirSync(join(root, '.pbai4devs/adapters/antigravity'), { recursive: true });
   cli(root, ['sync']);
-  assert.equal(existsSync(join(root, '.codex/skills/configurar-projeto')), false);
+  assert.ok(existsSync(join(root, '.codex/skills/configurar-projeto')));
   assert.equal(existsSync(join(root, '.pbai4devs/adapters')), false);
   assert.ok(existsSync(join(root, grouped)));
-  assert.equal(existsSync(join(root, '.codex/skills/retained/SKILL.md')), false);
+  assert.ok(existsSync(join(root, '.codex/skills/retained/SKILL.md')));
   for (const path of ['.codex', '.codex/skills', '.codex/skills/user-empty', '.codex/skills/retained/user-empty', '.codex/agents/unrelated-empty', '.codex/own-empty']) assert.ok(existsSync(join(root, path)), path);
   assert.equal(readFileSync(join(root, '.codex/skills/custom/SKILL.md'), 'utf8'), '# User skill\n');
   cli(root, ['update', '--force']);

@@ -119,15 +119,15 @@ test('desindexação não descarta edição humana staged com workingtree restau
   assert.equal(readFileSync(join(root, 'generated.md'), 'utf8'), 'gerado\n');
 });
 
-test('raízes dedicadas são locais, enquanto configurações de GitHub e VS Code são fontes', t => {
+test('configurações humanas dos clientes continuam versionáveis', t => {
   const root = fixture(t); git(root, ['init', '-q']);
   applyLocalIgnore(planLocalIgnore(root));
   put(root, '.codex/config.toml', 'local'); put(root, '.claude/settings.json', 'local');
   put(root, '.github/settings.json', 'fonte'); put(root, '.vscode/settings.json', 'fonte');
   git(root, ['add', '--all']);
   const tracked = git(root, ['ls-files', '-z']).split('\0');
-  assert.equal(tracked.includes('.codex/config.toml'), false);
-  assert.equal(tracked.includes('.claude/settings.json'), false);
+  assert.equal(tracked.includes('.codex/config.toml'), true);
+  assert.equal(tracked.includes('.claude/settings.json'), true);
   assert.ok(tracked.includes('.github/settings.json')); assert.ok(tracked.includes('.vscode/settings.json'));
 });
 

@@ -53,9 +53,15 @@ antigos sem escolha explícita mantêm esse comportamento.
 O instalador monta um plano, confere hashes e caminhos, apresenta conflitos e
 aplica mudanças com backup local. `--dry-run` não altera arquivos nem índice.
 
-Entradas humanas permanecem intactas. O kit cria suas próprias entradas quando
-faltam; na migração, separa seus blocos de texto humano. Nunca é possível
-ignorar somente um trecho de arquivo no Git.
+Entradas humanas recebem referências em um bloco delimitado do kit. O texto
+externo, frontmatter e nome existente são preservados; somente o hash do bloco
+é registrado. Alterações externas continuam permitidas; alterações dentro do
+bloco exigem revisão e não autorizam sobrescrever o arquivo com `--force`.
+Arquivos novos e integralmente gerados continuam com propriedade integral.
+Comandos TOML recebem a referência no valor de `prompt`, preservando as demais
+chaves. Configurações nativas fora desse escopo permanecem sob controle humano.
+Nunca é possível ignorar somente um trecho de arquivo no Git: arquivos mistos
+não entram nas exclusões do kit. Veja a [spec de integração][additive].
 
 Saídas identificadas são excluídas localmente do versionamento. O Git local
 usa `info/exclude`; fora de um repositório, a proteção fica no `.gitignore`
@@ -114,3 +120,4 @@ referência não comprova a execução da skill.
 [Recursos](../guides/resources.md)
 
 [clients]: ../../.pbai4devs/templates/clients/ADAPTERS.json
+[additive]: ../specs/additive-integration/SPEC.md

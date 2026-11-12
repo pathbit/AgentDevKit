@@ -36,6 +36,7 @@ agente; arquivos próprios também podem manter uma pasta após a desmarcação.
 | `E_TARGET`, `E_SYMLINK` | Use a pasta real, fora dos diretórios reservados. |
 | `E_CONFLICT` ou lista `conflicts` | Revise o plano e os arquivos afetados. |
 | `E_STATE`, `E_BLOCK`, `E_TEMPLATE` | Restaure o arquivo; não invente hashes. |
+| `E_MANAGED_BLOCK` | Revise marcadores ou formato; preserve suas instruções. |
 | `E_CHANGED` | Um arquivo mudou durante a operação; gere outro plano. |
 
 ## Conflitos e backups
@@ -81,12 +82,14 @@ local coerente com os arquivos correspondentes. O estado pessoal não é
 versionado. Não invente hashes nem apague o estado para ocultar conflitos;
 peça ao agente para comparar as fontes e planejar o reparo com `init`/`sync`.
 
-Entradas humanas permanecem separadas das geradas. Na migração de versões
-antigas, o kit retira somente seu bloco reconhecido e preserva o texto humano.
-Não altere os marcadores dos blocos que ainda serão migrados.
+Entradas humanas recebem um bloco delimitado do kit. Edite fora dos marcadores
+`BEGIN AGENTDEVKIT` e `END AGENTDEVKIT`; não altere hashes do estado. Um bloco
+modificado precisa de revisão, mesmo com `--force`. Se o recurso for retirado,
+somente seu bloco comprovado é removido, preservando o texto humano.
 Links humanos preexistentes nas entradas e nos clientes são mantidos sem
-atravessá-los. Consulte `preserved` no JSON para ver as rotas que não receberam
-apontamentos. Não transforme o hub ou caminhos já gerenciados em links.
+atravessá-los. Consulte `preserved` no JSON para ver as rotas mantidas sob
+controle do projeto, inclusive quando complementadas. Não transforme o hub
+ou caminhos já gerenciados em links.
 Destinos dentro de `.git`, `node_modules` ou `.pbai4devs` são recusados,
 inclusive com variações de maiúsculas/minúsculas.
 

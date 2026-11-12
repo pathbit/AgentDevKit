@@ -60,7 +60,7 @@ test('claude isolado, dependência do codex e persistência não criam clientes 
   assert.equal(existsSync(join(root, '.pbai4devs/tools/skills/.local')), false);
 });
 
-test('desmarcar preserva recursos próprios e exige revisão de derivados alterados', t => {
+test('desmarcar preserva arquivos com texto humano e remove somente derivados intactos', t => {
   const root = fixture(t); cli(root, ['init', '--agents', 'claude,codex']);
   const path = '.claude/skills/configurar-projeto/SKILL.md';
   const original = read(root, path), changed = `${original}\nUser edit.\n`;
@@ -71,18 +71,19 @@ test('desmarcar preserva recursos próprios e exige revisão de derivados altera
   put(root, 'CLAUDE.md', `# User instructions\n${read(root, 'CLAUDE.md').replace('AGENTS.md', 'CHANGED.md')}`);
   mkdirSync(join(root, '.claude/skills/user-empty'), { recursive: true });
   const before = read(root, statePath);
-  const denied = cli(root, ['agents', 'codex'], 1);
-  assert.ok(denied.conflicts.includes(path)); assert.ok(denied.conflicts.includes('CLAUDE.md'));
-  assert.equal(read(root, statePath), before); assert.equal(read(root, path), changed);
-  const result = cli(root, ['agents', 'codex', '--force']);
-  assert.equal(read(root, join(result.backup, path)), changed);
-  assert.equal(existsSync(join(root, path)), false);
+  const instructions = read(root, 'CLAUDE.md');
+  cli(root, ['agents', 'codex']);
+  assert.notEqual(read(root, statePath), before);
+  assert.equal(read(root, path), changed);
+  assert.equal(read(root, 'CLAUDE.md'), instructions);
+  assert.equal(cli(root, ['agents', 'codex', '--force']).changed, false);
   assert.equal(read(root, '.claude/skills/unknown/SKILL.md'), original);
   assert.equal(read(root, '.claude/skills/custom/SKILL.md'), '# User owned\n');
   assert.ok(existsSync(join(root, '.claude/skills/user-empty')));
   assert.equal(read(root, '.claude/.gitignore'), '# User ignore\n\n');
   assert.match(read(root, 'CLAUDE.md'), /^# User instructions/); assert.doesNotMatch(read(root, 'CLAUDE.md'), /BEGIN AGENTDEVKIT/);
   cli(root, ['sync']); assert.equal(read(root, '.claude/skills/unknown/SKILL.md'), original);
+  assert.equal(read(root, path), changed);
 });
 
 test('estado legado equivale a all e consultas não escrevem migração', t => {

@@ -47,8 +47,13 @@ test('texto humano com formato de referência nunca comprova propriedade', t => 
     const result = run(root);
     assert.ok(result.preserved.some(item => item.path === path));
     assert.ok(!result.ownedOutputs.includes(path));
-    assert.equal(fs.readFileSync(join(root, path), 'utf8'), human);
-    assert.equal(snapshot(root)[path], before[path]);
+    if (path === generated) {
+      assert.ok(fs.readFileSync(join(root, path), 'utf8').startsWith(human));
+      assert.match(fs.readFileSync(join(root, path), 'utf8'), /<!-- BEGIN AGENTDEVKIT -->/);
+    } else {
+      assert.equal(fs.readFileSync(join(root, path), 'utf8'), human);
+      assert.equal(snapshot(root)[path], before[path]);
+    }
     assert.equal(run(root, { check: true }).exitCode, 0);
     const stable = snapshot(root);
     run(root, { force: true });

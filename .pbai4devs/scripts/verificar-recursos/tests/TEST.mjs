@@ -162,10 +162,11 @@ test('instalação confere entradas derivadas sem aplicar lint a blocos humanos'
   const contents = document('# Entrada gerada\n');
   file('GEMINI.md', contents);
   file('.pbai4devs/estado/derived.json', JSON.stringify({ schemaVersion: 1, entries: { 'GEMINI.md': createHash('sha256').update(contents).digest('hex') } }));
-  file('AGENTS.md', '# Instruções humanas sem frontmatter\n\n<!-- BEGIN AGENTDEVKIT -->\nLeia as fontes.\n<!-- END AGENTDEVKIT -->\n');
+  const block = '<!-- BEGIN AGENTDEVKIT -->\nLeia as fontes.\n<!-- END AGENTDEVKIT -->';
+  file('AGENTS.md', `# Instruções humanas sem frontmatter\n\n${block}\n`);
   const statePath = join(root, '.pbai4devs/estado/agentdevkit.json');
   const state = JSON.parse(readFileSync(statePath, 'utf8'));
-  state.blocks['AGENTS.md'] = createHash('sha256').update('bloco registrado').digest('hex');
+  state.blocks['AGENTS.md'] = createHash('sha256').update(block).digest('hex');
   state.files['.pbai4devs/skills/exemplo/SKILL.md'] = createHash('sha256').update('fonte anterior').digest('hex');
   writeFileSync(statePath, JSON.stringify(state));
   const result = verify(root);

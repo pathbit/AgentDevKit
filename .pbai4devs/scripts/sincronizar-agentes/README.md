@@ -12,9 +12,11 @@ node --test .pbai4devs/scripts/sincronizar-agentes/tests/TEST.mjs
 
 `--check` só confere; a execução normal atualiza os recursos. `--force` salva
 conflitos em `.agent-tests/` antes de reparar os caminhos gerenciados.
-Recursos nativos humanos e seus links permanecem intactos, inclusive com
-`--force`. O retorno inclui `preserved`; esses caminhos não contam como
-derivados pendentes nem passam a pertencer ao kit.
+Recursos nativos humanos recebem um bloco curto com a referência ao hub.
+Texto, frontmatter e nomes existentes são preservados. O estado guarda só o
+hash desse bloco; edições externas continuam permitidas. Um bloco alterado
+não é sobrescrito por `--force`. Links humanos continuam opacos.
+Comandos Gemini recebem o complemento dentro do `prompt` TOML.
 
 Metadados vêm da fonte ou do YAML nativo declarado no manifesto. Regras exigem
 `trigger` válido; `glob` exige `globs`. Origens nativas precisam pertencer ao
@@ -36,9 +38,9 @@ a seleção, use `agentdevkit agents <lista>`; não edite o manifesto gerado.
 Os derivados ficam locais: catálogos, manifesto, estado e apontamentos são
 excluídos pelo Git. O bloco em `.git/info/exclude` preserva regras próprias;
 sem Git, usa um bloco na raiz que migra ao executar depois de `git init`.
-Raízes dedicadas são locais por completo; `.github` e `.vscode` excluem somente
-os arquivos gerados. Conteúdo próprio permanece no disco e não é desindexado
-sem comprovação de propriedade do kit.
+Somente arquivos integralmente gerados são excluídos; pastas de clientes podem
+conter arquivos humanos versionados. Conteúdo próprio não é desindexado pela
+presença de um bloco gerenciado.
 Entradas novas usam os templates; hashes em `estado/derived.json` permitem
-atualizar apenas arquivos integralmente gerados, preservando alterações humanas.
+atualizar arquivos gerados e blocos separadamente, preservando alterações humanas.
 `--check` também acusa derivados ainda rastreados; não altera o índice.

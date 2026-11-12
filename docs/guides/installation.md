@@ -79,7 +79,7 @@ npx @pathbit/agentdevkit sync --check
 
 Se escolheu GitHub Packages, use o mesmo prefixo
 `npx --registry=https://npm.pkg.github.com` nesses comandos. Para fixar a versão,
-use `@pathbit/agentdevkit@0.0.11` no lugar do nome sem versão, em qualquer destino.
+use `@pathbit/agentdevkit@0.0.12` no lugar do nome sem versão, em qualquer destino.
 O próximo passo é [preparar as ferramentas](prerequisites.md#depois-de-instalar-o-kit).
 
 ## O que fica no projeto
@@ -132,11 +132,28 @@ gerenciados alterados geram conflito; use `--force` somente após revisar o
 backup e o conteúdo que será substituído. Preserve os dados locais, as
 configurações próprias e os commits do projeto.
 
-Entradas, configurações, skills e agentes humanos permanecem intactos, mesmo
-quando seus nomes coincidem com os do kit. Links simbólicos preexistentes nas
-entradas ou nos clientes são preservados sem leitura ou escrita pelo link.
-O campo `preserved` do JSON informa os caminhos que o kit deixou sob controle
-do projeto; os apontamentos são gerados nas demais rotas disponíveis.
+Entradas como `AGENTS.md`, `claude.md` e `GEMINI.md`, além de skills, agentes,
+comandos e regras existentes, recebem apenas um complemento do kit:
+
+```markdown
+<!-- BEGIN AGENTDEVKIT -->
+Leia e siga [origem](caminho/para/.pbai4devs/recurso.md).
+<!-- END AGENTDEVKIT -->
+```
+
+O texto e o frontmatter humanos permanecem; a referência usa o caminho real
+do recurso. Repetir a operação não duplica o bloco. Edite suas instruções fora
+dele: atualizações alteram somente a contribuição do kit. Nomes de entradas
+com caixa diferente são reaproveitados quando há uma única opção.
+Comandos Gemini mantêm a referência dentro do valor `prompt` em TOML válido.
+Configurações que não são instruções não recebem uma mesclagem arbitrária.
+Arquivos mistos permanecem sob controle do Git do projeto; somente derivados
+integralmente gerados pelo kit recebem exclusão local.
+
+Links simbólicos preexistentes são preservados sem atravessá-los. O campo
+`preserved` informa rotas que continuam sob controle do projeto. Um formato
+não suportado ou um bloco alterado é informado; `--force` não permite apagar
+instruções humanas para reconstruir um apontamento.
 
 Essa preservação não autoriza trocar arquivos gerenciados por links. Links
 em caminhos já pertencentes ao kit, no hub, no estado ou em ferramentas

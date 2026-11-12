@@ -17,6 +17,7 @@ description: Incrementos verificáveis do AgentDevKit.
 - [Dois registries](dual-registry/SPEC.md): versão e bytes iguais no npm e GitHub.
 - [v0.0.10](v0.0.10/SPEC.md): release com instalação pelos dois registries e pré-requisitos.
 - [Ecossistema de segurança](security-ecosystem/SPEC.md): fluxos e scanners locais.
+- [Integração sem substituição][additive]: acréscimos em arquivos existentes.
 
 Cada incremento vincula requisitos, critérios, testes e evidências locais.
 
@@ -25,3 +26,5 @@ projeto, siga o [fluxo](../guides/workflow.md) e use os
 [modelos compartilhados](../../.pbai4devs/templates/README.md).
 
 [Wiki](../README.md) · [Roadmap](../product/roadmap.md)
+
+[additive]: additive-integration/SPEC.md

@@ -152,13 +152,14 @@ test('pacote real instala, preserva projetos e oferece próximos passos', { time
     write(join(target, '.gitignore'), '# Ignore próprio\nminha-pasta-local/\n');
     const legacy = '.codex/skills/configurar-projeto';
     write(join(target, legacy, 'SKILL.md'), '---\nname: configurar-projeto\ndescription: Ponte antiga.\n---\n\n# Configurar projeto\n\n<!-- gerado: sincronizar-agentes -->\nLeia e siga [origem](../../../.pbai4devs/skills/projeto/configurar-projeto/SKILL.md).\n');
+    const legacyBytes = readFileSync(join(target, legacy, 'SKILL.md'));
     const ownEmpty = join(target, '.codex/skills/user-empty'); mkdirSync(ownEmpty, { recursive: true });
     const before = Object.fromEntries(sentinels.map(relative => [relative, digest(join(target, relative))]));
     const result = cli(['init', '--target', target, '--yes']);
     assert.equal(result.language, 'pt');
     cli(['update', '--target', target, '--yes']);
     assert.deepEqual(readFileSync(join(target, '.pbai4devs/LICENSE')), canonicalLicense);
-    assert.equal(existsSync(join(target, legacy)), false, 'A pasta da ponte legada deve ser removida quando ficar vazia.');
+    assert.deepEqual(readFileSync(join(target, legacy, 'SKILL.md')), legacyBytes, 'Marcador sem comprovacao de propriedade nao autoriza apagar o arquivo.');
     assert.ok(existsSync(ownEmpty), 'A pasta vazia própria deve permanecer.');
     for (const relative of sentinels) assert.equal(digest(join(target, relative)), before[relative], relative);
     assert.match(readFileSync(join(target, 'AGENTS.md'), 'utf8'), /INSTRUCAO_DO_USUARIO/);
@@ -171,6 +172,7 @@ test('pacote real instala, preserva projetos e oferece próximos passos', { time
     assert.equal(cli(['update', '--target', target, '--yes'], 1).ok, false);
     assert.deepEqual(snapshot(target), altered, 'Conflito não deve aplicar mudanças parciais.');
     cli(['update', '--target', target, '--yes', '--force']);
+    assert.deepEqual(readFileSync(join(target, legacy, 'SKILL.md')), legacyBytes);
     assert.ok(existsSync(ownEmpty), 'O force não deve remover pastas próprias vazias.');
     assert.doesNotMatch(readFileSync(join(target, managed), 'utf8'), /USER_EDIT_MANAGED/);
     assert.equal(digest(join(target, '.claude/skills/custom/SKILL.md')), before['.claude/skills/custom/SKILL.md']);

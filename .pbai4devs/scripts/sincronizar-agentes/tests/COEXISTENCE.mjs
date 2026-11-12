@@ -39,7 +39,7 @@ function snapshot(root) {
   visit(); return result;
 }
 
-test('coexiste com aliases nativos, configuração e colisão humana sem alterar os destinos', t => {
+test('coexiste com aliases nativos e complementa colisões sem perder conteúdo humano', t => {
   const root = fixture(t);
   put(root, '.claude/skills/existing/SKILL.md', '# Human skill\n');
   put(root, '.claude/agents/revisor.md', '# Human reviewer\n');
@@ -48,7 +48,12 @@ test('coexiste com aliases nativos, configuração e colisão humana sem alterar
   put(root, 'external/config.json', '{"human":true}\n');
   if (!link(t, root, '../.claude/skills', '.codex/skills', 'dir') || !link(t, root, 'AGENTS.md', 'CLAUDE.md') || !link(t, root, '../external/config.json', '.claude/settings.local.json')) return;
   const original = snapshot(root), result = run(root, { force: true });
-  for (const [path, before] of Object.entries(original)) assert.deepEqual(snapshot(root)[path], before, path);
+  for (const [path, before] of Object.entries(original)) {
+    if (['AGENTS.md', '.claude/agents/revisor.md'].includes(path)) {
+      assert.ok(fs.readFileSync(join(root, path), 'utf8').startsWith(path === 'AGENTS.md' ? '# Human instructions\n' : '# Human reviewer\n'));
+      assert.match(fs.readFileSync(join(root, path), 'utf8'), /<!-- BEGIN AGENTDEVKIT -->/);
+    } else assert.deepEqual(snapshot(root)[path], before, path);
+  }
   for (const path of ['.codex/skills', 'CLAUDE.md', '.claude/agents/revisor.md', '.claude/.gitignore', '.claude/settings.local.json']) assert.ok(result.preserved.some(item => item.path === path), path);
   assert.ok(result.ownedOutputs.includes('.agents/skills/demo/SKILL.md'));
   assert.ok(result.ownedOutputs.every(path => !path.startsWith('.codex/skills/') && path !== '.claude/agents/revisor.md' && path !== 'CLAUDE.md'));
@@ -98,25 +103,24 @@ test('link em caminho registrado continua sendo erro antes de qualquer escrita',
   }
 });
 
-test('manifesto standalone tem propriedade explícita e alterações humanas exigem reparo autorizado', t => {
+test('manifesto standalone editado pelo usuário passa a ser preservado', t => {
   const root = fixture(t); run(root);
   const path = '.agents/skills.json', original = fs.readFileSync(join(root, path), 'utf8');
   const derived = JSON.parse(fs.readFileSync(join(root, '.pbai4devs/estado/derived.json')));
   assert.equal(derived.outputs[path], hash(original));
   put(root, path, '{"entries":[{"path":".agents/skills/custom"}]}\n');
-  const before = snapshot(root);
-  assert.throws(() => run(root), /--force/);
-  assert.deepEqual(snapshot(root), before);
   const result = run(root, { force: true });
-  assert.equal(fs.readFileSync(join(root, path), 'utf8'), original);
-  assert.equal(fs.readFileSync(join(result.backupRoot, path), 'utf8'), '{"entries":[{"path":".agents/skills/custom"}]}\n');
+  assert.equal(fs.readFileSync(join(root, path), 'utf8'), '{"entries":[{"path":".agents/skills/custom"}]}\n');
+  assert.ok(result.preserved.some(item => item.path === path));
+  assert.ok(!result.ownedOutputs.includes(path));
+  assert.equal(run(root, { check: true }).exitCode, 0);
 });
 
-test('manifesto nativo omite colisões preservadas e inclui somente apontamentos ativos', t => {
+test('manifesto nativo inclui recursos humanos complementados com apontamento', t => {
   const root = fixture(t), collision = '.agents/skills/demo/SKILL.md';
   put(root, collision, '# Human demo\n');
   const result = run(root);
-  assert.deepEqual(JSON.parse(fs.readFileSync(join(root, '.agents/skills.json'))).entries, []);
+  assert.deepEqual(JSON.parse(fs.readFileSync(join(root, '.agents/skills.json'))).entries, [{ path: '.agents/skills/demo' }]);
   assert.ok(result.preserved.some(item => item.path === collision));
   assert.ok(!result.ownedOutputs.includes(collision));
   assert.equal(run(root, { check: true }).exitCode, 0);
@@ -166,7 +170,12 @@ test('variantes humanas de entradas da raiz são preservadas sem criar duplicata
   const root = fixture(t);
   for (const path of ['Readme.md', 'agents.md', 'claude.md', 'gemini.md']) put(root, path, `# Human ${path}\n`);
   const before = snapshot(root), result = run(root, { force: true });
-  for (const [path, content] of Object.entries(before)) assert.deepEqual(snapshot(root)[path], content, path);
+  for (const [path, content] of Object.entries(before)) {
+    if (['agents.md', 'claude.md', 'gemini.md'].includes(path)) {
+      assert.ok(fs.readFileSync(join(root, path), 'utf8').startsWith(`# Human ${path}\n`));
+      assert.match(fs.readFileSync(join(root, path), 'utf8'), /<!-- BEGIN AGENTDEVKIT -->/);
+    } else assert.deepEqual(snapshot(root)[path], content, path);
+  }
   for (const [canonical, alias] of [['README.md', 'Readme.md'], ['AGENTS.md', 'agents.md'], ['CLAUDE.md', 'claude.md'], ['GEMINI.md', 'gemini.md']]) {
     assert.deepEqual(nativePathBoundary(root, canonical, [], { preserveRootAliases: true }), { path: alias, reason: 'case-variant' });
     if (canonical !== 'README.md') assert.ok(result.preserved.some(item => item.path === alias));
@@ -178,13 +187,14 @@ test('variantes humanas de entradas da raiz são preservadas sem criar duplicata
   assert.deepEqual(snapshot(root), stable);
 });
 
-test('variante de caixa de entrada registrada não esconde drift de propriedade', t => {
+test('variante única de entrada registrada conserva conteúdo como arquivo misto', t => {
   for (const owned of ['AGENTS.md', 'agents.md']) {
     const root = fixture(t); put(root, 'agents.md', '# Renamed human entry\n');
     assert.throws(() => nativePathBoundary(root, 'AGENTS.md', [owned], { preserveRootAliases: true }), /maiusculas\/minusculas/);
     put(root, '.pbai4devs/estado/agentdevkit.json', JSON.stringify({ schemaVersion: 1, files: { [owned]: 'a'.repeat(64) }, blocks: {} }));
-    const before = snapshot(root);
-    assert.throws(() => run(root, { force: true }), /maiusculas\/minusculas/);
-    assert.deepEqual(snapshot(root), before);
+    run(root, { force: true });
+    assert.ok(fs.readFileSync(join(root, 'agents.md'), 'utf8').startsWith('# Renamed human entry\n'));
+    assert.ok(!fs.readdirSync(root).includes('AGENTS.md'));
+    assert.equal(run(root, { check: true }).exitCode, 0);
   }
 });
