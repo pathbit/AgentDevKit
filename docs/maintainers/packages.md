@@ -28,13 +28,21 @@ não integram o TGZ do AgentDevKit.
 
 ## Instalar no projeto
 
-Com Node.js 18+ e npm, execute na pasta do projeto. Não é necessário login:
+Prepare os [pré-requisitos](../guides/prerequisites.md), depois escolha o destino:
 
 ```console
 npx @pathbit/agentdevkit init
 ```
 
-Para repetir uma instalação, fixe a versão desejada após o nome do pacote.
+O comando acima usa o npm público, sem login. Para GitHub Packages, faça a
+[autenticação inicial](../guides/installation.md#github-packages) e execute:
+
+```console
+npx --registry=https://npm.pkg.github.com @pathbit/agentdevkit init
+```
+
+Para repetir uma instalação, fixe a versão após o nome, como
+`@pathbit/agentdevkit@0.0.9`, nos dois destinos.
 
 Acrescente `--agents codex,claude` para selecionar clientes, `--dry-run` para
 simular ou use `update`, `doctor` e `sync --check` no lugar de `init`.
@@ -45,8 +53,8 @@ da aplicação. Para conferir as versões:
 npm view @pathbit/agentdevkit versions --json
 ```
 
-Se existir um mapeamento antigo para o GitHub Packages, siga a
-[correção de registry][fix].
+Se existir um mapeamento de `@pathbit` que impeça alternar o destino, siga o
+[diagnóstico de registry][fix].
 
 ## Publicar pelo Actions
 

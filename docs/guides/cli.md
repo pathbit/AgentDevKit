@@ -10,6 +10,9 @@ Execute o pacote do npm público por `npx`, sem login:
 npx @pathbit/agentdevkit --help
 ```
 
+Para GitHub Packages, autentique conforme a [instalação](installation.md#github-packages)
+e use o prefixo `npx --registry=https://npm.pkg.github.com` nos mesmos comandos.
+
 Nas tabelas, `agentdevkit` representa esse executável. No checkout das fontes,
 use `npm run cli -- <comando>` ou `node bin/agentdevkit.mjs`.
 Esse código não é copiado ao projeto

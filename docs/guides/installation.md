@@ -9,22 +9,57 @@ O pacote traz o gerador e as fontes compartilhadas. A instalação prepara
 
 ## Pré-requisitos
 
-Use Node.js 18+ com npm para iniciar o pacote. O launcher prepara Node 24+
-quando o runtime atual é antigo; o núcleo e as ferramentas usam Node 24+.
-A extração de runtime usa o executável nativo `tar`, sem scripts shell.
-
-Sem Node/npm, o agente precisa primeiro instalar o runtime pelo mecanismo do
-sistema operacional e continuar. `npx` não funciona antes dessa instalação.
-O [guia de preparo][bootstrap] explica as duas situações.
+Prepare [Node.js 24+ com npm e npx](prerequisites.md) no Windows, macOS ou Linux.
+O guia inclui instalação manual e como pedir ao agente para preparar a máquina.
+Git é opcional para instalar o kit. Com Node 18–23 existente, o launcher pode
+preparar Node 24 localmente usando `tar`; veja o [bootstrap][bootstrap].
 
 ## Instalar
 
-O pacote [`@pathbit/agentdevkit`](../maintainers/packages.md) é publicado no
-npm público. Execute na pasta do projeto, sem login:
+Os dois registries oferecem o mesmo [`@pathbit/agentdevkit`](../maintainers/packages.md).
+Escolha um deles e execute na pasta do projeto.
+
+### npm público
+
+É o caminho padrão e não exige conta nem login:
 
 ```console
 npx @pathbit/agentdevkit init
 ```
+
+Para escolher explicitamente esse registry:
+
+```console
+npx --registry=https://registry.npmjs.org @pathbit/agentdevkit init
+```
+
+### GitHub Packages
+
+O pacote é público, mas esse registry exige autenticação para baixar.
+Crie um [personal access token clássico][tokens] com `read:packages`.
+Autentique uma vez no seu computador:
+
+```console
+npm login --registry=https://npm.pkg.github.com --auth-type=legacy --scope=
+```
+
+Informe seu usuário do GitHub e use o token no campo de senha. O npm guarda
+a credencial no arquivo do seu usuário, vinculada ao host do GitHub.
+`--scope=` evita criar um mapeamento permanente do escopo; nunca coloque
+o token nos comandos compartilhados ou no repositório. Veja a
+[autenticação oficial][github-auth].
+
+Depois instale com npx:
+
+```console
+npx --registry=https://npm.pkg.github.com @pathbit/agentdevkit init
+```
+
+As opções de npx, como `--registry`, ficam **antes** do nome do pacote.
+Um `@pathbit:registry` já configurado pode prevalecer sobre essa opção;
+confira o [diagnóstico de registry](troubleshooting.md#download-plataforma-ou-ferramenta-falhando).
+
+### Opções e verificação
 
 Sem comando adicional, o pacote executa `init`. Em terminal interativo,
 pergunta idioma e agentes. No aplicativo desktop, peça ao agente para reunir
@@ -33,6 +68,19 @@ as escolhas no chat e usar `--lang` e `--agents` na CLI.
 Consulte [CLI](cli.md) para acrescentar seleção, destino e simulação. `--json`,
 `--yes`, `--dry-run` ou ausência de terminal interativo evitam perguntas.
 Sem escolha explícita ou salva, `all` mantém todos os clientes compatíveis.
+
+Após instalar, confirme a versão, o diagnóstico e os apontamentos:
+
+```console
+npx @pathbit/agentdevkit --version
+npx @pathbit/agentdevkit doctor
+npx @pathbit/agentdevkit sync --check
+```
+
+Se escolheu GitHub Packages, use o mesmo prefixo
+`npx --registry=https://npm.pkg.github.com` nesses comandos. Para fixar a versão,
+use `@pathbit/agentdevkit@0.0.9` no lugar do nome sem versão, em qualquer destino.
+O próximo passo é [preparar as ferramentas](prerequisites.md#depois-de-instalar-o-kit).
 
 ## O que fica no projeto
 
@@ -106,3 +154,5 @@ Se houver erro, consulte [solução de problemas](troubleshooting.md).
 
 [bootstrap]: ../../.pbai4devs/scripts/preparar-ferramentas/BOOTSTRAP.md
 [spec]: ../specs/v0.0.9/SPEC.md
+[tokens]: https://github.com/settings/tokens
+[github-auth]: https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-npm-registry#authenticating-to-github-packages

@@ -11,7 +11,8 @@ nem escolhe a stack da aplicação. Consulte o [catálogo][tools].
 
 O núcleo usa Node.js 24+ com npm. O launcher aceita Node 18+ e prepara o runtime
 atual quando necessário. Sem Node, o agente precisa instalá-lo pelo mecanismo
-do sistema operacional antes de iniciar `npx`.
+do sistema operacional antes de iniciar `npx`; siga os
+[pré-requisitos por sistema](prerequisites.md).
 
 Para preparar somente o runtime a partir do hub:
 

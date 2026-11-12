@@ -18,10 +18,19 @@ son locales y no se versionan.
 
 ## Empezar en tu proyecto
 
-Con Node.js 18+ y npm, ejecuta en tu proyecto, sin iniciar sesión:
+Usa Node.js 24+ con npm. La [guía de requisitos][prerequisites] explica
+la instalación en Windows, macOS y Linux.
+
+Desde la carpeta de tu proyecto, instala mediante **npm**, sin iniciar sesión:
 
 ```console
 npx @pathbit/agentdevkit init
+```
+
+O usa **GitHub Packages**, después de [autenticarte en GitHub][github-install]:
+
+```console
+npx --registry=https://npm.pkg.github.com @pathbit/agentdevkit init
 ```
 
 Elige tus agentes en la pregunta inicial o usa `--agents codex,claude`.
@@ -32,9 +41,9 @@ Después, abre el proyecto en tu agente y pide:
 
 > Lee AGENTS.md y usa la skill proximos-passos para orientar mi trabajo.
 
-La [guía de instalación](docs/guides/installation.md) incluye Windows, Node ausente,
-simulación y actualización. Instala y actualiza mediante el
-[paquete npm público][packages];
+La [guía de instalación](docs/guides/installation.md) incluye preparación del
+runtime, simulación y actualización. Los dos [registros][packages] ofrecen
+la misma versión;
 la [release v0.0.9][release] conserva artefactos y checksums para verificarlos.
 No requiere instalación global.
 La CLI guarda el idioma `pt`, `en` o `es` por proyecto.
@@ -43,6 +52,7 @@ La CLI guarda el idioma `pt`, `en` o `es` por proyecto.
 
 | Quiero… | Leer |
 | --- | --- |
+| Preparar Node.js y npm | [Requisitos][prerequisites] |
 | Entender el kit | [Wiki](docs/README.md) |
 | Planificar o retomar un proyecto | [Flujo](docs/guides/workflow.md) |
 | Mejorar documentación existente | [Inventario y complementos](docs/guides/documentation.md) |
@@ -90,3 +100,5 @@ al agente que lea `AGENTS.md`.
 [help]: docs/guides/troubleshooting.md
 [issues]: https://github.com/pathbit/AgentDevKit/issues/new/choose
 [packages]: docs/maintainers/packages.md
+[prerequisites]: docs/guides/prerequisites.md
+[github-install]: docs/guides/installation.md#github-packages

@@ -21,11 +21,21 @@ fica em `src/`, os testes em `tests/` e os recursos compartilhados em
 
 ## Começar em um projeto
 
-Com Node.js 18+ e npm, execute na pasta do seu projeto, sem login:
+Prepare [Node.js 24+ e npm](docs/guides/prerequisites.md) no Windows, macOS ou
+Linux. Na pasta do seu projeto, instale pelo **npm público**, sem login:
 
 ```console
 npx @pathbit/agentdevkit init
 ```
+
+Ou use **GitHub Packages**, após [autenticar no GitHub][github-install]:
+
+```console
+npx --registry=https://npm.pkg.github.com @pathbit/agentdevkit init
+```
+
+Os dois registries oferecem o mesmo pacote. O GitHub exige token para download,
+mesmo sendo público; o npm continua sendo a opção sem login.
 
 Escolha os agentes na pergunta inicial ou informe `--agents codex,claude`.
 A escolha fica salva no projeto; `agents` permite consultá-la ou alterá-la.
@@ -37,7 +47,7 @@ Depois, abra o projeto no seu agente e peça:
 
 Windows, instalação sem Node, simulação e atualização estão no
 [guia de instalação](docs/guides/installation.md). A distribuição usa a
-versão publicada no [npm público][packages] e na [release v0.0.9][release],
+versão publicada no [npm e GitHub Packages][packages] e na [release v0.0.9][release],
 sem instalação global. Instalação e atualização usam o pacote do registro;
 os arquivos da release servem para conferir os artefatos publicados.
 O idioma da CLI pode ser `pt`, `en` ou `es`.
@@ -46,6 +56,7 @@ O idioma da CLI pode ser `pt`, `en` ou `es`.
 
 | Quero… | Ler |
 | --- | --- |
+| Preparar Node/npm e instalar o kit | [Pré-requisitos](docs/guides/prerequisites.md) · [Instalação](docs/guides/installation.md) |
 | Entender e começar | [Wiki](docs/README.md) |
 | Planejar ou retomar um projeto | [Fluxo de trabalho](docs/guides/workflow.md) |
 | Evoluir documentos existentes | [Inventário e complementos](docs/guides/documentation.md) |
@@ -99,3 +110,4 @@ ao seu agente para ler `AGENTS.md`.
 [npm-package]: https://www.npmjs.com/package/@pathbit/agentdevkit
 [npm-badge]: https://img.shields.io/npm/v/%40pathbit%2Fagentdevkit
 [license-badge]: https://img.shields.io/badge/license-MIT-blue
+[github-install]: docs/guides/installation.md#github-packages

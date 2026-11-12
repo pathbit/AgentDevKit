@@ -29,7 +29,7 @@ agente; arquivos próprios também podem manter uma pasta após a desmarcação.
 | Sintoma ou código | Próxima ação |
 | --- | --- |
 | `node` ou `npx` não encontrado | Siga [sem Node/npm][runtime]. |
-| `E401` ou `E403` no registry | Confira se usa o [npm público][packages]. |
+| `E401` ou `E403` no registry | No npm, confira o destino; no GitHub, confira [token e login][github-install]. |
 | `E404` ao baixar o pacote | Confira registry, versão e permissão. |
 | `E_ARGS` | Confira comando e aspas com `agentdevkit --help`. |
 | `E_MISSING` | Confirme `--target`; inicialize o projeto correto. |
@@ -96,15 +96,31 @@ Para manter a instalação e sua seleção de clientes, prefira a CLI.
 
 ## Download, plataforma ou ferramenta falhando
 
-Se uma instalação antiga configurou `@pathbit` para o GitHub Packages,
-atualize somente esse escopo e repita a instalação:
+Confira o destino padrão e um possível mapeamento do escopo:
 
 ```console
-npm config set @pathbit:registry https://registry.npmjs.org --location=user
+npm config get registry
+npm config get @pathbit:registry
 ```
 
-O pacote público não exige autenticação para instalar. Publicar uma versão
-exige acesso de mantenedor no npm; são operações diferentes.
+Um valor de `@pathbit:registry` prevalece sobre `npx --registry=...`.
+Se esse mapeamento foi criado apenas para uma instalação antiga, remova
+**somente essa chave** do arquivo que a definiu. No arquivo do usuário:
+
+```console
+npm config delete @pathbit:registry --location=user
+```
+
+Se a chave está no `.npmrc` do projeto ou em variáveis de ambiente, revise
+nesse local; o comando acima não muda essas configurações. Preserve mapeamentos
+exigidos por outras dependências e nunca apague o `.npmrc` inteiro.
+Sem mapeamento do escopo, escolha o registry por execução no
+[guia de instalação](installation.md#instalar).
+
+O npm público não exige login para baixar o kit. No GitHub Packages, use
+um token clássico com `read:packages` e o [login específico][github-install].
+Publicar versões exige permissões adicionais; login no GitHub CLI (`gh`)
+não configura automaticamente a autenticação do npm.
 
 Confira acesso ao GitHub, ao registro npm e a `nodejs.org`, conforme a etapa.
 Mantenha a verificação de certificados e hashes; resolva proxy, rede ou
@@ -148,4 +164,4 @@ Use as [issues do projeto][issues] ou volte ao [índice](../README.md).
 [runtime]: installation.md#pré-requisitos
 [tools]: ../../.pbai4devs/scripts/preparar-ferramentas/README.md
 [issues]: https://github.com/pathbit/AgentDevKit/issues
-[packages]: ../maintainers/packages.md#instalar-no-projeto
+[github-install]: installation.md#github-packages

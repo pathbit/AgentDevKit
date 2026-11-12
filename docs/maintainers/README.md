@@ -6,7 +6,7 @@ description: Desenvolvimento, contribuição e publicação do AgentDevKit.
 
 - [Desenvolvimento](development.md)
 - [Manutenção e releases](maintenance.md)
-- [Pacote npm público](packages.md)
+- [Pacote no npm e GitHub Packages](packages.md)
 - [Participação na comunidade](community.md)
 
 [Voltar à documentação](../README.md)

@@ -18,10 +18,19 @@ See the [supported clients][clients].
 
 ## Start in your project
 
-With Node.js 18+ and npm, run this in your project. No login is required:
+Use Node.js 24+ with npm. The [prerequisites guide][prerequisites] explains
+installation on Windows, macOS and Linux.
+
+From your project folder, install through **npm**, without logging in:
 
 ```console
 npx @pathbit/agentdevkit init
+```
+
+Or use **GitHub Packages**, after [authenticating with GitHub][github-install]:
+
+```console
+npx --registry=https://npm.pkg.github.com @pathbit/agentdevkit init
 ```
 
 Choose your coding agents when prompted, or pass `--agents codex,claude`.
@@ -32,9 +41,9 @@ Then open the project in your coding agent and ask:
 
 > Read AGENTS.md and use the proximos-passos skill to guide my next steps.
 
-See [installation](docs/guides/installation.md) for Windows, missing Node, previews
-and updates. Install and update through the [public npm package][packages]; the
-[v0.0.9 release][release] retains artifacts and checksums for verification.
+See [installation](docs/guides/installation.md) for runtime preparation, previews
+and updates. Both [package registries][packages] provide the same version;
+the [v0.0.9 release][release] retains artifacts and checksums for verification.
 No global installation is required.
 The CLI supports `pt`, `en` and `es`; it saves your selection per project.
 
@@ -42,6 +51,7 @@ The CLI supports `pt`, `en` and `es`; it saves your selection per project.
 
 | I want to… | Read |
 | --- | --- |
+| Prepare Node.js and npm | [Prerequisites][prerequisites] |
 | Understand the kit | [Documentation wiki](docs/README.md) |
 | Plan or resume a project | [Workflow](docs/guides/workflow.md) |
 | Improve existing documentation | [Inventory and additions](docs/guides/documentation.md) |
@@ -88,3 +98,5 @@ agent to read `AGENTS.md`.
 [help]: docs/guides/troubleshooting.md
 [issues]: https://github.com/pathbit/AgentDevKit/issues/new/choose
 [packages]: docs/maintainers/packages.md
+[prerequisites]: docs/guides/prerequisites.md
+[github-install]: docs/guides/installation.md#github-packages

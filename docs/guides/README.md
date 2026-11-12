@@ -4,7 +4,8 @@ description: Guias de instalação, uso e verificação do AgentDevKit.
 
 # Guias de uso
 
-- [Instalação](installation.md)
+- [Pré-requisitos: Node/npm no Windows, macOS e Linux](prerequisites.md)
+- [Instalação: npm e GitHub Packages](installation.md)
 - [Comandos da CLI](cli.md)
 - [Fluxo de trabalho](workflow.md)
 - [Evoluir documentação existente](documentation.md)

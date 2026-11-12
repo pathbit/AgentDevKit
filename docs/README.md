@@ -22,7 +22,8 @@ pode trocar de agente sem manter várias cópias das mesmas instruções.
 
 | Objetivo | Caminho |
 | --- | --- |
-| Primeiro uso | [Instalar][install] → [seguir o fluxo][flow] |
+| Preparar o computador | [Node/npm no Windows, macOS e Linux](guides/prerequisites.md) |
+| Primeiro uso | [Instalar via npm ou GitHub Packages][install] → [seguir o fluxo][flow] |
 | Projeto em andamento | [Instalar com simulação][install] → [retomar][flow] |
 | Evoluir documentação existente | [Inventariar e complementar](guides/documentation.md) |
 | Personalizar agentes | [Recursos][resources] → [compatibilidade][clients] |
@@ -31,7 +32,7 @@ pode trocar de agente sem manter várias cópias das mesmas instruções.
 | Contribuir com o kit | [Contribuir][contrib] → [design](product/design.md) |
 | Desenvolver e experimentar | [Guia rápido][development] → [exemplos][examples] |
 | Preparar uma versão | [Manutenção e releases](maintainers/maintenance.md) |
-| Publicar ou instalar o pacote npm | [npm público](maintainers/packages.md) |
+| Publicar o pacote nos dois registries | [npm e GitHub Packages](maintainers/packages.md) |
 | Relatar um bug ou propor melhoria | [Participar](maintainers/community.md) |
 
 ## Entenda os termos
