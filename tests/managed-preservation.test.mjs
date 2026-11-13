@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -65,15 +65,52 @@ test('projeto aninhado preserva exemplos publicos e isola regras privadas', t =>
 });
 
 test('probes de privacidade nao atravessam raizes nativas simbolicas', t => {
-  const { root, put, git } = fixture(t);
+  const { root, git } = fixture(t);
   assert.equal(git('init', '--quiet').status, 0);
-  put('external/auth.json', 'preserve outside\n');
-  try { symlinkSync(join(root, 'external'), join(root, '.claude'), process.platform === 'win32' ? 'junction' : 'dir'); }
+  const external = mkdtempSync(join(tmpdir(), 'agentdevkit-external-'));
+  t.after(() => rmSync(external, { recursive: true, force: true }));
+  writeFileSync(join(external, 'auth.json'), 'preserve outside\n');
+  writeFileSync(join(external, '.gitignore'), '!.playwright-*/\n');
+  writeFileSync(join(root, '.gitignore'), '!/.claude/.playwright-mcp/\n');
+  try { symlinkSync(external, join(root, '.claude'), process.platform === 'win32' ? 'junction' : 'dir'); }
   catch (error) { if (['EPERM', 'EACCES', 'ENOSYS'].includes(error.code)) { t.skip('Links indisponiveis.'); return; } throw error; }
   const plan = planLocalIgnore(root, { outputs: [] });
   assert.equal(plan.artifactProbes.some(path => path.startsWith('.claude/')), false);
   assert.doesNotThrow(() => applyLocalIgnore(plan));
-  assert.equal(readFileSync(join(root, 'external/auth.json'), 'utf8'), 'preserve outside\n');
+  const unsafe = planLocalIgnore(root, { outputs: ['.claude/skills/kit.md'] });
+  assert.ok(checkLocalIgnore(unsafe).missing.includes('.claude/skills/kit.md'));
+  assert.throws(() => applyLocalIgnore(unsafe), /Regras humanas/);
+  assert.equal(readFileSync(join(external, 'auth.json'), 'utf8'), 'preserve outside\n');
+  assert.equal(readFileSync(join(external, '.gitignore'), 'utf8'), '!.playwright-*/\n');
+});
+
+test('probe planejado e novamente validado se uma pasta virar link', t => {
+  const { root, git } = fixture(t); assert.equal(git('init', '--quiet').status, 0);
+  const external = mkdtempSync(join(tmpdir(), 'agentdevkit-race-'));
+  t.after(() => rmSync(external, { recursive: true, force: true }));
+  mkdirSync(join(root, '.claude/logs'), { recursive: true });
+  const plan = planLocalIgnore(root);
+  renameSync(join(root, '.claude/logs'), join(root, '.claude/logs-original'));
+  try { symlinkSync(external, join(root, '.claude/logs'), process.platform === 'win32' ? 'junction' : 'dir'); }
+  catch (error) { if (['EPERM', 'EACCES', 'ENOSYS'].includes(error.code)) { t.skip('Links indisponiveis.'); return; } throw error; }
+  assert.doesNotThrow(() => checkLocalIgnore(plan));
+  assert.doesNotThrow(() => applyLocalIgnore(plan));
+});
+
+test('excecao de diretorio nao atravessa juncao dentro do cliente', t => {
+  const { root, git } = fixture(t);
+  assert.equal(git('init', '--quiet').status, 0);
+  const external = mkdtempSync(join(tmpdir(), 'agentdevkit-child-'));
+  t.after(() => rmSync(external, { recursive: true, force: true }));
+  writeFileSync(join(external, 'auth.json'), 'externo\n');
+  mkdirSync(join(root, '.claude'));
+  writeFileSync(join(root, '.gitignore'), '!/.claude/logs/\n');
+  try { symlinkSync(external, join(root, '.claude/logs'), process.platform === 'win32' ? 'junction' : 'dir'); }
+  catch (error) { if (['EPERM', 'EACCES', 'ENOSYS'].includes(error.code)) { t.skip('Links indisponiveis.'); return; } throw error; }
+  const plan = planLocalIgnore(root);
+  assert.equal(plan.artifactProbes.some(path => path.startsWith('.claude/logs/')), false);
+  assert.doesNotThrow(() => applyLocalIgnore(plan));
+  assert.equal(readFileSync(join(external, 'auth.json'), 'utf8'), 'externo\n');
 });
 
 test('verificador confere apenas nosso bloco e nao impoe metadados ao Markdown humano', t => {

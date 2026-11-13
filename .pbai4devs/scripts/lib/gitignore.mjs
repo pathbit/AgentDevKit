@@ -112,7 +112,7 @@ function checkedOutput(path) {
 function escapePattern(path) { return path.replace(/[\\!#*?\[\] ]/g, '\\$&'); }
 
 function rootProbes(root, roots) {
-  return roots.filter(path => { const item = localStat(join(root, path)); return !item || item.isDirectory(); }).map(path => `${path}/.agentdevkit-ignore-probe`);
+  return roots.filter(path => { const item = localStat(join(root, path)); return !item || item.isDirectory() && !item.isSymbolicLink(); }).map(path => `${path}/.agentdevkit-ignore-probe`);
 }
 
 function artifactPolicy(templateFile) {
@@ -150,7 +150,7 @@ function safeIgnoreProbe(root, path) {
   for (const part of path.split('/').slice(0, -1)) {
     parent = join(parent, part);
     const item = localStat(parent);
-    if (item && !item.isDirectory()) return false;
+    if (item && (!item.isDirectory() || item.isSymbolicLink())) return false;
   }
   return true;
 }
@@ -166,7 +166,7 @@ function artifactProbes(root, patterns) {
         let parent = root, safe = true;
         for (const part of path.split('/').slice(0, -1)) {
           parent = join(parent, part); const item = localStat(parent);
-          if (item && !item.isDirectory()) { safe = false; break; }
+          if (item && (!item.isDirectory() || item.isSymbolicLink())) { safe = false; break; }
         }
         if (safe) probes.add(path);
       }
@@ -204,8 +204,8 @@ function visibleArtifactProbes(root, location, patterns) {
   const listed = gitCommand(location.top, ['--literal-pathspecs', '-c', 'core.excludesFile=', 'ls-files', '--cached', '--others', '--exclude-standard', '-z', '--', location.prefix ? `${location.prefix}/` : '.']);
   if (listed.error || listed.status !== 0) throw new Error(listed.error?.message || listed.stderr || 'Falha ao conferir artefatos existentes.');
   const paths = listed.stdout.split('\0').filter(Boolean), prefix = location.prefix ? `${location.prefix}/` : '';
-  const probes = new Set(paths.filter(path => path.startsWith(prefix)).map(path => path.slice(prefix.length)).filter(path => artifactPath(path, patterns)));
-  const ignores = new Set(paths.filter(path => path.startsWith(prefix) && (path === '.gitignore' || path.endsWith('/.gitignore'))));
+  const probes = new Set(paths.filter(path => path.startsWith(prefix)).map(path => path.slice(prefix.length)).filter(path => artifactPath(path, patterns) && safeIgnoreProbe(root, path)));
+  const ignores = new Set(paths.filter(path => path.startsWith(prefix) && (path === '.gitignore' || path.endsWith('/.gitignore')) && safeIgnoreProbe(root, path.slice(prefix.length))));
   let ancestor = root;
   while (true) {
     ignores.add(portable(relative(location.top, join(ancestor, '.gitignore'))));
@@ -224,7 +224,8 @@ function visibleArtifactProbes(root, location, patterns) {
       const ruleBase = !rule.startsWith('/') && !literal.includes('/') && relative(dirname(file), root).split(sep)[0] !== '..' ? root : dirname(file);
       const candidate = portable(relative(root, resolve(ruleBase, literal.replace(/\\(.)/g, '$1'))));
       if (!candidate || candidate === '..' || candidate.startsWith('../') || !artifactPath(candidate, patterns, directory)) continue;
-      probes.add(checkedOutput(directory ? `${candidate}/.agentdevkit-artifact-probe` : candidate));
+      const probe = checkedOutput(directory ? `${candidate}/.agentdevkit-artifact-probe` : candidate);
+      if (safeIgnoreProbe(root, probe)) probes.add(probe);
     }
   }
   return [...probes];
@@ -237,7 +238,7 @@ function visiblePrivateProbes(root, location, clientRoots) {
   if (listed.error || listed.status !== 0) throw new Error(listed.error?.message || listed.stderr || 'Falha ao conferir arquivos privados.');
   const prefix = location.prefix ? `${location.prefix}/` : '', roots = new Set(clientRoots);
   const probes = new Set(listed.stdout.split('\0').filter(path => path.startsWith(prefix)).map(path => path.slice(prefix.length))
-    .filter(path => roots.has(path.split('/')[0]) && isGeneratedOutput(path)));
+    .filter(path => roots.has(path.split('/')[0]) && isGeneratedOutput(path) && safeIgnoreProbe(root, path)));
   const ignore = join(root, '.gitignore'), item = localStat(ignore);
   if (item?.isFile() && !item.isSymbolicLink()) for (const line of readFileSync(ignore, 'utf8').replace(/^\uFEFF/, '').split(/\r?\n/)) {
     if (!line.startsWith('!') || line.length === 1) continue;
@@ -245,7 +246,10 @@ function visiblePrivateProbes(root, location, clientRoots) {
     const witness = rule.replace(/^\//, '').replace(/\*\*\//g, '').replace(/\[([^\]]+)\]/g, (_m, letters) => letters[0]).replace(/\*/g, '').replace(/\?/g, 'x').replace(/\/$/, '');
     if (!witness || /[\\\x00-\x1f]/.test(witness)) continue;
     const candidates = roots.has(witness.split('/')[0]) ? [witness] : [...roots].map(client => `${client}/${witness}`);
-    for (const path of candidates) if (isGeneratedOutput(path, directory) && safeIgnoreProbe(root, path)) probes.add(checkedOutput(directory ? `${path}/.agentdevkit-ignore-probe` : path));
+    for (const path of candidates) {
+      const probe = checkedOutput(directory ? `${path}/.agentdevkit-ignore-probe` : path);
+      if (isGeneratedOutput(path, directory) && safeIgnoreProbe(root, probe)) probes.add(probe);
+    }
   }
   return [...probes];
 }
@@ -315,7 +319,7 @@ function foreignHiddenClients(plan) {
     if (begin) start = { id: begin[1], line: index + 1 };
     else if (end && start?.id === end[1]) { ranges.push({ ...start, end: index + 1 }); start = null; }
   });
-  const probes = plan.clientRoots.filter(path => { const item = localStat(join(plan.root, path)); return !item || item.isDirectory(); }).map(path => `${path}/.agentdevkit-human-probe.md`);
+  const probes = plan.clientRoots.filter(path => { const item = localStat(join(plan.root, path)); return !item || item.isDirectory() && !item.isSymbolicLink(); }).map(path => `${path}/.agentdevkit-human-probe.md`);
   if (!probes.length) return [];
   const { paths, matches } = ignoreMatches(plan.location, probes);
   return paths.flatMap((path, index) => {
@@ -333,6 +337,8 @@ function localIgnoreSource(location, source) {
 }
 
 function ignoreMatches(location, probes) {
+  const root = join(location.top, location.prefix);
+  if (probes.some(path => !safeIgnoreProbe(root, path))) throw new Error('Probe atravessa caminho simbolico.');
   const paths = probes.map(path => location.prefix ? `${location.prefix}/${path}` : path);
   const result = gitCommand(location.top, ['-c', 'core.excludesFile=', 'check-ignore', '--verbose', '--no-index', '--stdin', '-z'], paths.join('\0') + '\0');
   if (result.error || ![0, 1].includes(result.status)) throw new Error(result.error?.message || result.stderr || 'Falha ao conferir exclusoes Git.');
@@ -400,7 +406,7 @@ export function planLocalIgnore(root, { outputs = [], templateRoot } = {}) {
   const artifactPaths = [...new Set([...artifactProbes(root, artifacts), ...existingPrivate, ...(location ? [...visibleArtifactProbes(root, location, artifacts), ...visiblePrivateProbes(root, location, clientRoots)] : [])])];
   const wanted = new Set(probes.map(path => location?.prefix ? `${location.prefix}/${path}` : path));
   if (location && !before?.includes(first)) {
-    const ignored = ignoreMatches(location, [...probes, ...artifactPaths]);
+    const ignored = ignoreMatches(location, [...probes, ...artifactPaths].filter(path => safeIgnoreProbe(root, path)));
     if (ignored.paths.every(path => { const match = ignored.matches.get(path); return match && !match.pattern.startsWith('!') && localIgnoreSource(location, match.source); })) edits.length = 0;
   }
   const prefix = location?.prefix ? `${location.prefix}/` : '';
@@ -427,10 +433,11 @@ export function checkLocalIgnore(plan, { replacedBlocks = [] } = {}) {
     return { ...item, path };
   });
   if (plan.location && (plan.paths.length || plan.artifactProbes?.length)) {
+    missing.push(...plan.paths.filter(path => !safeIgnoreProbe(plan.root, path)));
     const privateProbes = (plan.privateProbes || []).filter(path => localStat(join(plan.root, path.split('/')[0]))?.isDirectory() && safeIgnoreProbe(plan.root, path));
     const probes = [...new Set([...plan.paths, ...rootProbes(plan.root, plan.roots || []), ...(plan.artifactProbes || []), ...privateProbes,
       ...(plan.artifactPatterns ? visibleArtifactProbes(plan.root, plan.location, plan.artifactPatterns) : []),
-      ...visiblePrivateProbes(plan.root, plan.location, plan.clientRoots || [])])];
+      ...visiblePrivateProbes(plan.root, plan.location, plan.clientRoots || [])])].filter(path => safeIgnoreProbe(plan.root, path));
     const { paths: relativePaths, matches } = ignoreMatches(plan.location, probes);
     for (let index = 0; index < relativePaths.length; index++) {
       const match = matches.get(relativePaths[index]);
