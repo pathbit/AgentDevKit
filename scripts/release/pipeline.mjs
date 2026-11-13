@@ -73,7 +73,7 @@ export function runPipeline(profile, { root = releaseRoot, env = process.env, ru
     return;
   }
   if (profile === 'portable') {
-    test(['adapters.test.mjs', 'cli.test.mjs', 'client-selection.test.mjs', 'documentation-compatibility.test.mjs', 'native-coexistence.test.mjs', 'next.test.mjs', 'managed-content.test.mjs', 'managed-content-helper.test.mjs', 'managed-toml.test.mjs', 'managed-preservation.test.mjs']);
+    test(['adapters.test.mjs', 'cli.test.mjs', 'client-selection.test.mjs', 'documentation-compatibility.test.mjs', 'github-packages.test.mjs', 'native-coexistence.test.mjs', 'next.test.mjs', 'managed-content.test.mjs', 'managed-content-helper.test.mjs', 'managed-toml.test.mjs', 'managed-preservation.test.mjs']);
     for (const name of ['preparar-ferramentas', 'sincronizar-agentes', 'verificar-recursos', 'executar-script', 'inspecionar-projeto']) run(root, ['--test', `${hub}/scripts/${name}/tests/TEST.mjs`], env);
     return;
   }
