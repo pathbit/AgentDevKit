@@ -4,7 +4,7 @@ import { chmodSync, closeSync, existsSync, fstatSync, lstatSync, openSync, readF
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { synchronize, isReference } from '../.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs';
-import { isGeneratedOutput, planLocalIgnore, checkLocalIgnore, assertLocalIgnoreUnchanged, applyLocalIgnore, planUntrack, applyUntrack, restoreUntrack, indexContentMatches } from '../.pbai4devs/scripts/lib/gitignore.mjs';
+import { isGeneratedOutput, planLocalIgnore, checkLocalIgnore, assertLocalIgnoreUnchanged, applyLocalIgnore, indexContentMatches } from '../.pbai4devs/scripts/lib/gitignore.mjs';
 import { nativePathBoundary } from '../.pbai4devs/scripts/lib/native-paths.mjs';
 import { canonicalEntrypoint, resolveEntrypoint, entrypointReference, renderEntrypointImports, extractManagedBlock, managedBlockDigest, mergeManagedContent, stripManagedContent } from '../.pbai4devs/scripts/lib/managed-content.mjs';
 import { extractTomlManagedBlock, tomlManagedBlockDigest, mergeTomlContent, stripTomlContent } from '../.pbai4devs/scripts/lib/managed-toml.mjs';
@@ -698,16 +698,9 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
     if (stagedChanges.length) fail('E_STAGED', `Staged content differs from the working tree for planned changes: ${stagedChanges.map(change => `${change.action} ${change.path}`).join(', ')}. Preserve and review these paths before updating.`);
     const retiredRoots = adapterRoots.filter(root => !active.roots.includes(root) && changes.some(change => change.action === 'remove' && change.path.startsWith(`${root}/`) && (previous?.files[change.path] || previous?.blocks[change.path])));
     const ownedOutputs = [...new Set([...synchronized.ownedOutputs, ...ownedEntrypoints, statePath])].filter(path => !mixedPaths.has(path) && !overlapsPreserved(path));
-    const hashes = {};
-    for (const [path, digest] of Object.entries(previous?.files || {})) if (path !== '.gitignore' && (ownedOutputs.includes(path) || !path.startsWith('.pbai4devs/')) && !mixedPaths.has(path) && !overlapsPreserved(path) && !aliasedEntrypoint(path)) hashes[path] = digest;
-    for (const path of ownedEntrypoints) { const current = read(target, path); if (current && (previous?.blocks[path] || derivedEntries[path] === hash(current))) hashes[path] = hash(current); }
-    for (const path of Object.keys(previous?.blocks || {})) if (path.endsWith('/.gitignore') && adapterRoots.some(root => path === `${root}/.gitignore`)) {
-      const current = read(target, path);
-      if (current) { const source = current.toString('utf8'), block = extractBlock(source, '# BEGIN AGENT IGNORE', '# END AGENT IGNORE'); if (block && source.trim() === block.trim() && hash(block) === previous.blocks[path]) hashes[path] = hash(current); }
-    }
-    if (previous && !migration) hashes[statePath] = hash(read(target, statePath));
-    const untrack = existsSync(target) ? planUntrack(target, hashes) : null;
-    if (migration && untrack?.paths.length) fail('E_STATE', 'State migration would change the Git index; preserve and resolve tracked outputs first.');
+    // Ignore rules affect only untracked files. Never remove existing index
+    // entries on behalf of the project; staged bytes are checked separately.
+    const untrack = { root: target, paths: [], hashes: {}, index: '', conflicts: [] };
     const localIgnore = planLocalIgnore(target, { outputs: ownedOutputs, templateRoot: stage });
     const localIgnoreCheck = checkLocalIgnore(localIgnore, { replacedBlocks: replacedIgnoreBlocks(target, changes, previous) });
     conflicts.push(...(untrack?.conflicts || []), ...localIgnoreCheck.missing);
@@ -759,14 +752,12 @@ export function applyPlan(plan) {
   for (const change of plan.changes) if ((before.get(change.path) ? hash(before.get(change.path)) : null) !== change.beforeHash) fail('E_CHANGED', `File changed after planning: ${change.path}`);
   for (const [path, content] of before) if (content) write(target, `${backup}/${path}`, content, beforeModes.get(path));
   const applied = [], removedDirectories = [];
-  let untracked = false;
   const assertOriginal = path => {
     const file = safePath(target, path), info = stat(file), bytes = before.get(path);
     if (bytes === null ? info !== null : !info?.isFile() || !readFileSync(file).equals(bytes) || (info.mode & 0o777) !== beforeModes.get(path)) fail('E_CHANGED', `File changed before writing: ${path}`);
   };
   try {
     for (const change of plan.changes) assertOriginal(change.path);
-    if (plan.untrack?.paths.length) { applyUntrack(plan.untrack); untracked = true; }
     for (const change of plan.changes) {
       assertOriginal(change.path);
       const file = safePath(target, change.path);
@@ -806,7 +797,7 @@ export function applyPlan(plan) {
     const changesFallback = plan.changes.some(change => change.path === '.gitignore');
     // Metadata is committed last; its writer rolls back partial writes itself.
     const ignored = applyLocalIgnore(changesFallback ? planLocalIgnore(target, { outputs: plan.ownedOutputs }) : plan.localIgnore);
-    return { changed: Boolean(plan.changes.length || ignored.changed || untracked), backup: [...before.values()].some(Boolean) ? backup : null };
+    return { changed: Boolean(plan.changes.length || ignored.changed), backup: [...before.values()].some(Boolean) ? backup : null };
   } catch (error) {
     const rollbackErrors = [], preserved = [];
     for (const removed of [...removedDirectories].sort((a, b) => a.path.length - b.path.length)) {
@@ -847,7 +838,6 @@ export function applyPlan(plan) {
     if (preserved.length) {
       try { error.rollbackPreservedPaths = preserved; } catch { /* Preserve a exceção original. */ }
     }
-    if (untracked) try { restoreUntrack(plan.untrack); } catch (failure) { rollbackErrors.push(failure); }
     if (rollbackErrors.length) throw Object.assign(new AggregateError([error, ...rollbackErrors], `${error.message}; rollback incompleto: ${rollbackErrors.map(failure => failure.message).join('; ')}`, { cause: error }), { code: error.code || 'E_OPERATION' });
     throw error;
   }

@@ -38,16 +38,14 @@ Após a instalação, depende somente de Node e do hub local, sem o pacote npm.
 Ele respeita os clientes escolhidos, sem recriar os desmarcados. Para trocar
 a seleção, use `agentdevkit agents <lista>`; não edite o manifesto gerado.
 
-Os derivados ficam locais: catálogos, manifesto, estado e apontamentos são
-excluídos pelo Git. O bloco em `.git/info/exclude` preserva regras próprias;
-sem Git, informa que a proteção fica pendente até `git init` e sincronização.
-Somente arquivos integralmente gerados são excluídos; pastas de clientes podem
-conter arquivos humanos versionados. Conteúdo próprio não é desindexado pela
-presença de um bloco gerenciado.
+O bloco local em `.git/info/exclude` ignora as pastas de clientes por padrão;
+sem Git, a proteção fica pendente até `git init` e sincronização. Para incluir
+uma pasta, use uma exceção literal no `.gitignore` da raiz, como `!/.claude/`.
+Isso também vale para `.github` e `.vscode`, que podem conter arquivos humanos.
+Arquivos já rastreados e o índice não são alterados automaticamente.
 Entradas novas usam os templates; hashes em `state/derived.json` permitem
 atualizar arquivos gerados e blocos separadamente, preservando alterações humanas.
-`--check` também acusa derivados ainda rastreados; não altera o índice.
+`--check` somente verifica; não altera o índice.
 Apontamentos obsoletos podem ser removidos quando a propriedade é comprovada;
 arquivos e pastas próprios, inclusive os adicionais dentro do mesmo recurso,
-devem permanecer. Na CLI, confira `untrackedPaths` antes de aplicar: saídas
-geradas comprovadas podem deixar de ser rastreadas, sem excluir seus bytes.
+devem permanecer.

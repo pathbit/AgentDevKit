@@ -1,4 +1,5 @@
 # BEGIN AGENT IGNORE
+# Pastas irmas: templates/gitignore/local.ignore e .git/info/exclude.
 # Derivados locais
 /catalog.json
 /skills.json

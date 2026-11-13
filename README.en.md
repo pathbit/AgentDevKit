@@ -13,7 +13,7 @@ Organize work with coding agents, from planning to verification. Keep skills,
 rules, commands and agent profiles in `.pbai4devs`; the kit generates the
 references each client can discover. Code lives in `src/`, product tests in
 `tests/`, and shared agent resources in `.pbai4devs/`. Generated client
-folders, entrypoints and preferences stay local and untracked.
+folders are ignored locally by default; projects can opt in to tracking them.
 See the [supported clients][clients].
 
 ## Start in your project

@@ -17,7 +17,7 @@ function fixture(t) {
   return { root, put, git };
 }
 
-test('ignore proprio cobre derivados e artefatos sem esconder instrucoes humanas', t => {
+test('ignore local cobre clientes; opt-in preserva instrucoes, indice e privacidade', t => {
   const { root, put, git } = fixture(t);
   assert.equal(git('init', '--quiet').status, 0);
   put('.claude/skills/minha-skill/SKILL.md', '# Minha skill\n');
@@ -27,18 +27,28 @@ test('ignore proprio cobre derivados e artefatos sem esconder instrucoes humanas
   applyLocalIgnore(planLocalIgnore(root, { outputs }));
   assert.equal(checkLocalIgnore(planLocalIgnore(root, { outputs })).ok, true);
   for (const path of [...outputs, '.agent-tests/result.json', '.PLAYWRIGHT-MCP/report.txt', '.claude/auth.json', '.claude/settings.local.json', '.claude/.LOCAL/cache', '.claude/nested/CREDENTIALS.JSON']) assert.equal(git('check-ignore', '--no-index', path).status, 0, path);
-  for (const path of ['.claude/skills/minha-skill/SKILL.md', '.claude/settings.json', '.agents/agents/meu-agente.md', '.claude/.env.example', 'src/auth.json']) assert.equal(git('check-ignore', '--no-index', path).status, 1, path);
+  for (const path of ['.claude/skills/minha-skill/SKILL.md', '.claude/settings.json', '.agents/agents/meu-agente.md', '.claude/.env.example']) assert.equal(git('check-ignore', '--no-index', path).status, 0, path);
+  assert.equal(git('check-ignore', '--no-index', 'src/auth.json').status, 1);
+  put('.gitignore', '!/.claude/\n!/.agents/\n');
+  applyLocalIgnore(planLocalIgnore(root, { outputs }));
+  for (const path of ['.claude/skills/minha-skill/SKILL.md', '.claude/settings.json', '.agents/agents/meu-agente.md', '.claude/.env.example']) assert.equal(git('check-ignore', '--no-index', path).status, 1, path);
+  for (const path of ['.claude/auth.json', '.claude/settings.local.json', '.claude/.LOCAL/cache']) assert.equal(git('check-ignore', '--no-index', path).status, 0, path);
   assert.equal(git('ls-files', '--stage', '-z').stdout, index);
 });
 
-test('migracao retira somente nosso ignore de pasta inteira', t => {
-  const { root, git } = fixture(t);
+test('migracao preserva regras humanas e permite opt-in de pasta inteira', t => {
+  const { root, put, git } = fixture(t);
   assert.equal(git('init', '--quiet').status, 0);
   const original = planLocalIgnore(root, { outputs: ['.claude/skills/kit/SKILL.md'] });
   writeFileSync(join(root, '.git/info/exclude'), `# Regra humana\nminha-pasta/\n${original.first}\n/.claude/\n${original.last}\n`);
   applyLocalIgnore(planLocalIgnore(root, { outputs: ['.claude/skills/kit/SKILL.md'] }));
-  assert.equal(git('check-ignore', '.claude/settings.json').status, 1);
+  assert.equal(git('check-ignore', '.claude/settings.json').status, 0);
   assert.equal(git('check-ignore', '.claude/skills/kit/SKILL.md').status, 0);
+  assert.ok(readFileSync(join(root, '.git/info/exclude'), 'utf8').startsWith('# Regra humana\nminha-pasta/\n'));
+  put('.gitignore', '!/.claude/\n');
+  applyLocalIgnore(planLocalIgnore(root, { outputs: ['.claude/skills/kit/SKILL.md'] }));
+  assert.equal(git('check-ignore', '.claude/settings.json').status, 1);
+  assert.equal(git('check-ignore', '.claude/skills/kit/SKILL.md').status, 1);
   assert.ok(readFileSync(join(root, '.git/info/exclude'), 'utf8').startsWith('# Regra humana\nminha-pasta/\n'));
 });
 
@@ -56,6 +66,7 @@ test('projeto aninhado preserva exemplos publicos e isola regras privadas', t =>
   const { root, put, git } = fixture(t);
   assert.equal(git('init', '--quiet').status, 0);
   const nested = join(root, 'packages/example');
+  put('packages/example/.gitignore', '!/.claude/\n');
   put('packages/example/.claude/.env.example', 'TOKEN=\n');
   put('packages/example/.claude/.env', 'private fixture\n');
   applyLocalIgnore(planLocalIgnore(nested, { outputs: ['.claude/skills/kit/SKILL.md'] }));

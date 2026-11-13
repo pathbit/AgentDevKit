@@ -332,26 +332,6 @@ function ambiguousExceptions(root, location, clientRoots, artifacts) {
   return conflicts;
 }
 
-function foreignHiddenClients(plan) {
-  if (!plan.location) return [];
-  const content = localRead(plan.location.exclude) || '', ranges = [];
-  let start = null;
-  content.split(/\r?\n/).forEach((line, index) => {
-    const begin = line.match(/^# BEGIN AGENTDEVKIT LOCAL ([a-f0-9]{16})$/);
-    const end = line.match(/^# END AGENTDEVKIT LOCAL ([a-f0-9]{16})$/);
-    if (begin) start = { id: begin[1], line: index + 1 };
-    else if (end && start?.id === end[1]) { ranges.push({ ...start, end: index + 1 }); start = null; }
-  });
-  const probes = plan.clientRoots.filter(path => { const item = localStat(join(plan.root, path)); return !item || item.isDirectory() && !item.isSymbolicLink(); }).map(path => `${path}/.agentdevkit-human-probe.md`);
-  if (!probes.length) return [];
-  const { paths, matches } = ignoreMatches(plan.location, probes);
-  return paths.flatMap((path, index) => {
-    const match = matches.get(path);
-    if (!match || match.pattern.startsWith('!') || resolve(plan.location.top, match.source) !== plan.location.exclude) return [];
-    return ranges.some(range => `# BEGIN AGENTDEVKIT LOCAL ${range.id}` !== plan.first && match.line >= range.line && match.line <= range.end) ? [probes[index]] : [];
-  });
-}
-
 function localIgnoreSource(location, source) {
   const path = resolve(location.top, source);
   if (path === location.exclude) return true;
@@ -368,6 +348,21 @@ function ignoreMatches(location, probes) {
   const values = result.stdout.split('\0'), matches = new Map();
   for (let index = 0; index + 3 < values.length; index += 4) matches.set(values[index + 3], { source: values[index], line: Number(values[index + 1]), pattern: values[index + 2] });
   return { paths, matches };
+}
+
+// A nested .gitignore cannot reopen a project hidden by an ignored ancestor.
+// Detect this before claiming that its client exceptions are effective.
+function ignoredProjectAncestors(location) {
+  if (!location.prefix) return [];
+  const segments = location.prefix.split('/');
+  const paths = segments.map((_part, index) => segments.slice(0, index + 1).join('/'));
+  const result = gitCommand(location.top, ['check-ignore', '--verbose', '--no-index', '--stdin', '-z'], `${paths.join('\0')}\0`);
+  if (result.error || ![0, 1].includes(result.status)) throw new Error(result.error?.message || result.stderr || 'Falha ao conferir ancestrais Git.');
+  const values = result.stdout.split('\0'), ignored = [];
+  for (let index = 0; index + 3 < values.length; index += 4) {
+    if (!values[index + 2].startsWith('!')) ignored.push(`Ancestral Git ignorado: ${values[index + 3]}/; reabra-o no .gitignore do repositorio pai`);
+  }
+  return ignored;
 }
 
 function localRoot(value) {
@@ -387,15 +382,17 @@ export function planLocalIgnore(root, { outputs = [], templateRoot } = {}) {
   const artifacts = artifactPolicy(templateFile);
   if (template.split('{{OUTPUTS}}').length !== 2) throw new Error('local.ignore exige um unico {{OUTPUTS}}.');
   if (template.split('{{ROOTS}}').length > 2) throw new Error('local.ignore permite um unico {{ROOTS}}.');
-  // A client directory can also contain human instructions and settings. Only
-  // whole files owned by the kit belong in the local output exclusion list.
-  const roots = [];
+  // Client roots are ignored locally. Projects can explicitly opt in to a
+  // complete client with a literal negation in their own root .gitignore.
   const localPolicy = join(templateRoot || root, '.pbai4devs/templates/clients/ADAPTERS.json');
   const policy = JSON.parse(readFileSync(checkedLocalPath(localStat(localPolicy) ? localPolicy : fileURLToPath(new URL('../../templates/clients/ADAPTERS.json', import.meta.url))), 'utf8'));
   const clientRoots = [...new Set(policy.adapters.flatMap(adapter => [adapter.root, ...(adapter.extraRoots || [])]))];
   if (clientRoots.some(path => typeof path !== 'string' || !/^\.[a-z0-9][a-z0-9-]*$/.test(path) || ['.git', '.pbai4devs', '.agent-tests'].includes(path))) throw new Error('Raiz de cliente invalida para exclusao.');
+  const roots = [...clientRoots];
   const privateClients = privateClientPolicy(templateFile, clientRoots);
-  const paths = [...new Set([...outputs.map(checkedOutput), ...template.split(/\r?\n/).filter(line => line.startsWith('/')).map(line => checkedOutput(line.slice(1)))])].sort();
+  const outputPaths = [...new Set(outputs.map(checkedOutput))];
+  const paths = [...new Set([...outputPaths, ...template.split(/\r?\n/).filter(line => line.startsWith('/')).map(line => checkedOutput(line.slice(1)))])]
+    .filter(path => !roots.some(client => path === client || path.startsWith(`${client}/`))).sort();
   const info = gitCommand(resolved.parent, ['rev-parse', '--show-toplevel', '--git-path', 'info/exclude']);
   let location = null;
   if (info.status === 0) {
@@ -412,6 +409,19 @@ export function planLocalIgnore(root, { outputs = [], templateRoot } = {}) {
     throw new Error(`Nao foi possivel localizar Git: ${info.error?.message || info.stderr}`);
   }
   const id = createHash('sha256').update(root).digest('hex').slice(0, 16);
+  const projectIgnore = join(root, '.gitignore'), projectIgnoreStat = localStat(projectIgnore);
+  const literalExceptions = projectIgnoreStat?.isFile() && !projectIgnoreStat.isSymbolicLink()
+    ? new Set(readFileSync(projectIgnore, 'utf8').replace(/^\uFEFF/, '').split(/\r?\n/)) : new Set();
+  const requestedRoots = location ? roots.filter(client => literalExceptions.has(`!/${client}/`) || literalExceptions.has(`!${client}/`)) : [];
+  const optCandidates = requestedRoots.filter(client => safeIgnoreProbe(root, `${client}/.agentdevkit-opt-in-probe`));
+  // A later rule or an ancestor can override a literal negation. Consult Git
+  // before accepting it, including when the client folder does not yet exist.
+  const optProbes = optCandidates.map(client => `${client}/.agentdevkit-opt-in-probe`);
+  const optMatches = location && optProbes.length ? ignoreMatches(location, optProbes) : { paths: [], matches: new Map() };
+  const optedRoots = optCandidates.filter((_client, index) => {
+    const match = optMatches.matches.get(optMatches.paths[index]);
+    return !match || match.pattern.startsWith('!');
+  });
   const first = `# BEGIN AGENTDEVKIT LOCAL ${id}`, last = `# END AGENTDEVKIT LOCAL ${id}`;
   const fixed = template.replace('{{ROOTS}}', roots.map(path => `/${path}/`).join('\n')).replace('{{OUTPUTS}}', paths.filter(path => !roots.some(root => path === root || path.startsWith(root + '/'))).map(path => `/${escapePattern(path)}`).join('\n'))
     + '\n# Estado privado dos clientes\n' + privateClients.rules.join('\n') + '\n'
@@ -424,10 +434,9 @@ export function planLocalIgnore(root, { outputs = [], templateRoot } = {}) {
   const target = location?.exclude;
   const before = target ? localRead(target) : null, after = target ? localBlock(before, first, last, body) : null;
   const edits = before === after ? [] : [{ path: target, before, after, beforeMode: localMode(target) }];
-  const probes = [...paths, ...rootProbes(root, roots)];
+  const probes = [...paths, ...rootProbes(root, roots.filter(client => !optedRoots.includes(client)))];
   const existingPrivate = privateClients.probes.filter(path => localStat(join(root, path.split('/')[0]))?.isDirectory() && safeIgnoreProbe(root, path));
   const artifactPaths = [...new Set([...artifactProbes(root, artifacts), ...existingPrivate, ...(location ? [...visibleArtifactProbes(root, location, artifacts), ...visiblePrivateProbes(root, location, clientRoots)] : [])])];
-  const wanted = new Set(probes.map(path => location?.prefix ? `${location.prefix}/${path}` : path));
   if (location && !before?.includes(first)) {
     const ignored = ignoreMatches(location, [...probes, ...artifactPaths].filter(path => safeIgnoreProbe(root, path)));
     if (ignored.paths.every(path => { const match = ignored.matches.get(path); return match && !match.pattern.startsWith('!') && localIgnoreSource(location, match.source); })) edits.length = 0;
@@ -436,14 +445,16 @@ export function planLocalIgnore(root, { outputs = [], templateRoot } = {}) {
   const tracked = location ? gitCommand(location.top, ['ls-files', '-z']).stdout.split('\0').filter(path => {
     if (!path.startsWith(prefix)) return false;
     const local = path.slice(prefix.length);
-    return wanted.has(path) || artifactPath(local, artifacts) || clientRoots.includes(local.split('/')[0]) && isGeneratedOutput(local);
+    // Git ignore never untracks existing files. Report private data and test
+    // artifacts, but don't flag legitimate already-tracked project content.
+    return artifactPath(local, artifacts) || clientRoots.includes(local.split('/')[0]) && isGeneratedOutput(local);
   }).map(path => path.slice(prefix.length)) : [];
-  return { root, status: location ? 'git' : 'no-git', location, paths, roots, clientRoots, artifactPatterns: artifacts, artifactProbes: artifactPaths, privateProbes: privateClients.probes, edits, trackedOutputs: tracked, first, last };
+  return { root, status: location ? 'git' : 'no-git', location, paths, outputPaths, roots, requestedRoots, optedRoots, clientRoots, artifactPatterns: artifacts, artifactProbes: artifactPaths, privateProbes: privateClients.probes, edits, trackedOutputs: tracked, first, last };
 }
 
 export function checkLocalIgnore(plan, { replacedBlocks = [] } = {}) {
   const missing = [];
-  if (plan.location) missing.push(...ambiguousExceptions(plan.root, plan.location, plan.clientRoots || [], plan.artifactPatterns || []), ...foreignHiddenClients(plan));
+  if (plan.location) missing.push(...((plan.requestedRoots || []).length ? ignoredProjectAncestors(plan.location) : []), ...ambiguousExceptions(plan.root, plan.location, plan.clientRoots || [], plan.artifactPatterns || []));
   const replacements = replacedBlocks.map(item => {
     const path = canonicalExisting(checkedLocalPath(resolve(item.path))), inside = relative(localRoot(plan.root).root, path);
     if (isAbsolute(inside) || inside === '..' || inside.startsWith(`..${sep}`) || !Number.isInteger(item.firstLine) || !Number.isInteger(item.lastLine) || item.firstLine < 1 || item.lastLine < item.firstLine || !/^[a-f0-9]{64}$/.test(item.sha256)) throw new Error('Faixa de ignore gerenciado invalida.');
@@ -456,9 +467,9 @@ export function checkLocalIgnore(plan, { replacedBlocks = [] } = {}) {
     return { ...item, path };
   });
   if (plan.location && (plan.paths.length || plan.artifactProbes?.length)) {
-    missing.push(...plan.paths.filter(path => !safeIgnoreProbe(plan.root, path)));
+    missing.push(...new Set([...plan.paths, ...(plan.outputPaths || [])].filter(path => !safeIgnoreProbe(plan.root, path))));
     const privateProbes = (plan.privateProbes || []).filter(path => localStat(join(plan.root, path.split('/')[0]))?.isDirectory() && safeIgnoreProbe(plan.root, path));
-    const probes = [...new Set([...plan.paths, ...rootProbes(plan.root, plan.roots || []), ...(plan.artifactProbes || []), ...privateProbes,
+    const probes = [...new Set([...plan.paths, ...rootProbes(plan.root, (plan.roots || []).filter(client => !(plan.optedRoots || []).includes(client))), ...(plan.artifactProbes || []), ...privateProbes,
       ...(plan.artifactPatterns ? visibleArtifactProbes(plan.root, plan.location, plan.artifactPatterns) : []),
       ...visiblePrivateProbes(plan.root, plan.location, plan.clientRoots || [])])].filter(path => safeIgnoreProbe(plan.root, path));
     const { paths: relativePaths, matches } = ignoreMatches(plan.location, probes);
@@ -481,12 +492,13 @@ export function assertLocalIgnoreUnchanged(plan) {
   }
 }
 
-function atomicLocalWrite(path, content, mode, published) {
+function atomicLocalWrite(path, content, mode, published, beforePublish) {
   const temporary = `${path}.agentdevkit-${randomUUID()}`;
   try {
     writeFileSync(temporary, content, { flag: 'wx' });
     if (mode !== null && mode !== undefined) chmodSync(temporary, mode);
     const writtenMode = localMode(temporary);
+    beforePublish?.();
     renameSync(temporary, path);
     published?.(writtenMode);
   } finally { rmSync(temporary, { force: true }); }
@@ -500,7 +512,10 @@ export function applyLocalIgnore(plan) {
   try {
     for (const edit of plan.edits) {
       mkdirSync(dirname(edit.path), { recursive: true });
-      atomicLocalWrite(edit.path, edit.after, edit.beforeMode, mode => written.push({ edit, mode }));
+      atomicLocalWrite(edit.path, edit.after, edit.beforeMode, mode => written.push({ edit, mode }), () => {
+        checkedLocalPath(edit.path);
+        if (localRead(edit.path) !== edit.before || localMode(edit.path) !== edit.beforeMode) throw new Error(`Exclusao alterada antes de publicar; conteudo preservado: ${edit.path}`);
+      });
     }
     const verified = checkLocalIgnore({ ...plan, edits: [], trackedOutputs: [] });
     if (verified.missing.length) throw new Error(`Regras humanas reabrem derivados locais: ${verified.missing.join(', ')}`);
@@ -509,7 +524,12 @@ export function applyLocalIgnore(plan) {
     for (const { edit, mode } of written.reverse()) {
       try {
         if (localRead(edit.path) !== edit.after || localMode(edit.path) !== mode) continue;
-        if (edit.before === null) rmSync(edit.path, { force: true }); else atomicLocalWrite(edit.path, edit.before, edit.beforeMode);
+        const checkPublished = () => {
+          checkedLocalPath(edit.path);
+          if (localRead(edit.path) !== edit.after || localMode(edit.path) !== mode) throw new Error(`Exclusao alterada durante rollback; conteudo preservado: ${edit.path}`);
+        };
+        if (edit.before === null) { checkPublished(); rmSync(edit.path, { force: true }); }
+        else atomicLocalWrite(edit.path, edit.before, edit.beforeMode, undefined, checkPublished);
       } catch (failure) { rollbackErrors.push(failure); }
     }
     if (rollbackErrors.length) throw new AggregateError([error, ...rollbackErrors], `${error.message}; rollback incompleto: ${rollbackErrors.map(failure => failure.message).join('; ')}`, { cause: error });

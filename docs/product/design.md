@@ -60,13 +60,13 @@ bloco exigem revisão e não autorizam sobrescrever o arquivo com `--force`.
 Arquivos novos e integralmente gerados continuam com propriedade integral.
 Comandos TOML recebem a referência no valor de `prompt`, preservando as demais
 chaves. Configurações nativas fora desse escopo permanecem sob controle humano.
-Nunca é possível ignorar somente um trecho de arquivo no Git: arquivos mistos
-não entram nas exclusões do kit. Veja a [spec de integração][additive].
+Nunca é possível ignorar somente um trecho de arquivo no Git. Veja a
+[spec de integração][additive].
 
-Saídas identificadas são excluídas localmente do versionamento. O Git local
-usa `info/exclude`; fora de um repositório, a proteção fica no `.gitignore`
-da raiz. A política vem dos templates, não de listas copiadas por cliente.
-Os arquivos humanos de `.github` e `.vscode` continuam versionáveis.
+O Git usa `info/exclude` para ignorar localmente pastas de clientes, inclusive
+seus arquivos humanos ainda não rastreados. Exceções literais no `.gitignore`
+da raiz permitem versioná-las. Arquivos já rastreados e o índice permanecem;
+sem Git, a proteção fica pendente. A política vem dos templates.
 
 O estado registra versão, escolha e propriedade local. Índices e manifesto
 podem ser reconstruídos. Downloads, credenciais e relatórios ficam fora do

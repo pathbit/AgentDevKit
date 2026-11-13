@@ -164,8 +164,9 @@ não devem ser versionados. Verifique com `git status` e `git check-ignore -v
 retira automaticamente do Git; revise a remoção do índice sem apagar dados.
 
 O `.gitignore` do hub não controla pastas irmãs. Confira a proteção local
-gerada pelo kit, incluindo `info/exclude` nos repositórios Git. Preserve
-configurações humanas em `.github` e `.vscode` ao migrar arquivos antigos.
+gerada pelo kit em `info/exclude`. Para versionar configurações humanas novas
+em `.github` ou `.vscode`, reabra a pasta com `!/.github/` ou `!/.vscode/`
+no `.gitignore` da raiz. Confira as regras com `git check-ignore -v`.
 
 Para pedir ajuda, inclua SO/arquitetura, versões de Node/npm/AgentDevKit,
 comando executado, código de saída e trecho relevante do JSON, sem segredos.

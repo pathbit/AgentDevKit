@@ -375,19 +375,36 @@ function ignoreFixture(t) {
   return context;
 }
 
-test('fontes novas permanecem elegíveis e derivados locais ficam fora do índice', t => {
+test('fontes permanecem elegíveis e pastas de clientes aceitam opt-in explícito', t => {
   const { root, file } = ignoreFixture(t);
   const outputs = ['.github/skills/generated/SKILL.md', '.vscode/.gitignore', '.github/.gitignore'];
-  applyLocalIgnore(planLocalIgnore(root, { outputs }));
-  const sources = ['src/new.mjs', 'bin/new.mjs', 'tests/new.test.mjs', 'scripts/release/new.mjs', '.github/workflows/own.yml', '.github/ISSUE_TEMPLATE/bug.yml', '.github/skills/human/SKILL.md', '.vscode/settings.json'];
+  const sources = ['src/new.mjs', 'bin/new.mjs', 'tests/new.test.mjs', 'scripts/release/new.mjs'];
+  const clients = ['.github/workflows/own.yml', '.github/ISSUE_TEMPLATE/bug.yml', '.github/skills/human/SKILL.md', '.vscode/settings.json'];
   const generated = [...outputs, '.pbai4devs/catalog.json', '.pbai4devs/skills.json', '.pbai4devs/espelhos.conf', '.pbai4devs/state/agentdevkit.json'];
-  for (const path of [...sources, ...generated]) file(path, 'fixture\n');
+  for (const path of [...sources, ...clients, ...generated.filter(path => !path.endsWith('/.gitignore'))]) file(path, 'fixture\n');
+  file('.github/auth.json', 'credencial local\n');
+  file('.vscode/logs/session.log', 'artefato local\n');
+  assert.equal(git(root, ['add', '--', clients[0], sources[0]]).status, 0);
+  const index = git(root, ['ls-files', '--stage', '-z']).stdout;
+  applyLocalIgnore(planLocalIgnore(root, { outputs }));
   assert.deepEqual(ignoredPaths(root, sources), []);
+  assert.deepEqual(new Set(ignoredPaths(root, clients)), new Set(clients));
   assert.deepEqual(new Set(ignoredPaths(root, generated)), new Set(generated));
+  assert.equal(git(root, ['ls-files', '--stage', '-z']).stdout, index);
+  for (const path of clients) assert.equal(readFileSync(join(root, path), 'utf8'), 'fixture\n', path);
+
+  const exceptions = '!/.github/\n!/.vscode/\n';
+  file('.gitignore', exceptions);
+  applyLocalIgnore(planLocalIgnore(root, { outputs }));
+  assert.equal(readFileSync(join(root, '.gitignore'), 'utf8'), exceptions);
+  assert.equal(git(root, ['ls-files', '--stage', '-z']).stdout, index);
+  assert.deepEqual(ignoredPaths(root, clients), []);
+  const privateFiles = ['.github/auth.json', '.vscode/logs/session.log'];
+  assert.deepEqual(new Set(ignoredPaths(root, privateFiles)), new Set(privateFiles));
   assert.equal(git(root, ['add', '--all']).status, 0);
   const tracked = git(root, ['ls-files', '-z']).stdout.split('\0');
-  for (const path of sources) assert.ok(tracked.includes(path), path);
-  for (const path of generated) assert.equal(tracked.includes(path), false, path);
+  for (const path of [...sources, ...clients, ...outputs]) assert.ok(tracked.includes(path), path);
+  for (const path of [...generated.filter(path => !outputs.includes(path)), ...privateFiles]) assert.equal(tracked.includes(path), false, path);
 });
 
 test('ignores locais cobrem resultados em qualquer caixa sem bloquear fixtures', t => {

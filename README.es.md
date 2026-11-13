@@ -13,8 +13,8 @@ Organiza el trabajo con agentes de código, desde la planificación hasta la
 verificación. Mantén skills, reglas, comandos y perfiles en `.pbai4devs`;
 el kit genera las referencias de cada [cliente compatible][clients].
 El código vive en `src/`, las pruebas del producto en `tests/` y los recursos
-compartidos en `.pbai4devs/`. Las carpetas, entradas y preferencias generadas
-son locales y no se versionan.
+compartidos en `.pbai4devs/`. Las carpetas de clientes se ignoran localmente
+por defecto; cada proyecto puede elegir versionarlas.
 
 ## Empezar en tu proyecto
 

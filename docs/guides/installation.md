@@ -87,7 +87,7 @@ O próximo passo é [preparar as ferramentas](prerequisites.md#depois-de-instala
 | Conteúdo | Tratamento |
 | --- | --- |
 | `.pbai4devs` com recursos e templates | Fonte compartilhada versionável. |
-| Skills, regras e comandos nos clientes | Apontamentos locais gerados. |
+| Recursos nos clientes | Apontamentos locais; pastas ignoradas por padrão. |
 | Entradas da raiz criadas pelo kit | Arquivos locais gerados. |
 | Índices, manifesto e seleção pessoal | Derivados locais ignorados. |
 | Código, documentos e configurações humanas | Preservados. |
@@ -102,12 +102,31 @@ identifica a licença dos recursos do AgentDevKit, sem redefinir a do projeto.
 
 ## Git e migração
 
-Um `.gitignore` dentro de `.pbai4devs` só controla essa árvore. Para os
-apontamentos externos, o kit gera exclusões locais do Git, sem ignorar
-workflows, formulários de issues ou configurações humanas em `.github`.
-O kit não cria nem altera o `.gitignore` da raiz. Sem Git, a exclusão local
-fica pendente; execute `git init` e `npx @pathbit/agentdevkit sync` antes de
-usar `git add`. No GitHub Packages, use o prefixo de registry da instalação.
+Um `.gitignore` dentro de `.pbai4devs` só controla essa árvore: `../` não
+alcança pastas irmãs. O kit gera regras em `.git/info/exclude` para ignorar
+por padrão as pastas dos clientes, sem alterar o `.gitignore` da raiz.
+Essas regras são locais, não acompanham o clone; execute `init` ou `sync`
+em cada clone com Git inicializado, antes de usar `git add`. Sem Git, a
+exclusão fica pendente até `git init` e sincronização.
+Worktrees do mesmo repositório podem compartilhar esse arquivo de exclusões.
+
+Para versionar uma pasta de cliente, o projeto pode acrescentar uma exceção
+literal ao seu próprio `.gitignore` da raiz, por exemplo:
+
+```gitignore
+!/.claude/
+!/.github/
+```
+
+A exceção da raiz tem precedência sobre `.git/info/exclude`; regras de um
+`.gitignore` mais profundo continuam valendo. Não use `!/.claude/**`: um
+curinga amplo pode reabrir credenciais e artefatos que devem ficar locais.
+O diagnóstico informa exceções que exponham esses arquivos.
+
+O padrão também oculta arquivos humanos ainda não rastreados nas pastas dos
+clientes. Em especial, `.github` pode conter workflows, formulários de issues
+e outras configurações do projeto; use `!/.github/` se precisar versioná-los.
+O mesmo cuidado vale para `.vscode` e configurações próprias de outros agentes.
 
 O bloco local também protege `.agent-tests`, `tmp`, `temp`, `.playwright*`
 e relatórios de testes, inclusive com letras maiúsculas e em subpastas.
@@ -119,15 +138,10 @@ de existir um arquivo correspondente. Examine a regra indicada no diagnóstico.
 Nomes próprios de artefatos e arquivos existentes também são conferidos;
 a validação fica restrita ao projeto e aos ignores de seus ancestrais.
 
-Arquivos já rastreados exigem migração do índice: apenas saídas identificadas
-do kit podem deixar de ser rastreadas, preservando seus bytes no disco.
-O plano informa esses caminhos em `untrackedPaths` antes de aplicar; examine-os
-e preserve alterações preparadas da equipe. `--dry-run` e `sync --check` não
-alteram o índice.
-Artefatos já rastreados são informados por `doctor` e `sync --check` para
-revisão; não são removidos automaticamente do índice.
-Revise o plano e os conflitos em um projeto existente; use `--dry-run` antes
-de aplicar. Conteúdo humano não deve ser classificado como saída do gerador.
+Ignorar uma pasta não retira arquivos já rastreados do índice. O kit preserva
+o índice, inclusive alterações preparadas; para mudar o rastreamento, o projeto
+decide a ação Git. `--dry-run` e `sync --check` também não alteram o índice.
+Revise o plano e os conflitos antes de aplicar em um projeto existente.
 
 ## Atualizar e escolher agentes
 
@@ -137,9 +151,9 @@ continua válida; `agents` consulta e `agents codex,claude` altera a seleção.
 necessárias para outro cliente, como `.agents` para Codex e Antigravity.
 
 Confira `update --dry-run --json` antes de atualizar um projeto existente.
-Revise arquivos criados, atualizados e removidos, conflitos, `preserved` e
-eventuais alterações do índice. `sync` usa as fontes já instaladas e não baixa
-uma nova versão. Consulte a [referência da CLI](cli.md) para todos os comandos.
+Revise arquivos criados, atualizados e removidos, conflitos e `preserved`.
+`sync` usa as fontes já instaladas e não baixa uma nova versão. Consulte a
+[referência da CLI](cli.md) para todos os comandos.
 
 Skills e outros recursos próprios podem coexistir com os do kit. Um nome
 igual não comprova propriedade: conteúdo humano e arquivos adicionais não
@@ -165,8 +179,8 @@ dele: atualizações alteram somente a contribuição do kit. Nomes de entradas
 com caixa diferente são reaproveitados quando há uma única opção.
 Comandos Gemini mantêm a referência dentro do valor `prompt` em TOML válido.
 Configurações que não são instruções não recebem uma mesclagem arbitrária.
-Arquivos mistos permanecem sob controle do Git do projeto; somente derivados
-integralmente gerados pelo kit recebem exclusão local.
+Arquivos mistos não passam a pertencer ao kit. Sua visibilidade para o Git
+também depende da regra aplicada à pasta do cliente.
 
 Links simbólicos preexistentes são preservados sem atravessá-los. O campo
 `preserved` informa rotas que continuam sob controle do projeto. Um formato

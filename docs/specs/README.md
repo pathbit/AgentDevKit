@@ -25,6 +25,7 @@ description: Incrementos verificáveis do AgentDevKit.
 - [Integração sem substituição][additive]: acréscimos em arquivos existentes.
 - [Compatibilidade com projetos reais][oss]: projetos públicos e exemplos reproduzíveis.
 - [Ignore do projeto](project-ignore/SPEC.md): preservar o arquivo da raiz.
+- [Ignore de clientes](client-ignore/SPEC.md): padrão local e exceções do projeto.
 
 Cada incremento vincula requisitos, critérios, testes e evidências locais.
 

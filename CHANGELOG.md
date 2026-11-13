@@ -4,6 +4,11 @@ description: Alterações verificáveis por versão do AgentDevKit.
 
 # Changelog
 
+## 0.0.19 — 2026-11-13
+
+- Pastas dos clientes são ignoradas localmente por padrão, com exceções do projeto.
+- O índice Git e os arquivos já rastreados permanecem intactos.
+
 ## 0.0.18 — 2026-11-13
 
 - Sincronização preserva recursos próprios, colisões e alterações humanas.

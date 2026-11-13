@@ -85,10 +85,12 @@ comando agêntico [sincronizar](../../.pbai4devs/commands/sincronizar/COMMAND.md
 orienta executar o script com `--force`; ele não é o mesmo que `sync` da CLI.
 
 No Git, o kit preserva o `.gitignore` da raiz e pode atualizar
-`.git/info/exclude`. Se o plano indicar `untrackedPaths`, a operação pode
-retirar do índice saídas comprovadamente geradas, mantendo seus arquivos no
-disco. Confira a lista: `--dry-run` e `sync --check` não alteram o índice.
-Backups locais ficam em `.agent-tests/` e não substituem o histórico Git.
+`.git/info/exclude` para ocultar por padrão as pastas dos clientes. O projeto
+pode reabri-las no `.gitignore` da raiz, como em `!/.claude/`; consulte as
+[exceções e seus efeitos](installation.md#git-e-migração). Os comandos não
+retiram arquivos já rastreados do índice, e `untrackedPaths` permanece vazio
+por compatibilidade. Backups locais ficam em `.agent-tests/` e não substituem
+o histórico Git.
 
 ## Ferramentas
 

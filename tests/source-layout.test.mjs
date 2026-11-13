@@ -178,26 +178,29 @@ test('licença própria dentro do hub é preservada inclusive com force', t => {
   assert.equal(read(root, licensePath), hubLicense);
 });
 
-test('update desindexa somente derivados comprovados e mantém fontes e estágio humano', t => {
+test('update mantém derivados, fontes e estágio humano no índice', t => {
   const root = fixture(t); cli(root, ['init', '--agents', 'claude']);
   const derived = '.claude/skills/configurar-projeto/SKILL.md';
   const source = '.pbai4devs/skills/projeto/configurar-projeto/SKILL.md';
   write(root, 'human.txt', 'staged human');
   git(root, 'add', '-f', derived, source, statePath, 'CLAUDE.md', 'human.txt');
-  const stagedHuman = git(root, 'show', ':human.txt');
-  cli(root, ['update']);
+  const stagedHuman = git(root, 'show', ':human.txt'), index = git(root, 'ls-files', '--stage', '-z');
+  assert.deepEqual(cli(root, ['update']).untrackedPaths, []);
   const tracked = git(root, 'ls-files', '-z').split('\0');
   assert.ok(tracked.includes(source)); assert.ok(tracked.includes('human.txt'));
-  for (const path of [derived, statePath, 'CLAUDE.md']) { assert.equal(tracked.includes(path), false); assert.ok(existsSync(join(root, path))); }
+  for (const path of [derived, statePath, 'CLAUDE.md']) { assert.equal(tracked.includes(path), true); assert.ok(existsSync(join(root, path))); }
+  assert.equal(git(root, 'ls-files', '--stage', '-z'), index);
   assert.equal(git(root, 'show', ':human.txt'), stagedHuman);
 });
 
-test('conteúdo humano diferente no índice bloqueia desindexação mesmo com force', t => {
+test('conteúdo humano diferente no índice permanece intacto mesmo com force', t => {
   const root = fixture(t); cli(root, ['init', '--agents', 'claude']);
   const derived = '.claude/skills/configurar-projeto/SKILL.md', original = read(root, derived);
   write(root, derived, 'human staged version'); git(root, 'add', '-f', derived); write(root, derived, original);
-  const result = cli(root, ['update', '--force'], 1);
-  assert.ok(result.conflicts.includes(derived)); assert.equal(git(root, 'show', `:${derived}`), 'human staged version');
+  const index = git(root, 'ls-files', '--stage', '-z');
+  assert.deepEqual(cli(root, ['update', '--force']).untrackedPaths, []);
+  assert.equal(git(root, 'ls-files', '--stage', '-z'), index);
+  assert.equal(git(root, 'show', `:${derived}`), 'human staged version');
   assert.equal(read(root, derived), original);
 });
 
@@ -222,7 +225,7 @@ test('mudança concorrente nas exclusões falha antes de alterar arquivos ou ín
   const exclude = resolve(root, git(root, 'rev-parse', '--git-path', 'info/exclude').trim());
   writeFileSync(exclude, '# exclusion before planning\n');
   const preview = cli(root, ['update', '--dry-run']);
-  assert.deepEqual(preview.untrackedPaths, [derived]);
+  assert.deepEqual(preview.untrackedPaths, []);
   assert.equal(preview.localIgnore.status, 'git');
   assert.deepEqual(preview.localIgnore.edits, [{ path: exclude, action: 'update' }]);
   const plan = planInstallation({ target: root, mode: 'update' });
@@ -237,7 +240,7 @@ test('mudança concorrente nas exclusões falha antes de alterar arquivos ou ín
   assert.equal(readFileSync(exclude, 'utf8'), '# concurrent human exclusion\n');
 });
 
-test('falha após desindexação restaura arquivos e só as entradas removidas do índice', t => {
+test('falha de escrita restaura arquivos e preserva entradas staged concorrentes', t => {
   const root = fixture(t); cli(root, ['init', '--agents', 'claude']);
   const derived = '.claude/skills/configurar-projeto/SKILL.md';
   write(root, 'human.txt', 'human staged before operation\n');
@@ -248,13 +251,13 @@ test('falha após desindexação restaura arquivos e só as entradas removidas d
   assert.ok(plan.changes.length > 0);
   plan.changes.push({ path: 'fault.txt', action: 'create', beforeHash: null,
     get content() {
-      assert.equal(git(root, 'ls-files', derived), '');
+      assert.equal(git(root, 'ls-files', derived), `${derived}\n`);
       write(root, 'concurrent.txt', 'concurrent staged content\n');
       git(root, 'add', '-f', 'concurrent.txt');
-      throw new Error('injected write failure after untrack');
+      throw new Error('injected write failure');
     },
   });
-  assert.throws(() => applyPlan(plan), /injected write failure after untrack/);
+  assert.throws(() => applyPlan(plan), /injected write failure/);
   for (const [path, content] of snapshots) {
     if (content === null) assert.equal(existsSync(join(root, path)), false, path);
     else assert.equal(read(root, path), content, path);
@@ -264,7 +267,7 @@ test('falha após desindexação restaura arquivos e só as entradas removidas d
   assert.equal(git(root, 'show', ':concurrent.txt'), 'concurrent staged content\n');
 });
 
-test('falha de escrita de exclusão sem alterações de arquivos também restaura o índice', t => {
+test('falha de escrita de exclusão sem alterações de arquivos preserva o índice', t => {
   const root = fixture(t); cli(root, ['init', '--agents', 'claude']);
   const derived = '.claude/skills/configurar-projeto/SKILL.md';
   git(root, 'add', '-f', derived);
@@ -272,7 +275,7 @@ test('falha de escrita de exclusão sem alterações de arquivos também restaur
   writeFileSync(exclude, '# initial exclusion\n');
   const plan = planInstallation({ target: root, mode: 'update' });
   assert.equal(plan.changes.length, 0);
-  assert.ok(plan.untrack.paths.includes(derived));
+  assert.deepEqual(plan.untrack.paths, []);
   const index = git(root, 'ls-files', '--stage', '-z');
   Object.defineProperty(plan.localIgnore.edits[0], 'after', { get() { throw new Error('injected exclusion write failure'); } });
   assert.throws(() => applyPlan(plan), /injected exclusion write failure/);
