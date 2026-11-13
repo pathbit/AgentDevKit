@@ -36,6 +36,10 @@ jobs:
             label: Windows / Node 24 / projects
           - os: windows-latest
             node: 24
+            profile: portable-migration
+            label: Windows / Node 24 / migration and preservation
+          - os: windows-latest
+            node: 24
             profile: portable-resources
             label: Windows / Node 24 / resources
           - os: windows-latest
@@ -50,6 +54,10 @@ jobs:
             node: 24
             profile: portable-projects
             label: macOS / Node 24 / projects
+          - os: macos-15-intel
+            node: 24
+            profile: portable-migration
+            label: macOS / Node 24 / migration and preservation
           - os: macos-15-intel
             node: 24
             profile: portable-resources

@@ -85,6 +85,8 @@ test('check Git distingue fontes de saídas e não gera arquivos no checkout', t
 });
 
 test('perfis portáteis cobrem cada suíte uma vez e o comando local executa todos', () => {
+  assert.deepEqual(portableProfiles['portable-projects'], ['client-selection.test.mjs', 'native-coexistence.test.mjs', 'oss-preservation.test.mjs']);
+  assert.deepEqual(portableProfiles['portable-migration'], ['state-migration.test.mjs', 'preservation-lifecycle.test.mjs']);
   const expected = ['adapters.test.mjs', 'cli.test.mjs', 'client-selection.test.mjs', 'development-ecosystem.test.mjs', 'documentation-compatibility.test.mjs', 'github-packages.test.mjs', 'native-coexistence.test.mjs', 'next.test.mjs', 'managed-content.test.mjs', 'managed-content-helper.test.mjs', 'managed-toml.test.mjs', 'managed-preservation.test.mjs', 'security-ecosystem.test.mjs', 'source-layout.test.mjs', 'state-migration.test.mjs', 'preservation-lifecycle.test.mjs', 'file-modes.test.mjs', 'oss-preservation.test.mjs', 'release-pipeline.test.mjs', 'release-resilience.test.mjs'].sort();
   const combined = Object.values(portableProfiles).flat();
   assert.equal(new Set(combined).size, combined.length);
