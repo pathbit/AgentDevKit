@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { delimiter, dirname, join, resolve, win32 } from 'node:path';
+import { delimiter, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { npmExecutable, releaseRoot, sha256 } from './assets.mjs';
@@ -88,13 +88,6 @@ function supportsOidc(value) {
   if (!match) return false;
   const [major, minor, patch] = match.slice(1).map(Number);
   return major > 11 || major === 11 && (minor > 5 || minor === 5 && patch >= 1);
-}
-
-export function npmExecExecutable(path, platform = process.platform) {
-  if (typeof path !== 'string' || !path || /[\x00-\x1f]/.test(path)) invalid('Caminho do Node inválido para npm exec.');
-  if (platform !== 'win32') return path;
-  if (!win32.isAbsolute(path) || /["%!?&|<>^()]/.test(path)) invalid('Caminho do Node contém caracteres incompatíveis com npm exec no Windows.');
-  return `"${path}"`;
 }
 
 function npmCacheReader(npm) {
@@ -225,8 +218,8 @@ export async function publishRegistryPackage({ directory, resolution, env = proc
     // Functional commands above run only from the archive checked by digest.
     const namedEnvironment = { ...consumerEnvironment, npm_config_offline: 'false', npm_config_prefer_offline: 'true', npm_config_prefer_online: 'false' };
     const named = await invoke(['exec', '--yes', '--ignore-scripts', `--registry=${registry}`,
-      `--package=${spec}`, '--', npmExecExecutable(process.execPath), '--version'], { cwd: probe, cache, environment: namedEnvironment });
-    if (named.trim() !== process.version) invalid('A prova do seletor npm não executou o Node esperado.');
+      `--package=${spec}`, '--', 'echo', 'AGENTDEVKIT_SELECTOR_OK'], { cwd: probe, cache, environment: namedEnvironment });
+    if (named.trim() !== 'AGENTDEVKIT_SELECTOR_OK') invalid('A prova do seletor npm não confirmou a instalação.');
     return { packageName, version: resolution.version, registry, url,
       status: existing ? 'skipped' : 'published', sha256: verified.manifest.sha256,
       integrity, authentication: target === 'github' && existing ? 'github-token' : authentication,
