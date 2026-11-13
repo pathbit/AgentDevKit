@@ -33,7 +33,7 @@ jobs:
   resolve:
     name: Find the approved commit artifact
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     permissions:
       contents: read
       actions: read
@@ -59,7 +59,7 @@ jobs:
     name: Publish the verified bytes
     needs: resolve
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     permissions:
       contents: write
       actions: read

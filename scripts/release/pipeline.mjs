@@ -36,7 +36,39 @@ export function guardSourceOnlyGit(root, environment = process.env) {
 export function executeNode(root, args, env = process.env) {
   const childEnv = { ...env }; delete childEnv.NODE_TEST_CONTEXT;
   const result = spawnSync(process.execPath, args, { cwd: root, env: childEnv, stdio: 'inherit', timeout: 900000, shell: false, windowsHide: true });
-  if (result.error || result.status !== 0) throw new Error(result.error?.message || `Falha (${result.status}): node ${args.join(' ')}`);
+  if (result.error || result.status !== 0) {
+    throw new Error(`Falha: node ${args.join(' ')}; status=${result.status}; sinal=${result.signal || 'none'}; erro=${result.error?.code || 'none'}${result.error?.message ? ` (${result.error.message})` : ''}`);
+  }
+}
+
+// Each named profile is an independent CI job; `portable` runs all locally.
+export const portableProfiles = Object.freeze({
+  'portable-cli': Object.freeze(['cli.test.mjs', 'adapters.test.mjs', 'development-ecosystem.test.mjs', 'security-ecosystem.test.mjs', 'file-modes.test.mjs']),
+  'portable-projects': Object.freeze(['client-selection.test.mjs', 'native-coexistence.test.mjs', 'oss-preservation.test.mjs']),
+  'portable-resources': Object.freeze(['documentation-compatibility.test.mjs', 'github-packages.test.mjs', 'next.test.mjs', 'managed-content.test.mjs', 'managed-content-helper.test.mjs', 'managed-toml.test.mjs', 'managed-preservation.test.mjs', 'release-pipeline.test.mjs', 'release-resilience.test.mjs']),
+  'portable-layout': Object.freeze(['source-layout.test.mjs']),
+});
+
+// Publication and the exact tarball are built and verified once on Linux.
+export const fullOnlyTests = Object.freeze({
+  'cli-pack.test.mjs': 'Valida o npm pack real gerado pelo perfil completo.',
+  'distribution.test.mjs': 'Testa o tarball exato produzido e entregue pelo perfil completo.',
+  'release-assets.test.mjs': 'Testa a montagem do artefato de release, executada no Linux.',
+});
+
+export function verifyPortableClassification(files, { profiles = portableProfiles, fullOnly = fullOnlyTests } = {}) {
+  const portable = Object.values(profiles).flat();
+  const excluded = Object.keys(fullOnly);
+  const classified = [...portable, ...excluded];
+  if (new Set(classified).size !== classified.length) throw new Error('Suíte portátil duplicada ou também excluída.');
+  if (Object.values(fullOnly).some(reason => typeof reason !== 'string' || !reason.trim())) throw new Error('Suíte exclusiva do perfil completo sem justificativa.');
+  const discovered = files.filter(name => name.endsWith('.test.mjs')).sort();
+  const actual = classified.toSorted();
+  if (discovered.length !== actual.length || discovered.some((name, index) => name !== actual[index])) {
+    const missing = discovered.filter(name => !classified.includes(name));
+    const obsolete = classified.filter(name => !discovered.includes(name));
+    throw new Error(`Classificação das suítes desatualizada; faltam: ${missing.join(', ') || 'nenhuma'}; ausentes: ${obsolete.join(', ') || 'nenhuma'}.`);
+  }
 }
 
 export function markVerified(directory, env = process.env) {
@@ -56,6 +88,9 @@ export function runPipeline(profile, { root = releaseRoot, env = process.env, ru
   const hub = '.pbai4devs';
   const tests = 'tests';
   const test = (names, options = []) => run(root, ['--test', ...options, ...names.map(name => `${tests}/${name}`)], env);
+  if (profile === 'full' || profile === 'portable' || Object.hasOwn(portableProfiles, profile)) {
+    verifyPortableClassification(readdirSync(join(root, tests)));
+  }
   const check = () => {
     guardSourceOnlyGit(root, env);
     run(root, [`${hub}/scripts/verificar-recursos/SCRIPT.mjs`, '--source-only'], env);
@@ -73,8 +108,15 @@ export function runPipeline(profile, { root = releaseRoot, env = process.env, ru
     return;
   }
   if (profile === 'portable') {
-    test(['adapters.test.mjs', 'cli.test.mjs', 'client-selection.test.mjs', 'development-ecosystem.test.mjs', 'documentation-compatibility.test.mjs', 'github-packages.test.mjs', 'native-coexistence.test.mjs', 'next.test.mjs', 'managed-content.test.mjs', 'managed-content-helper.test.mjs', 'managed-toml.test.mjs', 'managed-preservation.test.mjs'], ['--test-concurrency=2']);
-    for (const name of ['preparar-ferramentas', 'sincronizar-agentes', 'verificar-recursos', 'executar-script', 'inspecionar-projeto']) run(root, ['--test', `${hub}/scripts/${name}/tests/TEST.mjs`], env);
+    for (const name of Object.keys(portableProfiles)) runPipeline(name, { root, env, run });
+    return;
+  }
+  if (Object.hasOwn(portableProfiles, profile)) {
+    console.log(`Perfil ${profile}: ${portableProfiles[profile].join(', ')}`);
+    test(portableProfiles[profile], ['--test-concurrency=2']);
+    if (profile === 'portable-resources') {
+      for (const name of ['preparar-ferramentas', 'sincronizar-agentes', 'verificar-recursos', 'executar-script', 'inspecionar-projeto']) run(root, ['--test', `${hub}/scripts/${name}/tests/TEST.mjs`], env);
+    }
     return;
   }
   if (profile === 'smoke') {
@@ -82,7 +124,7 @@ export function runPipeline(profile, { root = releaseRoot, env = process.env, ru
     for (const flag of ['--help', '--version']) run(root, ['bin/agentdevkit.mjs', flag], env);
     return;
   }
-  throw new Error('Use full, portable, smoke ou check.');
+  throw new Error(`Use full, portable, ${Object.keys(portableProfiles).join(', ')}, smoke ou check.`);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

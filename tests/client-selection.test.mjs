@@ -20,8 +20,8 @@ const read = (root, path) => readFileSync(join(root, path), 'utf8');
 const state = root => JSON.parse(read(root, statePath));
 function put(root, path, value) { mkdirSync(dirname(join(root, path)), { recursive: true }); writeFileSync(join(root, path), value); }
 function cli(root, args, status = 0) {
-  const result = spawnSync(process.execPath, [bin, ...args, '--target', root, '--json'], { encoding: 'utf8', timeout: 90000 });
-  assert.equal(result.status, status, result.stdout + result.stderr); return JSON.parse(result.stdout);
+  const result = spawnSync(process.execPath, [bin, ...args, '--target', root, '--json'], { encoding: 'utf8', timeout: 180000 });
+  assert.equal(result.status, status, `agentdevkit ${args.join(' ')}: ${result.error?.stack || ''}\nsignal: ${result.signal || 'none'}\n${result.stdout || ''}${result.stderr || ''}`); return JSON.parse(result.stdout);
 }
 
 test('seleção valida aliases e entradas antes de escrever; consulta é somente leitura', t => {

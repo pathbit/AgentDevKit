@@ -1,11 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { npmExecutable, sha256 } from '../scripts/release/assets.mjs';
-import { guardSourceOnlyGit, markVerified, runPipeline } from '../scripts/release/pipeline.mjs';
+import { executeNode, guardSourceOnlyGit, markVerified, portableProfiles, runPipeline, verifyPortableClassification } from '../scripts/release/pipeline.mjs';
 import { assertApprovedSource, githubRequest, publishVerifiedPackage, releaseTag, resolveVerifiedPackage, verifyDistribution } from '../scripts/release/publish.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -84,12 +84,23 @@ test('check Git distingue fontes de saídas e não gera arquivos no checkout', t
   assert.ok(guardSourceOnlyGit(directory).files > 0);
 });
 
-test('perfis usam testes e executável da raiz sem ampliar a matriz', () => {
+test('perfis portáteis cobrem cada suíte uma vez e o comando local executa todos', () => {
+  const expected = ['adapters.test.mjs', 'cli.test.mjs', 'client-selection.test.mjs', 'development-ecosystem.test.mjs', 'documentation-compatibility.test.mjs', 'github-packages.test.mjs', 'native-coexistence.test.mjs', 'next.test.mjs', 'managed-content.test.mjs', 'managed-content-helper.test.mjs', 'managed-toml.test.mjs', 'managed-preservation.test.mjs', 'security-ecosystem.test.mjs', 'source-layout.test.mjs', 'file-modes.test.mjs', 'oss-preservation.test.mjs', 'release-pipeline.test.mjs', 'release-resilience.test.mjs'].sort();
+  const combined = Object.values(portableProfiles).flat();
+  assert.equal(new Set(combined).size, combined.length);
+  assert.deepEqual(combined.toSorted(), expected);
   const calls = [];
   const options = { root, run(_root, args) { calls.push(args); } };
+  for (const [profile, files] of Object.entries(portableProfiles)) {
+    const group = [];
+    runPipeline(profile, { root, run(_root, args) { group.push(args); } });
+    assert.deepEqual(group[0], ['--test', '--test-concurrency=2', ...files.map(file => `tests/${file}`)]);
+    assert.equal(group.length, profile === 'portable-resources' ? 6 : 1);
+    calls.push(...group);
+  }
+  const individual = calls.splice(0);
   runPipeline('portable', options);
-  assert.deepEqual(calls[0], ['--test', '--test-concurrency=2', 'tests/adapters.test.mjs', 'tests/cli.test.mjs', 'tests/client-selection.test.mjs', 'tests/development-ecosystem.test.mjs', 'tests/documentation-compatibility.test.mjs', 'tests/github-packages.test.mjs', 'tests/native-coexistence.test.mjs', 'tests/next.test.mjs', 'tests/managed-content.test.mjs', 'tests/managed-content-helper.test.mjs', 'tests/managed-toml.test.mjs', 'tests/managed-preservation.test.mjs']);
-  assert.equal(calls.length, 6);
+  assert.deepEqual(calls, individual);
   calls.length = 0;
   runPipeline('smoke', options);
   assert.deepEqual(calls, [
@@ -99,11 +110,38 @@ test('perfis usam testes e executável da raiz sem ampliar a matriz', () => {
   ]);
 });
 
-test('perfil portátil interrompe imediatamente ao falhar uma suíte', () => {
-  const calls = [];
-  const failure = new Error('falha real da suíte');
-  assert.throws(() => runPipeline('portable', { root, run(_root, args) { calls.push(args); throw failure; } }), error => error === failure);
-  assert.equal(calls.length, 1);
+test('classificação exige justificar cada suíte e detecta ausências e duplicatas', () => {
+  const files = readdirSync(join(root, 'tests'));
+  verifyPortableClassification(files);
+  assert.throws(() => verifyPortableClassification([...files, 'nova.test.mjs']), /faltam: nova\.test\.mjs/);
+  assert.throws(() => verifyPortableClassification(files.filter(file => file !== 'cli.test.mjs')), /ausentes: cli\.test\.mjs/);
+  assert.throws(() => verifyPortableClassification(['a.test.mjs'], { profiles: { a: ['a.test.mjs'], b: ['a.test.mjs'] }, fullOnly: {} }), /duplicada/);
+  assert.throws(() => verifyPortableClassification(['a.test.mjs'], { profiles: { a: [] }, fullOnly: { 'a.test.mjs': '' } }), /justificativa/);
+});
+
+test('matriz roda cada grupo portátil exatamente uma vez em cada SO e falhas bloqueiam o CI', () => {
+  const workflow = readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8');
+  assert.match(workflow, /fail-fast:\s*false/);
+  assert.doesNotMatch(workflow, /continue-on-error:/);
+  const rows = [...workflow.matchAll(/- os:\s*(\S+)\s+node:\s*(\d+)\s+profile:\s*(\S+)/g)].map(match => ({ os: match[1], node: match[2], profile: match[3] }));
+  for (const os of ['windows-latest', 'macos-15-intel']) {
+    assert.deepEqual(rows.filter(row => row.os === os && row.node === '24').map(row => row.profile).sort(), Object.keys(portableProfiles).sort());
+  }
+  assert.ok(rows.some(row => row.os === 'ubuntu-latest' && row.node === '24' && row.profile === 'full'));
+  assert.match(workflow, /if:\s*matrix\.profile == 'full'/);
+  for (const profile of ['portable', ...Object.keys(portableProfiles)]) {
+    const calls = [];
+    const failure = new Error('falha real da suíte');
+    assert.throws(() => runPipeline(profile, { root, run(_root, args) { calls.push(args); throw failure; } }), error => error === failure);
+    assert.equal(calls.length, 1);
+  }
+  let calls = 0;
+  assert.throws(() => runPipeline('portable', { root, run() { if (++calls === 2) throw new Error('segundo grupo falhou'); } }), /segundo grupo falhou/);
+  assert.equal(calls, 2);
+});
+
+test('executor informa status e sinal do processo que falhou', () => {
+  assert.throws(() => executeNode(root, ['-e', 'process.exit(7)']), /status=7; sinal=none; erro=none/);
 });
 
 test('seleção aguarda o CI correto e recusa origem de PR, fork, branch ou SHA diferentes', async () => {

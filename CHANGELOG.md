@@ -4,6 +4,12 @@ description: Alterações verificáveis por versão do AgentDevKit.
 
 # Changelog
 
+## 0.0.16 — 2026-11-13
+
+- Testes portáteis distribuídos entre jobs para Windows e macOS.
+- Diagnósticos de subprocessos e espera do CI melhorados para releases.
+- Instruções para recuperar o artefato da tentativa correta do CI.
+
 ## 0.0.15 — 2026-11-13
 
 - Especialistas e skills para arquitetura, backend, frontend, QA e performance.

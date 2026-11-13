@@ -25,8 +25,8 @@ function fixture(t) {
   git(root, 'init', '--quiet'); t.after(() => rmSync(root, { recursive: true, force: true })); return root;
 }
 function cli(root, args, status = 0) {
-  const result = spawnSync(process.execPath, [bin, ...args, '--target', root, '--json'], { encoding: 'utf8', timeout: 90000 });
-  assert.equal(result.status, status, result.stdout + result.stderr); return JSON.parse(result.stdout);
+  const result = spawnSync(process.execPath, [bin, ...args, '--target', root, '--json'], { encoding: 'utf8', timeout: 180000 });
+  assert.equal(result.status, status, `agentdevkit ${args.join(' ')}: ${result.error?.stack || ''}\nsignal: ${result.signal || 'none'}\n${result.stdout || ''}${result.stderr || ''}`); return JSON.parse(result.stdout);
 }
 
 test('doctor e sync check informam artefatos rastreados sem alterar o índice', t => {

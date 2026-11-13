@@ -39,9 +39,9 @@ function fixture(t) {
 function cli(root, args) {
   const result = spawnSync(process.execPath, [join(repository, 'bin/agentdevkit.mjs'), ...args, '--target', root, '--json'], {
     encoding: 'utf8',
-    timeout: 120000,
+    timeout: 180000,
   });
-  assert.equal(result.status, 0, `${result.error ?? ''}\n${result.stdout}\n${result.stderr}`);
+  assert.equal(result.status, 0, `agentdevkit ${args.join(' ')}: ${result.error?.stack || ''}\nsignal: ${result.signal || 'none'}\n${result.stdout || ''}${result.stderr || ''}`);
   const output = JSON.parse(result.stdout);
   assert.equal(output.ok, true, result.stdout);
   return output;

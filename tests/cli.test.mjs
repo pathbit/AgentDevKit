@@ -203,14 +203,14 @@ test('proximo passo em texto mostra a skill e a instrucao contextual', t => {
 
 test('saida humana resume alteracoes e limita o plano enquanto JSON permanece completo', t => {
   const root = fixture(t);
-  const preview = spawnSync(process.execPath, [bin, 'init', '--dry-run', '--yes', '--target', root], { encoding: 'utf8', timeout: 60000 });
-  assert.equal(preview.status, 0, preview.stdout + preview.stderr);
+  const preview = spawnSync(process.execPath, [bin, 'init', '--dry-run', '--yes', '--target', root], { encoding: 'utf8', timeout: 180000 });
+  assert.equal(preview.status, 0, `init --dry-run: ${preview.error?.stack || ''}\nsignal: ${preview.signal || 'none'}\n${preview.stdout || ''}${preview.stderr || ''}`);
   assert.match(preview.stdout, /Arquivos: \d+ criar, \d+ atualizar, 0 remover/);
   assert.match(preview.stdout, /use --json para o plano completo/);
   assert.equal(preview.stdout.split('\n').filter(line => /^  criar /.test(line)).length, 12);
   const json = cli(root, ['init', '--dry-run', '--yes']); assert.ok(json.plan.length > 12);
-  const installed = spawnSync(process.execPath, [bin, 'init', '--yes', '--target', root], { encoding: 'utf8', timeout: 60000 });
-  assert.equal(installed.status, 0, installed.stdout + installed.stderr);
+  const installed = spawnSync(process.execPath, [bin, 'init', '--yes', '--target', root], { encoding: 'utf8', timeout: 180000 });
+  assert.equal(installed.status, 0, `init: ${installed.error?.stack || ''}\nsignal: ${installed.signal || 'none'}\n${installed.stdout || ''}${installed.stderr || ''}`);
   assert.match(installed.stdout, /Arquivos: \d+ criar/);
   assert.match(installed.stdout, /\[ Próximo passo \]/);
   assert.equal(installed.stdout.split('\n').filter(line => /^  criar /.test(line)).length, 0);

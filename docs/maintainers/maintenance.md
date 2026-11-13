@@ -19,22 +19,26 @@ Resultados e capturas de verificação permanecem ignorados.
 
 ## Verificar sem desperdiçar CI
 
-O CI tem quatro perfis:
+O CI verifica Linux e distribui a portabilidade em grupos independentes:
 
 | Perfil | Responsabilidade |
 | --- | --- |
 | Linux / Node 24 | Fontes, produto, infraestrutura, lint e pacote real. |
-| Windows / Node 24 | Portabilidade da CLI, arquivos e runtime. |
-| macOS / Node 24 | Portabilidade da CLI, arquivos e runtime. |
+| Windows / Node 24 | CLI, projetos, recursos e layout em jobs separados. |
+| macOS / Node 24 | Os mesmos grupos de portabilidade em jobs separados. |
 | Linux / Node 26 | Smoke de compatibilidade. |
 
 O perfil macOS usa o runner padrão `macos-15-intel`. O label `macos-latest`
 usa ARM64 e pode ter filas diferentes; confira os [runners disponíveis][runners]
 antes de mudar a arquitetura. Provas locais devem informar a arquitetura usada.
 
-A distribuição real é testada uma vez no perfil completo. Os outros perfis
-validam seus riscos específicos. Execuções antigas da mesma referência podem
+A distribuição real é testada uma vez no perfil completo. Todos os grupos de
+Windows e macOS precisam passar para aprovar o CI. Cada grupo tem seu próprio
+log e limite, o que facilita identificar o teste que falhou. Execuções antigas
+da mesma referência podem
 ser canceladas quando substituídas, sem cancelar uma publicação em andamento.
+Novas suítes devem integrar um grupo portátil ou registrar uma justificativa
+explícita para executar somente no perfil completo.
 
 O workflow [Security tools smoke][security-ci] instala os três scanners com
 pins revisados em Linux, macOS e Windows. Depois analisa fixtures locais sem
@@ -81,7 +85,10 @@ Também envia o mesmo pacote ao [npm público e GitHub Packages](packages.md),
 confere a integridade nos dois destinos e testa versão, instalação, diagnóstico
 e sincronização. O consumo pelo npm é anônimo; pelo GitHub, autenticado.
 
-Se o artifact expirou, reexecute o CI original do push e depois a release.
+Se o artifact expirou ou um job do CI falhou, use **Re-run all jobs** no CI
+original do push e aguarde todos os jobs. **Re-run failed jobs** pode manter o
+pacote de uma tentativa anterior, que a release não aceita. Depois reexecute
+a release.
 Uma execução manual de CI serve para diagnóstico, mas não substitui essa
 procedência. Uma release existente não é sobrescrita.
 

@@ -55,8 +55,8 @@ test('instalacao leva o ecossistema de seguranca sem baixar scanners nem sobresc
   assert.match(help.stdout, /run|check|update-data/);
   await cli(root, ['doctor']);
   await cli(root, ['sync', '--check']);
-  const checked = spawnSync(process.execPath, [join(root, '.pbai4devs/scripts/verificar-recursos/SCRIPT.mjs')], { encoding: 'utf8', timeout: 60000 });
-  assert.equal(checked.status, 0, checked.stdout + checked.stderr);
+  const checked = spawnSync(process.execPath, [join(root, '.pbai4devs/scripts/verificar-recursos/SCRIPT.mjs')], { encoding: 'utf8', timeout: 180000 });
+  assert.equal(checked.status, 0, `verificar-recursos: ${checked.error?.stack || ''}\nsignal: ${checked.signal || 'none'}\n${checked.stdout || ''}${checked.stderr || ''}`);
   await cli(root, ['update']);
   assert.ok(readFileSync(join(root, custom), 'utf8').startsWith(own));
   assert.equal(existsSync(join(root, 'docs')), false, 'Guias do produto nao sao copiados ao consumidor.');

@@ -203,8 +203,8 @@ for (const mode of ['sync', 'deselect']) test(`recriação própria após remoç
   rmSync(join(root, 'AGENTS.md')); rmSync(join(root, native));
   assert.equal(synchronize({ root, output() {} }).exitCode, 0);
   assert.deepEqual(inspect(root).issues, []);
-  const check = spawnSync(process.execPath, [join(root, '.pbai4devs/scripts/verificar-recursos/SCRIPT.mjs')], { encoding: 'utf8', timeout: 60000 });
-  assert.equal(check.status, 0, check.stdout + check.stderr);
+  const check = spawnSync(process.execPath, [join(root, '.pbai4devs/scripts/verificar-recursos/SCRIPT.mjs')], { encoding: 'utf8', timeout: 180000 });
+  assert.equal(check.status, 0, `verificar-recursos: ${check.error?.stack || ''}\nsignal: ${check.signal || 'none'}\n${check.stdout || ''}${check.stderr || ''}`);
   const plan = planInstallation({ target: root, mode: mode === 'sync' ? 'sync' : 'agents', ...(mode === 'deselect' ? { clients: ['codex'] } : {}) });
   assert.equal(plan.canApply, true, JSON.stringify(plan.conflicts));
   await cli(root, mode === 'sync' ? ['sync'] : ['agents', 'codex']); await cli(root, ['doctor']);

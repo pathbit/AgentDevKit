@@ -21,10 +21,31 @@ function json(text) {
   try { return JSON.parse(text); } catch { return null; }
 }
 
+// Only fixed diagnostic values are emitted; npm output and exceptions may
+// contain credentials, paths or other private configuration.
+const diagnosticCodes = new Set([
+  'E401', 'E403', 'E404', 'E408', 'E409', 'E429', 'E500', 'E502', 'E503', 'E504',
+  'EACCES', 'EAGAIN', 'EAUTH', 'ECANCELED', 'ECONNREFUSED', 'ECONNRESET',
+  'ECONNABORTED', 'EEXIST', 'EHOSTUNREACH', 'EINTEGRITY', 'EINVALIDTAGNAME',
+  'EJSONPARSE', 'ENETUNREACH', 'ENOBUFS', 'ENOENT', 'ENOTFOUND', 'ENOMEM',
+  'ENOTCACHED', 'EOTP', 'EPERM', 'EPIPE',
+  'ERESOLVE', 'ETARGET', 'ETIMEDOUT', 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER',
+  'CERT_HAS_EXPIRED', 'SELF_SIGNED_CERT_IN_CHAIN', 'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
+]);
+const diagnosticSignals = new Set(['SIGHUP', 'SIGINT', 'SIGTERM', 'SIGKILL', 'SIGABRT']);
+
 function npmError(result) {
-  const error = json(result.stdout)?.error || json(result.stderr)?.error;
-  if (/^[A-Z][A-Z0-9_]+$/.test(error?.code || '')) return error.code;
-  return `${result.stdout || ''}\n${result.stderr || ''}`.match(/\bnpm (?:error|ERR!) code (E[A-Z0-9_]+)\b/)?.[1] || 'UNKNOWN';
+  const parsed = json(result.stdout)?.error || json(result.stderr)?.error;
+  const code = result.error?.code || parsed?.code
+    || `${result.stdout || ''}\n${result.stderr || ''}`.match(/\bnpm (?:error|ERR!) code (E[A-Z0-9_]+)\b/)?.[1];
+  return diagnosticCodes.has(code) ? code : 'UNKNOWN';
+}
+
+function npmFailure(result) {
+  const details = [];
+  if (diagnosticSignals.has(result.signal)) details.push(`sinal ${result.signal}`);
+  if (Number.isInteger(result.status) && result.status >= 0 && result.status <= 255) details.push(`saída ${result.status}`);
+  return `(${npmError(result)})${details.length ? ` [${details.join('; ')}]` : ''}`;
 }
 
 function sameIntegrity(value, expected) {
@@ -127,14 +148,16 @@ export async function publishRegistryPackage({ directory, resolution, env = proc
           cwd, env: cache ? { ...environment, npm_config_cache: cache } : environment,
           encoding: 'utf8', timeout: 180000, maxBuffer: 16 * 1024 * 1024, shell: false,
         });
-      } catch { invalid(`npm ${args[0]} não pôde ser executado.`); }
+      } catch (error) { invalid(`npm ${args[0]} não pôde ser executado ${npmFailure({ error, signal: error?.signal, status: error?.status })}.`); }
       if (!result || result.error || result.status !== 0) {
         const code = npmError(result || {});
         // A registry may expose metadata before the version is downloadable.
         // npm cache add reports ETARGET in that window; only retry that exact
         // operation, without treating other npm failures as propagation.
-        if (allowMissing && !result?.error && (code === 'E404' || code === 'ETARGET' && args[0] === 'cache' && args[1] === 'add')) return null;
-        invalid(`npm ${args[0]} falhou (${code}).`);
+        const exitedNormally = !result?.error && Number.isInteger(result?.status) && result.status > 0
+          && (result.signal === null || result.signal === undefined);
+        if (allowMissing && exitedNormally && (code === 'E404' || code === 'ETARGET' && args[0] === 'cache' && args[1] === 'add')) return null;
+        invalid(`npm ${args[0]} falhou ${npmFailure(result || {})}.`);
       }
       return result.stdout;
     };
