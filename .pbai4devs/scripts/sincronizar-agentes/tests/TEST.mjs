@@ -13,6 +13,7 @@ import './LOCAL_IGNORE.mjs';
 import './HUMAN_OWNERSHIP.mjs';
 import './COEXISTENCE.mjs';
 import './MANAGED_CONTENT.mjs';
+import './PRESERVATION.mjs';
 import { validateCatalog as validateExternalCatalog } from '../../gerenciar-skills-externas/SCRIPT.mjs';
 import { stateDirectory } from '../../lib/state-path.mjs';
 
@@ -140,7 +141,12 @@ test('sincroniza somente principais, preserva metadados e usa referências UTF-8
   assert.match(read(root, '.kimi-code/agents/revisor.md'), /tools: \[Read, Grep, Glob\]/);
   assert.ok(existsSync(join(root, '.claude/skills/projeto/demo/SKILL.md')));
   for (const client of ['.claude', '.opencode', '.github', '.codex', '.cursor', '.kimi-code', '.vscode', '.agents', '.agent', '.gemini']) {
-  for (const kind of ['templates', 'scripts', 'tools', 'external-skills', 'state', 'estado', 'tests', 'docs', 'adapters', 'extra', 'README.md', 'INSTRUCTIONS.md']) assert.equal(existsSync(join(root, client, kind)), false, `${client}/${kind}`);
+    for (const kind of ['templates', 'scripts', 'tools', 'external-skills', 'state', 'estado', 'tests', 'docs', 'adapters', 'extra', 'README.md', 'INSTRUCTIONS.md']) {
+      if (client === '.claude' && ['templates', 'scripts', 'tools', 'external-skills', 'state', 'tests', 'docs', 'adapters'].includes(kind)) {
+        assert.equal(existsSync(join(root, client, kind, 'demo/REFERENCE.md')), false);
+        assert.ok(existsSync(join(root, client, kind)), 'diretório sem prova de propriedade permanece');
+      } else assert.equal(existsSync(join(root, client, kind)), false, `${client}/${kind}`);
+    }
   }
   assert.deepEqual(JSON.parse(read(root, '.pbai4devs/agents.json')).entries, [{ path: '.pbai4devs/agents/revisor/AGENT.md' }]);
   assert.ok(JSON.parse(read(root, '.pbai4devs/skills.json')).entries.some(entry => entry.path === '.pbai4devs/skills/grupo com espaço/outro'));
@@ -441,7 +447,8 @@ test('atualiza fontes, adiciona clientes, remove recursos e migra agrupado para 
   rmSync(join(root, '.pbai4devs/rules/example/RULE.md'));
   write(root, '.pbai4devs/espelhos.conf', read(root, '.pbai4devs/espelhos.conf').replace('agente|.claude\n', 'agente|.claude|plano\n'));
   run(root);
-  assert.equal(existsSync(join(root, '.claude/skills/projeto')), false);
+  assert.equal(existsSync(join(root, '.claude/skills/projeto/demo/SKILL.md')), false);
+  assert.ok(existsSync(join(root, '.claude/skills/projeto')));
   assert.ok(existsSync(join(root, '.claude/skills/demo/SKILL.md')));
   assert.equal(existsSync(join(root, '.codex/rules/example.md')), false);
   assert.deepEqual(JSON.parse(read(root, '.pbai4devs/rules.json')).entries, []);
@@ -882,7 +889,8 @@ test('manifestos Antigravity acompanham skills, regras e agentes agrupados', t =
   rmSync(join(root, '.pbai4devs/skills/projeto/demo'), { recursive: true });
   run(root, { generateEntrypoints: true });
   assert.deepEqual(JSON.parse(read(root, '.agents/skills.json')).entries, [{ path: '.agents/skills/projeto/new-skill' }]);
-  assert.equal(existsSync(join(root, '.agents/skills/projeto/demo')), false);
+  assert.equal(existsSync(join(root, '.agents/skills/projeto/demo/SKILL.md')), false);
+  assert.ok(existsSync(join(root, '.agents/skills/projeto/demo')));
   assertCheckReadonly(root, { generateEntrypoints: true }, 0);
 });
 

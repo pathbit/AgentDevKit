@@ -4,6 +4,12 @@ description: Alterações verificáveis por versão do AgentDevKit.
 
 # Changelog
 
+## 0.0.18 — 2026-11-13
+
+- Sincronização preserva recursos próprios, colisões e alterações humanas.
+- Limpeza de recursos obsoletos exige comprovação de propriedade.
+- Comandos e efeitos sobre arquivos, índice e backups documentados.
+
 ## 0.0.17 — 2026-11-13
 
 - A pasta compartilhada de estado passa a se chamar `.pbai4devs/state`.

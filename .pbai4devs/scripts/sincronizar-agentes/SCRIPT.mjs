@@ -3,6 +3,7 @@
 import { chmodSync, cpSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, rmdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, posix, resolve } from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 import { requireNode, projectRoot, isMain } from '../lib/runtime.mjs';
 import { buildCatalog } from '../lib/catalog.mjs';
 import { resourcePath } from '../lib/resource-path.mjs';
@@ -10,7 +11,7 @@ import { adapterManifest, resolveAdapters } from '../lib/adapters.mjs';
 import { nativePathBoundary } from '../lib/native-paths.mjs';
 import { canonicalEntrypoint, resolveEntrypoint, entrypointReference, renderEntrypointImports, mergeManagedContent, stripManagedContent } from '../lib/managed-content.mjs';
 import { mergeTomlContent, stripTomlContent } from '../lib/managed-toml.mjs';
-import { mergeGitignore, validateIgnoreClients, renderClientIgnore, isGeneratedOutput, planLocalIgnore, applyLocalIgnore, checkLocalIgnore, assertLocalIgnoreUnchanged, ignoreBegin, ignoreEnd } from '../lib/gitignore.mjs';
+import { mergeGitignore, validateIgnoreClients, renderClientIgnore, isGeneratedOutput, planLocalIgnore, applyLocalIgnore, checkLocalIgnore, assertLocalIgnoreUnchanged, planUntrack, ignoreBegin, ignoreEnd } from '../lib/gitignore.mjs';
 import { stateDirectory } from '../lib/state-path.mjs';
 
 const marker = '<!-- gerado: sincronizar-agentes -->';
@@ -79,6 +80,28 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
   requireNode();
   root = realpathSync(resolve(root));
   const absolute = value => join(root, ...value.split('/'));
+  function assertGitReadableForChanges() {
+    // A project may be nested in a worktree; .git can be a file or directory.
+    // If that marker exists we must not treat an unavailable Git executable,
+    // an invalid repository or an unreadable index as a Git-free project.
+    let folder = root, found = false;
+    while (true) {
+      if (stat(join(folder, '.git'))) { found = true; break; }
+      const parent = dirname(folder);
+      if (parent === folder) break;
+      folder = parent;
+    }
+    if (!found) return false;
+    const env = { ...process.env };
+    for (const key of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_COMMON_DIR', 'GIT_INDEX_FILE']) delete env[key];
+    const probe = spawnSync('git', ['-C', root, 'rev-parse', '--is-inside-work-tree'], {
+      encoding: 'utf8', env, windowsHide: true, timeout: 20000,
+    });
+    if (probe.error || probe.status !== 0 || probe.stdout.trim() !== 'true') {
+      fail('Nao foi possivel consultar o Git deste projeto; sincronizacao bloqueada para preservar arquivos e indice.');
+    }
+    return true;
+  }
   function safe(value) {
     if (typeof value !== 'string' || !value || /^[A-Za-z]:/.test(value) || /[|\\\x00-\x1f\x7f]/.test(value) || value.split('/').some(part => !part || part === '.' || part === '..')) fail(`Caminho invalido: ${value}`);
     let current = root;
@@ -130,7 +153,6 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
     const recorded = recordedHash === digest;
     return isReference(text) && recorded;
   };
-  const onlyReferences = value => { const files = scan(value); return files.length > 0 && ![...preserved.keys()].some(path => path === value || path.startsWith(`${value}/`)) && files.every(file => /\.(md|mdc|toml)$/i.test(file) && referenceFile(file)); };
   const protectedPath = value => /^(workflows(?:\/|$)|settings\.json$|extensions\.json$)/.test(value.slice(value.indexOf('/') + 1).toLowerCase());
   const agents = new Map();
   const formats = new Map();
@@ -295,6 +317,7 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
   const remove = new Set();
   const backup = new Set();
   const conflicts = new Set();
+  const protectedConflicts = new Set();
   const expected = new Map();
   const managedBlocks = {};
   const generatedFiles = {};
@@ -307,17 +330,31 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
   function planRemove(value, custom = false) {
     safe(value);
     if (!managed(value) || protectedPath(value)) fail(`Limpeza fora dos espelhos ou caminho protegido: ${value}`);
+    // Directories, unowned files and edited references can contain project
+    // data even when --force is used. Only a recorded, unchanged reference
+    // may be removed; empty directories are never removed recursively.
+    if (!stat(safe(value))?.isFile() || !referenceFile(value)) {
+      remember(value, 'existing-file');
+      if (custom) { conflicts.add(value); protectedConflicts.add(value); }
+      return;
+    }
     remove.add(value);
     if (custom) backup.add(value);
   }
   function cleanScope(value) {
     if (preserveBoundary(value)) return;
-    if (!stat(safe(value))) return;
-    if (stat(safe(value)).isDirectory() && !scan(value).length) return;
-    if (Object.keys(priorBlocks).some(path => path === value || path.startsWith(value + '/'))) return;
-    if (onlyReferences(value)) planRemove(value);
-    else if (claimed(value)) remember(value, 'edited-generated-file');
-    else remember(value);
+    const info = stat(safe(value));
+    if (!info) return;
+    const files = info.isDirectory() ? scan(value) : [value];
+    if (info.isDirectory() && !files.length) { remember(value, 'existing-directory'); return; }
+    let hasHumanContent = false;
+    for (const file of files) {
+      if (expected.has(file) || priorBlocks[file] || protectedPath(file)) continue;
+      if (referenceFile(file)) planRemove(file);
+      else if (claimed(file)) { remember(file, 'edited-generated-file'); hasHumanContent = true; }
+      else { remember(file); hasHumanContent = true; }
+    }
+    if (hasHumanContent && info.isDirectory()) remember(value);
   }
   const registries = new Map();
   const discoveryOutputs = {};
@@ -551,6 +588,22 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
   const omittedRows = new Set([...legacy, ...missing.map(native => native.index)]);
   const finalConfig = rows.filter((row, index) => !omittedRows.has(index)).join('\n').replace(/\n*$/, '\n');
   const configChanged = !configExists || configText !== finalConfig;
+  // Every planned write/removal may cover a different staged version. Compare
+  // the worktree bytes with the index before touching any path, even in force
+  // mode, and repeat immediately before applying the transaction.
+  const affected = sorted([...removals, ...changed, ...registries.keys(), ...ignoreFiles.keys(), ...rootEntryChanges.map(([name]) => name), ...(configChanged ? [config] : [])]);
+  const emptyHash = createHash('sha256').update(Buffer.alloc(0)).digest('hex');
+  const affectedHashes = Object.fromEntries(affected.flatMap(value => {
+    const info = stat(safe(value));
+    if (info && !info.isFile()) return []; // A type conflict already blocks application.
+    return [[value, info ? createHash('sha256').update(readFileSync(absolute(value))).digest('hex') : emptyHash]];
+  }));
+  const hadGit = Object.keys(affectedHashes).length ? assertGitReadableForChanges() : false;
+  const affectedIndex = planUntrack(root, affectedHashes);
+  for (const path of affectedIndex.conflicts) {
+    conflicts.add(path);
+    remember(path, 'staged-content-preserved');
+  }
   function capture(value) {
     const file = safe(value), info = stat(file);
     if (!info) return null;
@@ -576,15 +629,15 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
     let parent = posix.dirname(value);
     while (parent !== '.') { if (stat(safe(parent))?.isDirectory()) originalDirectories.add(parent); parent = posix.dirname(parent); }
   }
-  const touched = new Set(), createdDirectories = new Set(), restoredDirectories = new Set();
-  const prunedDirectories = new Map();
-  let restoring = false;
+  const touched = new Set(), createdDirectories = new Set();
   const summary = { changed: changed.length + rootEntryChanges.length, stale: removals.length, conflicts: conflicts.size, missing: missing.length, legacy: legacy.length, registries: registries.size, gitignores: ignoreFiles.size, manifests: configExists ? 0 : 1, localIgnores: localStatus.changed + localStatus.missing.length + localStatus.trackedOutputs.length + (localStatus.status === 'no-git' ? 1 : 0) };
   const dirty = Object.values(summary).some(Boolean);
   output(`${summary.changed} desatualizadas; ${summary.stale} obsoletas; ${summary.conflicts} conflitos; ${summary.missing} origens nativas ausentes; ${summary.legacy} documentos antigos; ${summary.registries} indices derivados; ${summary.gitignores} gitignores; ${summary.localIgnores} exclusoes locais.`);
   if (localStatus.status === 'no-git') output('Git ausente: apos git init, execute a sincronizacao para proteger os arquivos locais.');
   const preservedPaths = sorted(preserved.keys()).map(path => preserved.get(path));
   if (check) return { ...summary, ownedOutputs, managedBlocks, preserved: preservedPaths, exitCode: dirty ? 1 : 0 };
+  if (affectedIndex.conflicts.length) fail(`Indice Git contem alteracoes proprias; arquivos preservados: ${sorted(affectedIndex.conflicts).join(', ')}`);
+  if (protectedConflicts.size) fail(`Conteudo proprio preservado; resolva a colisao antes de sincronizar: ${sorted(protectedConflicts).join(', ')}`);
   if (conflicts.size) fail(`Use --force para reconstruir somente os caminhos gerenciados: ${sorted(conflicts).join(', ')}`);
   if (localStatus.missing.length) fail(`Regras humanas reabrem derivados locais: ${localStatus.missing.join(', ')}`);
   if (localPlan) assertLocalIgnoreUnchanged(localPlan);
@@ -594,7 +647,6 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
     while (parent !== '.' && !stat(safe(parent))) { missing.push(parent); parent = posix.dirname(parent); }
     for (const directory of missing.reverse()) {
       mkdirSync(safe(directory)); createdDirectories.add(directory);
-      if (restoring) restoredDirectories.add(directory);
     }
   }
   function mutate(value, action, text) {
@@ -649,38 +701,25 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
   }
   try {
     if (localPlan) assertLocalIgnoreUnchanged(localPlan);
+    if (Object.keys(affectedHashes).length) {
+      if (!assertGitReadableForChanges() && hadGit) fail('Git deixou de estar disponivel antes da sincronizacao; arquivos preservados.');
+      const current = planUntrack(root, affectedHashes);
+      if (current.conflicts.length || current.index !== affectedIndex.index) fail('Indice Git mudou antes da sincronizacao; conteudo preservado.');
+    }
     for (const value of removals) mutate(value, () => rmSync(safe(value), { recursive: true, force: true }), null);
     for (const value of changed) mutate(value, () => atomic(value, expected.get(value)), expected.get(value));
     for (const [value, text] of registries) mutate(value, () => atomic(value, text), text);
     for (const [value, text] of ignoreFiles) mutate(value, () => atomic(value, text), text);
     for (const [value, text] of rootEntryChanges) mutate(value, () => atomic(value, text), text);
     if (configChanged) mutate(config, () => atomic(config, finalConfig), finalConfig);
-    // Só os ancestrais de remoções conhecidas são candidatos à limpeza.
-    for (const value of removals) {
-      let parent = posix.dirname(value);
-      const boundary = value.split('/').slice(0, 2).join('/');
-      while (parent.startsWith(boundary + '/') || parent === boundary) {
-        const info = stat(safe(parent));
-        if (!info?.isDirectory() || readdirSync(absolute(parent)).length) break;
-        rmdirSync(safe(parent)); prunedDirectories.set(parent, info.mode & 0o777); parent = posix.dirname(parent);
-      }
-    }
+    // Directory ownership is not recorded: keep even empty parent directories.
     if (localPlan) applyLocalIgnore(localPlan);
   } catch (error) {
     const failures = [];
-    restoring = true;
     for (const value of [...touched].reverse()) {
       try {
         if (fingerprint(capture(value)) !== currentHashes.get(value)) fail(`Mudanca concorrente preservada: ${value}`);
         restore(value, originals.get(value));
-      } catch (failure) { failures.push(failure); }
-    }
-    for (const [directory, mode] of [...prunedDirectories].sort(([left], [right]) => right.length - left.length)) {
-      try {
-        if (!stat(safe(directory))) ensureDirectory(`${directory}/.restore-probe`);
-        const info = stat(safe(directory));
-        if (!info?.isDirectory() || !restoredDirectories.has(directory) && (info.mode & 0o777) !== mode) fail(`Diretorio concorrente preservado: ${directory}`);
-        chmodSync(safe(directory), mode);
       } catch (failure) { failures.push(failure); }
     }
     for (const directory of sorted(createdDirectories).sort((a, b) => b.length - a.length)) {

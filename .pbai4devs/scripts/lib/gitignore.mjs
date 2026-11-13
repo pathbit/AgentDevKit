@@ -98,10 +98,33 @@ function localBlock(current, first, last, body) {
   return text.slice(0, start) + block + text.slice(finish);
 }
 
-function gitCommand(root, args, input) {
+function gitCommand(root, args, input, encoding = 'utf8') {
   const env = { ...process.env };
   for (const key of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_COMMON_DIR', 'GIT_INDEX_FILE']) delete env[key];
-  return spawnSync('git', [...(['ls-files', 'rm'].includes(args[0]) ? ['--literal-pathspecs'] : []), '-C', root, ...args], { input, encoding: 'utf8', env, windowsHide: true, maxBuffer: 16 * 1024 * 1024 });
+  return spawnSync('git', [...(['ls-files', 'rm'].includes(args[0]) ? ['--literal-pathspecs'] : []), '-C', root, ...args], { input, encoding, env, windowsHide: true, maxBuffer: 16 * 1024 * 1024 });
+}
+
+// Compare exact bytes first. Only accept Git's plain text CRLF conversion when
+// effective attributes prove it applies and no custom transformation can run.
+// This deliberately does not invoke hash-object or repository-defined filters.
+export function indexContentMatches(root, path, working, indexed) {
+  if (working.equals(indexed)) return true;
+  const attributes = gitCommand(root, ['check-attr', '-z', 'text', 'eol', 'filter', 'working-tree-encoding', 'ident', '--', path]);
+  if (attributes.status !== 0) return false;
+  const parts = attributes.stdout.split('\0');
+  const values = {};
+  for (let i = 0; i + 2 < parts.length; i += 3) values[parts[i + 1]] = parts[i + 2];
+  const absent = value => value === 'unspecified' || value === 'unset';
+  if (!absent(values.filter) || !absent(values['working-tree-encoding']) || !absent(values.ident) || values.text === 'unset') return false;
+  const config = gitCommand(root, ['config', '--bool', 'core.autocrlf']);
+  if (config.status !== 0 && config.status !== 1) return false;
+  const textEnabled = values.text === 'set' || values.text === 'auto' || ['lf', 'crlf'].includes(values.eol) || config.status === 0 && config.stdout.trim() === 'true';
+  if (!textEnabled || !working.includes(13) || /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(working.toString('latin1'))) return false;
+  try {
+    const text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(working);
+    if (text.replaceAll('\r\n', '').includes('\r')) return false;
+    return Buffer.from(text.replaceAll('\r\n', '\n')).equals(indexed);
+  } catch { return false; }
 }
 
 function checkedOutput(path) {
@@ -502,25 +525,39 @@ export function planUntrack(root, expectedHashes = {}) {
   if (!candidates.length || !localStat(root)) return { root, paths: [], hashes: {}, index: '', conflicts: [] };
   const result = gitCommand(root, ['ls-files', '--stage', '-z']);
   if (result.status !== 0) {
-    if (result.error?.code === 'ENOENT' || /not a git repository/i.test(result.stderr || '')) return { root, paths: [], hashes: {}, index: '', conflicts: [] };
+    if (result.error?.code === 'ENOENT' || /not a git repository/i.test(result.stderr || '')) {
+      // Fail closed if a repository exists even when Git cannot be launched.
+      let directory = root;
+      while (true) {
+        if (localStat(join(directory, '.git'))) throw new Error('Nao foi possivel consultar o Git deste projeto; indice e arquivos preservados.');
+        const parent = dirname(directory);
+        if (parent === directory) break;
+        directory = parent;
+      }
+      return { root, paths: [], hashes: {}, index: '', conflicts: [] };
+    }
     throw new Error(result.error?.message || result.stderr || 'Falha ao ler indice Git.');
   }
   const conflicts = [];
   const records = result.stdout.split('\0').filter(Boolean);
-  const wanted = new Set(candidates);
+  const folded = new Map();
+  for (const path of candidates) folded.set(path.toLowerCase(), [...(folded.get(path.toLowerCase()) || []), path]);
   const matches = new Map();
   for (const record of records) {
     const position = record.indexOf('\t'), path = record.slice(position + 1);
-    if (position < 0 || !wanted.has(path)) continue;
-    matches.set(path, [...(matches.get(path) || []), record]);
+    if (position < 0) continue;
+    for (const candidate of folded.get(path.toLowerCase()) || []) {
+      matches.set(candidate, [...(matches.get(candidate) || []), record]);
+    }
   }
   const paths = [...matches.keys()].filter(path => {
     const file = checkedLocalPath(join(root, path));
     const entries = matches.get(path);
     const match = entries.length === 1 && entries[0].match(/^\d+ ([a-f0-9]+) 0\t/);
-    const blob = match ? gitCommand(root, ['cat-file', 'blob', match[1]]) : null;
-    const owned = localStat(file) && createHash('sha256').update(readFileSync(file)).digest('hex') === expectedHashes[path];
-    const indexOwned = blob?.status === 0 && createHash('sha256').update(blob.stdout).digest('hex') === expectedHashes[path];
+    const blob = match ? gitCommand(root, ['cat-file', 'blob', match[1]], undefined, null) : null;
+    const data = localStat(file) ? readFileSync(file) : null;
+    const owned = data && createHash('sha256').update(data).digest('hex') === expectedHashes[path];
+    const indexOwned = entries[0]?.slice(entries[0].indexOf('\t') + 1) === path && blob?.status === 0 && data && indexContentMatches(root, path, data, blob.stdout);
     if (!owned || !indexOwned) conflicts.push(path);
     return owned && indexOwned;
   });

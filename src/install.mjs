@@ -1,9 +1,10 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 import { chmodSync, closeSync, existsSync, fstatSync, lstatSync, openSync, readFileSync, readSync, writeFileSync, readdirSync, mkdirSync, mkdtempSync, realpathSync, renameSync, rmSync, rmdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { synchronize, isReference } from '../.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs';
-import { isGeneratedOutput, planLocalIgnore, checkLocalIgnore, assertLocalIgnoreUnchanged, applyLocalIgnore, planUntrack, applyUntrack, restoreUntrack } from '../.pbai4devs/scripts/lib/gitignore.mjs';
+import { isGeneratedOutput, planLocalIgnore, checkLocalIgnore, assertLocalIgnoreUnchanged, applyLocalIgnore, planUntrack, applyUntrack, restoreUntrack, indexContentMatches } from '../.pbai4devs/scripts/lib/gitignore.mjs';
 import { nativePathBoundary } from '../.pbai4devs/scripts/lib/native-paths.mjs';
 import { canonicalEntrypoint, resolveEntrypoint, entrypointReference, renderEntrypointImports, extractManagedBlock, managedBlockDigest, mergeManagedContent, stripManagedContent } from '../.pbai4devs/scripts/lib/managed-content.mjs';
 import { extractTomlManagedBlock, tomlManagedBlockDigest, mergeTomlContent, stripTomlContent } from '../.pbai4devs/scripts/lib/managed-toml.mjs';
@@ -15,6 +16,122 @@ const hash = value => createHash('sha256').update(value).digest('hex');
 const portable = value => value.split(sep).join('/');
 const fail = (code, message) => { throw Object.assign(new Error(message), { code }); };
 const stat = path => { try { return lstatSync(path); } catch (error) { if (error.code === 'ENOENT') return null; throw error; } };
+
+// Protect staged human bytes that differ from the working tree, without
+// treating an unchanged HEAD entry as a staged edit or rewriting the index.
+function stagedDivergences(root) {
+  let anchor = resolve(root);
+  while (!existsSync(anchor)) {
+    const parent = dirname(anchor);
+    if (parent === anchor) break;
+    anchor = parent;
+  }
+  const prefix = portable(relative(anchor, root));
+  let hasGitMarker = false;
+  for (let current = anchor; ; current = dirname(current)) {
+    if (stat(join(current, '.git'))) { hasGitMarker = true; break; }
+    if (dirname(current) === current) break;
+  }
+  const env = { ...process.env, GIT_OPTIONAL_LOCKS: '0' };
+  for (const key of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_COMMON_DIR', 'GIT_INDEX_FILE', 'GIT_EXTERNAL_DIFF']) delete env[key];
+  const run = args => spawnSync('git', ['-C', anchor, '-c', 'core.fsmonitor=false', ...args], {
+    env, timeout: 30000, windowsHide: true, maxBuffer: 16 * 1024 * 1024,
+  });
+  const repository = run(['rev-parse', '--is-inside-work-tree']);
+  if (repository.error || repository.status !== 0) {
+    if (hasGitMarker) fail('E_GIT', 'Unable to inspect the existing Git repository safely.');
+    if (repository.error?.code === 'ENOENT' || !repository.error && repository.status !== 0) return new Set();
+  }
+  if (repository.error || repository.status !== 0 || repository.stdout.toString('utf8').trim() !== 'true') fail('E_GIT', 'Unable to inspect Git worktree.');
+  // `git diff` against the worktree respects assume-unchanged and
+  // skip-worktree, so compare the actual bytes to the index blobs instead.
+  const stagedResult = run(['diff', '--cached', '--no-renames', '--no-ext-diff', '--no-textconv', '--name-only', '--relative', '-z']);
+  const indexResult = run(['ls-files', '--stage', '-z']);
+  if (stagedResult.error || stagedResult.status !== 0 || indexResult.error || indexResult.status !== 0) fail('E_GIT', 'Unable to inspect staged changes safely.');
+  const decode = buffer => {
+    const value = buffer.toString('utf8');
+    if (!Buffer.from(value, 'utf8').equals(buffer)) fail('E_GIT', 'Unable to safely inspect a non-UTF-8 staged path.');
+    return value;
+  };
+  const records = buffer => {
+    const result = []; let start = 0;
+    for (let i = 0; i < buffer.length; i++) if (buffer[i] === 0) { result.push(buffer.subarray(start, i)); start = i + 1; }
+    if (start !== buffer.length) fail('E_GIT', 'Unable to parse Git output safely.');
+    return result;
+  };
+  const paths = new Set(records(stagedResult.stdout).map(decode));
+  const entries = new Map();
+  for (const bytes of records(indexResult.stdout)) {
+    const tab = bytes.indexOf(9);
+    const record = bytes.subarray(0, tab).toString('ascii');
+    if (tab < 0) fail('E_GIT', 'Unable to parse the Git index safely.');
+    const match = /^(\d+) ([0-9a-f]+) ([0-3])$/.exec(record);
+    if (!match) fail('E_GIT', 'Unable to parse the Git index safely.');
+    const rawName = bytes.subarray(tab + 1);
+    const name = rawName.toString('utf8');
+    if (!paths.has(name)) continue;
+    if (!Buffer.from(name, 'utf8').equals(rawName)) fail('E_GIT', 'Unable to safely inspect a non-UTF-8 staged path.');
+    if (entries.has(name) || match[3] !== '0') entries.set(name, null);
+    else entries.set(name, { mode: match[1], oid: match[2] });
+  }
+  const divergent = new Set();
+  divergent.deleted = new Set();
+  for (const name of paths) {
+    if (prefix && !name.startsWith(`${prefix}/`)) continue;
+    const path = prefix ? name.slice(prefix.length + 1) : name;
+    const entry = entries.get(name);
+    // Distinguish a staged deletion from unresolved index stages.
+    if (!entries.has(name)) { divergent.add(path); divergent.deleted.add(path); continue; }
+    if (!entry || !['100644', '100755'].includes(entry.mode) || ![40, 64].includes(entry.oid.length)) { divergent.add(path); continue; }
+    let fd;
+    try {
+      const file = safePath(root, path), info = stat(file);
+      if (!info?.isFile()) { divergent.add(path); continue; }
+      fd = openSync(file, 'r');
+      const before = fstatSync(fd);
+      const digest = createHash(entry.oid.length === 64 ? 'sha256' : 'sha1').update(`blob ${before.size}\0`);
+      const buffer = Buffer.allocUnsafe(64 * 1024);
+      let count = 0, n;
+      while ((n = readSync(fd, buffer, 0, buffer.length, null)) !== 0) { digest.update(buffer.subarray(0, n)); count += n; }
+      const after = fstatSync(fd);
+      if (count !== before.size || before.size !== after.size || before.mtimeMs !== after.mtimeMs) { divergent.add(path); continue; }
+      if (digest.digest('hex') !== entry.oid) {
+        const indexed = run(['cat-file', 'blob', entry.oid]);
+        const working = readFileSync(file), latest = fstatSync(fd);
+        if (indexed.error || indexed.status !== 0) fail('E_GIT', 'Unable to inspect staged content safely.');
+        if (latest.size !== after.size || latest.mtimeMs !== after.mtimeMs || !indexContentMatches(root, path, working, indexed.stdout)) divergent.add(path);
+      }
+    } catch (error) {
+      // Treat paths that cannot be inspected (including symbolic links) as
+      // divergent; the normal safety checks still reject unsafe writes.
+      if (error.code === 'E_SYMLINK' || error.code === 'ENOENT' || error.code === 'ENOTDIR' || error.code === 'E_PATH') divergent.add(path);
+      else throw error;
+    } finally { if (fd !== undefined) closeSync(fd); }
+  }
+  return divergent;
+}
+// A staged name may use another case for the same path on macOS or Windows.
+// Probe an existing directory only; do not create files during a dry run.
+function stagedContains(root, paths, path) {
+  if (paths.has(path)) return true;
+  let current = root;
+  while (!stat(current) && dirname(current) !== current) current = dirname(current);
+  while (dirname(current) !== current) {
+    const base = current.slice(dirname(current).length + 1);
+    const index = base.search(/[A-Za-z]/);
+    if (index >= 0) {
+      const letter = base[index];
+      const other = letter === letter.toUpperCase() ? letter.toLowerCase() : letter.toUpperCase();
+      const alternative = join(dirname(current), `${base.slice(0, index)}${other}${base.slice(index + 1)}`);
+      const a = stat(current), b = stat(alternative);
+      if (!a || !b || a.dev !== b.dev || a.ino !== b.ino) return false;
+      return [...paths].some(candidate => candidate.toLowerCase() === path.toLowerCase());
+    }
+    current = dirname(current);
+  }
+  // If no existing name can be probed, preserve on ambiguity.
+  return [...paths].some(candidate => candidate.toLowerCase() === path.toLowerCase());
+}
 const ignored = new Set(['.git', '.local', '.cache', 'node_modules', '.agent-tests', 'opencode-loop']);
 const reservedTargets = new Set(['.git', 'node_modules', '.pbai4devs']);
 const checkTarget = path => {
@@ -71,7 +188,10 @@ function walk(root, path = '', filter = () => true) {
   for (const name of readdirSync(directory).sort()) {
     const child = path ? `${path}/${name}` : name;
     const info = lstatSync(join(root, child));
-    if (info.isSymbolicLink()) fail('E_SYMLINK', `Symbolic link refused: ${child}`);
+    if (info.isSymbolicLink()) {
+      if (!filter(child, false) && !filter(child, true)) continue;
+      fail('E_SYMLINK', `Symbolic link refused: ${child}`);
+    }
     if (!filter(child, info.isDirectory())) continue;
     if (info.isDirectory()) files.push(...walk(root, child, filter));
     else if (info.isFile()) files.push(child);
@@ -109,7 +229,7 @@ function read(root, path) {
 }
 
 function allowedManaged(path) {
-  if (path === '.pbai4devs/estado/README.md') return true;
+  if (['.pbai4devs/estado/README.md', '.pbai4devs/adapters/README.md'].includes(path)) return true;
   if (canonicalEntrypoint(path) || path === '.gitignore') return true;
   if (nativeMarkdown(path) || nativeToml(path)) return true;
   if (['catalog.json', 'skills.json', 'agents.json', 'rules.json', 'espelhos.conf'].some(name => path === `.pbai4devs/${name}`)) return true;
@@ -316,6 +436,7 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
     ?? (canonicalEntrypoint(path) ? Object.entries(knownBlocks).find(([candidate]) => canonicalEntrypoint(candidate) === canonicalEntrypoint(path))?.[1] : undefined);
   const preserved = new Map();
   const recordPreserved = (path, reason) => { preserved.set(path, { path, reason }); return true; };
+  const stagedHuman = stagedDivergences(target);
   const native = path => canonicalEntrypoint(path) || path === 'README.md' || adapterRoots.some(root => path === root || path.startsWith(`${root}/`));
   const boundary = path => {
     if (!native(path)) return false;
@@ -353,8 +474,27 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
     }
     const supplied = new Set(bundled);
     const internal = new Set(['catalog.json', 'skills.json', 'agents.json', 'rules.json', 'espelhos.conf', '.gitignore', 'state/README.md', 'estado/README.md']);
-    if (bundled.length) for (const path of Object.keys(previous?.files || {})) {
-      if (path.startsWith('.pbai4devs/') && !supplied.has(path.slice(11)) && !internal.has(path.slice(11))) rmSync(safePath(stage, path), { force: true });
+    // A pathname, matching contents, or --force alone do not establish that a
+    // project's hub source belongs to the kit. Restore human files *before*
+    // deriving native pointers so that the staged catalogue describes the
+    // source that will actually remain in the project.
+    const preservedHub = new Set();
+    for (const relative of existing) {
+      const path = `.pbai4devs/${relative}`;
+      if (internal.has(relative)) continue;
+      const current = read(target, path);
+      if (!current || previous?.files?.[path] === hash(current) && !stagedContains(target, stagedHuman, path)) continue;
+      if (supplied.has(relative)) write(stage, path, current);
+      preservedHub.add(path);
+      recordPreserved(path, stagedContains(target, stagedHuman, path) ? 'staged-content-differs' : previous?.files?.[path] ? 'edited-managed-file' : 'existing-file');
+    }
+    if (bundled.length) for (const [path, digest] of Object.entries(previous?.files || {})) {
+      if (!path.startsWith('.pbai4devs/') || supplied.has(path.slice(11)) || internal.has(path.slice(11))) continue;
+      const current = read(target, path);
+      if (current && (digest !== hash(current) || stagedContains(target, stagedHuman, path))) {
+        preservedHub.add(path);
+        recordPreserved(path, stagedContains(target, stagedHuman, path) ? 'staged-content-differs' : 'edited-managed-file');
+      } else rmSync(safePath(stage, path), { force: true });
     }
     for (const root of active.roots) {
       if (preserveNative(`${root}/.gitignore`)) continue;
@@ -432,7 +572,7 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
     const manifest = { schemaVersion: 1, version: bundled.length ? packageInfo.version : previous.version, language, files: {}, blocks: {} };
     if (mode !== 'sync' || clients !== undefined || previous?.clients !== undefined) manifest.clients = selected;
     for (const [path, content] of desired) {
-      if (path === 'README.md' || migratedHuman.has(path)) continue;
+      if (path === 'README.md' || migratedHuman.has(path) || preservedHub.has(path)) continue;
       const block = blockDigest(path, content);
       if (block) manifest.blocks[path] = block;
       else manifest.files[path] = hash(content);
@@ -460,8 +600,8 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
       if (aliasedEntrypoint(path)) continue;
       const current = read(target, path); if (!current) continue;
       const known = wholeRecords.some(record => record[path] === hash(current));
-      if (nativeManagedText(path) && !known) { recordPreserved(path, 'existing-file'); continue; }
-      if (!known) conflicts.push(path);
+      if (stagedContains(target, stagedHuman, path)) { recordPreserved(path, 'staged-content-differs'); continue; }
+      if (!known) { recordPreserved(path, 'edited-managed-file'); continue; }
       changes.push({ path, action: 'remove', content: null, beforeHash: hash(current) });
     }
     for (const [recordedPath, digest] of Object.entries(knownBlocks)) {
@@ -509,13 +649,53 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
       if (preserved.has(full) || !known || !generatedReference(current)) { recordPreserved(full, 'existing-file'); continue; }
       changes.push({ path: full, action: 'remove', content: null, beforeHash: hash(current) });
     }
-    const legacy = '.pbai4devs/adapters/README.md', legacyContent = read(target, legacy);
-    if (legacyContent) {
-      const known = legacyContent.toString('utf8').includes('# Adaptadores') && /Antigravity|metadados/.test(legacyContent.toString('utf8'));
-      if (!known) conflicts.push(legacy);
-      changes.push({ path: legacy, action: 'remove', content: null, beforeHash: hash(legacyContent) });
+    const legacy = '.pbai4devs/adapters/README.md', legacyRoot = '.pbai4devs/adapters';
+    const legacyRootInfo = stat(join(target, legacyRoot));
+    const legacyInfo = legacyRootInfo?.isDirectory() ? stat(join(target, legacy)) : null;
+    if (legacyRootInfo && !legacyRootInfo.isDirectory()) recordPreserved(legacyRoot, legacyRootInfo.isSymbolicLink() ? 'symbolic-link' : 'existing-file');
+    if (legacyInfo && !legacyInfo.isFile()) recordPreserved(legacy, legacyInfo.isSymbolicLink() ? 'symbolic-link' : 'existing-directory');
+    const legacyContent = legacyInfo?.isFile() ? read(target, legacy) : null;
+    if (legacyContent && !changes.some(change => change.path === legacy)) {
+      if (!stagedContains(target, stagedHuman, legacy) && previous?.files?.[legacy] === hash(legacyContent)) changes.push({ path: legacy, action: 'remove', content: null, beforeHash: hash(legacyContent) });
+      else recordPreserved(legacy, stagedContains(target, stagedHuman, legacy) ? 'staged-content-differs' : 'existing-file');
     }
     for (const item of migration?.files || []) changes.push({ path: item.path, action: 'remove', content: null, beforeHash: hash(item.content) });
+    // The generated catalogues must agree with the installed sources. A staged
+    // deletion has no indexed bytes to overwrite; allow their regeneration only
+    // when the current file exactly matches the previously owned digest.
+    const generatedCatalogues = new Set(['.pbai4devs/catalog.json', '.pbai4devs/skills.json', '.pbai4devs/agents.json', '.pbai4devs/rules.json']);
+    for (const change of changes) if (change.action === 'update' && generatedCatalogues.has(change.path)
+      && stagedContains(target, stagedHuman.deleted || new Set(), change.path)
+      && change.beforeHash && previous?.files?.[change.path] === change.beforeHash) change.stagedDeletionAllowed = true;
+    for (const change of changes) {
+      if (!stagedContains(target, stagedHuman, change.path)) continue;
+      const current = read(target, change.path);
+      if (change.action === 'update' && current && change.content && nativeManagedText(change.path)) {
+        // Preserve every byte outside a known managed block. Appending a block
+        // is also safe when the complete existing file is an exact prefix.
+        if (!nativeToml(change.path) && change.content.subarray(0, current.length).equals(current)) {
+          try {
+            const digest = managedBlockDigest(change.content);
+            const stripped = digest && stripManagedContent(change.content, digest);
+            const extra = stripped?.slice(current.toString('utf8').length);
+            if (stripped?.startsWith(current.toString('utf8')) && extra !== undefined && /^[\r\n]*$/.test(extra)) change.stagedBlockAllowed = true;
+          } catch { /* Invalid or unproven block: keep the path blocked. */ }
+        } else if (knownBlocks[change.path]) {
+          try {
+            const strip = nativeToml(change.path) ? stripTomlContent : stripManagedContent;
+            if (Buffer.from(strip(current, knownBlocks[change.path])).equals(change.content)) change.stagedBlockAllowed = true;
+          } catch { /* An edited block is not safe to remove. */ }
+        }
+      }
+      if (change.action === 'remove' && migration) {
+        const item = migration.files.find(file => file.path === change.path);
+        const copy = item && changes.find(candidate => candidate.path === item.target && candidate.action === 'create');
+        if (item && current?.equals(item.content) && copy?.content?.equals(item.content)
+          && changes.indexOf(copy) < changes.indexOf(change)) change.stagedMigrationTarget = item.target;
+      }
+    }
+    const stagedChanges = changes.filter(change => stagedContains(target, stagedHuman, change.path) && !change.stagedDeletionAllowed && !change.stagedBlockAllowed && !change.stagedMigrationTarget);
+    if (stagedChanges.length) fail('E_STAGED', `Staged content differs from the working tree for planned changes: ${stagedChanges.map(change => `${change.action} ${change.path}`).join(', ')}. Preserve and review these paths before updating.`);
     const retiredRoots = adapterRoots.filter(root => !active.roots.includes(root) && changes.some(change => change.action === 'remove' && change.path.startsWith(`${root}/`) && (previous?.files[change.path] || previous?.blocks[change.path])));
     const ownedOutputs = [...new Set([...synchronized.ownedOutputs, ...ownedEntrypoints, statePath])].filter(path => !mixedPaths.has(path) && !overlapsPreserved(path));
     const hashes = {};
@@ -539,6 +719,24 @@ export function applyPlan(plan) {
   if (!plan.canApply) fail('E_CONFLICT', text(plan.language, 'conflict'));
   assertLocalIgnoreUnchanged(plan.localIgnore);
   const { target } = plan;
+  const stagedHuman = stagedDivergences(target);
+  const currentState = loadState(target);
+  const stagedChanges = plan.changes.filter(change => {
+    if (!stagedContains(target, stagedHuman, change.path)) return false;
+    const current = read(target, change.path);
+    if ((current ? hash(current) : null) !== change.beforeHash) fail('E_CHANGED', `File changed after planning: ${change.path}`);
+    if (!current) return true;
+    if (change.stagedDeletionAllowed && stagedContains(target, stagedHuman.deleted || new Set(), change.path)
+      && currentState?.files?.[change.path] === change.beforeHash) return false;
+    if (change.stagedBlockAllowed) return false; // Exact source and planned bytes were checked above.
+    if (change.stagedMigrationTarget) {
+      const copy = plan.changes.find(candidate => candidate.path === change.stagedMigrationTarget && candidate.action === 'create');
+      if (copy?.content?.equals(current) && plan.changes.indexOf(copy) < plan.changes.indexOf(change)
+        && !stat(safePath(target, change.stagedMigrationTarget))) return false;
+    }
+    return true;
+  });
+  if (stagedChanges.length) fail('E_STAGED', `Staged content differs from the working tree for planned changes: ${stagedChanges.map(change => `${change.action} ${change.path}`).join(', ')}. Preserve and review these paths before updating.`);
   if (plan.migration) {
     if (stat(safePath(target, '.pbai4devs/state'))) fail('E_CHANGED', 'State destination appeared after planning.');
     for (const directory of plan.migration.directories) {
@@ -574,7 +772,18 @@ export function applyPlan(plan) {
       const file = safePath(target, change.path);
       const content = change.content;
       const signature = { path: change.path, hash: content === null ? null : hash(content) };
-      if (content === null) { rmSync(file, { force: true }); applied.push(signature); }
+      if (content === null) {
+        const migrated = plan.migration?.files.find(item => item.path === change.path);
+        if (migrated) {
+          const copy = plan.changes.find(candidate => candidate.path === migrated.target && candidate.action === 'create');
+          const copied = read(target, migrated.target);
+          if (!copy?.content || !copied?.equals(copy.content)
+            || migrated.path !== legacyStatePath && !copied.equals(before.get(change.path))) {
+            fail('E_CHANGED', `Migrated copy changed before removing: ${change.path}`);
+          }
+        }
+        rmSync(file, { force: true }); applied.push(signature);
+      }
       else atomicWrite(target, change.path, content, beforeModes.get(change.path) ?? change.mode, mode => {
         signature.mode = mode; applied.push(signature);
       }, () => assertOriginal(change.path));

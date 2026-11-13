@@ -1,4 +1,6 @@
 import test from 'node:test';
+import fs from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
@@ -401,4 +403,35 @@ test('falha durante aplicação reverte arquivos migrados e mantém índice e ig
   assert.equal(existsSync(join(root, `${newRoot}/agentdevkit.json`)), false);
   assert.deepEqual(read(root, '.gitignore'), f.ignore);
   assert.equal(git(root, 'ls-files', '--stage', '-z'), f.index);
+});
+
+
+test('alteração concorrente na cópia migrada impede remoção da origem', t => {
+  const f = fixture(t), { root } = f;
+  const oldPath = `${oldRoot}/configuracao/ESTADO.md`;
+  const newPath = join(root, `${newRoot}/configuracao/ESTADO.md`);
+  const plan = planInstallation({ target: root, mode: 'update' });
+  assert.ok(plan.changes.some(change => change.path === oldPath && change.stagedMigrationTarget));
+  const originalRead = fs.readFileSync;
+  const concurrent = Buffer.from('Edição concorrente no destino.\n');
+  let injected = false;
+  fs.readFileSync = function(path, ...args) {
+    if (!injected && String(path) === newPath && existsSync(newPath)) {
+      injected = true;
+      writeFileSync(newPath, concurrent);
+    }
+    return originalRead.call(this, path, ...args);
+  };
+  syncBuiltinESMExports();
+  try {
+    assert.throws(() => applyPlan(plan), error => error.code === 'E_CHANGED');
+  } finally {
+    fs.readFileSync = originalRead;
+    syncBuiltinESMExports();
+  }
+  assert.equal(injected, true);
+  assert.deepEqual(read(root, oldPath), f.config);
+  assert.deepEqual(readFileSync(newPath), concurrent);
+  assert.equal(git(root, 'ls-files', '--stage', '-z'), f.index);
+  assert.deepEqual(read(root, '.gitignore'), f.ignore);
 });

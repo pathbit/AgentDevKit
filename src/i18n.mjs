@@ -42,6 +42,16 @@ const messages = {
 };
 export const text = (language, key) => messages[language || 'pt'][key] || key;
 export function explainError(language, code) {
+  if (code === 'E_STAGED') return {
+    pt: 'Há alterações preparadas diferentes dos arquivos locais; revise-as antes de atualizar.',
+    en: 'Staged changes differ from the working files; review them before updating.',
+    es: 'Hay cambios preparados distintos de los archivos locales; revíselos antes de actualizar.',
+  }[language || 'pt'];
+  if (code === 'E_GIT') return {
+    pt: 'Não foi possível verificar o índice Git com segurança; nenhum arquivo foi alterado.',
+    en: 'The Git index could not be checked safely; no files were changed.',
+    es: 'No se pudo verificar el índice Git de forma segura; no se modificaron archivos.',
+  }[language || 'pt'];
   if (code === 'E_CONFIG_PARSE') return {
     pt: 'Não foi possível analisar a configuração legada com segurança; revise o frontmatter e as aspas antes de executar update.',
     en: 'The legacy configuration could not be safely parsed; review its frontmatter and quoted values before running update.',

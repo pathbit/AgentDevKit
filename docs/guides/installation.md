@@ -111,7 +111,7 @@ usar `git add`. No GitHub Packages, use o prefixo de registry da instalação.
 
 O bloco local também protege `.agent-tests`, `tmp`, `temp`, `.playwright*`
 e relatórios de testes, inclusive com letras maiúsculas e em subpastas.
-O conteúdo do `.gitignore` existente e os arquivos rastreados são preservados.
+O conteúdo do `.gitignore` existente na raiz é preservado.
 Uma exceção que reabra arquivo privado ou artefato é informada como conflito;
 o projeto decide como ajustar suas próprias regras.
 Negativas com curingas também podem ser recusadas preventivamente, mesmo antes
@@ -121,6 +121,9 @@ a validação fica restrita ao projeto e aos ignores de seus ancestrais.
 
 Arquivos já rastreados exigem migração do índice: apenas saídas identificadas
 do kit podem deixar de ser rastreadas, preservando seus bytes no disco.
+O plano informa esses caminhos em `untrackedPaths` antes de aplicar; examine-os
+e preserve alterações preparadas da equipe. `--dry-run` e `sync --check` não
+alteram o índice.
 Artefatos já rastreados são informados por `doctor` e `sync --check` para
 revisão; não são removidos automaticamente do índice.
 Revise o plano e os conflitos em um projeto existente; use `--dry-run` antes
@@ -133,13 +136,20 @@ continua válida; `agents` consulta e `agents codex,claude` altera a seleção.
 `agents all` habilita todos. As pastas compartilhadas permanecem quando
 necessárias para outro cliente, como `.agents` para Codex e Antigravity.
 
-Confira a simulação antes de atualizar um projeto existente. Arquivos
-gerenciados alterados geram conflito; use `--force` somente após revisar o
-backup e o conteúdo que será substituído. Preserve os dados locais, as
-configurações próprias e os commits do projeto.
+Confira `update --dry-run --json` antes de atualizar um projeto existente.
+Revise arquivos criados, atualizados e removidos, conflitos, `preserved` e
+eventuais alterações do índice. `sync` usa as fontes já instaladas e não baixa
+uma nova versão. Consulte a [referência da CLI](cli.md) para todos os comandos.
 
-Entradas como `AGENTS.md`, `claude.md` e `GEMINI.md`, além de skills, agentes,
-comandos e regras existentes, recebem apenas um complemento do kit:
+Skills e outros recursos próprios podem coexistir com os do kit. Um nome
+igual não comprova propriedade: conteúdo humano e arquivos adicionais não
+devem ser descartados para reconstruir apontamentos. Remoções automáticas
+ficam restritas a arquivos obsoletos cuja propriedade possa ser comprovada.
+`--force` não autoriza substituir conteúdo próprio; backups ficam em
+`.agent-tests/` e devem ser revisados quando houver reparo gerenciado.
+
+Em entradas como `AGENTS.md`, `claude.md` e `GEMINI.md`, e em recursos nativos
+compatíveis, o kit pode acrescentar apenas uma referência delimitada:
 
 ```markdown
 <!-- BEGIN AGENTDEVKIT -->
@@ -148,7 +158,9 @@ Leia e siga [origem](caminho/para/.pbai4devs/recurso.md).
 ```
 
 O texto e o frontmatter humanos permanecem; a referência usa o caminho real
-do recurso. Repetir a operação não duplica o bloco. Edite suas instruções fora
+do recurso. Um arquivo que não possa receber o bloco é preservado e informado,
+sem prometer a adição do apontamento. Repetir a operação não duplica o bloco.
+Edite suas instruções fora
 dele: atualizações alteram somente a contribuição do kit. Nomes de entradas
 com caixa diferente são reaproveitados quando há uma única opção.
 Comandos Gemini mantêm a referência dentro do valor `prompt` em TOML válido.

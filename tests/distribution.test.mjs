@@ -168,20 +168,15 @@ test('pacote real instala, preserva projetos e oferece próximos passos', { time
     const managed = '.pbai4devs/rules/qualidade/RULE.md';
     const tampered = readFileSync(join(target, managed), 'utf8') + '\nUSER_EDIT_MANAGED\n';
     write(join(target, managed), tampered);
-    const altered = snapshot(target);
-    assert.equal(cli(['update', '--target', target, '--yes'], 1).ok, false);
-    assert.deepEqual(snapshot(target), altered, 'Conflito não deve aplicar mudanças parciais.');
+    const preserved = cli(['update', '--target', target, '--yes']);
+    assert.ok(preserved.preserved.some(item => item.path === managed));
+    assert.equal(readFileSync(join(target, managed), 'utf8'), tampered);
     cli(['update', '--target', target, '--yes', '--force']);
     assert.deepEqual(readFileSync(join(target, legacy, 'SKILL.md')), legacyBytes);
     assert.ok(existsSync(ownEmpty), 'O force não deve remover pastas próprias vazias.');
-    assert.doesNotMatch(readFileSync(join(target, managed), 'utf8'), /USER_EDIT_MANAGED/);
+    assert.equal(readFileSync(join(target, managed), 'utf8'), tampered);
     assert.equal(digest(join(target, '.claude/skills/custom/SKILL.md')), before['.claude/skills/custom/SKILL.md']);
-    const backupRoot = join(target, '.agent-tests/agentdevkit/backups');
-    assert.ok(existsSync(backupRoot));
-    assert.ok(readdirSync(backupRoot, { recursive: true }).some(relative => {
-      const file = join(backupRoot, relative);
-      return lstatSync(file).isFile() && readFileSync(file, 'utf8') === tampered;
-    }), 'Backup deve preservar a edição humana antes do --force.');
+    assert.deepEqual(cli(['update', '--target', target, '--dry-run']).plan, []);
   });
 
   await subtest('nova versão atualiza a fonte sem substituir a skill própria', () => {

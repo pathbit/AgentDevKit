@@ -159,23 +159,23 @@ test('update acrescenta licença em instalação anterior e detecta alteração 
   write(root, licensePath, edited);
   const doctor = cli(root, ['doctor'], 1);
   assert.ok(doctor.issues.some(issue => issue.code === 'modified' && issue.path === licensePath));
-  const blocked = cli(root, ['update'], 1);
-  assert.ok(blocked.conflicts.includes(licensePath));
+  const preserved = cli(root, ['update']);
+  assert.ok(preserved.preserved.some(item => item.path === licensePath));
   assert.deepEqual(readFileSync(join(root, licensePath)), edited);
+  assert.equal(Object.hasOwn(JSON.parse(read(root, statePath)).files, licensePath), false);
 });
 
-test('licença própria dentro do hub gera conflito e force guarda backup sem tocar raiz', t => {
+test('licença própria dentro do hub é preservada inclusive com force', t => {
   const root = fixture(t), licensePath = '.pbai4devs/LICENSE';
   const rootLicense = 'Licença do produto.\n', hubLicense = 'Licença humana existente.\r\n';
   write(root, 'LICENSE', rootLicense); write(root, licensePath, hubLicense);
-  const blocked = cli(root, ['init', '--agents', 'claude'], 1);
-  assert.ok(blocked.conflicts.includes(licensePath));
+  const initialized = cli(root, ['init', '--agents', 'claude']);
+  assert.ok(initialized.preserved.some(item => item.path === licensePath));
   assert.equal(read(root, licensePath), hubLicense); assert.equal(read(root, 'LICENSE'), rootLicense);
-  assert.equal(existsSync(join(root, statePath)), false);
-  const applied = cli(root, ['init', '--agents', 'claude', '--force']);
+  assert.equal(Object.hasOwn(JSON.parse(read(root, statePath)).files, licensePath), false);
+  cli(root, ['init', '--agents', 'claude', '--force']);
   assert.equal(read(root, 'LICENSE'), rootLicense);
-  assert.deepEqual(readFileSync(join(root, licensePath)), readFileSync(join(project, 'LICENSE')));
-  assert.equal(read(root, `${applied.backup}/${licensePath}`), hubLicense);
+  assert.equal(read(root, licensePath), hubLicense);
 });
 
 test('update desindexa somente derivados comprovados e mantém fontes e estágio humano', t => {

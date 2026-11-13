@@ -12,6 +12,9 @@ node --test .pbai4devs/scripts/sincronizar-agentes/tests/TEST.mjs
 
 `--check` só confere; a execução normal atualiza os recursos. `--force` salva
 conflitos em `.agent-tests/` antes de reparar os caminhos gerenciados.
+O [comando agêntico](../../commands/sincronizar/COMMAND.md) usa `--force` por
+padrão; executar este script diretamente não ativa essa opção. A CLI oferece
+`sync --dry-run --json` para consultar o plano antes de aplicá-lo.
 Recursos nativos humanos recebem um bloco curto com a referência ao hub.
 Texto, frontmatter e nomes existentes são preservados. O estado guarda só o
 hash desse bloco; edições externas continuam permitidas. Um bloco alterado
@@ -44,3 +47,7 @@ presença de um bloco gerenciado.
 Entradas novas usam os templates; hashes em `state/derived.json` permitem
 atualizar arquivos gerados e blocos separadamente, preservando alterações humanas.
 `--check` também acusa derivados ainda rastreados; não altera o índice.
+Apontamentos obsoletos podem ser removidos quando a propriedade é comprovada;
+arquivos e pastas próprios, inclusive os adicionais dentro do mesmo recurso,
+devem permanecer. Na CLI, confira `untrackedPaths` antes de aplicar: saídas
+geradas comprovadas podem deixar de ser rastreadas, sem excluir seus bytes.

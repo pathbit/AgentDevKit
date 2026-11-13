@@ -106,13 +106,16 @@ test('preserva README, settings, workflow e skill nativa do usuario inclusive co
   assert.equal(cli(root, ['doctor']).ok, true);
 });
 
-test('arquivo gerenciado alterado exige force e recebe backup antes da substituicao', t => {
+test('arquivo gerenciado com edição humana é preservado inclusive com force', t => {
   const root = fixture(t); cli(root, ['init', '--yes']);
-  const path = '.pbai4devs/skills/projeto/criar-skill/SKILL.md'; const custom = '# Local customization\n'; put(root, path, custom);
-  const denied = cli(root, ['update'], 1); assert.ok(denied.conflicts.includes(path)); assert.equal(readFileSync(join(root, path), 'utf8'), custom);
-  const result = cli(root, ['update', '--force']); assert.ok(result.backup);
-  assert.equal(readFileSync(join(root, result.backup, path), 'utf8'), custom);
-  assert.notEqual(readFileSync(join(root, path), 'utf8'), custom);
+  const path = '.pbai4devs/skills/projeto/criar-skill/SKILL.md';
+  const custom = `${readFileSync(join(root, path), 'utf8')}\nCustomização humana.\n`; put(root, path, custom);
+  for (const args of [['update'], ['update', '--force'], ['sync']]) {
+    const result = cli(root, args);
+    assert.ok(result.preserved.some(item => item.path === path), args.join(' '));
+    assert.equal(readFileSync(join(root, path), 'utf8'), custom);
+    assert.equal(Object.hasOwn(JSON.parse(readFileSync(join(root, '.pbai4devs/state/agentdevkit.json'))).files, path), false);
+  }
 });
 
 test('migração preserva apontamentos sem ownership e limpa apenas o legado comprovado', t => {
@@ -128,7 +131,8 @@ test('migração preserva apontamentos sem ownership e limpa apenas o legado com
   mkdirSync(join(root, '.pbai4devs/adapters/antigravity'), { recursive: true });
   cli(root, ['sync']);
   assert.ok(existsSync(join(root, '.codex/skills/configurar-projeto')));
-  assert.equal(existsSync(join(root, '.pbai4devs/adapters')), false);
+  assert.equal(readFileSync(join(root, '.pbai4devs/adapters/README.md'), 'utf8'), '# Adaptadores\n\nAntigravity\n');
+  assert.ok(existsSync(join(root, '.pbai4devs/adapters/antigravity')));
   assert.ok(existsSync(join(root, grouped)));
   assert.ok(existsSync(join(root, '.codex/skills/retained/SKILL.md')));
   for (const path of ['.codex', '.codex/skills', '.codex/skills/user-empty', '.codex/skills/retained/user-empty', '.codex/agents/unrelated-empty', '.codex/own-empty']) assert.ok(existsSync(join(root, path)), path);
