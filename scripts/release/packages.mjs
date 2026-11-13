@@ -214,11 +214,17 @@ export async function publishRegistryPackage({ directory, resolution, env = proc
     await prove('init', ['init', '--target', consumer, '--agents', 'codex,claude', '--lang', 'en', '--yes']);
     await prove('doctor', ['doctor', '--target', consumer]);
     await prove('sync', ['sync', '--check', '--target', consumer], 'sync --check');
+    // Exercise the registry selector without executing unverified package code.
+    // Functional commands above run only from the archive checked by digest.
+    const namedEnvironment = { ...consumerEnvironment, npm_config_offline: 'false', npm_config_prefer_offline: 'true', npm_config_prefer_online: 'false' };
+    const named = await invoke(['exec', '--yes', '--ignore-scripts', `--registry=${registry}`,
+      `--package=${spec}`, '--', process.execPath, '--version'], { cwd: probe, cache, environment: namedEnvironment });
+    if (named.trim() !== process.version) invalid('A prova do seletor npm não executou o Node esperado.');
     return { packageName, version: resolution.version, registry, url,
       status: existing ? 'skipped' : 'published', sha256: verified.manifest.sha256,
       integrity, authentication: target === 'github' && existing ? 'github-token' : authentication,
       ...(githubPackage ? { githubPackage } : {}),
-      probe: { status: 'passed', version: resolution.version, commands, anonymous: target === 'npm' } };
+      probe: { status: 'passed', version: resolution.version, commands, anonymous: target === 'npm', namedSelector: true } };
   } finally { rmSync(temporary, { recursive: true, force: true }); }
 }
 
