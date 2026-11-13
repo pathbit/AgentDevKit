@@ -27,6 +27,7 @@ function fixture(t) {
   put('.gitignore', readFileSync(join(projectRoot, '.gitignore')));
   put('.pbai4devs/scripts/inspecionar-projeto/SCRIPT.mjs', readFileSync(join(projectRoot, '.pbai4devs/scripts/inspecionar-projeto/SCRIPT.mjs')));
   put('.pbai4devs/scripts/lib/runtime.mjs', readFileSync(join(projectRoot, '.pbai4devs/scripts/lib/runtime.mjs')));
+  put('.pbai4devs/scripts/lib/state-path.mjs', readFileSync(join(projectRoot, '.pbai4devs/scripts/lib/state-path.mjs')));
   return { root, put, outputRoot: join(root, 'examples/generated') };
 }
 
@@ -112,7 +113,7 @@ test('preparação interrompida não conserva resultado anterior nem declara suc
   const index = join(outputRoot, 'README.md');
   writeFileSync(report, JSON.stringify({ owner: 'testar-maturidade', status: 'passed', results: [{}] }));
   writeFileSync(index, readFileSync(index, 'utf8').replaceAll('prepared', 'passed'));
-  put('.pbai4devs/estado/agentdevkit.json', JSON.stringify({ blocks: null }));
+  put('.pbai4devs/state/agentdevkit.json', JSON.stringify({ blocks: null }));
   assert.throws(() => prepareExamples(options), /Estado da instalação/);
   assert.equal(existsSync(report), false);
   assert.match(readFileSync(index, 'utf8'), /status: preparing/);
@@ -181,7 +182,7 @@ test('instalação parcial preserva entradas próprias e blocos editados', t => 
   const { root, put } = fixture(t);
   put('.pbai4devs/espelhos.conf', 'agente|.codex|agrupado\nagente|.agents|agrupado\n');
   const block = '<!-- BEGIN AGENTDEVKIT -->\nEntrada gerenciada.\n<!-- END AGENTDEVKIT -->';
-  put('.pbai4devs/estado/agentdevkit.json', JSON.stringify({ schemaVersion: 1, version: '1.0.0', language: 'pt', clients: ['codex'], files: {}, blocks: { 'AGENTS.md': createHash('sha256').update(block).digest('hex') } }));
+  put('.pbai4devs/state/agentdevkit.json', JSON.stringify({ schemaVersion: 1, version: '1.0.0', language: 'pt', clients: ['codex'], files: {}, blocks: { 'AGENTS.md': createHash('sha256').update(block).digest('hex') } }));
   put('AGENTS.md', `# Agentes\n\n${block}\n`);
   const human = '# Claude pessoal\r\n\r\nPreservar byte a byte: ação.\r\n';
   put('CLAUDE.md', human);
@@ -222,7 +223,7 @@ test('checkout de fontes sem manifesto deriva clientes em memória', t => {
   assert.ok(registeredRoots(root).includes('.claude'));
   const source = '.pbai4devs/skills/projeto/demo/SKILL.md';
   assert.ok(resourceTargets(root, source).includes('.claude/skills/demo/SKILL.md'));
-  put('.pbai4devs/estado/agentdevkit.json', JSON.stringify({ clients: ['claude'] }));
+  put('.pbai4devs/state/agentdevkit.json', JSON.stringify({ clients: ['claude'] }));
   assert.deepEqual(registeredRoots(root), ['.claude']);
   assert.deepEqual(resourceTargets(root, source), ['.claude/skills/demo/SKILL.md']);
   assert.equal(existsSync(manifest), false);

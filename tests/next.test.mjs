@@ -20,7 +20,7 @@ function fixture(t) {
   return { target, write };
 }
 function state(write, { preparation = 'concluido', technical = 'pendente', prd = 'aprovado', ux = 'nao-aplicavel', design = 'aprovado' } = {}) {
-  write('.pbai4devs/estado/configuracao/ESTADO.md', `---\npreparacao: ${preparation}\nconfiguracao_tecnica: ${technical}\ndocumentos:\n  prd: docs/prd.md\n  ux_ui: docs/ux.md\n  design: docs/design.md\n---\n\n# Estado\n`);
+  write('.pbai4devs/state/configuracao/ESTADO.md', `---\npreparacao: ${preparation}\nconfiguracao_tecnica: ${technical}\ndocumentos:\n  prd: docs/prd.md\n  ux_ui: docs/ux.md\n  design: docs/design.md\n---\n\n# Estado\n`);
   for (const [name, status] of [['prd', prd], ['ux', ux], ['design', design]]) write(`docs/${name}.md`, `---\nstatus: ${status}\n---\n\n# ${name}\n`);
 }
 
@@ -69,8 +69,8 @@ test('inspeção preserva destino com espaços e metacaracteres sem shell', t =>
 test('manutenção orienta roadmap e não cria um loop de next', t => {
   const { target, write } = fixture(t);
   state(write, { technical: 'concluido' });
-  const file = join(target, '.pbai4devs/estado/configuracao/ESTADO.md');
-  write('.pbai4devs/estado/configuracao/ESTADO.md', readFileSync(file, 'utf8').replace('  design: docs/design.md', '  design: docs/design.md\n  releases: docs/releases'));
+  const file = join(target, '.pbai4devs/state/configuracao/ESTADO.md');
+  write('.pbai4devs/state/configuracao/ESTADO.md', readFileSync(file, 'utf8').replace('  design: docs/design.md', '  design: docs/design.md\n  releases: docs/releases'));
   write('docs/releases/v1/RELEASE.md', '---\nstatus: publicado\n---\n\n# Release\n');
   for (const directory of ['.vscode', 'src', 'tests', 'infra', '.agents', '.agent', '.gemini', '.claude', '.codex', '.cursor', '.github', '.opencode']) mkdirSync(join(target, directory), { recursive: true });
   for (const name of ['.gitignore', '.gitattributes', '.editorconfig', '.dockerignore', 'Makefile', 'README.md', 'infra/compose/compose.local.yml']) write(name, '# Fixture\n');

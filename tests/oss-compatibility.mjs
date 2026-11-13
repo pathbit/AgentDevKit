@@ -11,7 +11,7 @@ import { findNpmCli } from '../.pbai4devs/scripts/lib/npm.mjs';
 const repositoryRoot = realpathSync.native(resolve(dirname(fileURLToPath(import.meta.url)), '..'));
 const hash = content => createHash('sha256').update(content).digest('hex');
 const portable = path => path.split(sep).join('/');
-const statePath = '.pbai4devs/estado/agentdevkit.json';
+const statePath = '.pbai4devs/state/agentdevkit.json';
 const registry = 'https://registry.npmjs.org';
 const put = (path, text) => { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, text); };
 const json = path => JSON.parse(readFileSync(path, 'utf8'));

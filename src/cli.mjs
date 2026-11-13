@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { spawnSync } from 'node:child_process';
-import { packageInfo } from './config.mjs';
+import { packageInfo, statePath, legacyStatePath } from './config.mjs';
 import { text, normalizeLanguage, explainError } from './i18n.mjs';
 import { resolveTarget, loadState, planInstallation, applyPlan, inspect } from './install.mjs';
 import { getNextSteps } from './next.mjs';
@@ -169,7 +169,7 @@ export async function main(argv = process.argv.slice(2), context = {}) {
     }
     print(result, options, output); return exitCode;
   } catch (error) {
-    const result = { ok: false, command: options.command || 'help', version: packageInfo.version, language, clients, target, message: explainError(language, error.code), error: { code: error.code || 'E_OPERATION', detail: error.message }, next: getNextSteps({ command: 'error', language, target, installed: existsSync(join(target, '.pbai4devs/estado/agentdevkit.json')) }) };
+    const result = { ok: false, command: options.command || 'help', version: packageInfo.version, language, clients, target, message: explainError(language, error.code), error: { code: error.code || 'E_OPERATION', detail: error.message }, next: getNextSteps({ command: 'error', language, target, installed: existsSync(join(target, statePath)) || existsSync(join(target, legacyStatePath)) }) };
     if (!options.json) result.message += ` (${error.code || 'E_OPERATION'})`;
     print(result, options, output); return error.exitCode || 1;
   }

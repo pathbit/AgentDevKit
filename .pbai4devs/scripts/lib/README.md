@@ -14,3 +14,6 @@ Texto externo, nomes existentes e metadados humanos permanecem preservados.
 
 `gitignore.mjs` planeja exclusões locais e detecta regras conflitantes. Ele não
 altera o `.gitignore` da raiz; conflitos são informados para revisão humana.
+
+`state-path.mjs` identifica o estado atual ou legado sem dividir dados; duas
+pastas simultâneas ou links simbólicos exigem resolver o conflito antes do uso.

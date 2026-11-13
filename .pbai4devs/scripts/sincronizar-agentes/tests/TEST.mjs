@@ -14,6 +14,7 @@ import './HUMAN_OWNERSHIP.mjs';
 import './COEXISTENCE.mjs';
 import './MANAGED_CONTENT.mjs';
 import { validateCatalog as validateExternalCatalog } from '../../gerenciar-skills-externas/SCRIPT.mjs';
+import { stateDirectory } from '../../lib/state-path.mjs';
 
 const project = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
 const cli = resolve(dirname(fileURLToPath(import.meta.url)), '../SCRIPT.mjs');
@@ -24,7 +25,7 @@ const read = (root, path) => readFileSync(join(root, path), 'utf8');
 const write = (root, path, content) => { mkdirSync(dirname(join(root, path)), { recursive: true }); writeFileSync(join(root, path), content); };
 const pointer = (origin = 'origem.md', title = 'Referencia') => `---\ndescription: Referencia.\n---\n\n# ${title}\n\n${marker}\nLeia e siga [origem](${origin}).\n`;
 const recordOwned = (root, paths) => {
-  const statePath = '.pbai4devs/estado/agentdevkit.json';
+  const statePath = '.pbai4devs/state/agentdevkit.json';
   const previous = existsSync(join(root, statePath)) ? JSON.parse(read(root, statePath)) : {};
   write(root, statePath, JSON.stringify({ schemaVersion: 1, files: { ...previous.files, ...Object.fromEntries(paths.map(path => [path, createHash('sha256').update(readFileSync(join(root, path))).digest('hex')])) }, blocks: previous.blocks ?? {} }));
 };
@@ -75,7 +76,7 @@ function fixture(t, minimal = false) {
   write(root, '.github/prompts/custom.prompt.md', '# Prompt proprio\n');
   write(root, '.claude/notas.md', '# Nota propria\n');
   write(root, 'README.md', 'README raiz preservado\n');
-  for (const kind of ['templates', 'scripts', 'tools', 'external-skills', 'estado', 'tests', 'docs', 'adapters', 'extra']) {
+  for (const kind of ['templates', 'scripts', 'tools', 'external-skills', 'state', 'tests', 'docs', 'adapters', 'extra']) {
     write(root, `.pbai4devs/${kind}/demo/REFERENCE.md`, '---\ndescription: Exclusivo.\n---\n\n# Exclusivo\n');
     if (kind !== 'extra') {
       const target = `.claude/${kind}/demo/REFERENCE.md`;
@@ -92,6 +93,30 @@ function fixture(t, minimal = false) {
   recordOwned(root, ownedLegacy);
   return root;
 }
+
+test('sincronização direta conserva estado legado e recusa duas pastas de estado', t => {
+  const root = fixture(t, true);
+  write(root, source, skill);
+  write(root, '.pbai4devs/estado/agentdevkit.json', JSON.stringify({
+    schemaVersion: 1, clients: ['codex'], files: {}, blocks: {},
+  }));
+  assert.equal(run(root).exitCode, 0);
+  assert.equal(existsSync(join(root, '.pbai4devs/estado/derived.json')), true);
+  assert.equal(existsSync(join(root, '.pbai4devs/state')), false);
+  write(root, '.pbai4devs/state/configuracao/ESTADO.md', '# Decisões próprias\n');
+  const before = snapshot(root);
+  assert.throws(() => run(root), /coexistem/);
+  assert.deepEqual(snapshot(root), before);
+});
+
+test('detecção de estado recusa link simbólico sem abrir o destino', { skip: process.platform === 'win32' }, t => {
+  const root = fixture(t, true);
+  const external = join(root, 'externo');
+  mkdirSync(external);
+  symlinkSync(external, join(root, '.pbai4devs/estado'), 'dir');
+  assert.throws(() => stateDirectory(root), /Link simbolico/);
+  assert.equal(existsSync(join(root, '.pbai4devs/state')), false);
+});
 function rejected(root, options = {}, pattern) {
   const before = snapshot(root);
   assert.throws(() => run(root, options), pattern);
@@ -115,7 +140,7 @@ test('sincroniza somente principais, preserva metadados e usa referências UTF-8
   assert.match(read(root, '.kimi-code/agents/revisor.md'), /tools: \[Read, Grep, Glob\]/);
   assert.ok(existsSync(join(root, '.claude/skills/projeto/demo/SKILL.md')));
   for (const client of ['.claude', '.opencode', '.github', '.codex', '.cursor', '.kimi-code', '.vscode', '.agents', '.agent', '.gemini']) {
-    for (const kind of ['templates', 'scripts', 'tools', 'external-skills', 'estado', 'tests', 'docs', 'adapters', 'extra', 'README.md', 'INSTRUCTIONS.md']) assert.equal(existsSync(join(root, client, kind)), false, `${client}/${kind}`);
+  for (const kind of ['templates', 'scripts', 'tools', 'external-skills', 'state', 'estado', 'tests', 'docs', 'adapters', 'extra', 'README.md', 'INSTRUCTIONS.md']) assert.equal(existsSync(join(root, client, kind)), false, `${client}/${kind}`);
   }
   assert.deepEqual(JSON.parse(read(root, '.pbai4devs/agents.json')).entries, [{ path: '.pbai4devs/agents/revisor/AGENT.md' }]);
   assert.ok(JSON.parse(read(root, '.pbai4devs/skills.json')).entries.some(entry => entry.path === '.pbai4devs/skills/grupo com espaço/outro'));
@@ -589,12 +614,12 @@ test('entradas da CLI mantêm ownership integral e recursos têm proveniência d
   write(root, source, skill);
   write(root, '.pbai4devs/templates/entrypoints/AGENTS.md', template);
   write(root, 'AGENTS.md', entry);
-  write(root, '.pbai4devs/estado/agentdevkit.json', JSON.stringify({ clients: ['codex'], files: { 'AGENTS.md': createHash('sha256').update(entry).digest('hex') } }));
+  write(root, '.pbai4devs/state/agentdevkit.json', JSON.stringify({ clients: ['codex'], files: { 'AGENTS.md': createHash('sha256').update(entry).digest('hex') } }));
   const result = run(root, { generateEntrypoints: true });
   assert.ok(result.ownedOutputs.includes('AGENTS.md'));
   assert.equal(read(root, 'AGENTS.md'), entry);
-  assert.equal(JSON.parse(read(root, '.pbai4devs/estado/derived.json')).entries['AGENTS.md'], undefined);
-  assert.ok(JSON.parse(read(root, '.pbai4devs/estado/derived.json')).files['.codex/skills/demo/SKILL.md']);
+  assert.equal(JSON.parse(read(root, '.pbai4devs/state/derived.json')).entries['AGENTS.md'], undefined);
+  assert.ok(JSON.parse(read(root, '.pbai4devs/state/derived.json')).files['.codex/skills/demo/SKILL.md']);
   assertCheckReadonly(root, { generateEntrypoints: true }, 0);
 });
 

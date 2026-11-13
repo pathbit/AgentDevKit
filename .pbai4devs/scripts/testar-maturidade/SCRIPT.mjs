@@ -8,6 +8,7 @@ import { isMain, projectRoot, requireNode } from '../lib/runtime.mjs';
 import { isGeneratedOutput } from '../lib/gitignore.mjs';
 import { resourcePath, synchronize } from '../sincronizar-agentes/SCRIPT.mjs';
 import { adapterManifest } from '../lib/adapters.mjs';
+import { stateDirectory } from '../lib/state-path.mjs';
 
 const assets = join(dirname(fileURLToPath(import.meta.url)), 'assets');
 const owner = 'testar-maturidade';
@@ -47,9 +48,9 @@ export const SCENARIOS = [
 ];
 
 function manifest(root) {
+  const state = join(root, stateDirectory(root), 'agentdevkit.json');
   const file = join(root, '.pbai4devs/espelhos.conf');
   if (existsSync(file)) return readFileSync(file, 'utf8');
-  const state = join(root, '.pbai4devs/estado/agentdevkit.json');
   return adapterManifest(root, { clients: existsSync(state) ? json(state).clients : undefined });
 }
 
@@ -94,7 +95,7 @@ function copyAllowed(relativePath, directory = false) {
 
 export function copyAgentStructure(sourceRoot, destination) {
   const roots = ['.pbai4devs', ...registeredRoots(sourceRoot)];
-  const stateFile = join(sourceRoot, '.pbai4devs/estado/agentdevkit.json');
+  const stateFile = join(sourceRoot, stateDirectory(sourceRoot), 'agentdevkit.json');
   const stateInfo = stat(stateFile);
   if (stateInfo && (!stateInfo.isFile() || stateInfo.isSymbolicLink())) fail('Estado da instalação deve ser arquivo regular.');
   const installation = stateInfo ? json(stateFile) : null;
@@ -162,10 +163,11 @@ function ensureOutput(output) {
 }
 
 function planning(root, scenario) {
-  const state = '.pbai4devs/estado/configuracao/ESTADO.md';
+  const stateRoot = stateDirectory(root);
+  const state = `${stateRoot}/configuracao/ESTADO.md`;
   rmSync(join(root, state), { force: true });
   if (scenario.planning === 'none' && !scenario.app) return;
-  write(root, '.pbai4devs/estado/README.md', document('Estado dos exemplos', 'Dados sintéticos deste cenário, sem aprovação real de produto.'));
+  write(root, `${stateRoot}/README.md`, document('Estado dos exemplos', 'Dados sintéticos deste cenário, sem aprovação real de produto.'));
   let paths = { prd: null, ux_ui: null, design: null, releases: null, specs: null };
   if (scenario.planning !== 'none') {
     for (const folder of ['docs', 'docs/produto', 'docs/design']) write(root, `${folder}/README.md`, document('Documentos do cenário', 'Entradas sintéticas para testar a classificação de maturidade.'));

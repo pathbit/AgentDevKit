@@ -5,6 +5,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { requireNode, isMain } from '../lib/runtime.mjs';
+import { stateDirectory } from '../lib/state-path.mjs';
 
 const repository = fs.realpathSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..'));
 const defaultAgents = ['.agents', '.agent', '.gemini', '.claude', '.codex', '.cursor', '.github', '.opencode'];
@@ -61,7 +62,7 @@ function metadata(root, file) {
 }
 
 function maturity(root, report) {
-  const stateFile = '.pbai4devs/estado/configuracao/ESTADO.md'; const state = metadata(root, stateFile);
+  const stateFile = `${stateDirectory(root)}/configuracao/ESTADO.md`; const state = metadata(root, stateFile);
   const safeDocument = value => typeof value === 'string' && !path.isAbsolute(value) && !value.includes('\\') && !value.split('/').some(part => !part || ['.', '..', '.git'].includes(part));
   const planning = {};
   for (const name of ['prd', 'ux_ui', 'design']) {
@@ -211,7 +212,7 @@ export function inspectDocumentation(root, limits = {}) {
       else if (found.kind === 'symbolic-link') add(found.boundary, found, role);
     }
   }
-  const declared = metadata(root, '.pbai4devs/estado/configuracao/ESTADO.md').documents;
+  const declared = metadata(root, `${stateDirectory(root)}/configuracao/ESTADO.md`).documents;
   for (const [role, file] of Object.entries(declared)) {
     if (!documentRoles.has(role)) continue;
     if (!safeDocument(file)) { if (file !== null) warn(null, 'invalid-configured-path'); continue; }

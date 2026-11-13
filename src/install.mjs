@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { chmodSync, existsSync, lstatSync, readFileSync, writeFileSync, readdirSync, mkdirSync, mkdtempSync, realpathSync, renameSync, rmSync, rmdirSync } from 'node:fs';
+import { chmodSync, closeSync, existsSync, fstatSync, lstatSync, openSync, readFileSync, readSync, writeFileSync, readdirSync, mkdirSync, mkdtempSync, realpathSync, renameSync, rmSync, rmdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { synchronize, isReference } from '../.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs';
@@ -8,7 +8,7 @@ import { nativePathBoundary } from '../.pbai4devs/scripts/lib/native-paths.mjs';
 import { canonicalEntrypoint, resolveEntrypoint, entrypointReference, renderEntrypointImports, extractManagedBlock, managedBlockDigest, mergeManagedContent, stripManagedContent } from '../.pbai4devs/scripts/lib/managed-content.mjs';
 import { extractTomlManagedBlock, tomlManagedBlockDigest, mergeTomlContent, stripTomlContent } from '../.pbai4devs/scripts/lib/managed-toml.mjs';
 import { writeAdapterManifest, adapterRoots, normalizeClients, resolveAdapters } from './adapters/index.mjs';
-import { packageRoot, packageInfo, statePath, entryNames, begin, end } from './config.mjs';
+import { packageRoot, packageInfo, statePath, legacyStatePath, entryNames, begin, end } from './config.mjs';
 import { normalizeLanguage, text } from './i18n.mjs';
 
 const hash = value => createHash('sha256').update(value).digest('hex');
@@ -54,11 +54,11 @@ export function safePath(root, path) {
 
 function resourceAllowed(path, directory = false) {
   const parts = path.split('/');
-  const folders = new Set(['agents', 'commands', 'external-skills', 'rules', 'scripts', 'skills', 'templates', 'tools', 'estado']);
+  const folders = new Set(['agents', 'commands', 'external-skills', 'rules', 'scripts', 'skills', 'templates', 'tools', 'state']);
   const files = new Set(['README.md', 'INSTRUCTIONS.md', 'COMPATIBILIDADE.md', 'LICENSE', '.gitignore']);
   if (!folders.has(parts[0]) && !(parts.length === 1 && files.has(parts[0]))) return false;
-  if (parts[0] === 'estado') return directory && parts.length === 1 || path === 'estado/README.md';
-  if (isGeneratedOutput(path, directory) || parts.some(part => ignored.has(part)) || parts[0] === 'adapters' || path === 'estado/agentdevkit.json' || path === '.npmignore') return false;
+  if (parts[0] === 'state') return directory && parts.length === 1 || path === 'state/README.md';
+  if (isGeneratedOutput(path, directory) || parts.some(part => ignored.has(part)) || parts[0] === 'adapters' || path === 'state/agentdevkit.json' || path === '.npmignore') return false;
   if (parts[0] === 'tools') return parts.length === 1 || (directory && parts.length === 2 && !['bin', 'npm-cache'].includes(parts[1])) || (parts.length === 2 && parts[1] === 'README.md') || (parts.length === 3 && ['TOOL.json', 'SCRIPT.mjs', 'README.md'].includes(parts[2]));
   if (parts[0] === 'external-skills') return parts.length === 1 || (parts.length === 2 && ['README.md', 'CATALOG.json'].includes(parts[1]));
   return true;
@@ -109,6 +109,7 @@ function read(root, path) {
 }
 
 function allowedManaged(path) {
+  if (path === '.pbai4devs/estado/README.md') return true;
   if (canonicalEntrypoint(path) || path === '.gitignore') return true;
   if (nativeMarkdown(path) || nativeToml(path)) return true;
   if (['catalog.json', 'skills.json', 'agents.json', 'rules.json', 'espelhos.conf'].some(name => path === `.pbai4devs/${name}`)) return true;
@@ -122,7 +123,7 @@ function nativeMarkdown(path) {
     && adapterRoots.some(root => {
       if (!path.startsWith(`${root}/`)) return false;
       const relative = path.slice(root.length + 1).split('/');
-      return !['tools', 'scripts', 'templates', 'external-skills', 'estado', 'tests', 'docs', 'adapters', 'workflows'].includes(relative[0].toLowerCase())
+      return !['tools', 'scripts', 'templates', 'external-skills', 'estado', 'state', 'tests', 'docs', 'adapters', 'workflows'].includes(relative[0].toLowerCase())
         && !['readme.md', 'instructions.md'].includes(relative.at(-1).toLowerCase());
     });
 }
@@ -130,7 +131,7 @@ const nativeToml = path => path.startsWith('.gemini/commands/') && path.endsWith
 const nativeManagedText = path => nativeMarkdown(path) || nativeToml(path);
 
 export function loadState(root) {
-  const content = read(root, statePath); if (content === null) return null;
+  const content = read(root, actualStatePath(root)); if (content === null) return null;
   let state; try { state = JSON.parse(content); } catch { fail('E_STATE', 'Invalid AgentDevKit state JSON.'); }
   if (state?.schemaVersion !== 1 || !normalizeLanguage(state.language) || typeof state.version !== 'string' || !state.files || typeof state.files !== 'object' || Array.isArray(state.files) || !state.blocks || typeof state.blocks !== 'object' || Array.isArray(state.blocks)) fail('E_STATE', 'Invalid AgentDevKit state.');
   if (state.clients !== undefined) {
@@ -142,6 +143,81 @@ export function loadState(root) {
     if (!allowedManaged(path) || !/^[a-f0-9]{64}$/.test(digest)) fail('E_STATE', `Invalid managed state entry: ${path}`);
   }
   return state;
+}
+
+function actualStatePath(root) {
+  const legacy = stat(safePath(root, '.pbai4devs/estado'));
+  const current = stat(safePath(root, '.pbai4devs/state'));
+  if (legacy && !legacy.isDirectory() || current && !current.isDirectory()) fail('E_STATE', 'AgentDevKit state must be a directory.');
+  if (legacy && current) fail('E_STATE', 'Both .pbai4devs/estado and .pbai4devs/state exist; preserve both and resolve the conflict.');
+  return legacy ? legacyStatePath : statePath;
+}
+
+function readLegacyConfiguration(root, path) {
+  const limit = 4 * 1024 * 1024, fd = openSync(safePath(root, path), 'r');
+  try {
+    if (!fstatSync(fd).isFile() || fstatSync(fd).size > limit) fail('E_STATE', 'Legacy configuration is too large or not a regular file.');
+    const buffer = Buffer.allocUnsafe(limit + 1);
+    let total = 0, count;
+    while (total < buffer.length && (count = readSync(fd, buffer, total, buffer.length - total, null)) > 0) total += count;
+    if (total > limit) fail('E_STATE', 'Legacy configuration is too large to inspect safely.');
+    return buffer.subarray(0, total);
+  } finally { closeSync(fd); }
+}
+
+function assertNoLegacyReferences(value) {
+  const legacy = /\.pbai4devs\/estado(?=$|\/|[\s"'\],}:#])/i;
+  const reject = () => fail('E_LEGACY_PATH', 'Replace .pbai4devs/estado references with .pbai4devs/state in the legacy configuration before running update.');
+  if (legacy.test(value)) reject();
+  const normalized = value.replaceAll('\r', '');
+  const header = normalized.match(/^---\n([\s\S]*?)\n---(?:\n|$)/)?.[1];
+  if (header === undefined) {
+    if (normalized.startsWith('---')) fail('E_CONFIG_PARSE', 'Legacy configuration has an incomplete frontmatter block.');
+    return;
+  }
+  let documents = false;
+  for (const line of header.split('\n')) {
+    const top = line.match(/^([a-z_]+):\s*(.*)$/);
+    if (top) documents = top[1] === 'documentos';
+    const nested = !top && documents ? line.match(/^  ([a-z_]+):\s*(.*)$/) : null;
+    const raw = (top?.[2] ?? nested?.[2])?.trim();
+    if (!raw?.startsWith('"')) continue;
+    let decoded;
+    try { decoded = JSON.parse(raw); }
+    catch { fail('E_CONFIG_PARSE', 'Legacy configuration contains an ambiguous quoted scalar.'); }
+    if (typeof decoded !== 'string') fail('E_CONFIG_PARSE', 'Legacy configuration contains an invalid quoted scalar.');
+    if (legacy.test(decoded)) reject();
+  }
+}
+
+function legacyStateMigration(root) {
+  if (actualStatePath(root) !== legacyStatePath) return null;
+  const base = '.pbai4devs/estado', files = [], directories = [];
+  const visit = folder => {
+    const info = stat(safePath(root, folder));
+    if (!info?.isDirectory()) fail('E_STATE', `Invalid state directory: ${folder}`);
+    const names = readdirSync(safePath(root, folder)).sort();
+    directories.push({ path: folder, mode: info.mode & 0o777, names });
+    for (const name of names) {
+      const path = `${folder}/${name}`, item = stat(safePath(root, path));
+      if (item?.isDirectory()) visit(path);
+      else if (item?.isFile()) {
+        const configuration = path === `${base}/configuracao/ESTADO.md`;
+        const content = configuration ? readLegacyConfiguration(root, path) : read(root, path);
+        if (configuration) {
+          if (content.includes(0)) fail('E_STATE', 'Legacy configuration contains binary data.');
+          let value;
+          try { value = new TextDecoder('utf-8', { fatal: true }).decode(content); }
+          catch { fail('E_STATE', 'Legacy configuration is not valid UTF-8.'); }
+          assertNoLegacyReferences(value);
+        }
+        files.push({ path, target: path.replace(`${base}/`, '.pbai4devs/state/'), mode: item.mode & 0o777, content });
+      }
+      else fail('E_STATE', `Unsupported state entry: ${path}`);
+    }
+  };
+  visit(base);
+  return { files, directories };
 }
 
 function extractBlock(content, first = begin, last = end) {
@@ -194,7 +270,7 @@ function copyResources(source, destination) {
 
 function readDerivedState(target) {
   let entries = {}, outputs = {}, blocks = {}, files = {}, removedBlocks = [];
-  const derived = read(target, '.pbai4devs/estado/derived.json');
+  const derived = read(target, actualStatePath(target).replace(/agentdevkit\.json$/, 'derived.json'));
   if (derived) {
     try {
       const value = JSON.parse(derived);
@@ -216,6 +292,10 @@ function readDerivedState(target) {
 
 export function planInstallation({ target, language = 'pt', mode = 'init', force = false, clients }) {
   const previous = loadState(target);
+  const migration = legacyStateMigration(target);
+  // A migration must update the installed scripts and pointers in the same
+  // transaction; a plain sync/agents/lang would leave old hard-coded paths.
+  if (migration && !['init', 'update'].includes(mode)) fail('E_UPGRADE', 'Run AgentDevKit update before migrating the legacy state directory.');
   if (mode !== 'init' && !previous) fail('E_MISSING', text(language, 'missing'));
   const selected = normalizeClients(clients ?? previous?.clients ?? ['all']);
   const active = resolveAdapters(selected);
@@ -272,7 +352,7 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
       bundled.push('LICENSE');
     }
     const supplied = new Set(bundled);
-    const internal = new Set(['catalog.json', 'skills.json', 'agents.json', 'rules.json', 'espelhos.conf', '.gitignore', 'estado/README.md']);
+    const internal = new Set(['catalog.json', 'skills.json', 'agents.json', 'rules.json', 'espelhos.conf', '.gitignore', 'state/README.md', 'estado/README.md']);
     if (bundled.length) for (const path of Object.keys(previous?.files || {})) {
       if (path.startsWith('.pbai4devs/') && !supplied.has(path.slice(11)) && !internal.has(path.slice(11))) rmSync(safePath(stage, path), { force: true });
     }
@@ -302,10 +382,32 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
       }
     }
     if (!preserveNative('README.md') && !read(target, 'README.md')) write(stage, 'README.md', `---\ndescription: ${JSON.stringify(text(language, 'readme'))}\nlanguage: ${language}\n---\n\n# ${text(language, 'project')}\n\n${text(language, 'readme')}\n`);
-    if (!existsSync(join(stage, '.pbai4devs/estado/README.md'))) write(stage, '.pbai4devs/estado/README.md', `---\ndescription: AgentDevKit state.\n---\n\n# AgentDevKit\n\n${text(language, 'state')}\n`);
+    if (!existsSync(join(stage, '.pbai4devs/state/README.md'))) write(stage, '.pbai4devs/state/README.md', `---\ndescription: AgentDevKit state.\n---\n\n# AgentDevKit\n\n${text(language, 'state')}\n`);
     const unknown = new Set(existing.filter(path => !supplied.has(path) && !previous?.files[`.pbai4devs/${path}`] && !internal.has(path)));
     const paths = walk(stage, '', path => !path.split('/').includes('.agent-tests')).filter(path => !path.startsWith('.pbai4devs/') || !unknown.has(path.slice(11)));
     const desired = new Map(paths.filter(path => !preserveNative(path)).map(path => [path, readFileSync(join(stage, path))]));
+    const migratedHuman = new Set();
+    for (const item of migration?.files || []) {
+      if (item.path === legacyStatePath) continue;
+      if (item.path === '.pbai4devs/estado/README.md') {
+        const managed = previous?.files?.[item.path] === hash(item.content);
+        const matchesTemplate = desired.get(item.target)?.equals(item.content);
+        desired.set(item.target, item.content);
+        if (!managed || !matchesTemplate) { recordPreserved(item.target, 'existing-file'); migratedHuman.add(item.target); }
+        continue;
+      }
+      if (desired.has(item.target)) fail('E_STATE', `State migration collides with a managed file: ${item.target}`);
+      desired.set(item.target, item.content);
+      migratedHuman.add(item.target);
+    }
+    // Preserve human README content; verified managed files may be updated.
+    const stateReadme = '.pbai4devs/state/README.md';
+    const currentStateReadme = read(target, stateReadme);
+    if (currentStateReadme && previous?.files?.[stateReadme] !== hash(currentStateReadme)) {
+      desired.set(stateReadme, currentStateReadme);
+      migratedHuman.add(stateReadme);
+      recordPreserved(stateReadme, 'existing-file');
+    }
     for (const [path, content] of desired) {
       if (!nativeManagedText(path) || canonicalEntrypoint(path)) continue;
       const current = read(target, path);
@@ -330,7 +432,7 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
     const manifest = { schemaVersion: 1, version: bundled.length ? packageInfo.version : previous.version, language, files: {}, blocks: {} };
     if (mode !== 'sync' || clients !== undefined || previous?.clients !== undefined) manifest.clients = selected;
     for (const [path, content] of desired) {
-      if (path === 'README.md') continue;
+      if (path === 'README.md' || migratedHuman.has(path)) continue;
       const block = blockDigest(path, content);
       if (block) manifest.blocks[path] = block;
       else manifest.files[path] = hash(content);
@@ -348,10 +450,12 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
       const conflict = current && path !== statePath && !managed && !appendBlock;
       const changedBlock = current && knownBlocks[path] && !managed;
       if (conflict || changedBlock) conflicts.push(path);
-      changes.push({ path, action: current ? 'update' : 'create', content, beforeHash: current ? hash(current) : null });
+      const migrated = migration?.files.find(item => item.target === path);
+      changes.push({ path, action: current ? 'update' : 'create', content, beforeHash: current ? hash(current) : null, ...(migrated ? { mode: migrated.mode } : {}) });
     }
     const wholeRecords = [previous?.files || {}, derivedEntries, derivedFiles];
     for (const path of new Set(wholeRecords.flatMap(record => Object.keys(record)))) if (!desired.has(path)) {
+      if (migration && path.startsWith('.pbai4devs/estado/')) continue;
       if (path === '.gitignore') { recordPreserved(path, 'project-owned'); continue; }
       if (aliasedEntrypoint(path)) continue;
       const current = read(target, path); if (!current) continue;
@@ -361,6 +465,7 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
       changes.push({ path, action: 'remove', content: null, beforeHash: hash(current) });
     }
     for (const [recordedPath, digest] of Object.entries(knownBlocks)) {
+      if (migration && recordedPath.startsWith('.pbai4devs/estado/')) continue;
       const path = canonicalEntrypoint(recordedPath) ? entryPaths.get(canonicalEntrypoint(recordedPath)) : recordedPath;
       if (desired.has(path)) continue;
       if (changes.some(change => change.path === path)) continue;
@@ -410,6 +515,7 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
       if (!known) conflicts.push(legacy);
       changes.push({ path: legacy, action: 'remove', content: null, beforeHash: hash(legacyContent) });
     }
+    for (const item of migration?.files || []) changes.push({ path: item.path, action: 'remove', content: null, beforeHash: hash(item.content) });
     const retiredRoots = adapterRoots.filter(root => !active.roots.includes(root) && changes.some(change => change.action === 'remove' && change.path.startsWith(`${root}/`) && (previous?.files[change.path] || previous?.blocks[change.path])));
     const ownedOutputs = [...new Set([...synchronized.ownedOutputs, ...ownedEntrypoints, statePath])].filter(path => !mixedPaths.has(path) && !overlapsPreserved(path));
     const hashes = {};
@@ -419,12 +525,13 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
       const current = read(target, path);
       if (current) { const source = current.toString('utf8'), block = extractBlock(source, '# BEGIN AGENT IGNORE', '# END AGENT IGNORE'); if (block && source.trim() === block.trim() && hash(block) === previous.blocks[path]) hashes[path] = hash(current); }
     }
-    if (previous) hashes[statePath] = hash(read(target, statePath));
+    if (previous && !migration) hashes[statePath] = hash(read(target, statePath));
     const untrack = existsSync(target) ? planUntrack(target, hashes) : null;
+    if (migration && untrack?.paths.length) fail('E_STATE', 'State migration would change the Git index; preserve and resolve tracked outputs first.');
     const localIgnore = planLocalIgnore(target, { outputs: ownedOutputs, templateRoot: stage });
     const localIgnoreCheck = checkLocalIgnore(localIgnore, { replacedBlocks: replacedIgnoreBlocks(target, changes, previous) });
     conflicts.push(...(untrack?.conflicts || []), ...localIgnoreCheck.missing);
-    return { target, language, mode, changes, conflicts: [...new Set(conflicts)].sort(), canApply: (!conflicts.length || force) && !untrack?.conflicts?.length && !localIgnoreCheck.missing.length, manifest, retiredRoots, ownedOutputs, untrack, localIgnore, localIgnoreCheck, preserved: [...preserved.values()].sort((a, b) => a.path.localeCompare(b.path)) };
+    return { target, language, mode, changes, conflicts: [...new Set(conflicts)].sort(), canApply: (!conflicts.length || force) && !untrack?.conflicts?.length && !localIgnoreCheck.missing.length, manifest, retiredRoots, ownedOutputs, untrack, localIgnore, localIgnoreCheck, migration, preserved: [...preserved.values()].sort((a, b) => a.path.localeCompare(b.path)) };
   } finally { rmSync(stage, { recursive: true, force: true }); }
 }
 
@@ -432,6 +539,17 @@ export function applyPlan(plan) {
   if (!plan.canApply) fail('E_CONFLICT', text(plan.language, 'conflict'));
   assertLocalIgnoreUnchanged(plan.localIgnore);
   const { target } = plan;
+  if (plan.migration) {
+    if (stat(safePath(target, '.pbai4devs/state'))) fail('E_CHANGED', 'State destination appeared after planning.');
+    for (const directory of plan.migration.directories) {
+      const info = stat(safePath(target, directory.path));
+      if (!info?.isDirectory() || (info.mode & 0o777) !== directory.mode || JSON.stringify(readdirSync(safePath(target, directory.path)).sort()) !== JSON.stringify(directory.names)) fail('E_CHANGED', `State directory changed after planning: ${directory.path}`);
+    }
+    for (const item of plan.migration.files) {
+      const info = stat(safePath(target, item.path));
+      if (!info?.isFile() || (info.mode & 0o777) !== item.mode || hash(readFileSync(safePath(target, item.path))) !== hash(item.content)) fail('E_CHANGED', `State file changed after planning: ${item.path}`);
+    }
+  }
   const backup = `.agent-tests/agentdevkit/backups/${Date.now()}-${randomUUID()}`;
   safePath(target, backup);
   for (const change of plan.changes) safePath(target, change.path);
@@ -457,9 +575,23 @@ export function applyPlan(plan) {
       const content = change.content;
       const signature = { path: change.path, hash: content === null ? null : hash(content) };
       if (content === null) { rmSync(file, { force: true }); applied.push(signature); }
-      else atomicWrite(target, change.path, content, beforeModes.get(change.path), mode => {
+      else atomicWrite(target, change.path, content, beforeModes.get(change.path) ?? change.mode, mode => {
         signature.mode = mode; applied.push(signature);
       }, () => assertOriginal(change.path));
+    }
+    if (plan.migration) {
+      for (const directory of plan.migration.directories) {
+        const destination = directory.path.replace(/^\.pbai4devs\/estado/, '.pbai4devs/state');
+        const file = safePath(target, destination), existing = stat(file);
+        if (existing && !existing.isDirectory()) fail('E_CHANGED', `Invalid state destination: ${destination}`);
+        if (!existing) mkdirSync(file, { recursive: true, mode: directory.mode });
+        chmodSync(file, directory.mode);
+      }
+      for (const directory of [...plan.migration.directories].sort((a, b) => b.path.length - a.path.length)) {
+        const file = safePath(target, directory.path), info = stat(file);
+        if (!info?.isDirectory() || readdirSync(file).length) fail('E_CHANGED', `State directory changed during migration: ${directory.path}`);
+        rmdirSync(file); removedDirectories.push({ path: directory.path, mode: directory.mode });
+      }
     }
     pruneRemovedDirectories(plan, directory => removedDirectories.push(directory));
     const changesFallback = plan.changes.some(change => change.path === '.gitignore');
@@ -497,6 +629,11 @@ export function applyPlan(plan) {
         if (failure.code === 'E_CHANGED') preserved.push(path);
         else rollbackErrors.push(failure);
       }
+    }
+    if (plan.migration) for (const directory of [...plan.migration.directories].sort((a, b) => b.path.length - a.path.length)) {
+      const destination = directory.path.replace(/^\.pbai4devs\/estado/, '.pbai4devs/state');
+      try { const file = safePath(target, destination); if (stat(file)?.isDirectory() && !readdirSync(file).length) rmdirSync(file); }
+      catch (failure) { if (!['ENOENT', 'ENOTEMPTY', 'EEXIST'].includes(failure.code)) rollbackErrors.push(failure); }
     }
     if (preserved.length) {
       try { error.rollbackPreservedPaths = preserved; } catch { /* Preserve a exceção original. */ }

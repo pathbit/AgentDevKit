@@ -6,7 +6,7 @@ description: Identifica o estado atual e orienta a próxima ação útil do proj
 # Próximos passos
 
 Leia o pedido, o estado salvo e os documentos existentes. Use o idioma de
-`.pbai4devs/estado/agentdevkit.json` ou português quando ainda não houver escolha.
+`.pbai4devs/state/agentdevkit.json` ou português quando ainda não houver escolha.
 Se a CLI estiver disponível, consulte `agentdevkit next --target . --json`;
 caso contrário, use os arquivos e a inspeção local do projeto.
 

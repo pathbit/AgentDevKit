@@ -28,7 +28,7 @@ function cli(root, args, expected = 0) {
 
 test('help, version e erros retornam JSON unico com proxima acao', t => {
   const root = fixture(t);
-  put(root, '.pbai4devs/estado/agentdevkit.json', '{invalid');
+  put(root, '.pbai4devs/state/agentdevkit.json', '{invalid');
   const help = cli(root, ['--help', '--lang', 'en']);
   assert.equal(help.language, 'en'); assert.equal(Object.hasOwn(help, 'clients'), false);
   const version = cli(root, ['--version']);
@@ -51,7 +51,7 @@ test('tools preserva argumentos opacos após -- e opções globais antes dele', 
 
 test('tools encaminha flags do processo filho sem mudar idioma ou destino da CLI', t => {
   const root = fixture(t);
-  put(root, '.pbai4devs/estado/agentdevkit.json', JSON.stringify({ schemaVersion: 1, version: packageInfo.version, language: 'pt', clients: ['codex'], files: {}, blocks: {} }));
+  put(root, '.pbai4devs/state/agentdevkit.json', JSON.stringify({ schemaVersion: 1, version: packageInfo.version, language: 'pt', clients: ['codex'], files: {}, blocks: {} }));
   put(root, '.pbai4devs/scripts/preparar-ferramentas/SCRIPT.mjs', 'process.stdout.write(JSON.stringify(process.argv.slice(2)));\n');
   const opaque = ['run', 'agent-browser', '--', '--json', '--lang', 'en', '--target', 'example.test'];
   const result = spawnSync(process.execPath, [bin, '--json', '--target', root, 'tools', ...opaque], { encoding: 'utf8', timeout: 60000 });
@@ -64,7 +64,7 @@ test('tools encaminha flags do processo filho sem mudar idioma ou destino da CLI
 test('help e version independem de cwd reservado, destino e estado do projeto', t => {
   const root = fixture(t), cwd = join(root, 'node_modules');
   mkdirSync(cwd);
-  put(cwd, '.pbai4devs/estado/agentdevkit.json', '{invalid');
+  put(cwd, '.pbai4devs/state/agentdevkit.json', '{invalid');
   for (const [flag, command] of [['--help', 'help'], ['--version', 'version']]) {
     for (const targetArgs of [[], ['--target', join(root, '.git')]]) {
       const result = spawnSync(process.execPath, [bin, flag, '--json', '--lang', 'en', ...targetArgs], { cwd, encoding: 'utf8', timeout: 60000 });
@@ -74,7 +74,7 @@ test('help e version independem de cwd reservado, destino e estado do projeto', 
       assert.equal(value.language, 'en'); assert.equal(value.error, undefined);
     }
   }
-  assert.equal(readFileSync(join(cwd, '.pbai4devs/estado/agentdevkit.json'), 'utf8'), '{invalid');
+  assert.equal(readFileSync(join(cwd, '.pbai4devs/state/agentdevkit.json'), 'utf8'), '{invalid');
 });
 
 test('sem comando inicializa; dry-run nao cria destino; init e update sao idempotentes', t => {
@@ -82,7 +82,7 @@ test('sem comando inicializa; dry-run nao cria destino; init e update sao idempo
   const preview = cli(target, ['init', '--dry-run', '--lang', 'en']);
   assert.ok(preview.plan.length); assert.equal(existsSync(target), false);
   const first = cli(target, ['--yes', '--lang', 'en']); assert.equal(first.command, 'init'); assert.equal(first.changed, true);
-  const state = JSON.parse(readFileSync(join(target, '.pbai4devs/estado/agentdevkit.json')));
+  const state = JSON.parse(readFileSync(join(target, '.pbai4devs/state/agentdevkit.json')));
   assert.equal(state.language, 'en');
   for (const name of ['skills', 'agents', 'rules']) assert.ok(state.files[`.agents/${name}.json`]);
   assert.match(readFileSync(join(target, 'README.md'), 'utf8'), /^---\ndescription: .+\nlanguage: en\n---\n\n# Project\n/);
@@ -180,7 +180,7 @@ test('estado e catalogo excluem artefatos locais sem apagar arquivos preexistent
   for (const path of artifacts) put(root, `${base}/${path}`, 'local-only');
   const fixturePath = `${base}/fixtures/cache/input.txt`; put(root, fixturePath, 'fixture');
   cli(root, ['init', '--yes']);
-  const state = JSON.parse(readFileSync(join(root, '.pbai4devs/estado/agentdevkit.json'))), catalog = readFileSync(join(root, '.pbai4devs/catalog.json'), 'utf8');
+  const state = JSON.parse(readFileSync(join(root, '.pbai4devs/state/agentdevkit.json'))), catalog = readFileSync(join(root, '.pbai4devs/catalog.json'), 'utf8');
   for (const path of artifacts) {
     assert.equal(state.files[`${base}/${path}`], undefined);
     assert.equal(catalog.includes(`${base}/${path}`), false, path);

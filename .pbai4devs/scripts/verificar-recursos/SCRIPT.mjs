@@ -8,12 +8,13 @@ import { buildCatalog } from '../lib/catalog.mjs';
 import { isGeneratedOutput } from '../lib/gitignore.mjs';
 import { canonicalEntrypoint, extractManagedBlock, managedBlockDigest } from '../lib/managed-content.mjs';
 import { extractTomlManagedBlock, tomlManagedBlockDigest } from '../lib/managed-toml.mjs';
+import { stateDirectory } from '../lib/state-path.mjs';
 
 const fail = message => { throw new Error(message); };
 const normalize = value => value.split(sep).join('/');
 const excluded = new Set(['node_modules', '.git', 'opencode-loop', '.agent-tests']);
 const toolState = new Set(['bin', '.cache', 'npm-cache']);
-const auxiliary = ['templates', 'scripts', 'tools', 'external-skills', 'adapters', 'estado', 'tests', 'docs'];
+const auxiliary = ['templates', 'scripts', 'tools', 'external-skills', 'adapters', 'state', 'estado', 'tests', 'docs'];
 
 function checkedStat(root, location) {
   let item;
@@ -31,8 +32,9 @@ function checkedPath(root, path) {
 }
 
 function ownership(root) {
-  const file = checkedPath(root, '.pbai4devs/estado/agentdevkit.json');
-  const derivedFile = checkedPath(root, '.pbai4devs/estado/derived.json');
+  const stateRoot = stateDirectory(root);
+  const file = checkedPath(root, `${stateRoot}/agentdevkit.json`);
+  const derivedFile = checkedPath(root, `${stateRoot}/derived.json`);
   if (!checkedStat(root, file) && !checkedStat(root, derivedFile)) return null;
   const readState = location => {
     try { return JSON.parse(readFileSync(location, 'utf8')); }

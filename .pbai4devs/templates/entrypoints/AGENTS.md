@@ -15,5 +15,5 @@ cliente em `.pbai4devs/COMPATIBILIDADE.md`.
 
 Use o `README.md` do projeto para seu contexto. Os clientes escolhidos têm
 apontamentos; scripts, ferramentas e modelos permanecem na origem compartilhada.
-Respeite a seleção em `.pbai4devs/estado/agentdevkit.json`. Para alterá-la, use
+Respeite a seleção em `.pbai4devs/state/agentdevkit.json`. Para alterá-la, use
 `agents` na CLI; não deduza o agente ativo pelo aplicativo ou pelas pastas.

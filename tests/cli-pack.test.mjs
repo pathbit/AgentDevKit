@@ -27,6 +27,7 @@ test('npm pack real exclui estado e payloads em qualquer caixa e preserva fontes
     'tools/.CACHE/runtime/node', 'tools/bin/demo', 'tools/BIN/demo', 'tools/versions/demo',
     'tools/npm-cache/private.json', 'external-skills/.local/private/SKILL.md',
     'external-skills/.LOCAL/private/SKILL.md', 'estado/agentdevkit.json', 'estado/configuracao/ESTADO.md',
+    'estado/README.md', 'state/agentdevkit.json', 'state/derived.json', 'state/configuracao/ESTADO.md',
     'scripts/demo/node_modules/private/index.js', 'scripts/demo/NODE_MODULES/private/index.js',
     'scripts/demo/.playwright-mcp/trace.json', 'scripts/demo/.PLAYWRIGHT-MCP/trace.json',
     'scripts/demo/Playwright-report/index.html', 'scripts/demo/TestResults/private.json',
@@ -39,7 +40,7 @@ test('npm pack real exclui estado e payloads em qualquer caixa e preserva fontes
   const developmentOnly = ['tests/private.test.mjs', 'scripts/release/private.mjs', 'examples/.claude/skills/private/SKILL.md'];
   for (const path of developmentOnly) put(stage, path, marker);
   const kept = [
-    'README.md', 'estado/README.md', 'external-skills/README.md', 'external-skills/CATALOG.json',
+    'README.md', 'state/README.md', 'external-skills/README.md', 'external-skills/CATALOG.json',
     'tools/demo/TOOL.json', 'tools/demo/SCRIPT.mjs', 'tools/demo/README.md',
     'scripts/demo/SCRIPT.mjs', 'scripts/demo/tests/TEST.mjs', 'scripts/demo/tests/fixtures/cache/input.txt',
     'scripts/demo/tests/fixtures/compose.local.yml.template', 'scripts/demo/tests/fixtures/.env.example',

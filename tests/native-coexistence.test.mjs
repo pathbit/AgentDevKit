@@ -85,7 +85,7 @@ test('instala e atualiza sobre agentes configurados preservando arquivos, links 
     assert.ok(installed.preserved.some(item => item.path === path), path);
   }
   assert.ok(existsSync(join(root, '.agents/skills/projeto/criar-skill/SKILL.md')), 'Codex retains its native skill path.');
-  const state = JSON.parse(readFileSync(join(root, '.pbai4devs/estado/agentdevkit.json')));
+  const state = JSON.parse(readFileSync(join(root, '.pbai4devs/state/agentdevkit.json')));
   const complemented = ['AGENTS.md', '.claude/agents/revisor.md', '.github/agents/revisor.agent.md'];
   for (const path of [...Object.keys(state.files), ...Object.keys(state.blocks)]) {
     assert.ok(!paths.includes(path) || complemented.includes(path) && state.blocks[path], `Human file claimed: ${path}`);
@@ -101,11 +101,11 @@ test('instala e atualiza sobre agentes configurados preservando arquivos, links 
   assert.ok(diagnostic.preserved.some(item => item.path === 'CLAUDE.md'));
   assert.ok(diagnostic.issues.some(item => item.code === 'tracked-local-output' && item.path === '.claude/settings.local.json'));
   await cli(root, ['sync', '--check'], 1);
-  const stable = readFileSync(join(root, '.pbai4devs/estado/agentdevkit.json'));
+  const stable = readFileSync(join(root, '.pbai4devs/state/agentdevkit.json'));
   assert.equal((await cli(root, ['update', '--force', '--yes'])).changed, false);
   assert.equal((await cli(root, args)).changed, false);
   await cli(root, ['doctor'], 1); await cli(root, ['sync', '--check'], 1);
-  assert.deepEqual(readFileSync(join(root, '.pbai4devs/estado/agentdevkit.json')), stable);
+  assert.deepEqual(readFileSync(join(root, '.pbai4devs/state/agentdevkit.json')), stable);
   assert.deepEqual(snapshot(root, paths), extended);
   assert.equal(git('ls-files', '--stage', '-z'), index);
   assert.equal(git('diff', '--cached', '--binary'), staged);
@@ -138,14 +138,14 @@ test('link em caminho já gerenciado continua sendo um erro e não causa gravaç
   await cli(root, ['init', '--yes', '--agents', 'claude']);
   const path = '.claude/agents/revisor.md', file = join(root, path);
   put(directory, 'outside.txt', 'external content\n');
-  const state = readFileSync(join(root, '.pbai4devs/estado/agentdevkit.json'));
+  const state = readFileSync(join(root, '.pbai4devs/state/agentdevkit.json'));
   rmSync(file);
   if (!link(t, '../../../outside.txt', file)) return;
   const originalLink = readlinkSync(file);
   const denied = await cli(root, ['update', '--force'], 1);
   assert.equal(denied.error.code, 'E_SYMLINK');
   assert.equal(readlinkSync(file), originalLink);
-  assert.deepEqual(readFileSync(join(root, '.pbai4devs/estado/agentdevkit.json')), state);
+  assert.deepEqual(readFileSync(join(root, '.pbai4devs/state/agentdevkit.json')), state);
   assert.equal(readFileSync(join(directory, 'outside.txt'), 'utf8'), 'external content\n');
 });
 
@@ -166,7 +166,7 @@ test('preserva configuração JSON nativa mesmo quando tem o formato de um índi
   put(root, path, content);
   const installed = await cli(root, ['init', '--yes', '--agents', 'codex']);
   assert.ok(installed.preserved.some(item => item.path === path));
-  const state = JSON.parse(readFileSync(join(root, '.pbai4devs/estado/agentdevkit.json')));
+  const state = JSON.parse(readFileSync(join(root, '.pbai4devs/state/agentdevkit.json')));
   assert.equal(state.files[path], undefined);
   await cli(root, ['doctor']); await cli(root, ['update', '--force']);
   assert.equal(readFileSync(join(root, path), 'utf8'), content);
@@ -176,15 +176,15 @@ test('migra índices comprovadamente gerados por sincronização standalone', as
   const { root } = fixture(t);
   const path = '.agents/skills.json';
   const preparation = planInstallation({ target: root, clients: ['codex'] });
-  for (const change of preparation.changes) if (change.path.startsWith('.pbai4devs/') && change.path !== '.pbai4devs/estado/agentdevkit.json') put(root, change.path, change.content);
-  assert.equal(existsSync(join(root, '.pbai4devs/estado/agentdevkit.json')), false);
+  for (const change of preparation.changes) if (change.path.startsWith('.pbai4devs/') && change.path !== '.pbai4devs/state/agentdevkit.json') put(root, change.path, change.content);
+  assert.equal(existsSync(join(root, '.pbai4devs/state/agentdevkit.json')), false);
   const standalone = synchronize({ root, output() {} });
   assert.equal(standalone.exitCode, 0);
-  const derived = JSON.parse(readFileSync(join(root, '.pbai4devs/estado/derived.json')));
+  const derived = JSON.parse(readFileSync(join(root, '.pbai4devs/state/derived.json')));
   assert.equal(derived.outputs[path], hash(readFileSync(join(root, path))));
   const installed = await cli(root, ['init', '--yes', '--agents', 'codex']);
   assert.ok(!installed.preserved.some(item => item.path === path));
-  const state = JSON.parse(readFileSync(join(root, '.pbai4devs/estado/agentdevkit.json')));
+  const state = JSON.parse(readFileSync(join(root, '.pbai4devs/state/agentdevkit.json')));
   assert.equal(state.files[path], hash(readFileSync(join(root, path))));
   assert.ok(JSON.parse(readFileSync(join(root, path))).entries.length);
   await cli(root, ['doctor']); await cli(root, ['sync', '--check']);
@@ -242,7 +242,7 @@ test('preserva Readme.md e entradas humanas com caixa diferente sem criar duplic
   assert.equal(git('ls-files', '--stage', '-z'), index);
   const names = readdirSync(root);
   for (const name of ['README.md', 'AGENTS.md', 'CLAUDE.md', 'GEMINI.md']) assert.ok(!names.includes(name), name);
-  const state = JSON.parse(readFileSync(join(root, '.pbai4devs/estado/agentdevkit.json')));
+  const state = JSON.parse(readFileSync(join(root, '.pbai4devs/state/agentdevkit.json')));
   for (const path of [...Object.keys(files), 'AGENTS.md', 'CLAUDE.md', 'GEMINI.md']) assert.equal(state.files[path], undefined, path);
   for (const path of ['agents.md', 'claude.md', 'Gemini.md']) assert.equal(state.blocks[path], managedBlockDigest(readFileSync(join(root, path))), path);
 });

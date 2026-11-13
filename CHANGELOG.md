@@ -4,6 +4,11 @@ description: Alterações verificáveis por versão do AgentDevKit.
 
 # Changelog
 
+## 0.0.17 — 2026-11-13
+
+- A pasta compartilhada de estado passa a se chamar `.pbai4devs/state`.
+- Instalações existentes migram os dados sem alterar o índice ou o ignore.
+
 ## 0.0.16 — 2026-11-13
 
 - Testes portáteis distribuídos entre jobs para Windows e macOS.

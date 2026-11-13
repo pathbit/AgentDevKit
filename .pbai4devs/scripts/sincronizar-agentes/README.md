@@ -41,6 +41,6 @@ sem Git, informa que a proteção fica pendente até `git init` e sincronizaçã
 Somente arquivos integralmente gerados são excluídos; pastas de clientes podem
 conter arquivos humanos versionados. Conteúdo próprio não é desindexado pela
 presença de um bloco gerenciado.
-Entradas novas usam os templates; hashes em `estado/derived.json` permitem
+Entradas novas usam os templates; hashes em `state/derived.json` permitem
 atualizar arquivos gerados e blocos separadamente, preservando alterações humanas.
 `--check` também acusa derivados ainda rastreados; não altera o índice.

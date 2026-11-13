@@ -68,14 +68,14 @@ test('check Git distingue fontes de saídas e não gera arquivos no checkout', t
   const put = (path, text = 'fixture') => { mkdirSync(dirname(join(directory, path)), { recursive: true }); writeFileSync(join(directory, path), text); };
   const git = (...args) => { const result = spawnSync('git', ['-C', directory, ...args], { encoding: 'utf8', shell: false }); assert.equal(result.status, 0, result.stderr); };
   put('.pbai4devs/templates/clients/ADAPTERS.json', readFileSync(join(root, '.pbai4devs/templates/clients/ADAPTERS.json')));
-  for (const file of ['README.md', 'src/cli.mjs', 'bin/agentdevkit.mjs', 'tests/example.test.mjs', 'scripts/release/pipeline.mjs', 'examples/.claude/skills/example/SKILL.md', '.github/workflows/ci.yml', '.github/ISSUE_TEMPLATE/bug.yml', '.github/PULL_REQUEST_TEMPLATE.md', '.github/.gitignore', '.vscode/.gitignore', '.vscode/settings.json', '.pbai4devs/agents/revisor/claude.yaml', '.pbai4devs/estado/README.md', '.pbai4devs/estado/configuracao/ESTADO.md', '.pbai4devs/templates/example.sh.template']) put(file);
+  for (const file of ['README.md', 'src/cli.mjs', 'bin/agentdevkit.mjs', 'tests/example.test.mjs', 'scripts/release/pipeline.mjs', 'examples/.claude/skills/example/SKILL.md', '.github/workflows/ci.yml', '.github/ISSUE_TEMPLATE/bug.yml', '.github/PULL_REQUEST_TEMPLATE.md', '.github/.gitignore', '.vscode/.gitignore', '.vscode/settings.json', '.pbai4devs/agents/revisor/claude.yaml', '.pbai4devs/state/README.md', '.pbai4devs/state/configuracao/ESTADO.md', '.pbai4devs/templates/example.sh.template']) put(file);
   git('init', '--quiet'); git('add', '.');
   assert.ok(guardSourceOnlyGit(directory).files > 0);
   const calls = [];
   runPipeline('check', { root: directory, run(_root, args) { calls.push(args); } });
   assert.deepEqual(calls, [['.pbai4devs/scripts/verificar-recursos/SCRIPT.mjs', '--source-only']]);
   assert.equal(existsSync(join(directory, '.pbai4devs/catalog.json')), false);
-  const forbidden = ['.CoDeX/skills/probe/SKILL.md', 'CLAUDE.md', '.github/agents/probe.agent.md', '.github/prompts/probe.prompt.md', '.github/instructions/probe.md', '.github/skills/probe/SKILL.md', '.pbai4devs/catalog.json', '.pbai4devs/espelhos.conf', '.pbai4devs/estado/agentdevkit.json', '.pbai4devs/estado/derived.json', 'scripts/legacy.PS1'];
+  const forbidden = ['.CoDeX/skills/probe/SKILL.md', 'CLAUDE.md', '.github/agents/probe.agent.md', '.github/prompts/probe.prompt.md', '.github/instructions/probe.md', '.github/skills/probe/SKILL.md', '.pbai4devs/catalog.json', '.pbai4devs/espelhos.conf', '.pbai4devs/state/agentdevkit.json', '.pbai4devs/state/derived.json', '.pbai4devs/estado/agentdevkit.json', '.pbai4devs/estado/derived.json', 'scripts/legacy.PS1'];
   for (const file of forbidden) {
     put(file); git('add', '--', file);
     assert.throws(() => guardSourceOnlyGit(directory), error => error.message.includes(JSON.stringify(file)), file);
@@ -85,7 +85,7 @@ test('check Git distingue fontes de saídas e não gera arquivos no checkout', t
 });
 
 test('perfis portáteis cobrem cada suíte uma vez e o comando local executa todos', () => {
-  const expected = ['adapters.test.mjs', 'cli.test.mjs', 'client-selection.test.mjs', 'development-ecosystem.test.mjs', 'documentation-compatibility.test.mjs', 'github-packages.test.mjs', 'native-coexistence.test.mjs', 'next.test.mjs', 'managed-content.test.mjs', 'managed-content-helper.test.mjs', 'managed-toml.test.mjs', 'managed-preservation.test.mjs', 'security-ecosystem.test.mjs', 'source-layout.test.mjs', 'file-modes.test.mjs', 'oss-preservation.test.mjs', 'release-pipeline.test.mjs', 'release-resilience.test.mjs'].sort();
+  const expected = ['adapters.test.mjs', 'cli.test.mjs', 'client-selection.test.mjs', 'development-ecosystem.test.mjs', 'documentation-compatibility.test.mjs', 'github-packages.test.mjs', 'native-coexistence.test.mjs', 'next.test.mjs', 'managed-content.test.mjs', 'managed-content-helper.test.mjs', 'managed-toml.test.mjs', 'managed-preservation.test.mjs', 'security-ecosystem.test.mjs', 'source-layout.test.mjs', 'state-migration.test.mjs', 'file-modes.test.mjs', 'oss-preservation.test.mjs', 'release-pipeline.test.mjs', 'release-resilience.test.mjs'].sort();
   const combined = Object.values(portableProfiles).flat();
   assert.equal(new Set(combined).size, combined.length);
   assert.deepEqual(combined.toSorted(), expected);

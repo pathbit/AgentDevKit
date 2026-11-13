@@ -11,7 +11,7 @@ O catálogo local `catalog.json` é gerado das fontes pelo sincronizador.
 Ele inclui recursos, ferramentas, automações, modelos e referências externas.
 Os arquivos `skills.json`, `rules.json` e `agents.json` são índices auxiliares
 das fontes. Os clientes selecionados usam seus diretórios de apontamentos.
-O estado `estado/agentdevkit.json` guarda `clients`: `["all"]` ou os IDs
+O estado `state/agentdevkit.json` guarda `clients`: `["all"]` ou os IDs
 escolhidos. Catálogos, manifesto, estado e pastas nativas são derivados locais;
 não devem ser commitados. No repositório do kit, o código do produto fica em
 `src/`, `bin/`, `tests/` e `scripts/release/`, na raiz.

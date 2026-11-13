@@ -42,6 +42,21 @@ const messages = {
 };
 export const text = (language, key) => messages[language || 'pt'][key] || key;
 export function explainError(language, code) {
+  if (code === 'E_CONFIG_PARSE') return {
+    pt: 'Não foi possível analisar a configuração legada com segurança; revise o frontmatter e as aspas antes de executar update.',
+    en: 'The legacy configuration could not be safely parsed; review its frontmatter and quoted values before running update.',
+    es: 'No se pudo analizar la configuración anterior de forma segura; revise el frontmatter y las comillas antes de ejecutar update.',
+  }[language || 'pt'];
+  if (code === 'E_LEGACY_PATH') return {
+    pt: 'Ajuste os caminhos .pbai4devs/estado para .pbai4devs/state na configuração antes de executar update.',
+    en: 'Change .pbai4devs/estado paths to .pbai4devs/state in the configuration before running update.',
+    es: 'Cambie las rutas .pbai4devs/estado por .pbai4devs/state en la configuración antes de ejecutar update.',
+  }[language || 'pt'];
+  if (code === 'E_UPGRADE') return {
+    pt: 'Execute agentdevkit update antes de sincronizar ou alterar a configuração legada.',
+    en: 'Run agentdevkit update before syncing or changing the legacy configuration.',
+    es: 'Ejecute agentdevkit update antes de sincronizar o cambiar la configuración anterior.',
+  }[language || 'pt'];
   const value = {
     pt: { E_ARGS: 'Argumentos inválidos; consulte --help.', E_STATE: 'O estado do AgentDevKit está inválido.', E_SYMLINK: 'Um link simbólico impede a operação segura.', E_TARGET: 'Escolha uma pasta real e segura como destino.', E_PATH: 'Um caminho gerenciado é inválido.', E_BLOCK: 'Os marcadores do bloco gerenciado estão inválidos.', E_CHANGED: 'Um arquivo mudou depois do planejamento; execute novamente.', E_TEMPLATE: 'Um template necessário está inválido.' },
     en: { E_ARGS: 'Invalid arguments; see --help.', E_STATE: 'AgentDevKit state is invalid.', E_SYMLINK: 'A symbolic link prevents this operation.', E_TARGET: 'Choose a real, safe target directory.', E_PATH: 'A managed path is invalid.', E_BLOCK: 'Managed block markers are invalid.', E_CHANGED: 'A file changed after planning; try again.', E_TEMPLATE: 'A required template is invalid.' },

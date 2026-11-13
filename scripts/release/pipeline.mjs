@@ -10,7 +10,7 @@ export function sourceOnlyViolations(files, policy) {
   const roots = new Set(policy.adapters.flatMap(adapter => [adapter.root, ...(adapter.extraRoots || [])]).map(value => value.toLowerCase()));
   roots.delete('.github'); roots.delete('.vscode');
   const entries = new Set([...(policy.entrypoints || []), ...policy.adapters.flatMap(adapter => adapter.entrypoints || [])].map(value => value.toLowerCase()));
-  const outputs = new Set(['catalog.json', 'skills.json', 'agents.json', 'rules.json', 'espelhos.conf', 'estado/agentdevkit.json', 'estado/derived.json']);
+  const outputs = new Set(['catalog.json', 'skills.json', 'agents.json', 'rules.json', 'espelhos.conf', 'estado/agentdevkit.json', 'estado/derived.json', 'state/agentdevkit.json', 'state/derived.json']);
   const violations = [];
   for (const path of files) {
     const lower = path.toLowerCase(), parts = lower.split('/');
@@ -44,7 +44,7 @@ export function executeNode(root, args, env = process.env) {
 // Each named profile is an independent CI job; `portable` runs all locally.
 export const portableProfiles = Object.freeze({
   'portable-cli': Object.freeze(['cli.test.mjs', 'adapters.test.mjs', 'development-ecosystem.test.mjs', 'security-ecosystem.test.mjs', 'file-modes.test.mjs']),
-  'portable-projects': Object.freeze(['client-selection.test.mjs', 'native-coexistence.test.mjs', 'oss-preservation.test.mjs']),
+  'portable-projects': Object.freeze(['client-selection.test.mjs', 'native-coexistence.test.mjs', 'oss-preservation.test.mjs', 'state-migration.test.mjs']),
   'portable-resources': Object.freeze(['documentation-compatibility.test.mjs', 'github-packages.test.mjs', 'next.test.mjs', 'managed-content.test.mjs', 'managed-content-helper.test.mjs', 'managed-toml.test.mjs', 'managed-preservation.test.mjs', 'release-pipeline.test.mjs', 'release-resilience.test.mjs']),
   'portable-layout': Object.freeze(['source-layout.test.mjs']),
 });

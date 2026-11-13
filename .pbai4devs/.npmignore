@@ -20,7 +20,8 @@
 !/external-skills/README.md
 !/external-skills/CATALOG.json
 /estado/**
-!/estado/README.md
+/state/**
+!/state/README.md
 
 **/.[Ll][Oo][Cc][Aa][Ll]/**
 **/.[Cc][Aa][Cc][Hh][Ee]/**

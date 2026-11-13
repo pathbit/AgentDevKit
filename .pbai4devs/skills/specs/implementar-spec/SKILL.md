@@ -5,7 +5,7 @@ description: Planeja e implementa uma spec aprovada, acompanhando tarefas e crit
 
 # Implementar spec
 
-Leia `.pbai4devs/estado/configuracao/ESTADO.md`. Exija spec, PRD e design aprovados;
+Leia `.pbai4devs/state/configuracao/ESTADO.md`. Exija spec, PRD e design aprovados;
 UX/UI aprovado ou não aplicável com justificativa aprovada. Confira evidências,
 atualidade, decisões essenciais e vínculos com o roadmap; resolva pendências
 antes de implementar.

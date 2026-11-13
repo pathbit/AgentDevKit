@@ -11,7 +11,7 @@ import { stripManagedContent } from '../.pbai4devs/scripts/lib/managed-content.m
 
 const project = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const bin = join(project, 'bin/agentdevkit.mjs');
-const statePath = '.pbai4devs/estado/agentdevkit.json';
+const statePath = '.pbai4devs/state/agentdevkit.json';
 const hash = value => createHash('sha256').update(value).digest('hex');
 const read = (root, path) => readFileSync(join(root, path), 'utf8');
 function write(root, path, content) { mkdirSync(dirname(join(root, path)), { recursive: true }); writeFileSync(join(root, path), content); }

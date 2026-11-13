@@ -31,7 +31,7 @@ serão preenchidos por perguntas e respostas quando o projeto começar.
 Combine destinos e registre-os no estado futuro de configuração. Ao finalizar
 uma etapa, explique a próxima e reúna suas perguntas. Use
 [proximos-passos](skills/projeto/proximos-passos/SKILL.md) e respeite o idioma
-salvo em `.pbai4devs/estado/agentdevkit.json`; sem escolha, use português.
+salvo em `.pbai4devs/state/agentdevkit.json`; sem escolha, use português.
 Evolua README e documentos pelos [modelos da fase](templates/README.md).
 Atualize fatos e links afetados; registre ausência de impacto com justificativa.
 

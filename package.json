@@ -1,6 +1,6 @@
 {
   "name": "@pathbit/agentdevkit",
-  "version": "0.0.16",
+  "version": "0.0.17",
   "description": "Shared skills, specifications and workflows for AI coding agents.",
   "type": "module",
   "license": "MIT",

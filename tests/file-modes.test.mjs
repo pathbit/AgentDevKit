@@ -23,7 +23,7 @@ function fixture(t) {
 }
 
 test('escrita atômica e backups preservam permissões mesmo com umask restritiva', { skip: posixOnly }, t => {
-  const root = fixture(t), agents = join(root, 'AGENTS.md'), state = join(root, '.pbai4devs/estado/agentdevkit.json');
+  const root = fixture(t), agents = join(root, 'AGENTS.md'), state = join(root, '.pbai4devs/state/agentdevkit.json');
   chmodSync(agents, 0o600); chmodSync(state, 0o640);
   const before = readFileSync(agents);
   const plan = planInstallation({ target: root, mode: 'lang', language: 'en' });
@@ -37,7 +37,7 @@ test('escrita atômica e backups preservam permissões mesmo com umask restritiv
   assert.ok(applied.backup);
   assert.deepEqual(readFileSync(join(root, applied.backup, 'AGENTS.md')), before);
   assert.equal(mode(join(root, applied.backup, 'AGENTS.md')), 0o600);
-  assert.equal(mode(join(root, applied.backup, '.pbai4devs/estado/agentdevkit.json')), 0o640);
+  assert.equal(mode(join(root, applied.backup, '.pbai4devs/state/agentdevkit.json')), 0o640);
 });
 
 test('rollback restaura bytes e modo de arquivos substituídos e removidos', { skip: posixOnly }, t => {
@@ -77,7 +77,7 @@ for (const remove of [false, true]) test(`rollback de 0444 após ${remove ? 'rem
 
 for (const changed of ['content-and-mode', 'mode-only', 'removed', 'recreated']) test(`rollback preserva mudança concorrente: ${changed}`, { skip: posixOnly }, t => {
   const root = fixture(t), agents = join(root, 'AGENTS.md');
-  const state = join(root, '.pbai4devs/estado/agentdevkit.json');
+  const state = join(root, '.pbai4devs/state/agentdevkit.json');
   const beforeState = readFileSync(state);
   chmodSync(agents, 0o600);
   const plan = planInstallation({ target: root, mode: 'lang', language: 'en' });

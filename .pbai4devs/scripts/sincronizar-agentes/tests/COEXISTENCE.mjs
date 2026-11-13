@@ -95,8 +95,8 @@ test('link em caminho registrado continua sendo erro antes de qualquer escrita',
   for (const source of ['files', 'blocks', 'derived', 'outputs']) {
     const root = fixture(t), path = source === 'derived' ? 'CLAUDE.md' : source === 'outputs' ? '.agents/skills.json' : '.claude/skills/demo/SKILL.md';
     if (!link(t, root, 'missing', path)) return;
-    if (source === 'derived' || source === 'outputs') put(root, '.pbai4devs/estado/derived.json', JSON.stringify({ schemaVersion: 1, entries: source === 'derived' ? { [path]: 'a'.repeat(64) } : {}, ...(source === 'outputs' ? { outputs: { [path]: 'a'.repeat(64) } } : {}) }));
-    else put(root, '.pbai4devs/estado/agentdevkit.json', JSON.stringify({ schemaVersion: 1, files: source === 'files' ? { [path]: 'a'.repeat(64) } : {}, blocks: source === 'blocks' ? { [path]: 'a'.repeat(64) } : {} }));
+    if (source === 'derived' || source === 'outputs') put(root, '.pbai4devs/state/derived.json', JSON.stringify({ schemaVersion: 1, entries: source === 'derived' ? { [path]: 'a'.repeat(64) } : {}, ...(source === 'outputs' ? { outputs: { [path]: 'a'.repeat(64) } } : {}) }));
+    else put(root, '.pbai4devs/state/agentdevkit.json', JSON.stringify({ schemaVersion: 1, files: source === 'files' ? { [path]: 'a'.repeat(64) } : {}, blocks: source === 'blocks' ? { [path]: 'a'.repeat(64) } : {} }));
     const before = snapshot(root);
     assert.throws(() => run(root, { force: true }), /Link simbolico em caminho gerenciado/);
     assert.deepEqual(snapshot(root), before);
@@ -106,7 +106,7 @@ test('link em caminho registrado continua sendo erro antes de qualquer escrita',
 test('manifesto standalone editado pelo usuário passa a ser preservado', t => {
   const root = fixture(t); run(root);
   const path = '.agents/skills.json', original = fs.readFileSync(join(root, path), 'utf8');
-  const derived = JSON.parse(fs.readFileSync(join(root, '.pbai4devs/estado/derived.json')));
+  const derived = JSON.parse(fs.readFileSync(join(root, '.pbai4devs/state/derived.json')));
   assert.equal(derived.outputs[path], hash(original));
   put(root, path, '{"entries":[{"path":".agents/skills/custom"}]}\n');
   const result = run(root, { force: true });
@@ -151,7 +151,7 @@ test('tipo alterado em caminho nativo registrado continua recusado antes de grav
   ]) {
     const root = fixture(t);
     if (path === '.codex') put(root, path, 'Human root\n'); else put(root, `${path}/keep.txt`, 'Human directory\n');
-    put(root, '.pbai4devs/estado/agentdevkit.json', JSON.stringify({ schemaVersion: 1, files: { [owned]: 'a'.repeat(64) }, blocks: {} }));
+    put(root, '.pbai4devs/state/agentdevkit.json', JSON.stringify({ schemaVersion: 1, files: { [owned]: 'a'.repeat(64) }, blocks: {} }));
     const before = snapshot(root);
     assert.throws(() => run(root, { force: true }), /caminho gerenciado/);
     assert.deepEqual(snapshot(root), before);
@@ -191,7 +191,7 @@ test('variante única de entrada registrada conserva conteúdo como arquivo mist
   for (const owned of ['AGENTS.md', 'agents.md']) {
     const root = fixture(t); put(root, 'agents.md', '# Renamed human entry\n');
     assert.throws(() => nativePathBoundary(root, 'AGENTS.md', [owned], { preserveRootAliases: true }), /maiusculas\/minusculas/);
-    put(root, '.pbai4devs/estado/agentdevkit.json', JSON.stringify({ schemaVersion: 1, files: { [owned]: 'a'.repeat(64) }, blocks: {} }));
+    put(root, '.pbai4devs/state/agentdevkit.json', JSON.stringify({ schemaVersion: 1, files: { [owned]: 'a'.repeat(64) }, blocks: {} }));
     run(root, { force: true });
     assert.ok(fs.readFileSync(join(root, 'agents.md'), 'utf8').startsWith('# Renamed human entry\n'));
     assert.ok(!fs.readdirSync(root).includes('AGENTS.md'));

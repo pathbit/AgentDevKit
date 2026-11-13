@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, readdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join, relative } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -43,13 +43,21 @@ const verify = root => verifyResources({ root, synchronize() {}, catalogCheck() 
 
 function installedFixture(t) {
   const context = resourceFixture(t);
-  context.file('.pbai4devs/estado/README.md');
+  context.file('.pbai4devs/state/README.md');
   const generated = '.agents/skills/managed/SKILL.md';
   context.file(generated, document('# Gerado\n'));
   const files = { [generated]: createHash('sha256').update(readFileSync(join(context.root, generated))).digest('hex') };
-  context.file('.pbai4devs/estado/agentdevkit.json', JSON.stringify({ schemaVersion: 1, version: '0.0.9', language: 'pt', files, blocks: {} }));
+  context.file('.pbai4devs/state/agentdevkit.json', JSON.stringify({ schemaVersion: 1, version: '0.0.9', language: 'pt', files, blocks: {} }));
   return { ...context, generated };
 }
+
+test('verificação consulta propriedade legada e recusa estado ambíguo', t => {
+  const { root } = installedFixture(t);
+  renameSync(join(root, '.pbai4devs/state'), join(root, '.pbai4devs/estado'));
+  assert.doesNotThrow(() => collectMarkdown(root));
+  mkdirSync(join(root, '.pbai4devs/state'));
+  assert.throws(() => collectMarkdown(root), /coexistem/);
+});
 
 function writeCatalog(root) {
   for (const [path, content] of buildCatalog(root).outputs) { mkdirSync(join(root, path, '..'), { recursive: true }); writeFileSync(join(root, path), content); }
@@ -161,10 +169,10 @@ test('instalação confere entradas derivadas sem aplicar lint a blocos humanos'
   const { root, file } = installedFixture(t);
   const contents = document('# Entrada gerada\n');
   file('GEMINI.md', contents);
-  file('.pbai4devs/estado/derived.json', JSON.stringify({ schemaVersion: 1, entries: { 'GEMINI.md': createHash('sha256').update(contents).digest('hex') } }));
+  file('.pbai4devs/state/derived.json', JSON.stringify({ schemaVersion: 1, entries: { 'GEMINI.md': createHash('sha256').update(contents).digest('hex') } }));
   const block = '<!-- BEGIN AGENTDEVKIT -->\nLeia as fontes.\n<!-- END AGENTDEVKIT -->';
   file('AGENTS.md', `# Instruções humanas sem frontmatter\n\n${block}\n`);
-  const statePath = join(root, '.pbai4devs/estado/agentdevkit.json');
+  const statePath = join(root, '.pbai4devs/state/agentdevkit.json');
   const state = JSON.parse(readFileSync(statePath, 'utf8'));
   state.blocks['AGENTS.md'] = createHash('sha256').update(block).digest('hex');
   state.files['.pbai4devs/skills/exemplo/SKILL.md'] = createHash('sha256').update('fonte anterior').digest('hex');
@@ -182,7 +190,7 @@ test('instalação também protege manifestos registrados em derived.outputs', t
   const manifest = '.agents/skills.json';
   const contents = '{"entries":[]}\n';
   file(manifest, contents);
-  file('.pbai4devs/estado/derived.json', JSON.stringify({ schemaVersion: 1, entries: {}, outputs: { [manifest]: createHash('sha256').update(contents).digest('hex') } }));
+  file('.pbai4devs/state/derived.json', JSON.stringify({ schemaVersion: 1, entries: {}, outputs: { [manifest]: createHash('sha256').update(contents).digest('hex') } }));
   assert.ok(!verify(root).files.includes(join(root, manifest)));
   rmSync(join(root, manifest));
   assert.throws(() => verify(root), /Arquivo gerenciado ausente: .agents\/skills.json/);
@@ -372,7 +380,7 @@ test('fontes novas permanecem elegíveis e derivados locais ficam fora do índic
   const outputs = ['.github/skills/generated/SKILL.md', '.vscode/.gitignore', '.github/.gitignore'];
   applyLocalIgnore(planLocalIgnore(root, { outputs }));
   const sources = ['src/new.mjs', 'bin/new.mjs', 'tests/new.test.mjs', 'scripts/release/new.mjs', '.github/workflows/own.yml', '.github/ISSUE_TEMPLATE/bug.yml', '.github/skills/human/SKILL.md', '.vscode/settings.json'];
-  const generated = [...outputs, '.pbai4devs/catalog.json', '.pbai4devs/skills.json', '.pbai4devs/espelhos.conf', '.pbai4devs/estado/agentdevkit.json'];
+  const generated = [...outputs, '.pbai4devs/catalog.json', '.pbai4devs/skills.json', '.pbai4devs/espelhos.conf', '.pbai4devs/state/agentdevkit.json'];
   for (const path of [...sources, ...generated]) file(path, 'fixture\n');
   assert.deepEqual(ignoredPaths(root, sources), []);
   assert.deepEqual(new Set(ignoredPaths(root, generated)), new Set(generated));

@@ -38,7 +38,7 @@ test('sync complementa Markdown humano, preserva CRLF/metadados e acompanha só 
   assert.equal(fs.statSync(join(root, path)).mode & 0o777, mode);
   assert.equal(result.managedBlocks[path], managedBlockDigest(actual));
   assert.ok(!result.ownedOutputs.includes(path));
-  const state = JSON.parse(read(root, '.pbai4devs/estado/derived.json'));
+  const state = JSON.parse(read(root, '.pbai4devs/state/derived.json'));
   assert.equal(state.blocks[path], managedBlockDigest(actual));
   assert.equal(state.files[path], undefined);
   assert.equal(run(root, { check: true }).exitCode, 0);
@@ -84,7 +84,7 @@ test('remover recurso ou cliente retira somente bloco próprio de Markdown misto
     run(root);
     assert.equal(read(root, path), outside);
     assert.ok(read(root, path).startsWith(human));
-    assert.equal(JSON.parse(read(root, '.pbai4devs/estado/derived.json')).blocks?.[path], undefined);
+    assert.equal(JSON.parse(read(root, '.pbai4devs/state/derived.json')).blocks?.[path], undefined);
     assert.equal(run(root, { check: true }).exitCode, 0);
   }
 });
@@ -130,10 +130,10 @@ test('retirada standalone registra tombstone para bloco do estado instalado', t 
   const root = fixture(t), path = '.claude/skills/demo/SKILL.md';
   put(root, path, '# Human\n'); run(root);
   const block = managedBlockDigest(read(root, path));
-  put(root, '.pbai4devs/estado/agentdevkit.json', JSON.stringify({ schemaVersion: 1, files: {}, blocks: { [path]: block } }));
+  put(root, '.pbai4devs/state/agentdevkit.json', JSON.stringify({ schemaVersion: 1, files: {}, blocks: { [path]: block } }));
   fs.rmSync(join(root, '.pbai4devs/skills/old/demo'), { recursive: true });
   run(root);
-  const derived = JSON.parse(read(root, '.pbai4devs/estado/derived.json'));
+  const derived = JSON.parse(read(root, '.pbai4devs/state/derived.json'));
   assert.ok(derived.removedBlocks.includes(path));
   assert.equal(extractManagedBlock(read(root, path)), null);
   assert.equal(run(root, { check: true }).exitCode, 0);
@@ -143,7 +143,7 @@ test('stage pode gerar referências sem gravar estado derivado', t => {
   const root = fixture(t);
   run(root, { generateEntrypoints: false, recordDerivedState: false });
   assert.ok(fs.existsSync(join(root, '.claude/skills/demo/SKILL.md')));
-  assert.ok(!fs.existsSync(join(root, '.pbai4devs/estado/derived.json')));
+  assert.ok(!fs.existsSync(join(root, '.pbai4devs/state/derived.json')));
 });
 
 test('regra Cursor mantém globs e modo humanos ao receber referência', t => {
@@ -292,10 +292,10 @@ test('arquivo misto removido é recriado sem conservar propriedade do bloco ause
     const root = fixture(t);
     put(root, path, '# Humano\n'); run(root);
     const hash = managedBlockDigest(read(root, path));
-    put(root, '.pbai4devs/estado/agentdevkit.json', JSON.stringify({ schemaVersion: 1, clients: ['claude'], files: {}, blocks: { [path]: hash } }));
+    put(root, '.pbai4devs/state/agentdevkit.json', JSON.stringify({ schemaVersion: 1, clients: ['claude'], files: {}, blocks: { [path]: hash } }));
     fs.rmSync(join(root, path));
     run(root);
-    const derived = JSON.parse(read(root, '.pbai4devs/estado/derived.json'));
+    const derived = JSON.parse(read(root, '.pbai4devs/state/derived.json'));
     assert.ok(derived.removedBlocks.includes(path));
     assert.ok(derived.files?.[path] || derived.entries?.[path]);
     assert.equal(extractManagedBlock(read(root, path)), null);
@@ -307,10 +307,10 @@ test('renomear caixa de entrada mista transfere só a propriedade do bloco', t =
   const root = fixture(t), before = '# Humano\n';
   put(root, 'AGENTS.md', before); run(root);
   const hash = managedBlockDigest(read(root, 'AGENTS.md'));
-  put(root, '.pbai4devs/estado/agentdevkit.json', JSON.stringify({ schemaVersion: 1, files: {}, blocks: { 'AGENTS.md': hash } }));
+  put(root, '.pbai4devs/state/agentdevkit.json', JSON.stringify({ schemaVersion: 1, files: {}, blocks: { 'AGENTS.md': hash } }));
   fs.renameSync(join(root, 'AGENTS.md'), join(root, 'agents.md'));
   const result = run(root);
-  const derived = JSON.parse(read(root, '.pbai4devs/estado/derived.json'));
+  const derived = JSON.parse(read(root, '.pbai4devs/state/derived.json'));
   assert.ok(read(root, 'agents.md').startsWith(before));
   assert.ok(derived.removedBlocks.includes('AGENTS.md'));
   assert.equal(derived.blocks['agents.md'], result.managedBlocks['agents.md']);

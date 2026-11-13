@@ -6,6 +6,8 @@
 /espelhos.conf
 /estado/agentdevkit.json
 /estado/derived.json
+/state/agentdevkit.json
+/state/derived.json
 
 # Downloads e launchers de ferramentas
 /tools/bin/

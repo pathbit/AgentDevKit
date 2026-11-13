@@ -111,7 +111,7 @@ test('rejeita origens fora das fixtures e opções desconhecidas', () => {
 
 test('classifica sinais de maturidade sem confundir planejamento com produto funcionando', t => {
   const { directory, file, run } = fixture(t);
-  const state = stage => file('.pbai4devs/estado/configuracao/ESTADO.md', `---\npreparacao: concluido\nconfiguracao_tecnica: ${stage}\ndocumentos:\n  prd: docs/PRD.md\n  ux_ui: docs/UX.md\n  design: docs/DESIGN.md\n  releases: docs/releases\n---\n# Estado\n`);
+  const state = stage => file('.pbai4devs/state/configuracao/ESTADO.md', `---\npreparacao: concluido\nconfiguracao_tecnica: ${stage}\ndocumentos:\n  prd: docs/PRD.md\n  ux_ui: docs/UX.md\n  design: docs/DESIGN.md\n  releases: docs/releases\n---\n# Estado\n`);
   assert.equal(run().report.maturity.level, 'preparacao');
   state('pendente'); file('docs/PRD.md', '---\nstatus: rascunho\n---\n# PRD\n');
   assert.equal(run().report.maturity.level, 'descoberta');
@@ -129,6 +129,20 @@ test('classifica sinais de maturidade sem confundir planejamento com produto fun
   assert.equal(result.report.maturity.level, 'manutencao');
   assert.equal(result.report.maturity.released, true);
   assert.match(result.report.maturity.limits[0], /nao substitui/);
+});
+
+test('inspeção lê decisões legadas e informa conflito entre pastas de estado', t => {
+  const { file, run } = fixture(t);
+  const decisions = '---\npreparacao: concluido\nconfiguracao_tecnica: pendente\n---\n# Estado\n';
+  file('.pbai4devs/estado/configuracao/ESTADO.md', decisions);
+  const legacy = run();
+  assert.equal(legacy.status, 0, legacy.stderr);
+  assert.equal(legacy.report.maturity.configuration.present, true);
+  assert.equal(legacy.report.maturity.configuration.preparacao, 'concluido');
+  file('.pbai4devs/state/configuracao/ESTADO.md', decisions);
+  const conflict = run();
+  assert.equal(conflict.status, 2);
+  assert.match(JSON.parse(conflict.stderr).error, /coexistem/);
 });
 
 test('exemplos e caches Playwright não viram aplicação do projeto real', t => {
@@ -154,7 +168,7 @@ test('aceita inspecionar cenário em examples/generated sem liberar outras pasta
 
 test('status arbitrários e referências fora da raiz não expõem dados da configuração', t => {
   const { file, run } = fixture(t); const secret = 'PRIVATE_STATUS_192819';
-  file('.pbai4devs/estado/configuracao/ESTADO.md', `---\npreparacao: ${secret}\nconfiguracao_tecnica: ${secret}\ndocumentos:\n  prd: ../outside.md\n  design: docs/DESIGN.md\n---\n# Estado\n`);
+  file('.pbai4devs/state/configuracao/ESTADO.md', `---\npreparacao: ${secret}\nconfiguracao_tecnica: ${secret}\ndocumentos:\n  prd: ../outside.md\n  design: docs/DESIGN.md\n---\n# Estado\n`);
   file('docs/DESIGN.md', `---\nstatus: ${secret}\n---\n# Design\n`);
   const result = run(); assert.equal(result.status, 0);
   assert.equal(result.report.maturity.planning.prd.path, null);
@@ -199,7 +213,7 @@ test('descobre documentação real sem impor caixa, pasta docs ou frontmatter', 
 
 test('caminhos cadastrados têm proveniência sem assumir status ou ler arquivos de configuração', t => {
   const { file, run } = fixture(t);
-  file('.pbai4devs/estado/configuracao/ESTADO.md', '---\ndocumentos:\n  design: architecture/current.md\n  specs: specifications\n  prd: planning/absent.md\n  readme: ../private-secret.md\n  seguranca: .env\n---\n# Estado\n');
+  file('.pbai4devs/state/configuracao/ESTADO.md', '---\ndocumentos:\n  design: architecture/current.md\n  specs: specifications\n  prd: planning/absent.md\n  readme: ../private-secret.md\n  seguranca: .env\n---\n# Estado\n');
   file('architecture/current.md', '# Existing architecture\n');
   file('specifications/current.mdx', '# Increment\n');
   file('.env', 'DO_NOT_EMIT_OR_HASH_THIS_SECRET');
@@ -231,7 +245,7 @@ test('documentos simbólicos permanecem opacos sem ler destinos internos, extern
     if (process.platform !== 'win32' || !['EPERM', 'EACCES'].includes(error.code)) throw error;
     t.skip('Links simbólicos indisponíveis sem permissão do Windows.'); return;
   }
-  file('.pbai4devs/estado/configuracao/ESTADO.md', '---\ndocumentos:\n  design: external/private.md\n---\n# State\n');
+  file('.pbai4devs/state/configuracao/ESTADO.md', '---\ndocumentos:\n  design: external/private.md\n---\n# State\n');
   const result = run();
   assert.equal(result.status, 0, result.stderr);
   const docs = result.report.documentation;

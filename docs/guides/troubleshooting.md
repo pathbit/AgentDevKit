@@ -73,11 +73,19 @@ Os backups são locais e ignorados; não substituem o controle de versão.
 
 ## Estado ou apontamentos inconsistentes
 
+Se a instalação ainda usa `.pbai4devs/estado`, execute `agentdevkit update`
+para migrar os dados e atualizar os scripts juntos. Se `estado` e `state`
+coexistirem, compare e preserve as duas pastas antes de resolver o conflito;
+o kit não escolhe nem sobrescreve uma delas automaticamente.
+Se a configuração apontar para caminhos dentro da pasta antiga, atualize
+esses caminhos para `.pbai4devs/state` antes de tentar novamente. O kit não
+reescreve as decisões do projeto.
+
 `missing`, `modified` e `outdated` em `issues` indicam arquivo ausente,
 conteúdo alterado ou derivação pendente. Use `sync --check` para inspecionar;
 se as alterações da origem forem intencionais, execute `sync` e confira de novo.
 
-Se `.pbai4devs/estado/agentdevkit.json` estiver inválido, recupere um backup
+Se `.pbai4devs/state/agentdevkit.json` estiver inválido, recupere um backup
 local coerente com os arquivos correspondentes. O estado pessoal não é
 versionado. Não invente hashes nem apague o estado para ocultar conflitos;
 peça ao agente para comparar as fontes e planejar o reparo com `init`/`sync`.

@@ -20,7 +20,7 @@ as ferramentas e rode o diagnóstico. Isso não escolhe a stack da aplicação.
 Antes de criar estado ou documentos, faça o inventário de `atualizar-documentacao`.
 Mapeie os documentos já existentes aos seus papéis, sem reiniciar o produto.
 Reúna dúvidas no início e aproveite decisões existentes. Quando o projeto
-começar, crie ou retome `.pbai4devs/estado/configuracao/ESTADO.md` pelo modelo.
+começar, crie ou retome `.pbai4devs/state/configuracao/ESTADO.md` pelo modelo.
 Combine os arquivos `prd`, `ux_ui`, `design`, `roadmap` e diretórios `releases`,
 `specs`, `tarefas` e documentos de apoio aplicáveis. Crie/evolua o README
 da raiz pelos [modelos da fase](../../../templates/README.md), preservando os

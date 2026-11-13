@@ -9,7 +9,7 @@ import { main, parseArgs } from '../src/cli.mjs';
 
 const project = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const bin = join(project, 'bin/agentdevkit.mjs');
-const statePath = '.pbai4devs/estado/agentdevkit.json';
+const statePath = '.pbai4devs/state/agentdevkit.json';
 function fixture(t) {
   mkdirSync(join(project, '.agent-tests'), { recursive: true });
   const root = mkdtempSync(join(project, '.agent-tests/client-selection-'));

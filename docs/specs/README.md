@@ -20,6 +20,7 @@ description: Incrementos verificáveis do AgentDevKit.
 - [Ecossistema de desenvolvimento](development-ecosystem/SPEC.md):
   especialistas, colaboração e provas.
 - [Confiabilidade da pipeline](ci-resilience/SPEC.md): testes e releases.
+- [Pasta de estado](state-directory/SPEC.md): migração segura para `state`.
 - [Integração sem substituição][additive]: acréscimos em arquivos existentes.
 - [Compatibilidade com projetos reais][oss]: projetos públicos e exemplos reproduzíveis.
 - [Ignore do projeto](project-ignore/SPEC.md): preservar o arquivo da raiz.

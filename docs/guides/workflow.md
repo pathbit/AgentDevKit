@@ -56,7 +56,7 @@ Neste momento quero apenas preparar os agentes; não crie produto ou aplicação
 
 Quando o produto começar, combine os caminhos dos documentos no estado de
 configuração. Não presuma que todo projeto usa as mesmas pastas de documentos.
-O registro é `.pbai4devs/estado/configuracao/ESTADO.md`.
+O registro é `.pbai4devs/state/configuracao/ESTADO.md`.
 
 ## 3. Definir produto e experiência
 

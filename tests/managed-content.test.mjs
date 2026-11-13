@@ -56,7 +56,7 @@ test('diagnostico deixa de exigir arquivo humano depois de retirar seu bloco', a
   await cli(root, ['sync']);
   fs.rmSync(join(root, source));
   synchronize({ root, output() {} });
-  const derived = JSON.parse(readFileSync(join(root, '.pbai4devs/estado/derived.json'), 'utf8'));
+  const derived = JSON.parse(readFileSync(join(root, '.pbai4devs/state/derived.json'), 'utf8'));
   assert.ok(derived.removedBlocks.includes(path));
   fs.rmSync(join(root, path));
   assert.equal(inspect(root).issues.some(issue => issue.path === path), false);
@@ -76,7 +76,7 @@ test('entradas humanas em caixa original recebem apenas o bloco e mantêm índic
   assert.equal(existsSync(join(root, '.pbai4devs')), false);
   assert.ok(preview.plan.some(item => item.path === 'agents.md'));
   await cli(root, args);
-  const state = JSON.parse(read('.pbai4devs/estado/agentdevkit.json'));
+  const state = JSON.parse(read('.pbai4devs/state/agentdevkit.json'));
   for (const [path, content] of Object.entries(entries)) {
     assert.ok(read(path).startsWith(content), path);
     assert.equal(state.files[path], undefined);
@@ -109,7 +109,7 @@ test('skills, agentes, comandos e regras de mesmo nome mantêm metadados e só r
   git('add', '--all'); const index = git('ls-files', '--stage', '-z');
   await cli(root, ['init', '--agents', 'claude,cursor', '--yes']);
   const plan = planInstallation({ target: root, mode: 'update' });
-  const state = JSON.parse(read('.pbai4devs/estado/agentdevkit.json'));
+  const state = JSON.parse(read('.pbai4devs/state/agentdevkit.json'));
   for (const [path, content] of Object.entries(paths)) {
     assert.ok(read(path).startsWith(content), path);
     assert.match(extractManagedBlock(read(path)), /\.pbai4devs\//);
@@ -142,7 +142,7 @@ test('edição humana num apontamento previamente gerado migra para ownership de
   assert.ok(read(path).startsWith(human));
   assert.equal(git('ls-files', '--stage', '-z'), index);
   assert.equal(statSync(join(root, path)).mode & 0o777, mode);
-  const state = JSON.parse(read('.pbai4devs/estado/agentdevkit.json'));
+  const state = JSON.parse(read('.pbai4devs/state/agentdevkit.json'));
   assert.equal(state.files[path], undefined);
   assert.equal(state.blocks[path], managedBlockDigest(read(path)));
   assert.equal((await cli(root, ['update', '--force'])).changed, false);
@@ -159,7 +159,7 @@ test('comando Gemini existente recebe referência dentro do prompt sem reescreve
   assert.ok(content.endsWith(' # comentário do prompt\r\n\r\n[metadata]\r\ncustom = true\r\n'));
   assert.match(content, /Siga a rotina do usuário/);
   assert.match(extractTomlManagedBlock(content), /@\{\.pbai4devs\/commands\/preparar-dev\/COMMAND\.md\}/);
-  const state = JSON.parse(read('.pbai4devs/estado/agentdevkit.json'));
+  const state = JSON.parse(read('.pbai4devs/state/agentdevkit.json'));
   assert.equal(state.files[path], undefined);
   assert.equal(state.blocks[path], tomlManagedBlockDigest(content));
   assert.equal((await cli(root, ['update'])).changed, false);
@@ -208,7 +208,7 @@ for (const mode of ['sync', 'deselect']) test(`recriação própria após remoç
   const plan = planInstallation({ target: root, mode: mode === 'sync' ? 'sync' : 'agents', ...(mode === 'deselect' ? { clients: ['codex'] } : {}) });
   assert.equal(plan.canApply, true, JSON.stringify(plan.conflicts));
   await cli(root, mode === 'sync' ? ['sync'] : ['agents', 'codex']); await cli(root, ['doctor']);
-  const state = JSON.parse(read('.pbai4devs/estado/agentdevkit.json'));
+  const state = JSON.parse(read('.pbai4devs/state/agentdevkit.json'));
   for (const path of mode === 'sync' ? ['AGENTS.md', native] : ['AGENTS.md']) { assert.ok(state.files[path]); assert.equal(state.blocks[path], undefined); }
   if (mode === 'deselect') assert.equal(existsSync(join(root, native)), false);
 });
@@ -305,12 +305,12 @@ for (const corruption of ['alterado', 'duplicado', 'incompleto']) test(`bloco ${
   const broken = corruption === 'alterado' ? source.replace('Leia e siga', 'Minha alteração: leia')
     : corruption === 'duplicado' ? `${source}\n${extractManagedBlock(source)}\n`
       : source.replace('<!-- END AGENTDEVKIT -->', '<!-- fim humano -->');
-  put('AGENTS.md', broken); const state = read('.pbai4devs/estado/agentdevkit.json');
+  put('AGENTS.md', broken); const state = read('.pbai4devs/state/agentdevkit.json');
   for (const args of [['update'], ['update', '--force']]) {
     const result = await cli(root, args, 1);
     assert.equal(result.error.code, 'E_MANAGED_BLOCK');
     assert.equal(read('AGENTS.md'), broken);
-    assert.equal(read('.pbai4devs/estado/agentdevkit.json'), state);
+    assert.equal(read('.pbai4devs/state/agentdevkit.json'), state);
   }
 });
 
@@ -320,11 +320,11 @@ test('desmarcar cliente não remove um bloco adulterado nem seu arquivo humano',
   put(path, '# Meu revisor\n');
   await cli(root, ['init', '--agents', 'claude,codex', '--yes']);
   const modified = read(path).replace('Leia e siga', 'Texto humano dentro do bloco');
-  put(path, modified); const before = read('.pbai4devs/estado/agentdevkit.json');
+  put(path, modified); const before = read('.pbai4devs/state/agentdevkit.json');
   const result = await cli(root, ['agents', 'codex', '--force'], 1);
   assert.equal(result.error.code, 'E_MANAGED_BLOCK');
   assert.equal(read(path), modified);
-  assert.equal(read('.pbai4devs/estado/agentdevkit.json'), before);
+  assert.equal(read('.pbai4devs/state/agentdevkit.json'), before);
 });
 
 test('limpeza preserva metadados humanos mesmo quando o corpo ainda parece um apontamento', async t => {
@@ -341,7 +341,7 @@ test('limpeza preserva metadados humanos mesmo quando o corpo ainda parece um ap
   assert.ok(!plan.changes.some(change => change.path === path));
   await cli(root, ['sync', '--force']);
   assert.equal(read(path), changed);
-  assert.equal(JSON.parse(read('.pbai4devs/estado/agentdevkit.json')).files[path], undefined);
+  assert.equal(JSON.parse(read('.pbai4devs/state/agentdevkit.json')).files[path], undefined);
 });
 
 test('marcador copiado em um arquivo sem ownership não autoriza sua remoção', async t => {
@@ -352,6 +352,6 @@ test('marcador copiado em um arquivo sem ownership não autoriza sua remoção',
   await cli(root, ['init', '--agents', 'claude', '--yes']);
   await cli(root, ['update', '--force']);
   assert.equal(read(path), content);
-  const state = JSON.parse(read('.pbai4devs/estado/agentdevkit.json'));
+  const state = JSON.parse(read('.pbai4devs/state/agentdevkit.json'));
   assert.equal(state.files[path], undefined); assert.equal(state.blocks[path], undefined);
 });

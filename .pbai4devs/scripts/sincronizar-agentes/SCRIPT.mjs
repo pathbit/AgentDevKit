@@ -11,11 +11,12 @@ import { nativePathBoundary } from '../lib/native-paths.mjs';
 import { canonicalEntrypoint, resolveEntrypoint, entrypointReference, renderEntrypointImports, mergeManagedContent, stripManagedContent } from '../lib/managed-content.mjs';
 import { mergeTomlContent, stripTomlContent } from '../lib/managed-toml.mjs';
 import { mergeGitignore, validateIgnoreClients, renderClientIgnore, isGeneratedOutput, planLocalIgnore, applyLocalIgnore, checkLocalIgnore, assertLocalIgnoreUnchanged, ignoreBegin, ignoreEnd } from '../lib/gitignore.mjs';
+import { stateDirectory } from '../lib/state-path.mjs';
 
 const marker = '<!-- gerado: sincronizar-agentes -->';
 const tomlMarker = '# gerado: sincronizar-agentes';
 const principals = { skills: 'SKILL.md', agents: 'AGENT.md', commands: 'COMMAND.md', rules: 'RULE.md' };
-const auxiliary = ['templates', 'scripts', 'tools', 'external-skills', 'estado', 'tests', 'docs', 'adapters'];
+const auxiliary = ['templates', 'scripts', 'tools', 'external-skills', 'state', 'estado', 'tests', 'docs', 'adapters'];
 const reserved = new Set(['.git', '.pbai4devs', '.agent-tests']);
 const compare = (a, b) => a < b ? -1 : a > b ? 1 : 0;
 const sorted = values => [...new Set(values)].sort(compare);
@@ -140,11 +141,12 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
   const config = '.pbai4devs/espelhos.conf';
   const configExists = stat(safe(config));
   captureInput(config, configExists ? readFileSync(absolute(config)) : null);
-  const stateFile = '.pbai4devs/estado/agentdevkit.json';
+  const stateRoot = stateDirectory(root);
+  const stateFile = `${stateRoot}/agentdevkit.json`;
   const installed = stat(safe(stateFile)) ? JSON.parse(read(safe(stateFile))) : null;
   const configText = configExists ? read(safe(config)) : adapterManifest(root, { clients: installed?.clients });
   const rows = configText.split('\n');
-  const entryRegistry = '.pbai4devs/estado/derived.json';
+  const entryRegistry = `${stateRoot}/derived.json`;
   const registryBytes = stat(safe(entryRegistry)) ? readFileSync(absolute(entryRegistry)) : null;
   captureInput(entryRegistry, registryBytes);
   const previousEntries = registryBytes ? JSON.parse(registryBytes.toString('utf8')) : { schemaVersion: 1, entries: {} };

@@ -64,7 +64,7 @@ test('texto humano com formato de referência nunca comprova propriedade', t => 
 test('hash registrado comprova referência legada sem marcador e diretório vazio humano permanece', t => {
   const root = fixture(t), stale = '.claude/skills/legacy.md';
   write(root, stale, human);
-  write(root, '.pbai4devs/estado/agentdevkit.json', JSON.stringify({ schemaVersion: 1, clients: ['claude'], files: { [stale]: hash(human) }, blocks: {} }));
+  write(root, '.pbai4devs/state/agentdevkit.json', JSON.stringify({ schemaVersion: 1, clients: ['claude'], files: { [stale]: hash(human) }, blocks: {} }));
   fs.mkdirSync(join(root, '.claude/skills/user-empty'), { recursive: true });
   run(root);
   assert.equal(fs.existsSync(join(root, stale)), false);

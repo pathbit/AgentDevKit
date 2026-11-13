@@ -28,7 +28,7 @@ Não apague raízes inteiras: workflows, configurações nativas e a origem fica
 fora da limpeza. `--check` só confere, sem corrigir nem criar backups.
 
 O manifesto `.pbai4devs/espelhos.conf` registra clientes e formatos nativos.
-Respeite a seleção salva em `estado/agentdevkit.json`; não reative clientes para
+Respeite a seleção salva em `state/agentdevkit.json`; não reative clientes para
 reparar apontamentos. Para alterá-la, use `agents` na CLI. Pastas compartilhadas
 continuam quando necessárias; arquivos próprios dos clientes são preservados
 pela CLI, inclusive ao reduzir a seleção.

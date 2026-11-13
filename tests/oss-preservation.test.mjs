@@ -19,7 +19,7 @@ test('verificação OSS rejeita substituição de link por arquivo com bloco', {
   const block = '<!-- BEGIN AGENTDEVKIT -->\n@AGENTS.md\n<!-- END AGENTDEVKIT -->';
   writeFileSync(path, `human.md\n\n${block}\n`); chmodSync(path, original.mode);
   assert.equal(fileSnapshot(root, 'CLAUDE.md').kind, 'file');
-  mkdirSync(join(root, '.pbai4devs/estado'), { recursive: true });
-  writeFileSync(join(root, '.pbai4devs/estado/agentdevkit.json'), JSON.stringify({ blocks: { 'CLAUDE.md': hash(block) } }));
+  mkdirSync(join(root, '.pbai4devs/state'), { recursive: true });
+  writeFileSync(join(root, '.pbai4devs/state/agentdevkit.json'), JSON.stringify({ blocks: { 'CLAUDE.md': hash(block) } }));
   assert.throws(() => checkOriginals(root, baseline, git), /Tipo do arquivo original alterado/);
 });

@@ -125,10 +125,10 @@ test('pacote real instala, preserva projetos e oferece próximos passos', { time
     const target = join(work, 'projeto vazio');
     const first = cli(['init', '--target', target, '--yes', '--lang', 'en']);
     assert.equal(first.language, 'en'); assert.equal(first.ok, true);
-    assert.equal(json(join(target, '.pbai4devs/estado/agentdevkit.json')).language, 'en');
+    assert.equal(json(join(target, '.pbai4devs/state/agentdevkit.json')).language, 'en');
     assert.ok(existsSync(join(target, '.pbai4devs/skills/projeto/proximos-passos/SKILL.md')));
     assert.deepEqual(readFileSync(join(target, '.pbai4devs/LICENSE')), canonicalLicense);
-    assert.equal(json(join(target, '.pbai4devs/estado/agentdevkit.json')).files['.pbai4devs/LICENSE'], digest(join(target, '.pbai4devs/LICENSE')));
+    assert.equal(json(join(target, '.pbai4devs/state/agentdevkit.json')).files['.pbai4devs/LICENSE'], digest(join(target, '.pbai4devs/LICENSE')));
     assert.equal(existsSync(join(target, 'docs')), false);
     for (const folder of ['src', 'bin', 'tests', 'scripts', 'examples']) assert.equal(existsSync(join(target, folder)), false, folder);
     for (const relative of localOnly) assert.equal(existsSync(join(target, relative)), false, relative);
