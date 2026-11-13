@@ -11,6 +11,7 @@ description: Alterações verificáveis por versão do AgentDevKit.
 - Delegação de tarefas independentes com responsabilidades e limites claros.
 - Preservação de arquivos e configurações existentes coberta por integração.
 - Permissões de somente leitura do revisor compatíveis com OpenCode V2.
+- Testes portáveis com concorrência limitada e diagnóstico de falhas da CLI.
 
 ## 0.0.14 — 2026-11-12
 

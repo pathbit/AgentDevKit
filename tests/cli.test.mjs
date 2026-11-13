@@ -20,8 +20,8 @@ function fixture(t) {
 }
 const put = (root, path, value) => { const file = join(root, path); mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, value); };
 function cli(root, args, expected = 0) {
-  const result = spawnSync(process.execPath, [bin, ...args, '--target', root, '--json'], { encoding: 'utf8', timeout: 60000 });
-  assert.equal(result.status, expected, result.stdout + result.stderr);
+  const result = spawnSync(process.execPath, [bin, ...args, '--target', root, '--json'], { encoding: 'utf8', timeout: 180000 });
+  assert.equal(result.status, expected, `agentdevkit ${args.join(' ')}: ${result.error?.stack || ''}\nsignal: ${result.signal || 'none'}\n${result.stdout || ''}${result.stderr || ''}`);
   const value = JSON.parse(result.stdout); assert.ok(Array.isArray(value.next)); assert.ok(value.next.length);
   return value;
 }

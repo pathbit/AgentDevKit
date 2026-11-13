@@ -88,7 +88,7 @@ test('perfis usam testes e executável da raiz sem ampliar a matriz', () => {
   const calls = [];
   const options = { root, run(_root, args) { calls.push(args); } };
   runPipeline('portable', options);
-  assert.deepEqual(calls[0], ['--test', 'tests/adapters.test.mjs', 'tests/cli.test.mjs', 'tests/client-selection.test.mjs', 'tests/documentation-compatibility.test.mjs', 'tests/github-packages.test.mjs', 'tests/native-coexistence.test.mjs', 'tests/next.test.mjs', 'tests/managed-content.test.mjs', 'tests/managed-content-helper.test.mjs', 'tests/managed-toml.test.mjs', 'tests/managed-preservation.test.mjs']);
+  assert.deepEqual(calls[0], ['--test', '--test-concurrency=2', 'tests/adapters.test.mjs', 'tests/cli.test.mjs', 'tests/client-selection.test.mjs', 'tests/development-ecosystem.test.mjs', 'tests/documentation-compatibility.test.mjs', 'tests/github-packages.test.mjs', 'tests/native-coexistence.test.mjs', 'tests/next.test.mjs', 'tests/managed-content.test.mjs', 'tests/managed-content-helper.test.mjs', 'tests/managed-toml.test.mjs', 'tests/managed-preservation.test.mjs']);
   assert.equal(calls.length, 6);
   calls.length = 0;
   runPipeline('smoke', options);
@@ -97,6 +97,13 @@ test('perfis usam testes e executável da raiz sem ampliar a matriz', () => {
     ['bin/agentdevkit.mjs', '--help'],
     ['bin/agentdevkit.mjs', '--version'],
   ]);
+});
+
+test('perfil portátil interrompe imediatamente ao falhar uma suíte', () => {
+  const calls = [];
+  const failure = new Error('falha real da suíte');
+  assert.throws(() => runPipeline('portable', { root, run(_root, args) { calls.push(args); throw failure; } }), error => error === failure);
+  assert.equal(calls.length, 1);
 });
 
 test('seleção aguarda o CI correto e recusa origem de PR, fork, branch ou SHA diferentes', async () => {
