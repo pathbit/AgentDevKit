@@ -4,6 +4,11 @@ description: Alterações verificáveis por versão do AgentDevKit.
 
 # Changelog
 
+## 0.0.21 — 2026-11-13
+
+- Criação automática da tag da versão após aprovação da matriz de CI.
+- Publicação acionada pela automação com proteção contra colisões de tags.
+
 ## 0.0.20 — 2026-11-13
 
 - Atualização da ferramenta agent-browser compatível com sua distribuição atual.

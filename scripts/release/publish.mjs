@@ -50,10 +50,12 @@ function trustedRun(run, repository, commit) {
     && run.head_repository?.full_name === repository;
 }
 
-export async function resolveVerifiedPackage({ repository, tag, request, now = Date.now, sleep = pause, timeoutMs = 2100000, pollMs = 10000 }) {
+export async function resolveVerifiedPackage({ repository, tag, expectedCommit, request, now = Date.now, sleep = pause, timeoutMs = 2100000, pollMs = 10000 }) {
   if (!/^[\w.-]+\/[\w.-]+$/.test(repository || '')) invalid('Repositório inválido.');
   if (!/^v\d+\.\d+\.\d+$/.test(tag || '')) invalid('A release exige uma tag vX.Y.Z.');
+  if (expectedCommit !== undefined && !/^[a-f0-9]{40}$/.test(expectedCommit)) invalid('Commit esperado inválido.');
   const sourceCommit = await tagCommit(repository, tag, request);
+  if (expectedCommit && sourceCommit !== expectedCommit) invalid('A tag não aponta para o commit esperado.');
   const deadline = now() + timeoutMs;
   do {
     const page = await request('GET', `/repos/${repository}/actions/workflows/ci.yml/runs?event=push&head_sha=${sourceCommit}&per_page=100`);
@@ -131,7 +133,8 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     const stateFile = join(releaseRoot, '.agent-tests/release-resolution.json');
     const request = githubRequest({ token: process.env.GH_TOKEN || process.env.GITHUB_TOKEN });
     if (process.argv[2] === 'resolve') {
-      const result = await resolveVerifiedPackage({ repository: process.env.GITHUB_REPOSITORY, tag: releaseTag(), request });
+      const expectedCommit = process.env.GITHUB_EVENT_NAME === 'workflow_dispatch' ? process.env.AGENTDEVKIT_EXPECTED_COMMIT || undefined : undefined;
+      const result = await resolveVerifiedPackage({ repository: process.env.GITHUB_REPOSITORY, tag: releaseTag(), expectedCommit, request });
       mkdirSync(join(releaseRoot, '.agent-tests'), { recursive: true });
       writeFileSync(stateFile, JSON.stringify(result, null, 2) + '\n');
       if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `artifact-id=${result.artifactId}\nrun-id=${result.runId}\nresolution=${JSON.stringify(result)}\n`);

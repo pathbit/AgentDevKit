@@ -16,6 +16,19 @@ const run = { id: 42, run_attempt: 1, head_sha: commit, head_branch: 'master', e
   path: resolution.workflowPath, repository: { full_name: repository }, head_repository: { full_name: repository } };
 const artifact = { id: 50, name: `agentdevkit-${commit}-1`, expired: false };
 
+test('release automática exige o commit original mesmo se a tag for movida', async () => {
+  let calls = 0;
+  const request = async (_method, path) => {
+    calls++;
+    if (path.includes('/git/ref/')) return { object: { type: 'commit', sha: 'b'.repeat(40) } };
+    throw new Error('CI e publicação não devem ser consultados.');
+  };
+  await assert.rejects(resolveVerifiedPackage({ repository, tag: `v${version}`, expectedCommit: commit, request }), /commit esperado/);
+  assert.equal(calls, 1);
+  await assert.rejects(resolveVerifiedPackage({ repository, tag: `v${version}`, expectedCommit: '../inválido', request }), /inválido/);
+  assert.equal(calls, 1);
+});
+
 function fixture(t) {
   const base = join(root, '.agent-tests'); mkdirSync(base, { recursive: true });
   const directory = mkdtempSync(join(base, 'release-resilience-'));

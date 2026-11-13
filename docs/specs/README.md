@@ -27,6 +27,7 @@ description: Incrementos verificáveis do AgentDevKit.
 - [Ignore do projeto](project-ignore/SPEC.md): preservar o arquivo da raiz.
 - [Ignore de clientes](client-ignore/SPEC.md): padrão local e exceções do projeto.
 - [Ferramenta e versões](tool-release/SPEC.md): atualização segura e tags de release.
+- [Tags automáticas](automatic-release-tags/SPEC.md): publicação após CI aprovada.
 
 Cada incremento vincula requisitos, critérios, testes e evidências locais.
 

@@ -10,6 +10,11 @@ on:
         type: string
         required: false
         default: ''
+      expected_commit:
+        description: 'Commit esperado da tag (opcional para recuperação manual)'
+        type: string
+        required: false
+        default: ''
       package_only:
         description: Publicar pacotes sem alterar a release existente
         type: boolean
@@ -53,6 +58,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           AGENTDEVKIT_RELEASE_TAG: ${{ inputs.tag }}
+          AGENTDEVKIT_EXPECTED_COMMIT: ${{ inputs.expected_commit }}
         run: node scripts/release/publish.mjs resolve
 
   publish:

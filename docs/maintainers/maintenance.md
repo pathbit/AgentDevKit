@@ -75,8 +75,15 @@ nada. Nunca versione o tarball ou seus relatórios.
 
 1. Atualize versão e lockfile, changelog, exemplos e escopo da entrega.
 2. Conclua testes, documentação e revisão independente.
-3. Envie o commit à branch principal e aguarde o CI aprovado.
-4. Crie e envie a tag `v<versão>` para esse mesmo commit.
+3. Envie o commit à branch principal e acompanhe o CI e a release.
+
+Após toda a matriz de CI passar, a automação cria a tag `v<versão>` no
+commit verificado e inicia o workflow de release. Um push sem mudança de versão
+publicada não gera outra release. Uma tag existente não é movida: se a versão
+mudou e a tag aponta para outro commit, a automação falha para revisão.
+Versões inferiores às já registradas também não são publicadas automaticamente.
+Se um push cancelar o CI anterior e a versão ainda não tiver tag, o próximo
+CI aprovado da branch principal poderá publicar a versão no seu próprio commit.
 
 O [workflow de release][release] localiza o CI aprovado de um push na branch
 principal, confere o commit e baixa seu artifact por ID. Verifica procedência,
@@ -85,9 +92,10 @@ Também envia o mesmo pacote ao [npm público e GitHub Packages](packages.md),
 confere a integridade nos dois destinos e testa versão, instalação, diagnóstico
 e sincronização. O consumo pelo npm é anônimo; pelo GitHub, autenticado.
 
-A tag é a origem da publicação: `v0.0.19`, a release `v0.0.19` e os pacotes
-`0.0.19` apontam para a mesma entrega. A execução manual também exige a tag;
-não crie outra tag para uma versão nem mova uma tag já publicada.
+A tag é a origem da publicação: `v0.0.21`, a release `v0.0.21` e os pacotes
+`0.0.21` apontam para a mesma entrega. A execução manual também exige a tag;
+não crie outra tag para uma versão nem mova uma tag já publicada. Publicações
+feitas fora desse fluxo não criam tags automaticamente.
 
 Para consultar o código de uma versão sem trocar os arquivos atuais:
 
@@ -124,6 +132,9 @@ Se a release ainda não existe, use **Re-run failed jobs** ou
 `gh workflow run release.yml --ref vX.Y.Z` com a tag real. A publicação prioriza
 o secret `NPMJS_TOKEN` do repositório; sem ele, usa OIDC, conforme
 [publicação](packages.md).
+Se a criação da tag ou o acionamento falhar, consulte a execução **Automatic
+release tag**. Uma tag no commit correto pode ser retomada sem movê-la; se ela
+apontar para outro commit, investigue antes de qualquer publicação.
 
 Se a release já existe e falta somente o pacote em um registro, use o modo
 `package_only` descrito em [pacote npm](packages.md#publicar-pelo-actions).

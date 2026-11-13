@@ -287,3 +287,205 @@ test('cliente HTTP limita o token aos hosts oficiais e propaga falhas', async ()
   await assert.rejects(request('GET', '/repos/pathbit/AgentDevKit'), /HTTP 403/);
   await assert.rejects(request('POST', 'https://other.example/upload'), /Destino/);
 });
+
+// A criação da tag é isolada da publicação e não chama a rede nestes testes.
+test('tag automática cria referência para o commit da matriz e dispara release explicitamente', async () => {
+  const { autoTagRelease } = await import('../scripts/release/auto-tag.mjs');
+  const f = autoTagFixture();
+  const result = await autoTagRelease(f.options);
+  assert.deepEqual(result, { status: 'dispatched', tag: 'v1.2.3', sourceCommit: commit, created: true });
+  assert.deepEqual(f.writes.map(x => [x.path, x.body]), [
+    [`/repos/${repository}/git/refs`, { ref: 'refs/tags/v1.2.3', sha: commit }],
+    [`/repos/${repository}/actions/workflows/release.yml/dispatches`, { ref: 'v1.2.3', inputs: { tag: 'v1.2.3', expected_commit: commit } }],
+  ]);
+  assert.ok(f.calls.findIndex(c => c.path.includes('/git/ref/heads/')) < f.calls.findIndex(c => c.path.endsWith('/git/refs')));
+});
+
+function autoTagFixture({ currentVersion = version, beforeVersion = '1.2.2', existing = null, release = null, runs = [], onCall } = {}) {
+  const before = 'b'.repeat(40), calls = [], writes = [];
+  let tagRef = existing;
+  const packageInfo = { name: '@pathbit/agentdevkit', version: currentVersion };
+  const lock = { name: packageInfo.name, version: currentVersion, lockfileVersion: 3, packages: { '': { ...packageInfo } } };
+  const environment = { GITHUB_EVENT_NAME: 'workflow_run', GITHUB_REPOSITORY: repository };
+  const event = { action: 'completed', repository: { full_name: repository, default_branch: 'master' }, workflow_run: structuredClone(run) };
+  const request = async (method, path, body) => {
+    calls.push({ method, path, body }); if (method !== 'GET') writes.push({ method, path, body });
+    const override = await onCall?.({ method, path, body, calls, writes, getTag: () => tagRef, setTag: value => { tagRef = value; } });
+    if (override?.handled) return override.value;
+    if (path.endsWith(`/actions/runs/${run.id}`)) return structuredClone(run);
+    if (path.includes(`/actions/runs/${run.id}/artifacts`)) return { artifacts: [{ id: 50, name: `agentdevkit-${commit}-${run.run_attempt}`, expired: false }] };
+    if (path.includes('/git/ref/heads/')) return { object: { type: 'commit', sha: commit } };
+    if (path.endsWith(`/commits/${commit}`)) return { sha: commit, parents: [{ sha: before }] };
+    if (path.includes('/contents/package.json?ref=')) return { encoding: 'base64', content: Buffer.from(JSON.stringify({ name: packageInfo.name, version: beforeVersion })).toString('base64') };
+    if (path.endsWith('/git/matching-refs/tags/v')) return [];
+    if (path.includes('/git/ref/tags/')) return tagRef;
+    if (path.endsWith('/git/refs') && method === 'POST') { tagRef = { object: { type: 'commit', sha: body.sha } }; return tagRef; }
+    if (path.includes('/releases/tags/')) return release;
+    if (path.includes('/actions/workflows/release.yml/runs?')) return { workflow_runs: runs };
+    if (path.endsWith('/actions/workflows/release.yml/dispatches')) return null;
+    assert.fail(`Chamada inesperada: ${method} ${path}`);
+  };
+  return { options: { event, environment, checkoutCommit: commit, packageInfo, lock, request }, event, environment, packageInfo, lock, calls, writes };
+}
+
+test('tag automática recusa evento não confiável, versão divergente e branch remoto inválido antes de escrever', async () => {
+  const { autoTagRelease } = await import('../scripts/release/auto-tag.mjs');
+  const changes = [
+    f => { f.environment.GITHUB_EVENT_NAME = 'pull_request'; },
+    f => { f.event.workflow_run.conclusion = 'failure'; },
+    f => { f.event.workflow_run.status = 'in_progress'; },
+    f => { f.event.workflow_run.event = 'pull_request'; },
+    f => { f.event.workflow_run.head_repository.full_name = 'attacker/fork'; },
+    f => { f.event.workflow_run.path = '.github/workflows/other.yml'; },
+    f => { f.event.workflow_run.run_attempt = 0; },
+    f => { f.options.checkoutCommit = 'c'.repeat(40); },
+    f => { f.event.repository.full_name = 'attacker/fork'; },
+    f => { f.event.repository.default_branch = 'feature'; },
+    f => { f.event.workflow_run.head_sha = 'c'.repeat(40); },
+    f => { f.event.workflow_run.head_branch = 'feature'; },
+    f => { f.packageInfo.version = '1.2.3-rc.1'; },
+    f => { f.packageInfo.name = '@malicious/other'; },
+    f => { f.lock.version = '9.0.0'; },
+    f => { f.lock.packages[''].version = '9.0.0'; },
+  ];
+  for (const change of changes) {
+    const f = autoTagFixture(); change(f);
+    await assert.rejects(autoTagRelease(f.options)); assert.deepEqual(f.writes, []);
+  }
+  const f = autoTagFixture({ onCall: ({ path }) => path.includes('/git/ref/heads/') ? { handled: true, value: { object: { type: 'commit', sha: 'd'.repeat(40) } } } : null });
+  assert.equal((await autoTagRelease(f.options)).reason, 'branch-advanced'); assert.deepEqual(f.writes, []);
+});
+
+test('tag automática não move versão publicada e rejeita colisão ou histórico inacessível', async () => {
+  const { autoTagRelease } = await import('../scripts/release/auto-tag.mjs');
+  const existing = { object: { type: 'commit', sha: 'c'.repeat(40) } };
+  const published = { tag_name: 'v1.2.3', draft: false };
+  const absent = autoTagFixture({ beforeVersion: version });
+  assert.equal((await autoTagRelease(absent.options)).status, 'dispatched');
+  let f = autoTagFixture({ beforeVersion: version, existing, release: published });
+  assert.equal((await autoTagRelease(f.options)).reason, 'version-already-released'); assert.deepEqual(f.writes, []);
+  f = autoTagFixture({ beforeVersion: '1.2.2', existing, release: published });
+  await assert.rejects(autoTagRelease(f.options), /outro commit/); assert.deepEqual(f.writes, []);
+  f = autoTagFixture({ beforeVersion: version, existing });
+  await assert.rejects(autoTagRelease(f.options), /sem release publicada/); assert.deepEqual(f.writes, []);
+  f = autoTagFixture({ onCall: ({ path }) => path.includes('/contents/package.json?') ? { handled: true, value: null } : null });
+  await assert.rejects(autoTagRelease(f.options), /anterior não disponível/); assert.deepEqual(f.writes, []);
+});
+
+test('tag automática consulta CI exato e artefato atual antes de qualquer alteração', async () => {
+  const { autoTagRelease } = await import('../scripts/release/auto-tag.mjs');
+  const badRuns = [
+    { ...run, conclusion: 'failure' }, { ...run, status: 'in_progress' },
+    { ...run, run_attempt: 3 }, { ...run, head_sha: 'd'.repeat(40) },
+    { ...run, event: 'pull_request' }, { ...run, head_repository: { full_name: 'attacker/fork' } },
+  ];
+  for (const bad of badRuns) {
+    const f = autoTagFixture({ onCall: ({ path }) => path.endsWith('/actions/runs/42') ? { handled: true, value: bad } : null });
+    await assert.rejects(autoTagRelease(f.options), /CI de origem/); assert.deepEqual(f.writes, []);
+  }
+  for (const artifacts of [[], [{ id: 50, name: `agentdevkit-${commit}-1`, expired: false }], [{ id: 50, name: `agentdevkit-${commit}-2`, expired: true }]]) {
+    const f = autoTagFixture({ onCall: ({ path }) => path.includes('/actions/runs/42/artifacts') ? { handled: true, value: { artifacts } } : null });
+    await assert.rejects(autoTagRelease(f.options), /Artefato/); assert.deepEqual(f.writes, []);
+  }
+});
+
+test('tag automática bloqueia downgrade de latest com comparação inteira sem overflow', async () => {
+  const { autoTagRelease } = await import('../scripts/release/auto-tag.mjs');
+  for (const [currentVersion, beforeVersion] of [
+    ['1.2.3', '1.2.4'], ['1.9.9', '2.0.0'],
+    ['99999999999999999999.1.1', '100000000000000000000.0.0'],
+    ['1.9007199254740992.2', '1.9007199254740993.0'],
+  ]) {
+    const f = autoTagFixture({ currentVersion, beforeVersion });
+    await assert.rejects(autoTagRelease(f.options), /Versão inferior/); assert.deepEqual(f.writes, []);
+  }
+  const f = autoTagFixture({ currentVersion: '100000000000000000000.0.0', beforeVersion: '99999999999999999999.99.99' });
+  assert.equal((await autoTagRelease(f.options)).status, 'dispatched');
+});
+
+test('tag maior impede publicação mesmo após commit sem mudança de versão; ignora pré-releases', async () => {
+  const { autoTagRelease } = await import('../scripts/release/auto-tag.mjs');
+  let f = autoTagFixture({ currentVersion: '1.2.3', beforeVersion: '1.2.3', onCall: ({ path }) => path.endsWith('/git/matching-refs/tags/v') ? { handled: true, value: [{ ref: 'refs/tags/v1.2.4' }] } : null });
+  await assert.rejects(autoTagRelease(f.options), /inferior a uma tag existente/); assert.deepEqual(f.writes, []);
+  f = autoTagFixture({ onCall: ({ path }) => path.endsWith('/git/matching-refs/tags/v') ? { handled: true, value: [{ ref: 'refs/tags/v9.9.9-rc.1' }, { ref: 'refs/tags/v1.2.2' }, { ref: 'refs/tags/other' }] } : null });
+  assert.equal((await autoTagRelease(f.options)).status, 'dispatched');
+  f = autoTagFixture({ existing: { object: { type: 'commit', sha: commit } }, onCall: ({ path }) => path.endsWith('/git/matching-refs/tags/v') ? { handled: true, value: [{ ref: 'refs/tags/v2.0.0' }] } : null });
+  await assert.rejects(autoTagRelease(f.options), /inferior a uma tag existente/); assert.deepEqual(f.writes, []);
+});
+
+test('tag automática retoma tag criada no mesmo commit e evita despachar release existente ou em andamento', async () => {
+  const { autoTagRelease } = await import('../scripts/release/auto-tag.mjs');
+  const existing = { object: { type: 'commit', sha: commit } };
+  let f = autoTagFixture({ existing });
+  assert.deepEqual(await autoTagRelease(f.options), { status: 'dispatched', tag: 'v1.2.3', sourceCommit: commit, created: false });
+  assert.equal(f.writes.length, 1); assert.match(f.writes[0].path, /dispatches$/);
+  f = autoTagFixture({ existing, release: { tag_name: 'v1.2.3', draft: false } });
+  assert.equal((await autoTagRelease(f.options)).reason, 'release-exists'); assert.deepEqual(f.writes, []);
+  f = autoTagFixture({ existing, release: { tag_name: 'v1.2.3', draft: true } });
+  await assert.rejects(autoTagRelease(f.options), /incompleta/); assert.deepEqual(f.writes, []);
+  const active = { head_sha: commit, head_branch: 'v1.2.3', path: '.github/workflows/release.yml', status: 'in_progress', repository: { full_name: repository }, head_repository: { full_name: repository } };
+  f = autoTagFixture({ existing, runs: [active] });
+  assert.equal((await autoTagRelease(f.options)).reason, 'release-in-progress'); assert.deepEqual(f.writes, []);
+});
+
+test('tag automática resolve tags anotadas, concorrência e propagação de falhas sem mover referências', async () => {
+  const { autoTagRelease } = await import('../scripts/release/auto-tag.mjs');
+  const annotated = { object: { type: 'tag', sha: 'c'.repeat(40) } };
+  let f = autoTagFixture({ existing: annotated, onCall: ({ path }) => path.includes('/git/tags/') ? { handled: true, value: { object: { type: 'commit', sha: commit } } } : null });
+  assert.equal((await autoTagRelease(f.options)).status, 'dispatched');
+  f = autoTagFixture({ onCall: ({ method, path, setTag }) => {
+    if (method === 'POST' && path.endsWith('/git/refs')) { setTag({ object: { type: 'commit', sha: commit } }); throw new Error('GitHub POST falhou: HTTP 409.'); }
+    return null;
+  } });
+  assert.equal((await autoTagRelease(f.options)).status, 'dispatched');
+  f = autoTagFixture({ onCall: ({ method, path, setTag }) => {
+    if (method === 'POST' && path.endsWith('/git/refs')) { setTag({ object: { type: 'commit', sha: commit } }); throw new Error('GitHub POST falhou: HTTP 422.'); }
+    return null;
+  } });
+  assert.equal((await autoTagRelease(f.options)).status, 'dispatched');
+  f = autoTagFixture({ onCall: ({ method, path, setTag }) => {
+    if (method === 'POST' && path.endsWith('/git/refs')) { setTag({ object: { type: 'commit', sha: 'd'.repeat(40) } }); throw new Error('GitHub POST falhou: HTTP 422.'); }
+    return null;
+  } });
+  await assert.rejects(autoTagRelease(f.options), /HTTP 422/); assert.equal(f.writes.length, 1);
+  f = autoTagFixture({ onCall: ({ method, path }) => { if (method === 'POST' && path.endsWith('/git/refs')) throw new Error('GitHub POST falhou: HTTP 403.'); return null; } });
+  await assert.rejects(autoTagRelease(f.options), /HTTP 403/); assert.equal(f.writes.length, 1);
+  f = autoTagFixture({ onCall: ({ method, path }) => { if (method === 'POST' && path.endsWith('/dispatches')) throw new Error('GitHub POST falhou: HTTP 503.'); return null; } });
+  await assert.rejects(autoTagRelease(f.options), /HTTP 503/); assert.equal(f.writes.length, 2);
+});
+
+test('tag criada em CI concluída continua publicável se o branch avançar; tag movida impede dispatch', async () => {
+  const { autoTagRelease } = await import('../scripts/release/auto-tag.mjs');
+  let branchReads = 0;
+  let f = autoTagFixture({ onCall: ({ path }) => {
+    if (path.includes('/git/ref/heads/')) return { handled: true, value: { object: { type: 'commit', sha: ++branchReads === 1 ? commit : 'd'.repeat(40) } } };
+    return null;
+  } });
+  assert.equal((await autoTagRelease(f.options)).status, 'dispatched'); assert.equal(branchReads, 1);
+  let tagReads = 0;
+  f = autoTagFixture({ onCall: ({ path }) => {
+    if (path.includes('/git/ref/tags/') && ++tagReads === 2) return { handled: true, value: { object: { type: 'commit', sha: 'd'.repeat(40) } } };
+    return null;
+  } });
+  await assert.rejects(autoTagRelease(f.options), /tag mudou/);
+  assert.deepEqual(f.writes.map(x => x.path), [`/repos/${repository}/git/refs`]);
+});
+
+test('workflow real cria tag somente depois do CI concluído e chama release sem aguardá-la', () => {
+  const workflow = readFileSync(join(root, '.github/workflows/auto-release.yml'), 'utf8');
+  const job = workflow.split('\n  tag:\n')[1];
+  assert.ok(job, 'Job tag ausente');
+  assert.match(workflow, /workflow_run:/);
+  assert.match(workflow, /workflows:\s*\[CI\]/);
+  assert.match(workflow, /types:\s*\[completed\]/);
+  assert.match(workflow, /group:\s*automatic-release-\$\{\{\s*github\.event\.workflow_run\.event\s*\}\}-\$\{\{\s*github\.event\.workflow_run\.head_repository\.full_name\s*\}\}-\$\{\{\s*github\.event\.workflow_run\.head_branch\s*\}\}/);
+  assert.match(job, /github\.event\.workflow_run\.conclusion\s*==\s*'success'/);
+  assert.match(job, /github\.event\.workflow_run\.event\s*==\s*'push'/);
+  assert.match(job, /github\.event\.repository\.default_branch/);
+  assert.match(job, /ref:\s*\$\{\{\s*github\.event\.workflow_run\.head_sha\s*\}\}/);
+  assert.match(job, /persist-credentials:\s*false/);
+  assert.match(job, /contents:\s*write/);
+  assert.match(job, /actions:\s*write/);
+  assert.match(job, /node scripts\/release\/auto-tag\.mjs/);
+  assert.doesNotMatch(job, /gh run watch|workflow.*wait/);
+});
