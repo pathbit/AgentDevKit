@@ -103,7 +103,8 @@ publicados. Assim, a verificação comprova o acesso de um usuário comum.
 Confirme também que `latest` aponta para a versão estável e que o tarball é
 baixável; metadados visíveis sozinhos não comprovam uma instalação funcional.
 Se o registro ainda não disponibilizar o pacote, aguarde a verificação sem
-republicar automaticamente a mesma versão.
+republicar automaticamente a mesma versão. Durante a propagação, `E404` e
+`ETARGET` do download do tarball são repetidos dentro da mesma janela limitada.
 
 O GitHub Packages verifica os mesmos comandos com autenticação. Metadados
 devem indicar visibilidade pública e associação ao repositório correto.

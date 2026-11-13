@@ -91,7 +91,7 @@ existente, mesmo em rascunho. Remova somente o rascunho incompleto dessa
 tentativa após conferir a origem; nunca apague uma release publicada para
 repetir o fluxo.
 
-Para reiniciar uma publicação que falhou, use **Re-run failed jobs** ou
+Se a release ainda não existe, use **Re-run failed jobs** ou
 `gh workflow run release.yml --ref vX.Y.Z` com a tag real. A publicação prioriza
 o secret `NPMJS_TOKEN` do repositório; sem ele, usa OIDC, conforme
 [publicação](packages.md).

@@ -116,7 +116,10 @@ export async function publishRegistryPackage({ directory, resolution, env = proc
       } catch { invalid(`npm ${args[0]} não pôde ser executado.`); }
       if (!result || result.error || result.status !== 0) {
         const code = npmError(result || {});
-        if (allowMissing && !result?.error && code === 'E404') return null;
+        // A registry may expose metadata before the version is downloadable.
+        // npm cache add reports ETARGET in that window; only retry that exact
+        // operation, without treating other npm failures as propagation.
+        if (allowMissing && !result?.error && (code === 'E404' || code === 'ETARGET' && args[0] === 'cache' && args[1] === 'add')) return null;
         invalid(`npm ${args[0]} falhou (${code}).`);
       }
       return result.stdout;

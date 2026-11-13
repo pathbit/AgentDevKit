@@ -238,6 +238,21 @@ test('atraso de metadata e tarball compartilha tentativas após uma publicação
   assert.equal(m.calls.filter(call => call.args[1] === 'publish').length, 1);
 });
 
+test('ETARGET transitório do cache é repetido sem republicar', async t => {
+  const f = fixture(t), m = mock(f, { views: [null, { integrity: f.integrity }], downloads: ['ETARGET', true] });
+  assert.equal((await publishRegistryPackage(m.options)).status, 'published');
+  assert.deepEqual(m.sleeps, [1]);
+  assert.equal(m.calls.filter(call => call.args[1] === 'cache').length, 2);
+  assert.equal(m.calls.filter(call => call.args[1] === 'publish').length, 1);
+});
+
+test('ETARGET fora do download não é tratado como propagação', async t => {
+  const f = fixture(t), m = mock(f, { views: ['ETARGET'] });
+  await assert.rejects(publishRegistryPackage(m.options), /npm view falhou \(ETARGET\)/);
+  assert.deepEqual(m.sleeps, []);
+  assert.ok(!m.calls.some(call => ['publish', 'cache', 'exec'].includes(call.args[1])));
+});
+
 test('erro textual diferente de E404 no download interrompe sem expor credenciais', async t => {
   const f = fixture(t), m = mock(f, { views: [{ integrity: f.integrity }], downloads: [{ status: 1, stdout: '', stderr: `npm ERR! code E403\n${env.NPM_TOKEN}` }] });
   await assert.rejects(publishRegistryPackage(m.options), error => {
