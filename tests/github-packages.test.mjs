@@ -5,6 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { chmodSync, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 import { npmExecutable, sha256 } from '../scripts/release/assets.mjs';
 import { parseRegistryArgs, publishRegistryPackage } from '../scripts/release/packages.mjs';
 
@@ -20,6 +21,11 @@ const request = async (_method, path) => path.includes('/actions/runs/')
   ? run : { object: { type: 'commit', sha: commit } };
 const npmRuntime = { npm_execpath: npmExecutable(), PATH: process.env.PATH };
 const env = { ...process.env, ...npmRuntime, GITHUB_ACTIONS: 'false', NPM_TOKEN: 'test-secret-do-not-log', GH_TOKEN: 'test-github-secret' };
+
+test('npm instalado oferece leitura de cache por digest', () => {
+  const cacache = createRequire(npmExecutable())('cacache');
+  assert.equal(typeof cacache?.get?.byDigest, 'function');
+});
 
 function fixture(t, archive = Buffer.from('exact approved archive bytes'), releaseVersion = version) {
   const base = join(root, '.agent-tests'); mkdirSync(base, { recursive: true });
