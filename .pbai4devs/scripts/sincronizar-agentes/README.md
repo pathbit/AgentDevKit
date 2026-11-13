@@ -37,7 +37,7 @@ a seleção, use `agentdevkit agents <lista>`; não edite o manifesto gerado.
 
 Os derivados ficam locais: catálogos, manifesto, estado e apontamentos são
 excluídos pelo Git. O bloco em `.git/info/exclude` preserva regras próprias;
-sem Git, usa um bloco na raiz que migra ao executar depois de `git init`.
+sem Git, informa que a proteção fica pendente até `git init` e sincronização.
 Somente arquivos integralmente gerados são excluídos; pastas de clientes podem
 conter arquivos humanos versionados. Conteúdo próprio não é desindexado pela
 presença de um bloco gerenciado.

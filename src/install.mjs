@@ -352,6 +352,7 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
     }
     const wholeRecords = [previous?.files || {}, derivedEntries, derivedFiles];
     for (const path of new Set(wholeRecords.flatMap(record => Object.keys(record)))) if (!desired.has(path)) {
+      if (path === '.gitignore') { recordPreserved(path, 'project-owned'); continue; }
       if (aliasedEntrypoint(path)) continue;
       const current = read(target, path); if (!current) continue;
       const known = wholeRecords.some(record => record[path] === hash(current));
@@ -412,7 +413,7 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
     const retiredRoots = adapterRoots.filter(root => !active.roots.includes(root) && changes.some(change => change.action === 'remove' && change.path.startsWith(`${root}/`) && (previous?.files[change.path] || previous?.blocks[change.path])));
     const ownedOutputs = [...new Set([...synchronized.ownedOutputs, ...ownedEntrypoints, statePath])].filter(path => !mixedPaths.has(path) && !overlapsPreserved(path));
     const hashes = {};
-    for (const [path, digest] of Object.entries(previous?.files || {})) if ((ownedOutputs.includes(path) || !path.startsWith('.pbai4devs/')) && !mixedPaths.has(path) && !overlapsPreserved(path) && !aliasedEntrypoint(path)) hashes[path] = digest;
+    for (const [path, digest] of Object.entries(previous?.files || {})) if (path !== '.gitignore' && (ownedOutputs.includes(path) || !path.startsWith('.pbai4devs/')) && !mixedPaths.has(path) && !overlapsPreserved(path) && !aliasedEntrypoint(path)) hashes[path] = digest;
     for (const path of ownedEntrypoints) { const current = read(target, path); if (current && (previous?.blocks[path] || derivedEntries[path] === hash(current))) hashes[path] = hash(current); }
     for (const path of Object.keys(previous?.blocks || {})) if (path.endsWith('/.gitignore') && adapterRoots.some(root => path === `${root}/.gitignore`)) {
       const current = read(target, path);

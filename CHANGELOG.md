@@ -4,6 +4,13 @@ description: Alterações verificáveis por versão do AgentDevKit.
 
 # Changelog
 
+## 0.0.14 — 2026-11-12
+
+- O `.gitignore` da raiz pertence ao projeto e não é alterado pelo kit.
+- Exclusões locais ficam no Git e conflitos são informados antes da instalação.
+- Projetos sem Git recebem orientação para ativar a proteção após `git init`.
+- Negação ambígua, blocos antigos e artefatos rastreados recebem diagnóstico.
+
 ## 0.0.13 — 2026-11-12
 
 - Proteção de caches de agentes mesmo com negações genéricas no `.gitignore`.

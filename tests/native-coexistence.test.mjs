@@ -97,12 +97,14 @@ test('instala e atualiza sobre agentes configurados preservando arquivos, links 
     assert.equal(state.blocks[path], managedBlockDigest(readFileSync(join(root, path))));
   }
   const extended = snapshot(root, paths);
-  assert.ok((await cli(root, ['doctor'])).preserved.some(item => item.path === 'CLAUDE.md'));
-  await cli(root, ['sync', '--check']);
+  const diagnostic = await cli(root, ['doctor'], 1);
+  assert.ok(diagnostic.preserved.some(item => item.path === 'CLAUDE.md'));
+  assert.ok(diagnostic.issues.some(item => item.code === 'tracked-local-output' && item.path === '.claude/settings.local.json'));
+  await cli(root, ['sync', '--check'], 1);
   const stable = readFileSync(join(root, '.pbai4devs/estado/agentdevkit.json'));
   assert.equal((await cli(root, ['update', '--force', '--yes'])).changed, false);
   assert.equal((await cli(root, args)).changed, false);
-  await cli(root, ['doctor']); await cli(root, ['sync', '--check']);
+  await cli(root, ['doctor'], 1); await cli(root, ['sync', '--check'], 1);
   assert.deepEqual(readFileSync(join(root, '.pbai4devs/estado/agentdevkit.json')), stable);
   assert.deepEqual(snapshot(root, paths), extended);
   assert.equal(git('ls-files', '--stage', '-z'), index);

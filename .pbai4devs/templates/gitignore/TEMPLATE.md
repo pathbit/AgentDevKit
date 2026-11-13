@@ -1,15 +1,15 @@
 ---
-description: Bloco customizado obrigatório ao final do gitignore.
+description: Exemplo opcional de regras de ignore para o projeto.
 ---
 
 # Custom ignore
 
-Ao criar ou atualizar `.gitignore`, mantenha este bloco no final. Preserve
-exceções existentes e acrescente os ignorados específicos da tecnologia aqui.
+O `.gitignore` da raiz pertence ao projeto; o kit não o cria nem o altera.
+O projeto pode adotar este exemplo e seus próprios padrões se desejar.
 Regras de artefatos locais vêm de [shared.ignore](shared.ignore) e
 [agents.ignore](agents.ignore). As saídas calculadas usam
-[local.ignore](local.ignore) em `.git/info/exclude`; sem Git, um bloco gerado
-na raiz protege os arquivos e migra para `exclude` após `git init` e `sync`.
+[local.ignore](local.ignore) em `.git/info/exclude`; sem Git, essa proteção
+fica pendente até `git init` e sincronização, antes de adicionar arquivos.
 O sincronizador mantém o bloco `BEGIN AGENT IGNORE` / `END AGENT IGNORE`;
 regras próprias ficam fora dele, com exceções depois do bloco. Para permitir
 novos arquivos compartilhados, ajuste as fontes e sincronize. Raízes dedicadas

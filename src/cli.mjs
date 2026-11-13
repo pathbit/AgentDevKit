@@ -59,6 +59,7 @@ export function parseArgs(argv) {
 function print(result, options, output) {
   if (options.json) { output.write(`${JSON.stringify(result)}\n`); return; }
   output.write(`${result.message}\n`);
+  if (result.warnings?.length) for (const warning of result.warnings) output.write(`${warning}\n`);
   if (result.clients) output.write(`${text(result.language, 'clientsCurrent')}: ${result.clients.join(', ')}\n`);
   if (result.availableClients) output.write(`${text(result.language, 'clientsAvailable')}: ${result.availableClients.map(client => client.id).join(', ')}\n`);
   if (result.toolOutput) output.write(`${result.toolOutput.trimEnd()}\n`);
@@ -125,9 +126,11 @@ export async function main(argv = process.argv.slice(2), context = {}) {
       if (found.installed && !found.issues.length) {
         const plan = planInstallation({ target, language, mode: 'sync' });
         result.preserved = plan.preserved;
+        if (plan.localIgnore.status === 'no-git') { found.issues.push({ code: 'git-pending', path: '.git/info/exclude' }); result.warnings = [text(language, 'gitPending')]; }
         found.issues.push(...plan.changes.map(change => ({ code: 'outdated', path: change.path })));
         found.issues.push(...plan.localIgnoreCheck.missing.map(path => ({ code: 'unignored', path })));
-        if (plan.localIgnore.edits.length || plan.untrack?.paths.length) found.issues.push({ code: 'local-ignore', path: '.gitignore / Git info/exclude' });
+        found.issues.push(...plan.localIgnoreCheck.trackedOutputs.map(path => ({ code: 'tracked-local-output', path })));
+        if (plan.localIgnore.edits.length || plan.untrack?.paths.length) found.issues.push({ code: 'local-ignore', path: 'Git info/exclude' });
       }
       result.issues = found.issues; result.ok = found.installed && found.issues.length === 0;
       result.message = text(language, result.ok ? 'healthy' : found.installed ? 'unhealthy' : 'missing'); exitCode = result.ok ? 0 : 1;
@@ -149,13 +152,15 @@ export async function main(argv = process.argv.slice(2), context = {}) {
       result.preserved = plan.preserved;
       result.plan = plan.changes.map(({ path, action }) => ({ path, action, conflict: plan.conflicts.includes(path) }));
       result.untrackedPaths = [...(plan.untrack?.paths || [])];
-      result.localIgnore = { status: plan.localIgnore.status, edits: plan.localIgnore.edits.map(({ path, before }) => ({ path, action: before === null ? 'create' : 'update' })), missing: plan.localIgnoreCheck.missing };
-      if (plan.localIgnore.edits.length) result.plan.push({ path: '.gitignore / Git info/exclude', action: 'update', conflict: false });
+      result.localIgnore = { status: plan.localIgnore.status, edits: plan.localIgnore.edits.map(({ path, before }) => ({ path, action: before === null ? 'create' : 'update' })), missing: plan.localIgnoreCheck.missing, trackedOutputs: plan.localIgnoreCheck.trackedOutputs };
+      if (plan.localIgnore.status === 'no-git') result.warnings = [text(language, 'gitPending')];
+      if (plan.localIgnoreCheck.trackedOutputs.length) (result.warnings ||= []).push(`${text(language, 'trackedLocal')} ${plan.localIgnoreCheck.trackedOutputs.join(', ')}`);
+      if (plan.localIgnore.edits.length) result.plan.push({ path: 'Git info/exclude', action: 'update', conflict: false });
       if (plan.untrack?.paths.length) result.plan.push({ path: 'Git index (generated files)', action: 'update', conflict: false });
       result.conflicts = plan.conflicts;
       const preview = options.dryRun || (options.command === 'sync' && options.check);
       if (!plan.canApply || preview) {
-        result.ok = plan.canApply && (!options.check || result.plan.length === 0);
+        result.ok = plan.canApply && (!options.check || result.plan.length === 0 && plan.localIgnore.status !== 'no-git' && !plan.localIgnoreCheck.trackedOutputs.length);
         result.message = text(language, plan.canApply ? 'plan' : 'conflict'); exitCode = result.ok ? 0 : 1;
       } else {
         Object.assign(result, applyPlan(plan)); result.message = text(language, result.changed ? options.command : 'unchanged');

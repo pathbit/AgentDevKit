@@ -23,14 +23,14 @@ function git(root, args, input) {
   assert.ifError(result.error); assert.equal(result.status, 0, result.stderr); return result.stdout;
 }
 
-test('fallback protege outputs antes de git init e migra para exclude preservando regras', t => {
+test('sem Git preserva ignore e informa pendência; após git init protege outputs', t => {
   const root = fixture(t), outputs = ['.github/skills/generated/SKILL.md', '.vscode/.gitignore', 'AGENTS.md'];
   put(root, '.gitignore', '# Regras humanas\n*.own-cache\n');
   const plan = planLocalIgnore(root, { outputs });
-  assert.equal(plan.status, 'fallback'); assert.equal(checkLocalIgnore(plan).ok, false);
+  assert.equal(plan.status, 'no-git'); assert.equal(checkLocalIgnore(plan).ok, false);
   applyLocalIgnore(plan);
-  assert.equal(checkLocalIgnore(planLocalIgnore(root, { outputs })).ok, true);
-  assert.match(readFileSync(join(root, '.gitignore'), 'utf8'), /^# Regras humanas\n\*\.own-cache\n/);
+  assert.equal(checkLocalIgnore(planLocalIgnore(root, { outputs })).ok, false);
+  assert.equal(readFileSync(join(root, '.gitignore'), 'utf8'), '# Regras humanas\n*.own-cache\n');
   git(root, ['init', '-q']);
   put(root, '.git/info/exclude', '# Exclusoes humanas\n*.local-backup\n');
   applyLocalIgnore(planLocalIgnore(root, { outputs }));
@@ -68,10 +68,10 @@ test('check identifica negação humana e outputs rastreados sem alterar o índi
   assert.equal(git(root, ['ls-files', 'generated.md']).trim(), 'generated.md');
 });
 
-test('negação genérica de cache preserva regras humanas e protege caches de clientes', t => {
+test('exceções de templates preservam o ignore raiz e protegem dados privados', t => {
   const root = fixture(t); git(root, ['init', '-q']);
   git(root, ['config', 'core.ignorecase', 'false']);
-  const original = '# Regras do projeto\n!*.[Cc]ache/\n';
+  const original = '# Regras do projeto\n.env.*\n!.env.example\n!.env.*.example\n';
   put(root, '.gitignore', original); git(root, ['add', '.gitignore']);
   const index = git(root, ['ls-files', '--stage', '-z']);
   const plan = planLocalIgnore(root);
@@ -79,7 +79,7 @@ test('negação genérica de cache preserva regras humanas e protege caches de c
   assert.equal(existsSync(join(root, '.cursor')), false);
   applyLocalIgnore(plan);
   const updated = readFileSync(join(root, '.gitignore'), 'utf8');
-  assert.ok(updated.startsWith(original));
+  assert.equal(updated, original);
   assert.equal(git(root, ['ls-files', '--stage', '-z']), index);
   assert.equal(existsSync(join(root, '.cursor')), false);
   assert.equal(checkLocalIgnore(planLocalIgnore(root)).ok, true);
@@ -96,18 +96,12 @@ test('negação genérica de cache preserva regras humanas e protege caches de c
   assert.equal(checkLocalIgnore(planLocalIgnore(root)).ok, true);
 });
 
-test('bloco privado modificado é preservado e recusa atualização', t => {
+test('bloco legado na raiz pertence ao projeto e permanece intacto', t => {
   const root = fixture(t); git(root, ['init', '-q']);
-  put(root, '.gitignore', '!*.[Cc]ache/\n');
+  const original = '# BEGIN AGENTDEVKIT PRIVATE legado\n# edição humana\n# END AGENTDEVKIT PRIVATE legado\n';
+  put(root, '.gitignore', original);
   applyLocalIgnore(planLocalIgnore(root));
-  const path = join(root, '.gitignore');
-  const changed = readFileSync(path, 'utf8').replace('# Estado local', '# Estado alterado');
-  // Alter a concrete managed rule, even if the template has no heading here.
-  const edited = changed.replace('/.cursor/', '/.cursor-alterado/');
-  assert.notEqual(edited, readFileSync(path, 'utf8'));
-  writeFileSync(path, edited);
-  assert.throws(() => planLocalIgnore(root), /Bloco privado AgentDevKit alterado/);
-  assert.equal(readFileSync(path, 'utf8'), edited);
+  assert.equal(readFileSync(join(root, '.gitignore'), 'utf8'), original);
 });
 
 test('negação com caixa mista não expõe cache em Git sensível a maiúsculas', t => {
@@ -115,9 +109,8 @@ test('negação com caixa mista não expõe cache em Git sensível a maiúsculas
   git(root, ['config', 'core.ignorecase', 'false']);
   put(root, '.gitignore', '!*.CaChE/\n');
   put(root, '.cursor/.CaChE/private.json', 'local');
-  applyLocalIgnore(planLocalIgnore(root));
-  assert.equal(checkLocalIgnore(planLocalIgnore(root)).ok, true);
-  assert.ok(git(root, ['check-ignore', '--no-index', '.cursor/.CaChE/private.json']).includes('.cursor/.CaChE/private.json'));
+  assert.throws(() => applyLocalIgnore(planLocalIgnore(root)), /Regras humanas/);
+  assert.equal(readFileSync(join(root, '.gitignore'), 'utf8'), '!*.CaChE/\n');
 });
 
 test('negações literais e com caixa mista não expõem estado privado', t => {
@@ -125,41 +118,36 @@ test('negações literais e com caixa mista não expõem estado privado', t => {
   git(root, ['config', 'core.ignorecase', 'false']);
   put(root, '.gitignore', '!*.LoCaL/\n!/.cursor/.env.production\n');
   for (const path of ['.cursor/.LoCaL/private.json', '.cursor/.env.production']) put(root, path, 'privado');
-  applyLocalIgnore(planLocalIgnore(root));
-  for (const path of ['.cursor/.LoCaL/private.json', '.cursor/.env.production']) assert.ok(git(root, ['check-ignore', '--no-index', path]).includes(path));
-  assert.equal(checkLocalIgnore(planLocalIgnore(root)).ok, true);
+  assert.throws(() => applyLocalIgnore(planLocalIgnore(root)), /Regras humanas/);
+  assert.equal(readFileSync(join(root, '.gitignore'), 'utf8'), '!*.LoCaL/\n!/.cursor/.env.production\n');
 });
 
 test('negação na primeira linha com BOM preserva bytes e protege segredos', t => {
   const root = fixture(t); git(root, ['init', '-q']);
   const original = '\uFEFF!/.cursor/.env.production\r\n';
   put(root, '.gitignore', original); put(root, '.cursor/.env.production', 'privado');
-  applyLocalIgnore(planLocalIgnore(root));
-  assert.ok(readFileSync(join(root, '.gitignore'), 'utf8').startsWith(original));
-  assert.ok(git(root, ['check-ignore', '--no-index', '.cursor/.env.production']).includes('.cursor/.env.production'));
-  assert.equal(checkLocalIgnore(planLocalIgnore(root)).ok, true);
+  assert.throws(() => applyLocalIgnore(planLocalIgnore(root)), /Regras humanas/);
+  assert.equal(readFileSync(join(root, '.gitignore'), 'utf8'), original);
 });
 
-test('negação humana acrescentada após o bloco recebe proteção na próxima sincronização', t => {
+test('negação humana posterior é informada sem reescrever a raiz', t => {
   const root = fixture(t); git(root, ['init', '-q']);
-  put(root, '.gitignore', '!*.cache/\n'); applyLocalIgnore(planLocalIgnore(root));
+  put(root, '.gitignore', '# humano\n'); applyLocalIgnore(planLocalIgnore(root));
   const path = join(root, '.gitignore');
   writeFileSync(path, readFileSync(path, 'utf8') + '!/.cursor/.env.production\n');
   put(root, '.cursor/.env.production', 'privado');
   const plan = planLocalIgnore(root);
-  assert.ok(plan.edits.some(edit => edit.path === path));
-  applyLocalIgnore(plan);
-  assert.match(readFileSync(path, 'utf8'), /!\*\.cache\/\n!\/\.cursor\/\.env\.production\n/);
-  assert.ok(git(root, ['check-ignore', '--no-index', '.cursor/.env.production']).includes('.cursor/.env.production'));
-  assert.equal(checkLocalIgnore(planLocalIgnore(root)).ok, true);
+  assert.ok(checkLocalIgnore(plan).missing.includes('.cursor/.env.production'));
+  assert.throws(() => applyLocalIgnore(plan), /Regras humanas/);
+  assert.equal(readFileSync(path, 'utf8'), '# humano\n!/.cursor/.env.production\n');
 });
 
-test('planejamento é somente leitura e aplicação detecta mudança concorrente', t => {
+test('planejamento sem Git não modifica ignore nem edição humana posterior', t => {
   const root = fixture(t); put(root, '.gitignore', 'antes\r\n');
   const plan = planLocalIgnore(root, { outputs: ['generated.md'] });
   assert.equal(readFileSync(join(root, '.gitignore'), 'utf8'), 'antes\r\n');
   put(root, '.gitignore', 'depois\r\n');
-  assert.throws(() => applyLocalIgnore(plan), /alterada apos planejar/);
+  applyLocalIgnore(plan);
   assert.equal(readFileSync(join(root, '.gitignore'), 'utf8'), 'depois\r\n');
   for (const path of ['../outside', '/absolute', 'line\nname', 'a\\b']) assert.throws(() => planLocalIgnore(root, { outputs: [path] }), /invalida/);
 });
@@ -185,7 +173,7 @@ test('plano de instalação em alvo inexistente não cria arquivos', t => {
   const root = fixture(t);
   const target = join(root, 'new project', 'nested');
   const fallback = planLocalIgnore(target, { outputs: ['AGENTS.md'] });
-  assert.equal(fallback.status, 'fallback'); assert.equal(existsSync(target), false);
+  assert.equal(fallback.status, 'no-git'); assert.equal(existsSync(target), false);
   git(root, ['init', '-q']);
   const plan = planLocalIgnore(target, { outputs: ['AGENTS.md'] });
   assert.equal(plan.status, 'git'); assert.equal(existsSync(target), false);
@@ -217,21 +205,21 @@ test('configurações humanas dos clientes continuam versionáveis', t => {
   assert.ok(tracked.includes('.github/settings.json')); assert.ok(tracked.includes('.vscode/settings.json'));
 });
 
-test('artefatos vêm da política compartilhada e não entram na lista de outputs', t => {
+test('artefatos vêm da política compartilhada e rastreados são informados', t => {
   const root = fixture(t); git(root, ['init', '-q']);
   put(root, '.agent-tests/human.txt', 'evidência humana'); git(root, ['add', '-f', '.agent-tests/human.txt']);
   const plan = planLocalIgnore(root, { outputs: ['AGENTS.md'] });
   assert.ok(plan.artifactProbes.some(path => path.startsWith('.agent-tests/')));
   assert.ok(plan.artifactProbes.some(path => path.startsWith('.agentdevkit-ignore-probes/')));
   assert.ok(plan.paths.every(path => !plan.artifactProbes.includes(path)));
-  assert.ok(!plan.trackedOutputs.includes('.agent-tests/human.txt'));
+  assert.ok(plan.trackedOutputs.includes('.agent-tests/human.txt'));
   applyLocalIgnore(plan);
   for (const path of ['.agent-tests/x', 'TMP/x', 'nested/TeMp/x', '.PlAyWrIgHt-McP/x', 'nested/playwright-report/x', 'TEST-RESULTS/x', 'nested/TestResults/x', 'BLOB-REPORT/x']) {
     assert.equal(git(root, ['check-ignore', '--no-index', path]).trim(), path);
   }
   assert.equal(git(root, ['ls-files', '.agent-tests/human.txt']).trim(), '.agent-tests/human.txt');
   assert.equal(readFileSync(join(root, '.agent-tests/human.txt'), 'utf8'), 'evidência humana');
-  assert.equal(checkLocalIgnore(planLocalIgnore(root, { outputs: ['AGENTS.md'] })).ok, true);
+  assert.equal(checkLocalIgnore(planLocalIgnore(root, { outputs: ['AGENTS.md'] })).ok, false);
 });
 
 test('regras de artefatos são limitadas ao projeto dentro do monorepo', t => {
@@ -467,6 +455,63 @@ test('arquivo real reaberto por glob é detectado também se surgir após o plan
   assert.equal(readFileSync(join(root, path), 'utf8'), 'artefato local\n');
 });
 
+test('negações globais e aninhadas não expõem futuros arquivos privados', t => {
+  for (const [file, rule] of [['.gitignore', '!/.claude/s*.json'], ['.claude/.gitignore', '!s*.json'], ['.claude/.gitignore', '!/settings.local.json'], ['.pbai4devs/.gitignore', '!.playwright-*/'], ['.pbai4devs/module/.gitignore', '!.playwright-*/'], ['logs/.gitignore', '!.playwright-*/'], ['.gitignore', '!**/foo/s*.json'], ['.gitignore', '!**/foo/.playwright-*.png'], ['.gitignore', '!/docs/.playwright-*.png'], ['docs/.gitignore', '!.playwright-*/'], ['.gitignore', '!*.CaChE/'], ['.gitignore', '!/.playwright-*.png']]) {
+    const root = fixture(t); git(root, ['init', '-q']);
+    put(root, file, `\uFEFF${rule}\n`);
+    const before = readFileSync(join(root, '.git/info/exclude'));
+    const index = git(root, ['ls-files', '--stage', '-z']);
+    const plan = planLocalIgnore(root);
+    assert.ok(checkLocalIgnore(plan).missing.some(value => value.includes(rule)), rule);
+    assert.throws(() => applyLocalIgnore(plan), /Regras humanas/);
+    assert.deepEqual(readFileSync(join(root, '.git/info/exclude')), before);
+    assert.equal(git(root, ['ls-files', '--stage', '-z']), index);
+    assert.equal(readFileSync(join(root, file), 'utf8'), `\uFEFF${rule}\n`);
+  }
+});
+
+test('glob ancestral do subprojeto é detectado antes de alterar o exclude', t => {
+  const root = fixture(t); git(root, ['init', '-q']);
+  const child = join(root, 'packages/app'); mkdirSync(child, { recursive: true });
+  put(root, '.gitignore', '!/packages/app/.claude/s*.json\n');
+  const before = readFileSync(join(root, '.git/info/exclude'));
+  const plan = planLocalIgnore(child);
+  assert.ok(checkLocalIgnore(plan).missing.some(value => value.includes('s*.json')));
+  assert.throws(() => applyLocalIgnore(plan), /Regras humanas/);
+  assert.deepEqual(readFileSync(join(root, '.git/info/exclude')), before);
+});
+
+test('dependências já ignoradas não causam conflito, mas ignores visíveis são verificados', t => {
+  const root = fixture(t); git(root, ['init', '-q']);
+  put(root, '.gitignore', 'node_modules/\n');
+  put(root, 'node_modules/pacote/.gitignore', '!.playwright-*/\n');
+  assert.equal(checkLocalIgnore(planLocalIgnore(root)).missing.length, 0);
+  put(root, '.gitignore', '# dependências visíveis\n');
+  assert.ok(checkLocalIgnore(planLocalIgnore(root)).missing.some(value => value.includes('!.playwright-*/')));
+});
+
+test('bloco antigo de outro caminho não oculta arquivos humanos silenciosamente', t => {
+  const root = fixture(t); git(root, ['init', '-q']);
+  const old = '# BEGIN AGENTDEVKIT LOCAL 0123456789abcdef\n/.claude/\n# END AGENTDEVKIT LOCAL 0123456789abcdef\n';
+  put(root, '.git/info/exclude', old);
+  const plan = planLocalIgnore(root);
+  assert.ok(checkLocalIgnore(plan).missing.includes('.claude/.agentdevkit-human-probe.md'));
+  assert.throws(() => applyLocalIgnore(plan), /Regras humanas/);
+  assert.equal(readFileSync(join(root, '.git/info/exclude'), 'utf8'), old);
+});
+
+test('artefatos já versionados são informados sem alterar o índice', t => {
+  const root = fixture(t); git(root, ['init', '-q']);
+  const artifacts = ['.playwright-mcp/trace.zip', 'playwright-report/index.html', 'test-results/result.txt', '.agent-tests/log.txt', '.claude/settings.local.json', '.codex/.env'];
+  for (const path of artifacts) put(root, path, 'trace');
+  git(root, ['add', '-f', ...artifacts]);
+  const before = git(root, ['ls-files', '--stage', '-z']);
+  const plan = planLocalIgnore(root);
+  assert.deepEqual([...plan.trackedOutputs].sort(), artifacts.sort());
+  assert.equal(checkLocalIgnore(plan).ok, false);
+  assert.equal(git(root, ['ls-files', '--stage', '-z']), before);
+});
+
 test('regras customizadas aninhadas continuam válidas e incluem pais ocultos', t => {
   const root = fixture(t); git(root, ['init', '-q']);
   const policy = readFileSync(join(projectRoot, '.pbai4devs/templates/gitignore/agents.ignore'), 'utf8');
@@ -485,7 +530,7 @@ test('chaves literais em padrões Git não viram expansão de glob', t => {
   const policy = readFileSync(join(projectRoot, '.pbai4devs/templates/gitignore/agents.ignore'), 'utf8');
   put(root, '.pbai4devs/templates/gitignore/agents.ignore', `${policy}\n**/cache{keep,archive}/\n`);
   put(root, 'cachekeep/source.txt', 'código humano\n');
-  put(root, '.gitignore', '!cachekeep/**\n');
+  put(root, '.gitignore', '!cachekeep/source.txt\n');
   assert.doesNotThrow(() => applyLocalIgnore(planLocalIgnore(root)));
   assert.equal(readFileSync(join(root, 'cachekeep/source.txt'), 'utf8'), 'código humano\n');
 });
@@ -510,32 +555,28 @@ test('escrita de exclusões preserva permissões e detecta alteração concorren
   assert.equal(statSync(exclude).mode & 0o777, 0o640);
 });
 
-test('fallback e rollback de exclusões mantêm o modo original', { skip: process.platform === 'win32' }, t => {
+test('ignore raiz mantém modo e bytes antes e depois de git init', { skip: process.platform === 'win32' }, t => {
   const root = fixture(t), ignore = join(root, '.gitignore');
   put(root, '.gitignore', '# humano\n'); chmodSync(ignore, 0o600);
   applyLocalIgnore(planLocalIgnore(root));
   assert.equal(statSync(ignore).mode & 0o777, 0o600);
   const original = readFileSync(ignore); git(root, ['init', '-q']);
-  const exclude = join(root, '.git/info/exclude'), before = readFileSync(exclude);
-  chmodSync(exclude, 0o600);
-  const plan = planLocalIgnore(root); assert.equal(plan.edits.length, 2);
-  Object.defineProperty(plan.edits[1], 'after', { get() { throw new Error('injected rollback failure'); } });
-  assert.throws(() => applyLocalIgnore(plan), /injected rollback failure/);
-  assert.deepEqual(readFileSync(exclude), before); assert.equal(statSync(exclude).mode & 0o777, 0o600);
+  const exclude = join(root, '.git/info/exclude'); chmodSync(exclude, 0o600);
+  applyLocalIgnore(planLocalIgnore(root));
+  assert.equal(statSync(exclude).mode & 0o777, 0o600);
   assert.deepEqual(readFileSync(ignore), original); assert.equal(statSync(ignore).mode & 0o777, 0o600);
 });
 
-test('rollback restaura exclusão somente leitura com escrita atômica', { skip: process.platform === 'win32' }, t => {
+test('ignore raiz somente leitura não impede exclusão local no Git', { skip: process.platform === 'win32' }, t => {
   const root = fixture(t), ignore = join(root, '.gitignore');
   put(root, '.gitignore', '# humano\n'); chmodSync(ignore, 0o444);
   applyLocalIgnore(planLocalIgnore(root));
   const original = readFileSync(ignore); git(root, ['init', '-q']);
-  const exclude = join(root, '.git/info/exclude'), before = readFileSync(exclude);
+  const exclude = join(root, '.git/info/exclude');
   chmodSync(exclude, 0o444);
   const plan = planLocalIgnore(root);
-  Object.defineProperty(plan.edits[1], 'after', { get() { throw new Error('readonly rollback probe'); } });
-  assert.throws(() => applyLocalIgnore(plan), /readonly rollback probe/);
-  assert.deepEqual(readFileSync(exclude), before); assert.equal(statSync(exclude).mode & 0o777, 0o444);
+  applyLocalIgnore(plan);
+  assert.equal(statSync(exclude).mode & 0o777, 0o444);
   assert.deepEqual(readFileSync(ignore), original); assert.equal(statSync(ignore).mode & 0o777, 0o444);
 });
 

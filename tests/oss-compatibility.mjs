@@ -156,21 +156,21 @@ function checkOriginals(root, baseline, git) {
   for (const [path, original] of Object.entries(baseline.files)) {
     const current = fileSnapshot(root, path);
     if (JSON.stringify(current) === JSON.stringify(original)) continue;
+    assert.notEqual(path, '.gitignore', 'O .gitignore da raiz pertence ao projeto e não pode ser alterado.');
     assert.equal(original.kind, 'file', `Tipo do arquivo original alterado: ${path}`);
     assert.equal(current.kind, 'file', `Tipo do arquivo original alterado: ${path}`);
     assert.equal(current.mode, original.mode, `Permissão do arquivo original alterada: ${path}`);
     const content = readFileSync(join(root, path));
     // Existing Markdown receives an appended, kit-owned block. Verify every
     // original byte by its pre-install hash, including original line endings.
-    const privateIgnore = path === '.gitignore' && content.includes(Buffer.from('# BEGIN AGENTDEVKIT PRIVATE '));
-    const marker = Buffer.from(privateIgnore ? '# BEGIN AGENTDEVKIT PRIVATE ' : '<!-- BEGIN AGENTDEVKIT -->');
+    const marker = Buffer.from('<!-- BEGIN AGENTDEVKIT -->');
     const position = content.indexOf(marker);
     assert.ok(position >= 0 && content.indexOf(marker, position + marker.length) < 0, `Arquivo original alterado: ${path}`);
-    const blockEnd = Buffer.from(privateIgnore ? '# END AGENTDEVKIT PRIVATE ' : '<!-- END AGENTDEVKIT -->');
+    const blockEnd = Buffer.from('<!-- END AGENTDEVKIT -->');
     const end = content.indexOf(blockEnd, position + marker.length);
     const suffix = end < 0 ? '' : content.subarray(end + blockEnd.length).toString();
-    assert.ok(end >= 0 && (privateIgnore ? /^[a-f0-9]{16}(?:\r\n|\n|\r)?$/.test(suffix) : /^(?:\r\n|\n|\r)?$/.test(suffix)), `Bloco adicionado inválido: ${path}`);
-    if (!privateIgnore) assert.equal(state?.blocks?.[path], hash(content.subarray(position, end + blockEnd.length)), `Bloco não pertence ao kit: ${path}`);
+    assert.ok(end >= 0 && /^(?:\r\n|\n|\r)?$/.test(suffix), `Bloco adicionado inválido: ${path}`);
+    assert.equal(state?.blocks?.[path], hash(content.subarray(position, end + blockEnd.length)), `Bloco não pertence ao kit: ${path}`);
     const prefix = content.subarray(0, position);
     let preserved = hash(prefix) === original.sha256;
     for (let removed = 1; !preserved && removed <= Math.min(4, prefix.length); removed++) {

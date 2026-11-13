@@ -19,6 +19,7 @@ description: Incrementos verificáveis do AgentDevKit.
 - [Ecossistema de segurança](security-ecosystem/SPEC.md): fluxos e scanners locais.
 - [Integração sem substituição][additive]: acréscimos em arquivos existentes.
 - [Compatibilidade com projetos reais][oss]: projetos públicos e exemplos reproduzíveis.
+- [Ignore do projeto](project-ignore/SPEC.md): preservar o arquivo da raiz.
 
 Cada incremento vincula requisitos, critérios, testes e evidências locais.
 

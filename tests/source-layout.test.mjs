@@ -29,6 +29,18 @@ function cli(root, args, status = 0) {
   assert.equal(result.status, status, result.stdout + result.stderr); return JSON.parse(result.stdout);
 }
 
+test('doctor e sync check informam artefatos rastreados sem alterar o índice', t => {
+  const root = fixture(t); cli(root, ['init', '--agents', 'claude']);
+  write(root, '.playwright-mcp/trace.zip', 'trace');
+  git(root, 'add', '-f', '.playwright-mcp/trace.zip');
+  const before = git(root, 'ls-files', '--stage', '-z');
+  const doctor = cli(root, ['doctor'], 1);
+  assert.ok(doctor.issues.some(item => item.code === 'tracked-local-output' && item.path === '.playwright-mcp/trace.zip'));
+  const sync = cli(root, ['sync', '--check'], 1);
+  assert.deepEqual(sync.localIgnore.trackedOutputs, ['.playwright-mcp/trace.zip']);
+  assert.equal(git(root, 'ls-files', '--stage', '-z'), before);
+});
+
 test('consumidor recebe recursos sem código do gerador e preserva entrada humana', t => {
   const root = fixture(t), human = '# Meu projeto\n\nInstruções próprias.\n';
   write(root, 'AGENTS.md', human); cli(root, ['init', '--agents', 'claude']);
@@ -75,7 +87,7 @@ test('instalação em Git vazio ignora artefatos sem modificar README, licença 
   assert.equal(read(root, 'README.md'), readme); assert.equal(read(root, 'LICENSE'), license);
   assert.equal(git(root, 'ls-files', '.agent-tests/human.txt').trim(), '.agent-tests/human.txt');
   assert.equal(read(root, '.agent-tests/human.txt'), 'evidência própria\n');
-  assert.equal(cli(root, ['sync', '--check']).ok, true);
+  assert.deepEqual(cli(root, ['sync', '--check'], 1).localIgnore.trackedOutputs, ['.agent-tests/human.txt']);
   assert.equal(cli(root, ['init', '--agents', 'claude']).changed, false);
   assert.equal(read(root, '.git/info/exclude'), exclude);
   write(root, '.git/info/exclude', exclude.replace(/\n# Resultados e arquivos temporarios\n[\s\S]*?(?=# END AGENTDEVKIT LOCAL)/, '\n'));
@@ -96,21 +108,43 @@ test('negação humana de artefatos impede init mesmo com force', t => {
   }
 });
 
-test('fallback sem Git carrega artefatos e migra sem tocar as regras humanas', t => {
+test('sem Git mantém ignore raiz, informa pendência e protege após sincronizar', t => {
   const root = mkdtempSync(join(tmpdir(), 'agentdevkit-no-git-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const human = '# Regra do produto\ndist/\n'; write(root, '.gitignore', human);
   write(root, 'README.md', '# Meu produto\n'); write(root, 'LICENSE', 'Minha licença\n');
-  cli(root, ['init', '--agents', 'claude']);
-  const fallback = read(root, '.gitignore'); assert.ok(fallback.startsWith(human));
-  assert.match(fallback, /Resultados e arquivos temporarios/);
-  assert.equal(cli(root, ['sync', '--check']).ok, true);
+  const installed = cli(root, ['init', '--agents', 'claude']);
+  assert.equal(installed.localIgnore.status, 'no-git');
+  assert.ok(installed.warnings.some(warning => /git init/.test(warning)));
+  assert.equal(read(root, '.gitignore'), human);
+  assert.equal(cli(root, ['doctor'], 1).ok, false);
+  assert.equal(cli(root, ['sync', '--check'], 1).ok, false);
   git(root, 'init', '--quiet'); cli(root, ['sync']);
   assert.equal(read(root, '.gitignore'), human);
   for (const path of ['.agent-tests/x', 'nested/TmP/x', '.PLAYWRIGHT-MCP/x', 'sub/playwright-report/x', 'test-results/x']) {
     assert.equal(git(root, 'check-ignore', '--no-index', path).trim(), path);
   }
   assert.equal(read(root, 'README.md'), '# Meu produto\n'); assert.equal(read(root, 'LICENSE'), 'Minha licença\n');
+});
+
+test('sem Git não cria ignore de raiz ausente', t => {
+  const root = mkdtempSync(join(tmpdir(), 'agentdevkit-no-ignore-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const result = cli(root, ['init', '--agents', 'claude']);
+  assert.equal(result.localIgnore.status, 'no-git');
+  assert.equal(existsSync(join(root, '.gitignore')), false);
+});
+
+test('ignore raiz registrado por versão antiga nunca é removido ou desindexado', t => {
+  const root = fixture(t), human = '# Regras do projeto\n.env.*\n!.env.example\n';
+  write(root, '.gitignore', human); git(root, 'add', '.gitignore');
+  cli(root, ['init', '--agents', 'claude']);
+  const state = JSON.parse(read(root, statePath));
+  state.files['.gitignore'] = hash(human); write(root, statePath, JSON.stringify(state));
+  const index = git(root, 'ls-files', '--stage', '-z');
+  cli(root, ['update', '--yes']);
+  assert.equal(read(root, '.gitignore'), human);
+  assert.equal(git(root, 'ls-files', '--stage', '-z'), index);
 });
 
 test('update acrescenta licença em instalação anterior e detecta alteração posterior', t => {

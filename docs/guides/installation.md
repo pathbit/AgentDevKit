@@ -105,20 +105,24 @@ identifica a licença dos recursos do AgentDevKit, sem redefinir a do projeto.
 Um `.gitignore` dentro de `.pbai4devs` só controla essa árvore. Para os
 apontamentos externos, o kit gera exclusões locais do Git, sem ignorar
 workflows, formulários de issues ou configurações humanas em `.github`.
-Sem Git, uma proteção no `.gitignore` da raiz evita incluir os derivados
-quando o repositório for iniciado.
+O kit não cria nem altera o `.gitignore` da raiz. Sem Git, a exclusão local
+fica pendente; execute `git init` e `npx @pathbit/agentdevkit sync` antes de
+usar `git add`. No GitHub Packages, use o prefixo de registry da instalação.
 
 O bloco local também protege `.agent-tests`, `tmp`, `temp`, `.playwright*`
 e relatórios de testes, inclusive com letras maiúsculas e em subpastas.
 O conteúdo do `.gitignore` existente e os arquivos rastreados são preservados.
-Quando há exceções no `.gitignore` da raiz, o kit pode acrescentar um bloco
-limitado ao estado privado dos clientes, sem criar pastas não selecionadas.
-Conflitos detectados nas demais proteções são informados para revisão.
+Uma exceção que reabra arquivo privado ou artefato é informada como conflito;
+o projeto decide como ajustar suas próprias regras.
+Negativas com curingas também podem ser recusadas preventivamente, mesmo antes
+de existir um arquivo correspondente. Examine a regra indicada no diagnóstico.
 Nomes próprios de artefatos e arquivos existentes também são conferidos;
 a validação fica restrita ao projeto e aos ignores de seus ancestrais.
 
 Arquivos já rastreados exigem migração do índice: apenas saídas identificadas
 do kit podem deixar de ser rastreadas, preservando seus bytes no disco.
+Artefatos já rastreados são informados por `doctor` e `sync --check` para
+revisão; não são removidos automaticamente do índice.
 Revise o plano e os conflitos em um projeto existente; use `--dry-run` antes
 de aplicar. Conteúdo humano não deve ser classificado como saída do gerador.
 

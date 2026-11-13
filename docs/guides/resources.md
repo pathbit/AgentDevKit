@@ -14,6 +14,9 @@ O hub permanece completo mesmo com poucos clientes selecionados. Apenas os
 apontamentos necessários são gerados; consulte ou altere a seleção com `agents`
 na [CLI](cli.md). Pastas compartilhadas podem atender mais de um cliente.
 
+Para um exemplo de cada tipo aplicado ao desenvolvimento de software, veja
+[recursos na prática](recursos-na-pratica.md).
+
 ## Escolher o tipo certo
 
 Os caminhos abaixo são relativos a `.pbai4devs/`.

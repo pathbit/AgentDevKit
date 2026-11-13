@@ -577,9 +577,10 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
   const touched = new Set(), createdDirectories = new Set(), restoredDirectories = new Set();
   const prunedDirectories = new Map();
   let restoring = false;
-  const summary = { changed: changed.length + rootEntryChanges.length, stale: removals.length, conflicts: conflicts.size, missing: missing.length, legacy: legacy.length, registries: registries.size, gitignores: ignoreFiles.size, manifests: configExists ? 0 : 1, localIgnores: localStatus.changed + localStatus.missing.length + localStatus.trackedOutputs.length };
+  const summary = { changed: changed.length + rootEntryChanges.length, stale: removals.length, conflicts: conflicts.size, missing: missing.length, legacy: legacy.length, registries: registries.size, gitignores: ignoreFiles.size, manifests: configExists ? 0 : 1, localIgnores: localStatus.changed + localStatus.missing.length + localStatus.trackedOutputs.length + (localStatus.status === 'no-git' ? 1 : 0) };
   const dirty = Object.values(summary).some(Boolean);
   output(`${summary.changed} desatualizadas; ${summary.stale} obsoletas; ${summary.conflicts} conflitos; ${summary.missing} origens nativas ausentes; ${summary.legacy} documentos antigos; ${summary.registries} indices derivados; ${summary.gitignores} gitignores; ${summary.localIgnores} exclusoes locais.`);
+  if (localStatus.status === 'no-git') output('Git ausente: apos git init, execute a sincronizacao para proteger os arquivos locais.');
   const preservedPaths = sorted(preserved.keys()).map(path => preserved.get(path));
   if (check) return { ...summary, ownedOutputs, managedBlocks, preserved: preservedPaths, exitCode: dirty ? 1 : 0 };
   if (conflicts.size) fail(`Use --force para reconstruir somente os caminhos gerenciados: ${sorted(conflicts).join(', ')}`);

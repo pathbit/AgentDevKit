@@ -27,6 +27,7 @@ pode trocar de agente sem manter várias cópias das mesmas instruções.
 | Projeto em andamento | [Instalar com simulação][install] → [retomar][flow] |
 | Evoluir documentação existente | [Inventariar e complementar](guides/documentation.md) |
 | Personalizar agentes | [Recursos][resources] → [compatibilidade][clients] |
+| Entender cada peça com um exemplo | [Recursos na prática](guides/recursos-na-pratica.md) |
 | Revisar segurança | [Scanners locais e controles](guides/security.md) |
 | Executar ou verificar algo | [CLI](guides/cli.md) → [ferramentas e testes][tests] |
 | Corrigir uma dificuldade | [Soluções e recuperação](guides/troubleshooting.md) |
