@@ -632,43 +632,47 @@ test('executaveis opcionais validam pacotes e caminhos sem permitir escapes', ()
 });
 
 test('atualizacao aceita layout opcional e preserva versao anterior se dependencia falhar', async t => {
-  const target = platformKey(); const name = '@owner/cli-host';
-  const config = { ...tool(), executables: { [target]: ['bin/legacy'] }, optionalExecutables: { [target]: [{ package: name, file: 'bin/probe' }] } };
-  const { manager, state, local, root } = fixture(t, { 'test-tool': config });
-  let scenario = 'legacy'; const outside = join(root, 'outside-native'); const probe = join(root, 'probe-executado'); writeFileSync(outside, 'untouched'); chmodSync(outside, 0o644);
-  const officialTarball = version => `https://registry.npmjs.org/${name}/-/cli-host-${version}.tgz`;
-  manager.fetchOptional = async (pkgName, version) => ({ name: pkgName, version, dist: { tarball: officialTarball(version), integrity: 'sha512-fixture' } });
-  manager.installPackage = (prefix, pkgName, version) => {
-    packageFiles(prefix, pkgName, version);
-    const base = join(prefix, 'node_modules', pkgName); mkdirSync(join(base, 'bin'));
-    if (scenario === 'legacy') { writeFileSync(join(base, 'bin/legacy'), 'legacy'); return; }
-    const manifestFile = join(base, 'package.json'); const manifest = JSON.parse(readFileSync(manifestFile));
-    manifest.optionalDependencies = { [name]: version }; writeFileSync(manifestFile, JSON.stringify(manifest));
-    writeFileSync(join(base, 'cli.cjs'), `require('node:fs').writeFileSync(${JSON.stringify(probe)}, 'executado'); console.log(${JSON.stringify(version)});`);
-    if (scenario === 'missing') return;
-    const optional = join(prefix, 'node_modules', name);
-    if (scenario === 'package-link') { mkdirSync(dirname(optional), { recursive: true }); symlinkSync(root, optional, 'dir'); return; }
-    mkdirSync(join(optional, 'bin'), { recursive: true });
-    writeFileSync(join(optional, 'package.json'), JSON.stringify({ name, version: scenario === 'version' ? '9.9.9' : version }));
-    const lockFile = join(prefix, 'package-lock.json'); const lock = JSON.parse(readFileSync(lockFile));
-    lock.packages[`node_modules/${name}`] = { version, integrity: scenario === 'integrity' ? 'sha512-other-registry' : 'sha512-fixture', resolved: scenario === 'registry' ? `https://example.invalid/${name}/-/cli-host-${version}.tgz` : officialTarball(version) };
-    writeFileSync(lockFile, JSON.stringify(lock));
-    if (scenario === 'escape') symlinkSync(outside, join(optional, 'bin/probe'));
-    else { writeFileSync(join(optional, 'bin/probe'), 'probe'); chmodSync(join(optional, 'bin/probe'), 0o644); }
-    if (scenario === 'legacy-escape') symlinkSync(outside, join(base, 'bin/legacy'));
-  };
-  await manager.install('test-tool'); const before = readFileSync(join(local, 'CURRENT.json'), 'utf8'); state.version = '2.0.0';
-  for (scenario of ['missing', 'version', 'integrity', 'registry', ...(process.platform === 'win32' ? [] : ['escape', 'package-link', 'legacy-escape'])]) {
-    await assert.rejects(manager.update('test-tool'), /ausente|corresponde|fora do pacote|nao pode ser um link/);
-    assert.equal(readFileSync(join(local, 'CURRENT.json'), 'utf8'), before);
-    assert.equal(manager.check('test-tool').version, '1.0.0');
-    assert.equal(existsSync(probe), false);
-    assert.ok(readdirSync(local).every(entry => !entry.startsWith('.stage-')));
-  }
-  if (process.platform !== 'win32') assert.equal(statSync(outside).mode & 0o777, 0o644);
-  scenario = 'optional'; const updated = await manager.update('test-tool');
-  assert.equal(updated.version, '2.0.0'); assert.equal(manager.check('test-tool').version, '2.0.0');
-  if (process.platform !== 'win32') assert.equal(statSync(join(updated.prefix, 'node_modules', name, 'bin/probe')).mode & 0o777, 0o755);
+  const targets = process.platform === 'win32' ? [platformKey()] : [platformKey(), 'win32-x64'];
+  for (const target of targets) await t.test(target, async subtest => {
+    const name = '@owner/cli-host'; const isWindowsTarget = target.startsWith('win32-');
+    const config = { ...tool(), platforms: [target], ...(!isWindowsTarget ? { executables: { [target]: ['bin/legacy'] } } : {}), optionalExecutables: { [target]: [{ package: name, file: 'bin/probe' }] } };
+    const [platform, arch] = target.split('-');
+    const { manager, state, local, root } = fixture(subtest, { 'test-tool': config }, { platform, arch });
+    let scenario = 'legacy'; const outside = join(root, 'outside-native'); const probe = join(root, 'probe-executado'); writeFileSync(outside, 'untouched'); chmodSync(outside, 0o644);
+    const officialTarball = version => `https://registry.npmjs.org/${name}/-/cli-host-${version}.tgz`;
+    manager.fetchOptional = async (pkgName, version) => ({ name: pkgName, version, dist: { tarball: officialTarball(version), integrity: 'sha512-fixture' } });
+    manager.installPackage = (prefix, pkgName, version) => {
+      packageFiles(prefix, pkgName, version);
+      const base = join(prefix, 'node_modules', pkgName); mkdirSync(join(base, 'bin'));
+      if (scenario === 'legacy') { writeFileSync(join(base, 'bin/legacy'), 'legacy'); return; }
+      const manifestFile = join(base, 'package.json'); const manifest = JSON.parse(readFileSync(manifestFile));
+      manifest.optionalDependencies = { [name]: version }; writeFileSync(manifestFile, JSON.stringify(manifest));
+      writeFileSync(join(base, 'cli.cjs'), `require('node:fs').writeFileSync(${JSON.stringify(probe)}, 'executado'); console.log(${JSON.stringify(version)});`);
+      if (scenario === 'missing') return;
+      const optional = join(prefix, 'node_modules', name);
+      if (scenario === 'package-link') { mkdirSync(dirname(optional), { recursive: true }); symlinkSync(root, optional, 'dir'); return; }
+      mkdirSync(join(optional, 'bin'), { recursive: true });
+      writeFileSync(join(optional, 'package.json'), JSON.stringify({ name, version: scenario === 'version' ? '9.9.9' : version }));
+      const lockFile = join(prefix, 'package-lock.json'); const lock = JSON.parse(readFileSync(lockFile));
+      lock.packages[`node_modules/${name}`] = { version, integrity: scenario === 'integrity' ? 'sha512-other-registry' : 'sha512-fixture', resolved: scenario === 'registry' ? `https://example.invalid/${name}/-/cli-host-${version}.tgz` : officialTarball(version) };
+      writeFileSync(lockFile, JSON.stringify(lock));
+      if (scenario === 'escape') symlinkSync(outside, join(optional, 'bin/probe'));
+      else { writeFileSync(join(optional, 'bin/probe'), 'probe'); chmodSync(join(optional, 'bin/probe'), 0o644); }
+      if (scenario === 'legacy-escape') symlinkSync(outside, join(base, 'bin/legacy'));
+    };
+    await manager.install('test-tool'); const before = readFileSync(join(local, 'CURRENT.json'), 'utf8'); state.version = '2.0.0';
+    for (scenario of ['missing', 'version', 'integrity', 'registry', ...(process.platform === 'win32' ? [] : ['escape', 'package-link', ...(!isWindowsTarget ? ['legacy-escape'] : [])])]) {
+      await assert.rejects(manager.update('test-tool'), /ausente|corresponde|fora do pacote|nao pode ser um link/);
+      assert.equal(readFileSync(join(local, 'CURRENT.json'), 'utf8'), before);
+      assert.equal(manager.check('test-tool').version, '1.0.0');
+      assert.equal(existsSync(probe), false);
+      assert.ok(readdirSync(local).every(entry => !entry.startsWith('.stage-')));
+    }
+    if (process.platform !== 'win32') assert.equal(statSync(outside).mode & 0o777, 0o644);
+    scenario = 'optional'; const updated = await manager.update('test-tool');
+    assert.equal(updated.version, '2.0.0'); assert.equal(manager.check('test-tool').version, '2.0.0');
+    if (process.platform !== 'win32') assert.equal(statSync(join(updated.prefix, 'node_modules', name, 'bin/probe')).mode & 0o777, 0o755);
+  });
 });
 
 test('executables prepara somente binarios da plataforma no staging antes de executar probe real', { skip: process.platform === 'win32' }, async t => {
