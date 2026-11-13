@@ -139,10 +139,23 @@ test('índice com alias de caixa bloqueia alteração conservadoramente em qualq
   const index = git(root, 'ls-files', '--stage', '-z');
   put(root, pointer, generated);
   put(root, original, '---\nname: criar-skill\ndescription: Mudança real.\n---\n\n# Criar skill\n');
-  assert.notEqual(run(root, { check: true, force: true }).exitCode, 0);
-  assert.throws(() => run(root, { force: true }), /indice/i);
-  assert.deepEqual(readFileSync(file(root, pointer)), generated);
-  assert.equal(git(root, 'ls-files', '--stage', '-z'), index);
+  const aliasBytes = readFileSync(file(root, alias));
+  const state = readFileSync(file(root, '.pbai4devs/state/derived.json'));
+  const ignore = readFileSync(file(root, '.gitignore'));
+  const preserved = () => {
+    assert.deepEqual(readFileSync(file(root, pointer)), generated);
+    assert.deepEqual(readFileSync(file(root, alias)), aliasBytes);
+    assert.deepEqual(readFileSync(file(root, '.pbai4devs/state/derived.json')), state);
+    assert.deepEqual(readFileSync(file(root, '.gitignore')), ignore);
+    assert.equal(git(root, 'ls-files', '--stage', '-z'), index);
+  };
+  let check, error;
+  try { check = run(root, { check: true, force: true }); } catch (failure) { error = failure; }
+  if (error) assert.match(error.message, /maiusculas\/minusculas/i);
+  else assert.notEqual(check.exitCode, 0);
+  preserved();
+  assert.throws(() => run(root, { force: true }), /indice|maiusculas\/minusculas/i);
+  preserved();
 });
 
 test('comparação de índice entende CRLF autorizado e recusa filtros, binários e divergência', t => {
