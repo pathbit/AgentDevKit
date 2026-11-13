@@ -7,7 +7,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { npmExecutable, sha256 } from '../scripts/release/assets.mjs';
-import { parseRegistryArgs, publishRegistryPackage } from '../scripts/release/packages.mjs';
+import { npmExecExecutable, parseRegistryArgs, publishRegistryPackage } from '../scripts/release/packages.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const version = '1.2.3', packageName = '@pathbit/agentdevkit';
@@ -25,6 +25,14 @@ const env = { ...process.env, ...npmRuntime, GITHUB_ACTIONS: 'false', NPM_TOKEN:
 test('npm instalado oferece leitura de cache por digest', () => {
   const cacache = createRequire(npmExecutable())('cacache');
   assert.equal(typeof cacache?.get?.byDigest, 'function');
+});
+
+test('executável do npm exec é protegido para caminhos Windows', () => {
+  assert.equal(npmExecExecutable('C:\\Program Files\\node.exe', 'win32'), '"C:\\Program Files\\node.exe"');
+  assert.throws(() => npmExecExecutable('C:\\%TEMP%\\node.exe', 'win32'), /incompatíveis/);
+  assert.throws(() => npmExecExecutable('node.exe', 'win32'), /incompatíveis/);
+  assert.throws(() => npmExecExecutable('C:\\node&calc.exe', 'win32'), /incompatíveis/);
+  assert.equal(npmExecExecutable('/tmp/node with spaces', 'darwin'), '/tmp/node with spaces');
 });
 
 function fixture(t, archive = Buffer.from('exact approved archive bytes'), releaseVersion = version) {
@@ -63,7 +71,7 @@ function mock(fixture, options = {}) {
     }
     if (action === 'publish') { options.onPublish?.(); return options.publishResult || success({ id: `${packageName}@${version}` }); }
     if (action === 'exec') {
-      if (args[args.indexOf('--') + 1] === process.execPath) return options.namedResult || success(`${process.version}\n`);
+      if (args[args.indexOf('--') + 1] === npmExecExecutable(process.execPath)) return options.namedResult || success(`${process.version}\n`);
       const selected = args[args.indexOf('--') + 2];
       const command = selected === '--version' ? 'version' : selected;
       const archive = args.find(value => value.startsWith('--package=')).slice('--package='.length);
@@ -105,7 +113,7 @@ test('publica o TGZ aprovado e prova instalação pelo registry em cache novo', 
   assert.equal(m.calls[5].config.env.npm_config_offline, 'true');
   assert.equal(m.calls[9].config.env.npm_config_offline, 'false');
   assert.ok(m.calls[9].args.includes(`--package=${packageName}@${version}`));
-  assert.deepEqual(m.calls[9].args.slice(-3), ['--', process.execPath, '--version']);
+  assert.deepEqual(m.calls[9].args.slice(-3), ['--', npmExecExecutable(process.execPath), '--version']);
   assert.ok(!existsSync(m.calls[0].config.cwd));
   assert.deepEqual(readFileSync(f.path), f.archive);
 });
@@ -438,7 +446,7 @@ test('inspeção real preserva TGZ antigo e atual sem presumir o caminho do exec
     if (release.version === version) {
       const spaced = join(f.directory, 'node with spaces', process.platform === 'win32' ? 'node.exe' : 'node');
       mkdirSync(dirname(spaced)); copyFileSync(process.execPath, spaced); chmodSync(spaced, 0o755);
-      const probe = spawnSync(process.execPath, [npmExecutable(), 'exec', '--yes', '--offline', '--ignore-scripts', `--package=${real.path}`, '--', spaced, '--version'], {
+      const probe = spawnSync(process.execPath, [npmExecutable(), 'exec', '--yes', '--offline', '--ignore-scripts', `--package=${real.path}`, '--', npmExecExecutable(spaced), '--version'], {
         cwd: source, env: { ...env, npm_config_cache: join(f.directory, 'exec-cache'), npm_config_offline: 'true' }, encoding: 'utf8', shell: false, timeout: 60000,
       });
       assert.equal(probe.status, 0, probe.stderr || probe.stdout);
