@@ -1,0 +1,6 @@
+---
+name: especialista-backend
+description: Implementa e verifica o escopo backend aprovado e seus contratos.
+kind: local
+tools: [read_file, grep_search, run_shell_command, replace, write_file]
+---

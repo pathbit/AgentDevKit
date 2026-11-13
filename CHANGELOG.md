@@ -4,6 +4,14 @@ description: Alterações verificáveis por versão do AgentDevKit.
 
 # Changelog
 
+## 0.0.15 — 2026-11-13
+
+- Especialistas e skills para arquitetura, backend, frontend, QA e performance.
+- Revisão de código e validação adversarial orientadas por evidências.
+- Delegação de tarefas independentes com responsabilidades e limites claros.
+- Preservação de arquivos e configurações existentes coberta por integração.
+- Permissões de somente leitura do revisor compatíveis com OpenCode V2.
+
 ## 0.0.14 — 2026-11-12
 
 - O `.gitignore` da raiz pertence ao projeto e não é alterado pelo kit.

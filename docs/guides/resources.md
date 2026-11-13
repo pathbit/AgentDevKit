@@ -56,6 +56,24 @@ O agente principal reúne resultados e mantém o contexto. Quando um cliente
 não permite delegação aninhada, o especialista devolve o próximo passo ao
 principal. Markdown e links não criam processos nem executam código sozinhos.
 
+## Especialistas e colaboração
+
+| Perfil | Quando contribui |
+| --- | --- |
+| [Arquiteto][architect] | Fronteiras, alternativas, riscos e decisões técnicas. |
+| [Backend][backend] | Contratos, dados, integrações e falhas do servidor. |
+| [Frontend][frontend] | Interação, acessibilidade, estados e experiência real. |
+| [QA][qa] e [validador][validator] | Casos, critérios e evidências executadas. |
+| [Auditor de segurança][auditor] | Ameaças e controles no contexto da mudança. |
+| [Performance][performance] | Carga, métricas e comparação com metas definidas. |
+| [Revisor][reviewer] | Revisão independente da mudança e das provas. |
+
+Use apenas os perfis relevantes à tarefa e à fase do projeto. Quando o cliente
+permitir, distribua tarefas independentes entre subagentes com arquivos de
+escrita exclusivos, dependências explícitas e evidências esperadas. O principal
+integra os resultados. Sem delegação, execute sequencialmente e informe o que
+não teve revisão independente; links não garantem execução automática.
+
 ## Três fluxos completos
 
 | Etapa | Comando | Resultado |
@@ -170,3 +188,11 @@ Para provas reais, consulte [ferramentas e testes](tools-and-testing.md).
 [compatibilidade]: ../../.pbai4devs/COMPATIBILIDADE.md
 [externas]: ../../.pbai4devs/external-skills/README.md
 [ignore]: ../../.pbai4devs/templates/gitignore/TEMPLATE.md
+[architect]: ../../.pbai4devs/agents/arquiteto/AGENT.md
+[backend]: ../../.pbai4devs/agents/especialista-backend/AGENT.md
+[frontend]: ../../.pbai4devs/agents/especialista-frontend/AGENT.md
+[qa]: ../../.pbai4devs/agents/engenheiro-qa/AGENT.md
+[validator]: ../../.pbai4devs/agents/validador/AGENT.md
+[auditor]: ../../.pbai4devs/agents/auditor-seguranca/AGENT.md
+[performance]: ../../.pbai4devs/agents/analista-performance/AGENT.md
+[reviewer]: ../../.pbai4devs/agents/revisor/AGENT.md

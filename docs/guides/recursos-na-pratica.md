@@ -43,6 +43,17 @@ conforme suas capacidades e permissões. Consulte a
 6. Atualize a documentação afetada e encaminhe a mudança à
    [revisão independente][review]. A equipe decide quando integrar a entrega.
 
+Quando houver trabalho independente, o agente principal pode distribuí-lo
+entre os [especialistas][specialists] disponíveis, com responsáveis por arquivos,
+dependências e provas. Se o cliente não oferecer subagentes, o trabalho segue
+em sequência e a ausência de revisão independente fica explícita.
+
+Escolha provas pelo escopo: contratos, validação e dados no backend; interação,
+acessibilidade, estados de erro e navegador ou desktop no frontend. QA inclui
+casos de limite e falha; segurança considera ameaças e permissões; performance
+compara medições com metas e carga definidas. Registre ambiente, comandos e
+resultados por critério, inclusive falhas e verificações não executadas.
+
 Para um projeto existente, comece pelo inventário e preserve suas decisões;
 consulte o [fluxo de trabalho][workflow] e a
 [instalação em projetos existentes][install].
@@ -89,3 +100,4 @@ sincronize e verifique os apontamentos. Para dúvidas de operação, consulte
 [install]: installation.md
 [cli]: cli.md
 [resources]: resources.md
+[specialists]: resources.md#especialistas-e-colaboração

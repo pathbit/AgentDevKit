@@ -12,6 +12,12 @@ Acione o [planejador](../../agents/planejador/AGENT.md). Ele usa
 a fase e encaminhar às skills de produto, design ou spec. Em projeto existente,
 leia os documentos reais antes de usar templates.
 
-Saída: escopo, dúvidas, tarefas, arquivos e provas por critério. O plano não
-autoriza mudanças por si só; respeite decisões e aprovações já registradas.
+Quando o escopo justificar, consulte o [arquiteto](../../agents/arquiteto/AGENT.md)
+para fronteiras, alternativas, riscos e decisões de design. Identifique tarefas
+independentes, dependências, responsáveis por arquivos e provas necessárias;
+inclua backend, frontend, QA, segurança e performance quando aplicáveis.
+Planeje subagentes conforme a capacidade do cliente, sem antecipar fases do produto.
+
+Saída: escopo, dúvidas, tarefas, dependências, arquivos e provas por critério.
+O plano não autoriza mudanças por si só; respeite aprovações já registradas.
 Após o alinhamento, siga [implementar-entrega](../implementar-entrega/COMMAND.md).

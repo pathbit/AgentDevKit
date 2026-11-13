@@ -27,6 +27,11 @@ antes de implementar.
 5. Implemente só a spec. Em trabalho delegado, use worktrees e branches próprias;
    integre somente trabalho completo e verificado, sem sobrescrever alterações.
    Esclareça novos impedimentos antes de avançar na parte afetada.
+   Quando disponíveis e autorizados, divida tarefas independentes entre
+   especialistas com arquivos atribuídos e provas esperadas. Use as skills de
+   [backend](../../desenvolvimento/implementar-backend/SKILL.md) e
+   [frontend](../../desenvolvimento/implementar-frontend/SKILL.md) conforme o
+   escopo. Se não houver delegação, prossiga em sequência e informe o limite.
 6. Por tarefa concluída, atualize tarefas/release e a documentação afetada com
    `atualizar-documentacao`. Execute o comando `revisar-entrega`, incluindo
    provas e revisão independente. Só então crie o commit do checkpoint conforme

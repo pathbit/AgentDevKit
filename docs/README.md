@@ -28,6 +28,7 @@ pode trocar de agente sem manter várias cópias das mesmas instruções.
 | Evoluir documentação existente | [Inventariar e complementar](guides/documentation.md) |
 | Personalizar agentes | [Recursos][resources] → [compatibilidade][clients] |
 | Entender cada peça com um exemplo | [Recursos na prática](guides/recursos-na-pratica.md) |
+| Escolher especialistas e distribuir trabalho | [Perfis e colaboração](guides/resources.md#especialistas-e-colaboração) |
 | Revisar segurança | [Scanners locais e controles](guides/security.md) |
 | Executar ou verificar algo | [CLI](guides/cli.md) → [ferramentas e testes][tests] |
 | Corrigir uma dificuldade | [Soluções e recuperação](guides/troubleshooting.md) |

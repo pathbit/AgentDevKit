@@ -8,6 +8,9 @@ description: Verifica alterações com ferramentas reais e registra evidências 
 Reúna os critérios e o impacto da alteração. Use `executar-script` para
 identificar ferramentas disponíveis e selecione os níveis aplicáveis. Use
 `usar-skills-externas` para referências pertinentes, sem adotar uma stack nova:
+[planejar-qa](../../qualidade/planejar-qa/SKILL.md) organiza casos por risco;
+[validar-adversarial](../../qualidade/validar-adversarial/SKILL.md) questiona
+as hipóteses e provas relevantes, no ambiente autorizado.
 
 1. **Estrutura:** para recursos dos agentes, execute `verificar-recursos`;
    ele confere espelhos, frontmatter/H1 e links, além do Markdown lint quando

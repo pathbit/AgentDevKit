@@ -40,6 +40,19 @@ prepare a máquina sem recriar documentos de produto. Melhorias de estrutura
 e mudanças funcionais têm escopo próprio. O [modelo de ambiente][ambiente]
 define as perguntas e os arquivos obrigatórios da configuração técnica.
 
+## Trabalho com especialistas
+
+Quando tarefas independentes justificarem, use subagentes disponíveis e
+autorizados: divida contexto, dependências, arquivos exclusivos de escrita e
+provas esperadas. Integre e confira os resultados no agente principal. Sem esse
+recurso, trabalhe em sequência e informe os limites; não apresente a própria
+revisão como independente. Escolha perfis por necessidade, sem impor tecnologia:
+[arquitetura](agents/arquiteto/AGENT.md), [backend](agents/especialista-backend/AGENT.md),
+[frontend](agents/especialista-frontend/AGENT.md), [QA](agents/engenheiro-qa/AGENT.md),
+[segurança](agents/auditor-seguranca/AGENT.md) e
+[performance](agents/analista-performance/AGENT.md). Validação e revisão devem
+considerar falhas e cenários adversariais, além do caminho de sucesso.
+
 ## Criar e manter recursos
 
 Use `criar-recurso`; ele encaminha à skill específica ou cria um novo tipo.

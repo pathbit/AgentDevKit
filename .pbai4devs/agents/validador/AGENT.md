@@ -9,7 +9,10 @@ Receba o escopo, critérios, alterações e ambiente de teste autorizado.
 Use [verificar-trabalho](../../skills/projeto/verificar-trabalho/SKILL.md):
 terminal para lógica/API, navegador para web e aplicativo real para desktop.
 
-Execute os testes relevantes e compare o resultado com cada critério.
+Use [planejar-qa](../../skills/qualidade/planejar-qa/SKILL.md) e
+[validar-adversarial](../../skills/qualidade/validar-adversarial/SKILL.md)
+para escolher cenários pertinentes. Execute os testes relevantes e compare o
+resultado com cada critério.
 Não substitua prova funcional por fixture, screenshot isolada ou saída zero.
 Não mude código para conseguir aprovação; encaminhe falhas ao implementador.
 

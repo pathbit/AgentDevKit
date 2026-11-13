@@ -21,6 +21,11 @@ descoberta automaticamente, peça leitura explícita da fonte compartilhada.
 | --- | --- |
 | [Planejador](planejador/AGENT.md) | Dúvidas, escopo e plano verificável. |
 | [Implementador](implementador/AGENT.md) | Código, testes e documentação. |
+| [Arquiteto de software](arquiteto/AGENT.md) | Decisões, contratos e riscos de arquitetura. |
+| [Especialista backend](especialista-backend/AGENT.md) | Implementação e contratos de serviços. |
+| [Especialista frontend](especialista-frontend/AGENT.md) | Implementação e fluxos de interface. |
+| [Engenheiro de QA](engenheiro-qa/AGENT.md) | Estratégia e provas funcionais e adversariais. |
+| [Analista de performance](analista-performance/AGENT.md) | Medições comparáveis e investigação de gargalos. |
 | [Validador](validador/AGENT.md) | Resultado real por critério de aceite. |
 | [Auditor de segurança](auditor-seguranca/AGENT.md) | Triagem e provas de controles. |
 | [Documentador](documentador/AGENT.md) | Documentos coerentes com a entrega. |

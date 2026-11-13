@@ -18,6 +18,8 @@ Revise também autenticação, autorização por recurso, isolamento de dados,
 segredos e entradas conforme o [guia](../REFERENCE.md).
 Use [revisar-autorizacao](../revisar-autorizacao/SKILL.md) para permissões e
 [modelar-ameacas](../modelar-ameacas/SKILL.md) quando houver novas fronteiras.
+Use [validação adversarial](../../qualidade/validar-adversarial/SKILL.md) para
+testar hipóteses de abuso dentro do escopo autorizado.
 
 Registre achado, evidência, impacto, confiança e estado da triagem, sem valores
 secretos. Diferencie vulnerabilidade confirmada, suspeita e falso positivo.

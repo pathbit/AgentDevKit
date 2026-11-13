@@ -14,9 +14,12 @@ urgente, defina critérios próprios AC-001 e registre o motivo.
    `--spec`, `--scope` e `--output` quando aplicáveis. Complete o JSON gerado
    conforme o [modelo](../../templates/revisao-entrega/TEMPLATE.md), com provas
    reais e decisões de documentação justificadas.
-3. Conclua a revisão independente em leitura prescrita pela skill. Aplique os
-   achados; se arquivos mudarem, gere novo snapshot, execute as verificações
-   afetadas e revise novamente antes de registrar `review.status: approved`.
+3. Acione o [revisor](../../agents/revisor/AGENT.md) independente, em leitura,
+   para contestar premissas e procurar regressões, falhas e lacunas nas provas.
+   Registre achados com evidências e localização. Aplique os pertinentes; se
+   arquivos mudarem, gere novo snapshot, execute as verificações afetadas e
+   revise novamente antes de registrar `review.status: approved`. Sem revisão
+   independente disponível, informe a limitação e mantenha a revisão pendente.
 4. Execute `revisar-entrega seal <relatorio>` para registrar os hashes após a
    revisão e `revisar-entrega check <relatorio>` pelo mesmo seletor. Falha,
    critério sem prova ou revisão pendente bloqueiam o commit/merge.

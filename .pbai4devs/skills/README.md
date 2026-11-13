@@ -13,6 +13,13 @@ as capacidades do cliente.
 - `projeto`: configuração, criação e manutenção dos recursos.
 - `produto`: PRD, experiência e design técnico.
 - `specs`: especificações, roadmap e implementação.
+- `arquitetura`: [avaliar decisões e riscos](arquitetura/avaliar-arquitetura/SKILL.md).
+- `desenvolvimento`: [backend](desenvolvimento/implementar-backend/SKILL.md) e
+  [frontend](desenvolvimento/implementar-frontend/SKILL.md).
+- `qualidade`: [QA](qualidade/planejar-qa/SKILL.md),
+  [validação adversarial](qualidade/validar-adversarial/SKILL.md),
+  [revisão de código](qualidade/revisar-codigo/SKILL.md) e
+  [performance](qualidade/avaliar-performance/SKILL.md).
 - `seguranca`: [revisão](seguranca/revisar-seguranca/SKILL.md),
   [autorização](seguranca/revisar-autorizacao/SKILL.md),
   [ameaças](seguranca/modelar-ameacas/SKILL.md) e

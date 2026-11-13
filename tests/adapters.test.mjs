@@ -60,6 +60,24 @@ test('clientes recebem grupos e excecoes nativas pesquisadas', t => {
   assert.equal(synchronize({ localIgnores: false, generateEntrypoints: false, root, check: true, output() {} }).exitCode, 0);
 });
 
+test('revisor OpenCode gerado bloqueia edição, shell e delegação com permissões V2', t => {
+  const root = fixture(t);
+  const sidecar = '.pbai4devs/agents/revisor/opencode.yaml';
+  write(root, sidecar, read(project, sidecar));
+  writeAdapterManifest(root, { clients: 'opencode' });
+  assert.equal(synchronize({ localIgnores: false, generateEntrypoints: false, root, output() {} }).exitCode, 0);
+  const generated = read(root, '.opencode/agents/revisor.md');
+  const frontmatter = generated.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  assert.ok(frontmatter, 'o agente gerado precisa de frontmatter');
+  assert.match(frontmatter[1], /^mode: subagent$/m);
+  assert.match(frontmatter[1], /^permissions:$/m);
+  assert.doesNotMatch(frontmatter[1], /^permission:|^\s*bash:/m);
+  for (const action of ['edit', 'shell', 'subagent']) {
+    assert.match(frontmatter[1], new RegExp(`^  - action: ${action}\\r?\\n    resource: ["']\\*["']\\r?\\n    effect: deny$`, 'm'));
+  }
+  assert.ok(generated.includes('.pbai4devs/agents/revisor/AGENT.md'));
+});
+
 test('cada excecao de layout tem motivo e fontes oficiais', () => {
   assert.equal(new Set(adapterRoots).size, adapterRoots.length);
   assert.equal(adapters.length, 14);

@@ -1,0 +1,6 @@
+---
+name: engenheiro-qa
+description: Planeja e executa validações funcionais e adversariais com evidências.
+kind: local
+tools: [read_file, grep_search, run_shell_command]
+---

@@ -17,6 +17,8 @@ description: Incrementos verificáveis do AgentDevKit.
 - [Dois registries](dual-registry/SPEC.md): versão e bytes iguais no npm e GitHub.
 - [v0.0.10](v0.0.10/SPEC.md): release com instalação pelos dois registries e pré-requisitos.
 - [Ecossistema de segurança](security-ecosystem/SPEC.md): fluxos e scanners locais.
+- [Ecossistema de desenvolvimento](development-ecosystem/SPEC.md):
+  especialistas, colaboração e provas.
 - [Integração sem substituição][additive]: acréscimos em arquivos existentes.
 - [Compatibilidade com projetos reais][oss]: projetos públicos e exemplos reproduzíveis.
 - [Ignore do projeto](project-ignore/SPEC.md): preservar o arquivo da raiz.
