@@ -1,7 +1,7 @@
-import test from 'node:test';
+import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { devNull, tmpdir } from 'node:os';
+import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
@@ -10,7 +10,13 @@ const repository = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const bin = join(repository, 'bin/agentdevkit.mjs');
 const policy = JSON.parse(readFileSync(join(repository, '.pbai4devs/templates/clients/ADAPTERS.json'), 'utf8'));
 const clientRoots = [...new Set(policy.adapters.flatMap(adapter => [adapter.root, ...(adapter.extraRoots || [])]))];
-const env = { ...process.env, GIT_OPTIONAL_LOCKS: '0', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: devNull };
+// Git for Windows cannot open Node's \\.\nul as a config file. Use a real,
+// private temporary file so no test reads or modifies the user's Git config.
+const globalDirectory = mkdtempSync(join(tmpdir(), 'agentdevkit-git-config-'));
+const globalConfig = join(globalDirectory, 'config');
+writeFileSync(globalConfig, '');
+after(() => rmSync(globalDirectory, { recursive: true, force: true }));
+const env = { ...process.env, GIT_OPTIONAL_LOCKS: '0', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: globalConfig };
 for (const key of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_COMMON_DIR', 'GIT_INDEX_FILE']) delete env[key];
 
 function fixture(t, { git = true } = {}) {
