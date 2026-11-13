@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, join, relative, resolve, sep } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { isMain, projectRoot, requireNode } from '../lib/runtime.mjs';
@@ -9,6 +9,7 @@ import { isGeneratedOutput } from '../lib/gitignore.mjs';
 import { resourcePath, synchronize } from '../sincronizar-agentes/SCRIPT.mjs';
 import { adapterManifest } from '../lib/adapters.mjs';
 import { stateDirectory } from '../lib/state-path.mjs';
+import { nativePathBoundary } from '../lib/native-paths.mjs';
 
 const assets = join(dirname(fileURLToPath(import.meta.url)), 'assets');
 const owner = 'testar-maturidade';
@@ -33,6 +34,39 @@ function noLinks(root, target) {
   for (const part of ['', ...relative(root, target).split(sep).filter(Boolean)]) {
     if (part) current = join(current, part);
     if (stat(current)?.isSymbolicLink()) fail(`Caminho gerenciado não pode ser link: ${current}`);
+  }
+}
+
+// The child binds its cwd to the verified parent directory. A swapped parent
+// changes the inode or real path before the child can create the new directory.
+const createDirectoryScript = `const fs=require('node:fs');
+const [name,expected,dev,ino]=process.argv.slice(1);
+const info=fs.statSync('.');
+if(fs.realpathSync('.')!==expected || String(info.dev)!==dev || String(info.ino)!==ino) process.exit(73);
+try { fs.mkdirSync(name); } catch(error) { if(error.code==='EEXIST') process.exit(17); throw error; }
+`;
+function createChild(root, parent, name, { allowExisting = false } = {}) {
+  if (!name || name === '.' || name === '..' || basename(name) !== name) fail('Nome de diretório inválido.');
+  noLinks(root, parent);
+  const info = stat(parent);
+  if (!info?.isDirectory() || info.isSymbolicLink()) fail('Diretório ancestral inválido.');
+  const canonical = realpathSync(parent), inside = relative(root, canonical);
+  if (isAbsolute(inside) || inside === '..' || inside.startsWith(`..${sep}`)) fail('Diretório ancestral fora do projeto.');
+  const env = { ...process.env }; delete env.NODE_TEST_CONTEXT;
+  const result = spawnSync(process.execPath, ['-e', createDirectoryScript, name, canonical, String(info.dev), String(info.ino)], { cwd: canonical, env, encoding: 'utf8', timeout: 30000, windowsHide: true, shell: false });
+  if (result.error || result.status !== 0 && !(allowExisting && result.status === 17)) fail(`Não foi possível criar diretório exclusivo: ${result.error?.message || result.stderr?.trim() || result.status}`);
+  noLinks(root, join(parent, name));
+  const output = stat(join(parent, name));
+  if (!output?.isDirectory() || output.isSymbolicLink()) fail('Diretório de saída inválido.');
+}
+function ensureDirectories(root, target) {
+  let current = root;
+  for (const part of relative(root, target).split(sep).filter(Boolean)) {
+    const next = join(current, part), info = stat(next);
+    if (!info) createChild(root, current, part, { allowExisting: true });
+    else if (!info.isDirectory() || info.isSymbolicLink()) fail('Diretório ancestral inválido ou link simbólico.');
+    noLinks(root, next);
+    current = next;
   }
 }
 
@@ -63,11 +97,28 @@ export function registeredRoots(root) {
 
 export function resourceTargets(root, source, kind = 'skills') {
   const rows = manifest(root).split(/\r?\n/).filter(line => line && !line.startsWith('#')).map(line => line.split('|'));
-  const targets = [];
+  const targets = [], suppressed = new Set();
+  for (const [type, fallback, primary, resource] of rows) {
+    if (type !== 'fallback' || resource !== kind) continue;
+    const primaryRow = rows.find(([entry, target]) => entry === 'agente' && target === primary);
+    const fallbackRow = rows.find(([entry, target]) => entry === 'agente' && target === fallback);
+    if (!primaryRow || !fallbackRow) fail(`Fallback sem cliente: ${fallback}`);
+    const primaryFormat = rows.find(([entry, target, scope]) => entry === 'formato' && target === primary && scope === kind)?.[3] || primaryRow[2] || 'agrupado';
+    const primaryTarget = `${primary}/${resourcePath(source, kind, primaryFormat)}`;
+    const boundary = nativePathBoundary(root, primaryTarget, [], { preserveRootAliases: true });
+    const info = boundary ? null : stat(join(root, primaryTarget));
+    if (boundary || (info && !info.isFile())) {
+      suppressed.add(primaryTarget);
+      targets.push(`${fallback}/${resourcePath(source, kind, fallbackRow[2] || 'agrupado')}`);
+    }
+  }
   for (const [type, agent, layout = 'agrupado'] of rows) {
     if (type !== 'agente') continue;
     const override = rows.find(([entry, target, resource]) => entry === 'formato' && target === agent && resource === kind)?.[3];
-    targets.push(`${agent}/${resourcePath(source, kind, override || layout)}`);
+    if (override === 'nenhum') continue;
+    let target = `${agent}/${resourcePath(source, kind, override || layout)}`;
+    if (agent === '.gemini' && kind === 'commands') target = target.replace(/\.md$/, '.toml');
+    if (!suppressed.has(target)) targets.push(target);
   }
   for (const [type, target, origin] of rows) if (type === 'nativo' && origin === source) targets.push(target);
   return [...new Set(targets)];
@@ -139,29 +190,6 @@ export function copyAgentStructure(sourceRoot, destination) {
   return { roots, copiedFiles: files.length, skipped, files, sourceDigest, entrypoints, toolDefinitions: files.filter(file => /^\.pbai4devs\/tools\/[^/]+\/TOOL\.json$/.test(file)).length };
 }
 
-function ownership(root, file, expectedId) {
-  if (stat(root)?.isSymbolicLink()) return false;
-  const path = join(root, file);
-  if (!existsSync(path)) return false;
-  const item = lstatSync(path);
-  if (!item.isFile() || item.isSymbolicLink()) return false;
-  try { const data = json(path); return data.owner === owner && (!expectedId || data.id === expectedId); }
-  catch { return false; }
-}
-
-function ensureOutput(output) {
-  if (existsSync(output) && lstatSync(output).isSymbolicLink()) fail('A pasta de exemplos não pode ser um link.');
-  for (const name of [suiteMarker, 'README.md', 'REPORT.json', '.gitignore']) {
-    const item = stat(join(output, name));
-    if (item && (!item.isFile() || item.isSymbolicLink())) fail(`Arquivo de saída deve ser regular: ${name}`);
-  }
-  if (existsSync(output) && [suiteMarker, 'README.md', 'REPORT.json'].some(name => existsSync(join(output, name)))
-    && !ownership(output, suiteMarker)) fail('Índice de exemplos existente não pertence a este gerador.');
-  if (existsSync(join(output, 'REPORT.json')) && !ownership(output, 'REPORT.json')) fail('Relatório de exemplos existente não pertence a este gerador.');
-  if (existsSync(join(output, '.gitignore')) && readFileSync(join(output, '.gitignore'), 'utf8') !== outputIgnore) fail('Ignore de exemplos existente não pertence a este gerador.');
-  mkdirSync(output, { recursive: true });
-}
-
 function planning(root, scenario) {
   const stateRoot = stateDirectory(root);
   const state = `${stateRoot}/configuracao/ESTADO.md`;
@@ -228,6 +256,13 @@ function application(root, scenario) {
     preserved.push(server, test, 'config/legacy.json', '.github/workflows/legacy.yml', '.vscode/settings.json', 'Makefile', 'package.json');
   }
   if (scenario.configured) {
+    // Published packages and existing projects need not contain these files;
+    // create only the missing synthetic fixtures, never replace copied content.
+    for (const [file, content] of Object.entries({
+      '.gitignore': '# Arquivos temporários do cenário sintético.\nnode_modules/\n.agent-tests/\n',
+      '.gitattributes': '* text=auto\n',
+      '.editorconfig': 'root = true\n\n[*]\ncharset = utf-8\nend_of_line = lf\ninsert_final_newline = true\n',
+    })) if (!stat(join(root, file))) write(root, file, content);
     write(root, '.dockerignore', '.git\n.agent-tests\nnode_modules\n');
     write(root, '.env.example', 'PORT=3000\n');
     write(root, 'Dockerfile', 'FROM node:24-alpine\nWORKDIR /app\nCOPY package.json ./\nCOPY src ./src\nEXPOSE 3000\nCMD ["node", "src/server.mjs"]\n');
@@ -242,31 +277,37 @@ function gitInit(root) {
   if (result.error || result.status !== 0) fail(`Git init: ${result.error?.message || result.stderr}`);
 }
 
-export function prepareExamples({ sourceRoot = projectRoot, outputRoot = defaultOutput(sourceRoot), scenarios = SCENARIOS, initializeGit = true, renderResources = prepareResources } = {}) {
-  requireNode(); sourceRoot = realpathSync(resolve(sourceRoot)); outputRoot = resolve(outputRoot);
-  const outputPath = portable(relative(sourceRoot, outputRoot));
+export function prepareExamples({ sourceRoot = projectRoot, outputRoot, scenarios = SCENARIOS, initializeGit = true, renderResources = prepareResources } = {}) {
+  requireNode(); sourceRoot = realpathSync(resolve(sourceRoot));
+  const base = resolve(outputRoot ?? defaultOutput(sourceRoot));
+  const outputPath = portable(relative(sourceRoot, base));
   if (!(outputPath === 'examples/generated' || outputPath.startsWith('examples/generated/')
     || outputPath === 'tmp/examples' || outputPath.startsWith('tmp/examples/') || outputPath.startsWith('.agent-tests/'))) fail('Saída permitida somente em examples/generated, tmp/examples ou descendente de .agent-tests.');
-  noLinks(sourceRoot, outputRoot);
+  noLinks(sourceRoot, base);
   const ids = new Set();
+  if (!Array.isArray(scenarios) || !scenarios.length) fail('Selecione pelo menos um cenário.');
   for (const scenario of scenarios) {
     if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(scenario.id) || ids.has(scenario.id)) fail('Cenários devem ter IDs únicos e seguros.');
     ids.add(scenario.id);
   }
-  ensureOutput(outputRoot);
-  for (const scenario of scenarios) {
-    const destination = join(outputRoot, scenario.id);
-    noLinks(sourceRoot, destination);
-    if (existsSync(destination) && !ownership(destination, marker, scenario.id)) fail(`Diretório existente não é gerenciado: ${destination}`);
+  if (outputRoot !== undefined && stat(base)) fail(`Pasta de saída já existe; escolha um destino novo: ${base}`);
+  if (outputRoot !== undefined) {
+    for (let parent = dirname(base); parent !== sourceRoot && parent.startsWith(sourceRoot + sep); parent = dirname(parent)) {
+      if (stat(join(parent, suiteMarker)) || stat(join(parent, marker))) fail('Saída não pode ficar dentro de uma execução anterior.');
+    }
   }
+  const parent = outputRoot === undefined ? base : dirname(base);
+  ensureDirectories(sourceRoot, parent);
+  const name = outputRoot === undefined ? `maturity-${randomUUID()}` : basename(base);
+  createChild(sourceRoot, parent, name);
+  outputRoot = join(parent, name);
   write(outputRoot, suiteMarker, JSON.stringify({ owner, version: 1 }, null, 2) + '\n');
   write(outputRoot, '.gitignore', outputIgnore);
-  rmSync(join(outputRoot, 'REPORT.json'), { force: true });
   writeIndex(outputRoot, [], 'preparing');
   const examples = [];
   for (const scenario of scenarios) {
     const destination = join(outputRoot, scenario.id);
-    rmSync(destination, { recursive: true, force: true }); mkdirSync(destination, { recursive: true });
+    mkdirSync(destination);
     write(destination, marker, JSON.stringify({ owner, version: 1, id: scenario.id }, null, 2) + '\n');
     const copied = copyAgentStructure(sourceRoot, destination);
     planning(destination, scenario);
@@ -283,8 +324,8 @@ export function prepareExamples({ sourceRoot = projectRoot, outputRoot = default
 
 function writeIndex(outputRoot, examples, status) {
   const rows = examples.map(item => `| [${item.id}](${item.id}/README.md) | ${item.expected} | ${item.status || 'prepared'} |`).join('\n');
-  const progress = status === 'preparing' ? '\nPreparação em andamento; os resultados anteriores foram invalidados.\n' : '';
-  write(outputRoot, 'README.md', document('Exemplos de maturidade', `Projetos sintéticos com cópias locais da estrutura de agentes.\nNenhum resultado certifica produção, revisão humana ou outros sistemas operacionais.\n${progress}\n| Cenário | Nível esperado | Resultado |\n| --- | --- | --- |${rows ? '\n' + rows : ''}\n\nRelatório: \`REPORT.json\`. Logs e evidências por projeto ficam em \`.agent-tests/\`.\nPastas sem marcador deste gerador são preservadas.\n`, `status: ${status}\n`));
+  const progress = status === 'preparing' ? '\nPreparação em andamento nesta execução.\n' : '';
+  write(outputRoot, 'README.md', document('Exemplos de maturidade', `Projetos sintéticos com cópias locais da estrutura de agentes.\nNenhum resultado certifica produção, revisão humana ou outros sistemas operacionais.\n${progress}\n| Cenário | Nível esperado | Resultado |\n| --- | --- | --- |${rows ? '\n' + rows : ''}\n\nRelatório: \`REPORT.json\`. Logs e evidências por projeto ficam em \`.agent-tests/\`.\nCada execução usa uma pasta nova e preserva as anteriores.\n`, `status: ${status}\n`));
 }
 
 function hashes(root, files) { return Object.fromEntries(files.map(file => [file, digest(readFileSync(join(root, file)))])); }
@@ -453,7 +494,7 @@ export function testExample(example) {
 export function runExamples(options = {}) {
   const examples = prepareExamples(options);
   const results = examples.map(example => { const result = testExample(example); console.log(`${example.id}=${result.status}${result.error ? ': ' + result.error : ''}`); return result; });
-  const outputRoot = resolve(options.outputRoot || defaultOutput(options.sourceRoot || projectRoot));
+  const outputRoot = dirname(examples[0].root);
   const report = { owner, version: 1, status: results.every(item => item.status === 'passed') ? 'passed' : 'failed', platform: process.platform, arch: process.arch, node: process.version, results, limits: ['Provas reais somente das operações descritas e APIs locais.', 'Pareceres do gate são simulações explícitas, sem revisão humana.', 'Não certifica produção nem sistemas operacionais não executados.'] };
   write(outputRoot, 'REPORT.json', JSON.stringify(report, null, 2) + '\n');
   writeIndex(outputRoot, examples.map(example => ({ ...example, status: results.find(result => result.id === example.id).status })), report.status);
@@ -462,15 +503,16 @@ export function runExamples(options = {}) {
 
 export function main(args = process.argv.slice(2)) {
   requireNode(); const [mode = 'help', ...rest] = args;
-  if (['help', '--help', '-h'].includes(mode)) { console.log('Uso: testar-maturidade prepare|run [--case <id>]. Exemplos gerados em examples/generated; apenas pastas marcadas são substituídas.'); return 0; }
+  if (['help', '--help', '-h'].includes(mode)) { console.log('Uso: testar-maturidade prepare|run [--case <id>]. Cada execução cria uma nova pasta em examples/generated.'); return 0; }
   if (!['prepare', 'run'].includes(mode)) fail('Use prepare ou run.');
   let scenarios = SCENARIOS;
   if (rest.length) {
     if (rest.length !== 2 || rest[0] !== '--case') fail('Use --case <id>.');
     scenarios = SCENARIOS.filter(item => item.id === rest[1]); if (!scenarios.length) fail('Cenário desconhecido.');
   }
-  if (mode === 'prepare') { const examples = prepareExamples({ scenarios }); console.log(`prepared=${examples.length}`); return 0; }
-  return runExamples({ scenarios }).report.status === 'passed' ? 0 : 1;
+  if (mode === 'prepare') { const examples = prepareExamples({ scenarios }); console.log(`prepared=${examples.length}\noutput=${dirname(examples[0].root)}`); return 0; }
+  const result = runExamples({ scenarios }); console.log(`output=${result.outputRoot}`);
+  return result.report.status === 'passed' ? 0 : 1;
 }
 
 if (isMain(import.meta.url)) {

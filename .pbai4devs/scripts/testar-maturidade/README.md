@@ -14,19 +14,21 @@ node .pbai4devs/scripts/testar-maturidade/SCRIPT.mjs run --case legado
 node --test .pbai4devs/scripts/testar-maturidade/tests/TEST.mjs
 ```
 
-`prepare` só gera as cópias; `run` gera e executa. Os oito cenários ficam em
-`examples/generated/`: agentes, descoberta, planejamento, aplicação inicial,
-configurada, manutenção, legado e monorepo com caminhos em português.
+`prepare` só gera as cópias; `run` gera e executa. Cada execução cria uma nova
+pasta `examples/generated/maturity-*` e informa seu caminho no console. Por
+padrão são oito cenários: agentes, descoberta, planejamento, aplicação inicial,
+configurada, manutenção, legado e monorepo com caminhos em português. Use
+`--case` para executar apenas um.
 
 O harness copia recursos e configurações reais; exclui pacotes, caches, logs,
 resultados de testes, Playwright e pastas temporárias em qualquer caixa,
 `.git` e nomes conhecidos de credenciais/overrides locais. Não faz varredura
 semântica de segredos. A API também aceita `tmp/examples/` para compatibilidade
-e descendentes de `.agent-tests/`. Regenera apenas pastas identificadas como
-suas. Cada exemplo recebe Git local, sem commits nem identidade alterada.
-O diretório gerado contém um ignore próprio, inclusive em projetos consumidores.
-`prepare` redefine o relatório como `prepared`, sem conservar provas antigas.
-Se a preparação falhar, o índice fica em `preparing` e o relatório antigo sai.
+e descendentes de `.agent-tests/`. Um destino explícito deve ser inexistente;
+execuções e projetos anteriores não são substituídos nem removidos. Cada
+exemplo recebe Git local, sem commits nem identidade alterada. O diretório
+gerado contém um ignore próprio, inclusive em projetos consumidores. Se a
+preparação falhar, o índice da nova execução permanece em `preparing`.
 O hub `.pbai4devs` e os clientes registrados são copiados, incluindo comandos
 nativos em TOML. Sem manifesto local, os templates definem os clientes em
 memória, respeitando a seleção salva. `.vscode` exige registro. Apenas as entradas
@@ -50,5 +52,5 @@ O gate positivo simula o parecer para testar seu contrato; não representa
 revisão humana. Estados de aprovação são dados sintéticos. Nenhum teste
 certifica produção, Docker, interface visual ou outro sistema operacional.
 
-Índice e relatório: `examples/generated/README.md` e `REPORT.json`. Logs e provas
-individuais ficam em `.agent-tests/` dentro de cada exemplo, todos ignorados.
+Índice e relatório ficam em `README.md` e `REPORT.json` na pasta informada.
+Logs e provas ficam em `.agent-tests/` dentro de cada exemplo, todos ignorados.

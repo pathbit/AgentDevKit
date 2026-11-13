@@ -103,8 +103,28 @@ function recorder(output, env) {
   return { run, commands };
 }
 
+function parseCliResult(text, status, { name, expected, version }) {
+  let value;
+  try { value = JSON.parse(text); }
+  catch { throw new Error(`${name}: saída da CLI não é JSON válido.`); }
+  const conflicts = Array.isArray(value.conflicts) ? value.conflicts : [];
+  const details = conflicts.length ? `; conflitos: ${conflicts.join(', ')}` : '';
+  assert.equal(status, expected, `${name}: esperado ${expected}, recebido ${status}${details}.`);
+  assert.equal(value.version, version, 'Versão executada diverge do pacote solicitado.');
+  assert.equal(value.ok, expected === 0, `${name}: estado JSON inesperado.`);
+  return value;
+}
+
 function fileSnapshot(root, path) {
   assert.ok(!isAbsolute(path) && !path.split('/').includes('..'), 'Caminho fora do clone.');
+  let parent = root;
+  for (const part of path.split('/').slice(0, -1)) {
+    parent = join(parent, part);
+    const ancestor = info(parent);
+    assert.ok(!ancestor?.isSymbolicLink(), `Link simbólico em diretório ancestral: ${path}`);
+    if (!ancestor) return { kind: 'missing' };
+    assert.ok(ancestor.isDirectory(), `Ancestral não é diretório: ${path}`);
+  }
   const item = info(join(root, path));
   if (!item) return { kind: 'missing' };
   const mode = item.mode & 0o777;
@@ -140,15 +160,34 @@ function workspace(root) {
 }
 
 function gitSnapshot(root, git) {
-  return { head: git('rev-parse', 'HEAD').trim(), index: git('ls-files', '--stage', '-z'),
+  const indexPath = join(root, '.git/index');
+  const indexHash = () => {
+    const item = info(indexPath);
+    assert.ok(!item || item.isFile() && !item.isSymbolicLink(), 'Índice Git deve ser arquivo regular.');
+    return item ? hash(readFileSync(indexPath)) : null;
+  };
+  const indexSha256 = indexHash();
+  const snapshot = { head: git('rev-parse', 'HEAD').trim(), index: git('ls-files', '--stage', '-z'),
     stagedDiff: git('diff', '--cached', '--binary', '--no-ext-diff', '--no-color'),
     remotes: git('config', '--get-regexp', '^remote\\..*\\.(url|pushurl)$'),
     configSha256: hash(readFileSync(join(root, '.git/config'))),
     exclude: info(join(root, '.git/info/exclude')) ? hash(readFileSync(join(root, '.git/info/exclude'))) : null };
+  assert.equal(indexHash(), indexSha256, 'Consulta Git alterou os bytes do índice.');
+  return { ...snapshot, indexSha256 };
 }
 
 function originalSnapshot(root, paths) {
   return Object.fromEntries(paths.map(path => [path, fileSnapshot(root, path)]));
+}
+
+// Only recognized instruction entrypoints or native resource paths may receive
+// managed Markdown blocks. A forged state entry must never allow editing code.
+function permitsManagedAppend(path) {
+  const parts = path.split('/');
+  if (parts.length === 1) return ['agents.md', 'claude.md', 'gemini.md'].includes(parts[0].toLowerCase());
+  const roots = new Set(['.agents', '.agent', '.claude', '.codex', '.cursor', '.github', '.opencode', '.gemini', '.zcode', '.kimi-code', '.kimi', '.minimax', '.mimocode', '.dsh']);
+  const resources = new Set(['skills', 'agents', 'commands', 'rules', 'instructions', 'prompts']);
+  return parts.length >= 3 && roots.has(parts[0]) && resources.has(parts[1]) && /\.(?:md|mdc)$/i.test(parts.at(-1));
 }
 
 function checkOriginals(root, baseline, git) {
@@ -157,6 +196,7 @@ function checkOriginals(root, baseline, git) {
     const current = fileSnapshot(root, path);
     if (JSON.stringify(current) === JSON.stringify(original)) continue;
     assert.notEqual(path, '.gitignore', 'O .gitignore da raiz pertence ao projeto e não pode ser alterado.');
+    assert.ok(permitsManagedAppend(path), `Arquivo original não aceita bloco gerenciado: ${path}`);
     assert.equal(original.kind, 'file', `Tipo do arquivo original alterado: ${path}`);
     assert.equal(current.kind, 'file', `Tipo do arquivo original alterado: ${path}`);
     assert.equal(current.mode, original.mode, `Permissão do arquivo original alterada: ${path}`);
@@ -180,7 +220,44 @@ function checkOriginals(root, baseline, git) {
     assert.ok(preserved, `Conteúdo original alterado: ${path}`);
   }
   const now = gitSnapshot(root, git);
-  for (const field of ['head', 'index', 'stagedDiff', 'remotes', 'configSha256']) assert.equal(now[field], baseline.git[field], `Git ${field} alterado.`);
+  for (const field of ['head', 'index', 'indexSha256', 'stagedDiff', 'remotes', 'configSha256']) assert.equal(now[field], baseline.git[field], `Git ${field} alterado.`);
+}
+
+// A human edit turns a previously managed file into user-owned content. The
+// state and a newly-created backup may change, but the edited bytes, the rest of
+// the workspace and the complete Git snapshot must remain untouched.
+function checkPreservedManagedEdit({ before, after, beforeGit, afterGit, managed, edited, outcome, beforeState, state }) {
+  assert.equal(outcome?.ok, true, 'Update com edição humana deve preservar o conteúdo.');
+  assert.ok(outcome.preserved?.some(item => item.path === managed && item.reason === 'edited-managed-file'), 'Edição humana não foi reportada.');
+  assert.deepEqual(outcome.conflicts || [], [], 'Edição preservada não deve ser tratada como conflito.');
+  assert.equal(before[managed]?.kind, 'file', 'Probe exige arquivo regular.');
+  assert.equal(before[managed]?.sha256, hash(edited), 'Snapshot não contém a edição esperada.');
+  assert.deepEqual(after[managed], before[managed], 'Arquivo editado ou suas permissões foram alterados.');
+  assert.ok(beforeState?.files && Object.hasOwn(beforeState.files, managed), 'Arquivo não estava sob propriedade do kit.');
+  assert.ok(state?.files && !Object.hasOwn(state.files, managed), 'Arquivo editado ainda está sob propriedade do kit.');
+  const expectedState = structuredClone(beforeState);
+  delete expectedState.files[managed];
+  assert.deepEqual(state, expectedState, 'O estado mudou além da retirada de ownership do arquivo editado.');
+  assert.deepEqual(afterGit, beforeGit, 'Update alterou o Git, índice ou exclusões locais.');
+  assert.equal(before[statePath]?.kind, 'file', 'Estado anterior ausente.');
+  assert.equal(after[statePath]?.kind, 'file', 'Estado posterior ausente.');
+  const backup = outcome.backup;
+  assert.ok(typeof backup === 'string', 'Backup do estado anterior é obrigatório.');
+  assert.match(backup, /^\.agent-tests\/agentdevkit\/backups\/[A-Za-z0-9-]+$/, 'Backup fora do diretório local esperado.');
+  assert.ok(!Object.hasOwn(before, backup), 'Backup informado já existia.');
+  const backupState = `${backup}/${statePath}`;
+  const components = backupState.split('/');
+  for (let i = 1; i < components.length; i++) assert.equal(after[components.slice(0, i).join('/')]?.kind, 'directory', 'Caminho do backup não é diretório regular.');
+  assert.deepEqual(after[backupState], before[statePath], 'Backup do estado anterior ausente, alterado ou com permissões divergentes.');
+  const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+  const unexpected = [...keys].filter(file => {
+    if (JSON.stringify(before[file]) === JSON.stringify(after[file]) || file === statePath) return false;
+    if (!backup || Object.hasOwn(before, file) || !Object.hasOwn(after, file)) return true;
+    const inBackup = file === backup || file.startsWith(`${backup}/`);
+    const newAncestor = backup.startsWith(`${file}/`) && after[file].kind === 'directory';
+    return !(inBackup || newAncestor);
+  });
+  assert.deepEqual(unexpected, [], `Update alterou outros arquivos: ${unexpected.join(', ')}`);
 }
 
 function testProject(project, options, output, env, npm) {
@@ -226,11 +303,8 @@ function testProject(project, options, output, env, npm) {
     result.originalFiles = trackedPaths.length; result.nativeSentinel = nativeSkill; result.nativeReference = nativeReference; result.checkout = baseline.git.head; checked('checkout-pinned');
     const cli = (name, args, expected = 0) => {
       const text = run(name, process.execPath, [npm, 'exec', '--yes', '--ignore-scripts', `--registry=${registry}`,
-        `--package=${options.tarball || `@pathbit/agentdevkit@${options.version}`}`, '--', 'agentdevkit', ...args, '--json'], join(output, 'npm-work'), expected);
-      const value = JSON.parse(text);
-      assert.equal(value.version, options.version, 'Versão executada diverge do pacote solicitado.');
-      assert.equal(value.ok, expected === 0, `${name}: estado JSON inesperado.`);
-      return value;
+        `--package=${options.tarball || `@pathbit/agentdevkit@${options.version}`}`, '--', 'agentdevkit', ...args, '--json'], join(output, 'npm-work'), null);
+      return parseCliResult(text, commands.at(-1).status, { name, expected, version: options.version });
     };
     cli('package-version', ['--version']);
     const init = ['init', '--target', directory, '--agents', project.clients.join(','), '--lang', 'en', '--yes'];
@@ -288,17 +362,24 @@ function testProject(project, options, output, env, npm) {
     cli('sync-user-skill', ['sync', '--check', '--target', directory]);
     checkOriginals(directory, baseline, git); checked('user-skill-preserved');
     const managed = '.pbai4devs/rules/qualidade/RULE.md', original = readFileSync(join(directory, managed));
-    assert.equal(json(join(directory, statePath)).files[managed], hash(original), 'Probe exige arquivo comprovadamente gerenciado.');
-    const beforeConflict = workspace(directory);
+    const beforeState = json(join(directory, statePath));
+    assert.equal(beforeState.files[managed], hash(original), 'Probe exige arquivo comprovadamente gerenciado.');
     try {
-      writeClone(directory, managed, Buffer.concat([original, Buffer.from('\n<!-- Deliberate compatibility conflict. -->\n')]));
-      const expected = { workspace: workspace(directory), git: gitSnapshot(directory, git) };
-      const denied = cli('update-conflict', ['update', '--target', directory, '--yes'], 1);
-      assert.ok(denied.conflicts.includes(managed), 'Conflito deliberado não foi identificado.');
-      assert.deepEqual({ workspace: workspace(directory), git: gitSnapshot(directory, git) }, expected, 'Update bloqueado alterou arquivos ou Git.');
+      const edited = Buffer.concat([original, Buffer.from('\n<!-- Deliberate human edit. -->\n')]);
+      writeClone(directory, managed, edited);
+      const before = workspace(directory), beforeGit = gitSnapshot(directory, git);
+      const outcome = cli('update-human-edit', ['update', '--target', directory, '--yes']);
+      const after = workspace(directory), afterGit = gitSnapshot(directory, git);
+      checkPreservedManagedEdit({ before, after, beforeGit, afterGit, managed, edited, outcome, beforeState, state: json(join(directory, statePath)) });
+      const repeat = cli('update-human-edit-repeat', ['update', '--target', directory, '--yes']);
+      assert.equal(repeat.changed, false, 'Repetição alterou a instalação com edição humana.');
+      assert.deepEqual(workspace(directory), after, 'Repetição alterou arquivos preservados ou estado.');
+      assert.deepEqual(gitSnapshot(directory, git), afterGit, 'Repetição alterou o Git.');
+      cli('doctor-human-edit', ['doctor', '--target', directory]);
+      cli('sync-human-edit', ['sync', '--check', '--target', directory]);
     } finally { writeClone(directory, managed, original); }
-    assert.deepEqual(workspace(directory), beforeConflict, 'Arquivo do conflito não foi restaurado.');
-    checkOriginals(directory, baseline, git); checked('conflict-blocked-and-restored');
+    assert.deepEqual(readFileSync(join(directory, managed)), original, 'Arquivo da fixture não foi restaurado.');
+    checkOriginals(directory, baseline, git); checked('human-edit-preserved-and-restored');
     put(join(evidence, 'after.json'), JSON.stringify({ files: originalSnapshot(directory, paths), git: gitSnapshot(directory, git) }, null, 2) + '\n');
     assert.ok(commands.every(command => command.command !== 'git' || !command.args.includes('push')));
     result.remoteUrlsUnchanged = true; result.originalsPreserved = true; result.runnerPushCommands = 0;
@@ -352,7 +433,7 @@ export function main(args = process.argv.slice(2)) {
 // Shared by the opt-in documentation exercise; no helper runs on import.
 export {
   parse as parseCompatibilityArgs, outputDirectory, environment, recorder,
-  fileSnapshot, workspace, gitSnapshot, checkOriginals, info, put, json, hash, portable,
+  fileSnapshot, workspace, gitSnapshot, checkOriginals, checkPreservedManagedEdit, parseCliResult, info, put, json, hash, portable,
   repositoryRoot, registry,
 };
 

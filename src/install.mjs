@@ -169,6 +169,19 @@ export function safePath(root, path) {
   return current;
 }
 
+// Inspect the route without following user-owned links. A final directory is
+// also unavailable where the generated skill requires a regular file.
+function nativeOutputBoundary(root, path, ownedPaths) {
+  let boundary = nativePathBoundary(root, path, ownedPaths, { preserveRootAliases: true });
+  if (!boundary) {
+    const info = stat(safePath(root, path));
+    if (info && !info.isFile()) boundary = { path, reason: 'non-file' };
+  }
+  if (!boundary) return { blocked: false };
+  const info = lstatSync(join(root, ...boundary.path.split('/')));
+  return { blocked: true, ...boundary, identity: [info.dev, info.ino, info.mode, info.size, info.mtimeMs, info.ctimeMs] };
+}
+
 function resourceAllowed(path, directory = false) {
   const parts = path.split('/');
   const folders = new Set(['agents', 'commands', 'external-skills', 'rules', 'scripts', 'skills', 'templates', 'tools', 'state']);
@@ -388,30 +401,85 @@ function copyResources(source, destination) {
   return files;
 }
 
+// Change only one top-level JSON member. Other fields, escaping and whitespace
+// remain byte-for-byte intact, including user-provided fields in local state.
+function replaceJsonMember(bytes, member, value) {
+  const text = bytes.toString('utf8');
+  if (!Buffer.from(text, 'utf8').equals(bytes)) fail('E_STATE', 'Invalid UTF-8 in derived state.');
+  let i = 0;
+  const space = () => { while (/\s/.test(text[i] || '') && i < text.length) i++; };
+  const stringEnd = () => {
+    if (text[i++] !== '"') fail('E_STATE', 'Invalid JSON member.');
+    while (i < text.length) {
+      const char = text[i++];
+      if (char === '\\') { i++; continue; }
+      if (char === '"') return;
+    }
+    fail('E_STATE', 'Unterminated JSON string.');
+  };
+  space(); if (text[i++] !== '{') fail('E_STATE', 'Invalid derived state.');
+  const properties = [];
+  while (true) {
+    space(); if (text[i] === '}') break;
+    const start = i; stringEnd(); const key = JSON.parse(text.slice(start, i));
+    space(); if (text[i++] !== ':') fail('E_STATE', 'Invalid JSON member.');
+    space(); const valueStart = i;
+    if (text[i] === '"') stringEnd();
+    else if (text[i] === '{' || text[i] === '[') {
+      const stack = [];
+      do {
+        const char = text[i];
+        if (char === '"') { stringEnd(); continue; }
+        i++;
+        if (char === '{' || char === '[') stack.push(char);
+        else if (char === '}' || char === ']') stack.pop();
+      } while (stack.length && i < text.length);
+      if (stack.length) fail('E_STATE', 'Invalid derived state.');
+    } else { while (i < text.length && text[i] !== ',' && text[i] !== '}') i++; while (i > valueStart && /\s/.test(text[i - 1])) i--; }
+    const end = i; properties.push({ key, start, valueStart, end });
+    space(); if (text[i] === ',') { i++; continue; } if (text[i] === '}') break;
+    fail('E_STATE', 'Invalid JSON member separator.');
+  }
+  const matches = properties.filter(item => item.key === member);
+  if (matches.length !== 1) fail('E_STATE', 'Ambiguous derived state member.');
+  const current = matches[0], index = properties.indexOf(current);
+  let next;
+  if (value !== undefined) next = text.slice(0, current.valueStart) + JSON.stringify(value, null, 2) + text.slice(current.end);
+  else if (index > 0) next = text.slice(0, properties[index - 1].end) + text.slice(current.end);
+  else if (properties.length > 1) next = text.slice(0, current.start) + text.slice(properties[1].start);
+  else next = text.slice(0, current.start) + text.slice(current.end);
+  try { JSON.parse(next); } catch { fail('E_STATE', 'Unable to preserve derived state safely.'); }
+  return Buffer.from(next);
+}
+
 function readDerivedState(target) {
-  let entries = {}, outputs = {}, blocks = {}, files = {}, removedBlocks = [];
+  let entries = {}, outputs = {}, blocks = {}, files = {}, removedBlocks = [], removedFiles = {};
   const derived = read(target, actualStatePath(target).replace(/agentdevkit\.json$/, 'derived.json'));
   if (derived) {
     try {
       const value = JSON.parse(derived);
       if (value.schemaVersion !== 1 || !value.entries || typeof value.entries !== 'object' || Array.isArray(value.entries)
-        || ['outputs', 'blocks', 'files'].some(key => value[key] !== undefined && (!value[key] || typeof value[key] !== 'object' || Array.isArray(value[key])))) fail('E_STATE', 'Invalid derived entrypoint state.');
-      entries = value.entries; outputs = value.outputs ?? {}; blocks = value.blocks ?? {}; files = value.files ?? {};
+        || ['outputs', 'blocks', 'files', 'removedFiles'].some(key => value[key] !== undefined && (!value[key] || typeof value[key] !== 'object' || Array.isArray(value[key])))) fail('E_STATE', 'Invalid derived entrypoint state.');
+      entries = value.entries; outputs = value.outputs ?? {}; blocks = value.blocks ?? {}; files = value.files ?? {}; removedFiles = value.removedFiles ?? {};
       removedBlocks = value.removedBlocks ?? [];
       if (!Array.isArray(removedBlocks) || removedBlocks.some(path => typeof path !== 'string' || !nativeManagedText(path))) fail('E_STATE', 'Invalid removed block state.');
       for (const [path, digest] of Object.entries(entries)) if (!canonicalEntrypoint(path) || !/^[a-f0-9]{64}$/.test(digest)) fail('E_STATE', 'Invalid derived entrypoint state.');
       for (const [path, digest] of Object.entries(outputs)) if (!allowedManaged(path) || !/^\.[^/]+\/(?:skills|agents|rules)\.json$/.test(path) || !/^[a-f0-9]{64}$/.test(digest)) fail('E_STATE', 'Invalid derived output state.');
-      for (const [path, digest] of Object.entries(blocks)) if (!nativeManagedText(path) || !/^[a-f0-9]{64}$/.test(digest)) fail('E_STATE', 'Invalid derived block state.');
+      for (const [path, digest] of Object.entries(blocks)) if (!(nativeManagedText(path) || adapterRoots.some(root => path === `${root}/.gitignore`)) || !/^[a-f0-9]{64}$/.test(digest)) fail('E_STATE', 'Invalid derived block state.');
       for (const [path, digest] of Object.entries(files)) if (!allowedManaged(path) || !/\.(?:md|mdc|toml)$/.test(path) || !/^[a-f0-9]{64}$/.test(digest)) fail('E_STATE', 'Invalid derived file state.');
+      for (const [path, digest] of Object.entries(removedFiles)) if (canonicalEntrypoint(path) || !(nativeMarkdown(path) || nativeToml(path)) || !/^[a-f0-9]{64}$/.test(digest)) fail('E_STATE', 'Invalid removed file state.');
+      const installed = loadState(target);
+      if (Object.entries(removedFiles).some(([path, digest]) => installed?.files?.[path] && installed.files[path] !== digest)) fail('E_STATE', 'Removed file state differs from installation.');
     }
     catch { fail('E_STATE', 'Invalid derived entrypoint state.'); }
-    for (const path of [...Object.keys(entries), ...Object.keys(outputs), ...Object.keys(blocks), ...Object.keys(files), ...removedBlocks]) safePath(target, path);
+    for (const path of [...Object.keys(entries), ...Object.keys(outputs), ...Object.keys(blocks), ...Object.keys(files), ...Object.keys(removedFiles), ...removedBlocks]) safePath(target, path);
   }
-  return { entries, outputs, blocks, files, removedBlocks };
+  return { entries, outputs, blocks, files, removedBlocks, removedFiles };
 }
 
 export function planInstallation({ target, language = 'pt', mode = 'init', force = false, clients }) {
-  const previous = loadState(target);
+  let previous = loadState(target);
+  const installedState = previous;
   const migration = legacyStateMigration(target);
   // A migration must update the installed scripts and pointers in the same
   // transaction; a plain sync/agents/lang would leave old hard-coded paths.
@@ -427,7 +495,8 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
       if (original === null ? content !== null : !content?.equals(original)) fail('E_CHANGED', `File changed while planning: ${path}`);
     } else nativeInputs.set(path, content);
   };
-  const { entries: derivedEntries, outputs: derivedOutputs, blocks: derivedBlocks, files: derivedFiles, removedBlocks } = readDerivedState(target);
+  const { entries: derivedEntries, outputs: derivedOutputs, blocks: derivedBlocks, files: derivedFiles, removedBlocks, removedFiles } = readDerivedState(target);
+  if (previous) previous = { ...previous, files: Object.fromEntries(Object.entries(previous.files).filter(([path, digest]) => removedFiles[path] !== digest)) };
   const previousBlocks = Object.fromEntries(Object.entries(previous?.blocks || {}).filter(([path]) => !removedBlocks.includes(path)));
   const knownBlocks = { ...previousBlocks, ...derivedBlocks };
   const ownedPaths = [...Object.keys(previous?.files || {}), ...Object.keys(previousBlocks), ...Object.keys(derivedEntries), ...Object.keys(derivedOutputs), ...Object.keys(derivedBlocks), ...Object.keys(derivedFiles)];
@@ -436,6 +505,14 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
     ?? (canonicalEntrypoint(path) ? Object.entries(knownBlocks).find(([candidate]) => canonicalEntrypoint(candidate) === canonicalEntrypoint(path))?.[1] : undefined);
   const preserved = new Map();
   const recordPreserved = (path, reason) => { preserved.set(path, { path, reason }); return true; };
+  const fallbackChecks = new Map();
+  const outputBlocked = path => {
+    const result = nativeOutputBoundary(target, path, ownedPaths);
+    if (fallbackChecks.has(path) && JSON.stringify(fallbackChecks.get(path)) !== JSON.stringify(result)) fail('E_CHANGED', `Skill route changed while planning: ${path}`);
+    fallbackChecks.set(path, result);
+    if (result.blocked) recordPreserved(result.path, result.reason);
+    return result;
+  };
   const stagedHuman = stagedDivergences(target);
   const native = path => canonicalEntrypoint(path) || path === 'README.md' || adapterRoots.some(root => path === root || path.startsWith(`${root}/`));
   const boundary = path => {
@@ -504,7 +581,7 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
     const ownIgnore = read(target, '.pbai4devs/.gitignore');
     if (ownIgnore) write(stage, '.pbai4devs/.gitignore', ownIgnore);
     writeAdapterManifest(stage, { clients: selected });
-    const synchronized = synchronize({ root: stage, force: true, localIgnores: false, generateEntrypoints: false, recordDerivedState: false, output() {} });
+    const synchronized = synchronize({ root: stage, force: true, localIgnores: false, generateEntrypoints: false, recordDerivedState: false, outputBlocked, output() {} });
     for (const canonical of active.entrypoints) {
       const name = entryPaths.get(canonical);
       if (preserveNative(name)) continue;
@@ -577,14 +654,45 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
       if (block) manifest.blocks[path] = block;
       else manifest.files[path] = hash(content);
     }
-    desired.set(statePath, Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`));
+    // A standalone sync records its proven outputs separately. During a later
+    // check/sync, compare that overlay before declaring the installation state
+    // stale; update still consolidates it into the main state transactionally.
+    let stateContent = Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`);
+    if (mode === 'sync' && installedState && !changingClients) {
+      const files = { ...installedState.files }, blocks = { ...installedState.blocks };
+      for (const [path, digest] of Object.entries(removedFiles)) {
+        if (files[path] === digest && !stat(safePath(target, path))) delete files[path];
+      }
+      for (const path of removedBlocks) delete blocks[path];
+      for (const [path, digest] of Object.entries({ ...derivedFiles, ...derivedOutputs, ...derivedEntries })) { files[path] = digest; delete blocks[path]; }
+      for (const [path, digest] of Object.entries(derivedBlocks)) { blocks[path] = digest; delete files[path]; }
+      const same = (a, b) => {
+        const keys = Object.keys(a).sort();
+        return keys.length === Object.keys(b).length && keys.every(key => a[key] === b[key]);
+      };
+      if (installedState.schemaVersion === manifest.schemaVersion && installedState.version === manifest.version && installedState.language === manifest.language
+        && JSON.stringify(installedState.clients) === JSON.stringify(manifest.clients) && same(files, manifest.files) && same(blocks, manifest.blocks)) stateContent = read(target, statePath);
+    }
+    desired.set(statePath, stateContent);
+    const derivedPath = actualStatePath(target).replace(/agentdevkit\.json$/, 'derived.json');
+    const derivedBytes = !migration ? read(target, derivedPath) : null;
+    if (derivedBytes && Object.keys(removedFiles).length) {
+      const finalState = JSON.parse(stateContent);
+      const remaining = Object.fromEntries(Object.entries(removedFiles).filter(([path, digest]) =>
+        finalState.files[path] === digest && !stat(safePath(target, path))));
+      if (Object.keys(remaining).length !== Object.keys(removedFiles).length) {
+        observeNative(derivedPath, derivedBytes);
+        desired.set(derivedPath, replaceJsonMember(derivedBytes, 'removedFiles', Object.keys(remaining).length ? remaining : undefined));
+      }
+    }
     const changes = [], conflicts = [];
     const aliasedEntrypoint = path => canonicalEntrypoint(path) && entryPaths.get(canonicalEntrypoint(path)) !== path;
     for (const [path, content] of desired) {
       const current = read(target, path);
       if (nativeInputs.has(path) && (nativeInputs.get(path) === null ? current !== null : !current?.equals(nativeInputs.get(path)))) fail('E_CHANGED', `File changed while planning: ${path}`);
       if (current?.equals(content)) continue;
-      const managed = [previous?.files[path], derivedOutputs[path], derivedEntries[path], derivedFiles[path]].some(digest => digest && hash(current || '') === digest)
+      const managed = path === derivedPath && derivedBytes && current?.equals(derivedBytes)
+        || [previous?.files[path], derivedOutputs[path], derivedEntries[path], derivedFiles[path]].some(digest => digest && hash(current || '') === digest)
         || knownBlocks[path] && blockDigest(path, current || Buffer.alloc(0)) === knownBlocks[path];
       const appendBlock = mixedPaths.has(path) || canonicalEntrypoint(path) || path === '.gitignore' || path.endsWith('/.gitignore');
       const conflict = current && path !== statePath && !managed && !appendBlock;
@@ -704,7 +812,7 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
     const localIgnore = planLocalIgnore(target, { outputs: ownedOutputs, templateRoot: stage });
     const localIgnoreCheck = checkLocalIgnore(localIgnore, { replacedBlocks: replacedIgnoreBlocks(target, changes, previous) });
     conflicts.push(...(untrack?.conflicts || []), ...localIgnoreCheck.missing);
-    return { target, language, mode, changes, conflicts: [...new Set(conflicts)].sort(), canApply: (!conflicts.length || force) && !untrack?.conflicts?.length && !localIgnoreCheck.missing.length, manifest, retiredRoots, ownedOutputs, untrack, localIgnore, localIgnoreCheck, migration, preserved: [...preserved.values()].sort((a, b) => a.path.localeCompare(b.path)) };
+    return { target, language, mode, changes, conflicts: [...new Set(conflicts)].sort(), canApply: (!conflicts.length || force) && !untrack?.conflicts?.length && !localIgnoreCheck.missing.length, manifest, retiredRoots, ownedOutputs, untrack, localIgnore, localIgnoreCheck, migration, fallbackChecks: [...fallbackChecks], fallbackOwnedPaths: ownedPaths, preserved: [...preserved.values()].sort((a, b) => a.path.localeCompare(b.path)) };
   } finally { rmSync(stage, { recursive: true, force: true }); }
 }
 
@@ -712,6 +820,15 @@ export function applyPlan(plan) {
   if (!plan.canApply) fail('E_CONFLICT', text(plan.language, 'conflict'));
   assertLocalIgnoreUnchanged(plan.localIgnore);
   const { target } = plan;
+  const assertFallbackChecks = () => {
+    for (const [path, expected] of plan.fallbackChecks || []) {
+      let current;
+      try { current = nativeOutputBoundary(target, path, plan.fallbackOwnedPaths || []); }
+      catch { fail('E_CHANGED', `Skill route changed after planning: ${path}`); }
+      if (JSON.stringify(current) !== JSON.stringify(expected)) fail('E_CHANGED', `Skill route changed after planning: ${path}`);
+    }
+  };
+  assertFallbackChecks();
   const stagedHuman = stagedDivergences(target);
   const currentState = loadState(target);
   const stagedChanges = plan.changes.filter(change => {
@@ -793,6 +910,7 @@ export function applyPlan(plan) {
         rmdirSync(file); removedDirectories.push({ path: directory.path, mode: directory.mode });
       }
     }
+    assertFallbackChecks();
     pruneRemovedDirectories(plan, directory => removedDirectories.push(directory));
     const changesFallback = plan.changes.some(change => change.path === '.gitignore');
     // Metadata is committed last; its writer rolls back partial writes itself.
@@ -881,6 +999,10 @@ export function inspect(target) {
   for (const [path, digest] of Object.entries(state.files)) {
     if (derived.blocks[path] || derived.removedBlocks.includes(path)) continue;
     const content = read(target, path);
+    if (derived.removedFiles[path] === digest && !derived.files[path] && !derived.entries[path]) {
+      if (content) issues.push({ code: 'modified', path });
+      continue;
+    }
     if (!content || hash(content) !== digest && hash(content) !== derived.outputs[path] && hash(content) !== derived.files[path] && hash(content) !== derived.entries[path]) issues.push({ code: content ? 'modified' : 'missing', path });
   }
   for (const [path, digest] of Object.entries({ ...state.blocks, ...derived.blocks })) {

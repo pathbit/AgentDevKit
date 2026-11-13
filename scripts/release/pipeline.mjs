@@ -33,9 +33,11 @@ export function guardSourceOnlyGit(root, environment = process.env) {
   return { files: listed.stdout.split('\0').filter(Boolean).length };
 }
 
+export const nodeProcessTimeoutMs = 20 * 60 * 1000;
+
 export function executeNode(root, args, env = process.env) {
   const childEnv = { ...env }; delete childEnv.NODE_TEST_CONTEXT;
-  const result = spawnSync(process.execPath, args, { cwd: root, env: childEnv, stdio: 'inherit', timeout: 900000, shell: false, windowsHide: true });
+  const result = spawnSync(process.execPath, args, { cwd: root, env: childEnv, stdio: 'inherit', timeout: nodeProcessTimeoutMs, shell: false, windowsHide: true });
   if (result.error || result.status !== 0) {
     throw new Error(`Falha: node ${args.join(' ')}; status=${result.status}; sinal=${result.signal || 'none'}; erro=${result.error?.code || 'none'}${result.error?.message ? ` (${result.error.message})` : ''}`);
   }
@@ -44,9 +46,10 @@ export function executeNode(root, args, env = process.env) {
 // Each named profile is an independent CI job; `portable` runs all locally.
 export const portableProfiles = Object.freeze({
   'portable-cli': Object.freeze(['cli.test.mjs', 'adapters.test.mjs', 'development-ecosystem.test.mjs', 'security-ecosystem.test.mjs', 'file-modes.test.mjs']),
-  'portable-projects': Object.freeze(['client-selection.test.mjs', 'client-ignore.test.mjs', 'native-coexistence.test.mjs', 'oss-preservation.test.mjs']),
+  'portable-selection': Object.freeze(['client-selection.test.mjs']),
+  'portable-projects': Object.freeze(['client-ignore.test.mjs', 'native-coexistence.test.mjs', 'oss-preservation.test.mjs']),
   'portable-migration': Object.freeze(['state-migration.test.mjs', 'preservation-lifecycle.test.mjs']),
-  'portable-resources': Object.freeze(['documentation-compatibility.test.mjs', 'github-packages.test.mjs', 'next.test.mjs', 'managed-content.test.mjs', 'managed-content-helper.test.mjs', 'managed-toml.test.mjs', 'managed-preservation.test.mjs', 'release-pipeline.test.mjs', 'release-resilience.test.mjs']),
+  'portable-resources': Object.freeze(['documentation-compatibility.test.mjs', 'github-packages.test.mjs', 'next.test.mjs', 'managed-content.test.mjs', 'managed-content-helper.test.mjs', 'managed-toml.test.mjs', 'managed-preservation.test.mjs', 'release-pipeline.test.mjs', 'release-resilience.test.mjs', 'resource-coverage.test.mjs']),
   'portable-layout': Object.freeze(['source-layout.test.mjs']),
 });
 
@@ -70,6 +73,15 @@ export function verifyPortableClassification(files, { profiles = portableProfile
     const obsolete = classified.filter(name => !discovered.includes(name));
     throw new Error(`Classificação das suítes desatualizada; faltam: ${missing.join(', ') || 'nenhuma'}; ausentes: ${obsolete.join(', ') || 'nenhuma'}.`);
   }
+}
+
+// Run the installation-heavy selection suite separately to avoid I/O contention
+// with other project fixtures. Every remaining suite is still run exactly once.
+export function fullTestGroups(files) {
+  const names = files.filter(name => name.endsWith('.test.mjs') && name !== 'distribution.test.mjs').sort();
+  const selection = 'client-selection.test.mjs';
+  if (!names.includes(selection)) throw new Error('Suíte de seleção ausente do perfil completo.');
+  return [[selection], names.filter(name => name !== selection)];
 }
 
 export function markVerified(directory, env = process.env) {
@@ -98,7 +110,7 @@ export function runPipeline(profile, { root = releaseRoot, env = process.env, ru
   };
   if (profile === 'check') { check(); return; }
   if (profile === 'full') {
-    test(readdirSync(join(root, tests)).filter(name => name.endsWith('.test.mjs') && name !== 'distribution.test.mjs').sort());
+    for (const group of fullTestGroups(readdirSync(join(root, tests)))) test(group, ['--test-concurrency=4']);
     run(root, [`${hub}/scripts/testar-infraestrutura/SCRIPT.mjs`], env);
     run(root, [`${hub}/scripts/preparar-ferramentas/SCRIPT.mjs`, 'install', 'markdownlint-cli2'], env);
     check();
@@ -116,7 +128,7 @@ export function runPipeline(profile, { root = releaseRoot, env = process.env, ru
     console.log(`Perfil ${profile}: ${portableProfiles[profile].join(', ')}`);
     test(portableProfiles[profile], ['--test-concurrency=2']);
     if (profile === 'portable-resources') {
-      for (const name of ['preparar-ferramentas', 'sincronizar-agentes', 'verificar-recursos', 'executar-script', 'inspecionar-projeto']) run(root, ['--test', `${hub}/scripts/${name}/tests/TEST.mjs`], env);
+      for (const name of ['preparar-ferramentas', 'sincronizar-agentes', 'verificar-recursos', 'executar-script', 'inspecionar-projeto', 'testar-maturidade']) run(root, ['--test', `${hub}/scripts/${name}/tests/TEST.mjs`], env);
     }
     return;
   }

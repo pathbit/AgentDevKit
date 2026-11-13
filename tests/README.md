@@ -4,10 +4,17 @@ description: Testes do pacote, instalação e distribuição do AgentDevKit.
 
 # Testes do pacote
 
-Execute `npm test` na raiz. Testes e fixtures são versionados; resultados
-temporários ficam em `.agent-tests/`. `npm run test:distribution` testa o
+Execute `npm test` na raiz. Código de testes e fixtures são versionados;
+projetos gerados, clones e resultados ficam em `tmp/`, `.agent-tests/`,
+`examples/generated/` ou em diretório temporário fora do repositório, sem subir
+ao Git.
+`npm run test:distribution` testa o
 pacote real, incluindo instalação, atualização e preservação de arquivos.
 Estes testes não são copiados para os projetos atendidos.
+
+`resource-coverage.test.mjs` confere as referências geradas para os clientes e
+as combinações de seleção. A cobertura estrutural não prova que cada recurso
+foi executado em todos os clientes; valide também descoberta e uso real.
 
 Para verificar o pacote publicado em projetos reais, execute:
 
@@ -31,6 +38,8 @@ com os arquivos preservados; não equivale a uma instalação bem-sucedida.
 O processo retorna `1` se algum cenário falhar ou bloquear. No Zod, confere
 a preservação dos links `CLAUDE.md`, `README.md` e `.codex/skills`, enquanto
 os apontamentos disponíveis são instalados nas demais rotas nativas.
+O EF6 pode bloquear a instalação quando uma exceção do `.gitignore` existente
+expõe caches de testes; o diagnóstico preserva esse arquivo e o índice Git.
 
 ## Fluxo documental
 

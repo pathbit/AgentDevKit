@@ -29,7 +29,9 @@ catálogo; resultados, caches e pastas temporárias não entram nos índices.
 `formato|pasta|tipo|formato` e registrar `descoberta|.agents|antigravity`.
 `agrupado` preserva a árvore; `plano` retira categorias; `arquivo` preserva
 categorias e usa `nome.md`. `mdc`, `instrucoes`, `prompt` e `agente` produzem as
-extensões nativas. A descoberta gera os três manifestos JSON do Antigravity.
+extensões nativas; `nenhum` desativa a derivação de skills naquela rota.
+`fallback|destino|origem|skills` usa o destino para cada skill cuja rota de
+origem estiver obstruída. A descoberta gera os três manifestos JSON do Antigravity.
 Veja os motivos e limites em [Compatibilidade](../../COMPATIBILIDADE.md).
 
 Sem manifesto, o sincronizador gera a política de
@@ -49,3 +51,5 @@ atualizar arquivos gerados e blocos separadamente, preservando alterações huma
 Apontamentos obsoletos podem ser removidos quando a propriedade é comprovada;
 arquivos e pastas próprios, inclusive os adicionais dentro do mesmo recurso,
 devem permanecer.
+O estado derivado registra remoções comprovadas para reconciliá-las no próximo
+`update`; campos adicionais existentes no estado são preservados.

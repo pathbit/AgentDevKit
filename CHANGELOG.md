@@ -4,6 +4,16 @@ description: Alterações verificáveis por versão do AgentDevKit.
 
 # Changelog
 
+## 0.0.22 — 2026-11-13
+
+- Descoberta de skills do Codex sem duplicação, com alternativa segura quando a
+  rota principal está obstruída.
+- Sincronização e atualização reconciliam o estado sem substituir recursos ou
+  metadados humanos.
+- Scripts reconhecem caminhos por aliases e exemplos de maturidade usam saídas isoladas.
+- Testes ampliados para combinações de clientes, projetos existentes e
+  preservação do Git.
+
 ## 0.0.21 — 2026-11-13
 
 - Criação automática da tag da versão após aprovação da matriz de CI.

@@ -81,8 +81,13 @@ test('instala e atualiza sobre agentes configurados preservando arquivos, links 
   assert.equal(existsSync(join(root, '.pbai4devs')), false);
   assert.deepEqual(snapshot(root, paths), before);
   const installed = await cli(root, args);
-  for (const path of ['CLAUDE.md', 'README.md', '.codex/skills', '.claude/agents/revisor.md', '.github/agents/revisor.agent.md', '.claude/.gitignore']) {
+  for (const path of ['CLAUDE.md', 'README.md', '.claude/agents/revisor.md', '.github/agents/revisor.agent.md', '.claude/.gitignore']) {
     assert.ok(installed.preserved.some(item => item.path === path), path);
+  }
+  // Codex no longer writes this unused route when its shared route is available.
+  assert.deepEqual(snapshot(root, ['.codex/skills'])['.codex/skills'], before['.codex/skills']);
+  for (const path of ['.claude/skills/triage/SKILL.md', '.claude/skills/triage/REFERENCE.md']) {
+    assert.deepEqual(snapshot(root, [path])[path], before[path], path);
   }
   assert.ok(existsSync(join(root, '.agents/skills/projeto/criar-skill/SKILL.md')), 'Codex retains its native skill path.');
   const state = JSON.parse(readFileSync(join(root, '.pbai4devs/state/agentdevkit.json')));

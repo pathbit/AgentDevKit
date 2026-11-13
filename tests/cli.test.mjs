@@ -121,7 +121,9 @@ test('arquivo gerenciado com edição humana é preservado inclusive com force',
 test('migração preserva apontamentos sem ownership e limpa apenas o legado comprovado', t => {
   const root = fixture(t); cli(root, ['init', '--yes']);
   const grouped = '.codex/skills/projeto/configurar-projeto/SKILL.md';
-  const pointer = readFileSync(join(root, grouped), 'utf8').replace('../../../../.pbai4devs/', '../../../.pbai4devs/');
+  const native = readFileSync(join(root, '.agents/skills/projeto/configurar-projeto/SKILL.md'), 'utf8');
+  put(root, grouped, native);
+  const pointer = native.replace('../../../../.pbai4devs/', '../../../.pbai4devs/');
   put(root, '.codex/skills/configurar-projeto/SKILL.md', pointer);
   put(root, '.codex/skills/retained/SKILL.md', pointer);
   mkdirSync(join(root, '.codex/skills/retained/user-empty'), { recursive: true });

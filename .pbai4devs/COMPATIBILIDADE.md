@@ -45,7 +45,8 @@ representa categorias opcionais; `nome` é o identificador único do recurso.
 Os caminhos são relativos à pasta do cliente, exceto onde indicado.
 
 - Codex: `.agents/skills/grupo/nome/SKILL.md` e referências agrupadas em
-  `.codex`. `AGENTS.md` apresenta o hub; demais tipos são referências.
+  `.codex`. Se a rota principal de uma skill estiver obstruída, ela usa
+  `.codex/skills` como alternativa. `AGENTS.md` apresenta o hub.
 - Claude: `skills/nome/SKILL.md`, `commands/grupo/nome.md`,
   `rules/grupo/nome/RULE.md` e `agents/nome.md`.
 - Cursor: `skills/grupo/nome/SKILL.md`, `rules/grupo/nome.mdc`,
@@ -91,12 +92,21 @@ Prompts `.prompt.md` pertencem ao harness Local do VS Code, anunciado para
 remoção em fevereiro de 2027. No Copilot, use skills para rotinas invocáveis.
 `GEMINI.md` importa `AGENTS.md`; `CLAUDE.md` aponta para esse mesmo guia.
 
+Com Claude e Copilot selecionados, o Copilot CLI pode receber referências
+equivalentes de `.claude/rules` e `.github/instructions`. As duas rotas são
+mantidas para seus respectivos clientes; o suporte a instruções varia entre
+[ambientes do Copilot](https://docs.github.com/en/copilot/reference/custom-instructions-support).
+
 O instalador gera a seleção e a política em `espelhos.conf`; `sincronizar`
 reconstrói os apontamentos somente com Node e os arquivos do hub instalado.
 `--check` não altera arquivos. `--force` faz backup ignorado ao reparar
 conflitos gerenciados. Recursos e links humanos dos clientes são preservados;
 uma rota preservada não recebe apontamentos novos. No Zod, `.codex/skills`
 continua apontando para suas skills e o Codex recebe o kit em `.agents/skills`.
+Quando a rota principal volta a ficar disponível, apontamentos alternativos
+obsoletos só são removidos com propriedade comprovada. Conteúdo humano e o
+índice Git são preservados; se ambas as rotas estiverem obstruídas, a operação
+informa o conflito sem substituí-las.
 
 As fontes confirmam formatos, não execução de cada cliente. Valide descoberta,
 invocação e resultado no cliente escolhido antes de considerar uma integração

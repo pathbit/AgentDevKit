@@ -196,6 +196,28 @@ test('instalação também protege manifestos registrados em derived.outputs', t
   assert.throws(() => verify(root), /Arquivo gerenciado ausente: .agents\/skills.json/);
 });
 
+test('remoções derivadas exigem hash compatível e não ocultam arquivo humano recriado', t => {
+  const { root, file, generated } = installedFixture(t);
+  const statePath = join(root, '.pbai4devs/state/agentdevkit.json');
+  const state = JSON.parse(readFileSync(statePath, 'utf8'));
+  const hash = state.files[generated], derivedPath = '.pbai4devs/state/derived.json';
+  rmSync(join(root, generated));
+  const record = removedFiles => file(derivedPath, JSON.stringify({ schemaVersion: 1, entries: {}, removedFiles }));
+  record({ [generated]: hash });
+  assert.doesNotThrow(() => verify(root));
+  file(generated, document('# Conteúdo recriado pelo usuário\n'));
+  const recreated = readFileSync(join(root, generated));
+  assert.throws(() => verify(root), /Arquivo removido foi recriado/);
+  assert.deepEqual(readFileSync(join(root, generated)), recreated);
+  rmSync(join(root, generated));
+  record({ [generated]: 'f'.repeat(64) });
+  assert.throws(() => verify(root), /Registro de arquivos removidos divergente/);
+  record({ [generated]: 'invalido' });
+  assert.throws(() => verify(root), /Estado de entradas derivadas invalido/);
+  record({ '.pbai4devs/skills/exemplo/SKILL.md': hash });
+  assert.throws(() => verify(root), /Registro de arquivos removidos invalido/);
+});
+
 test('catalogo derivado cobre recursos e detecta JSON editado sem reescrever', t => {
   const { root, file } = resourceFixture(t);
   file('.pbai4devs/commands/inspecionar/COMMAND.md', document('# Inspecionar\n\n[Script](../../scripts/inspecionar/SCRIPT.mjs).\n'));

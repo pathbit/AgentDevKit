@@ -42,10 +42,12 @@ test('clientes recebem grupos e excecoes nativas pesquisadas', t => {
   const root = fixture(t);
   writeAdapterManifest(root);
   assert.equal(synchronize({ localIgnores: false, generateEntrypoints: false, root, output() {} }).exitCode, 0);
-  for (const client of ['.agents', '.codex', '.cursor', '.opencode', '.kimi-code', '.mimocode']) {
+  for (const client of ['.agents', '.cursor', '.opencode', '.kimi-code', '.mimocode']) {
     assert.ok(existsSync(join(root, client, 'skills/projeto/example/SKILL.md')), client);
     assert.equal(existsSync(join(root, client, 'skills/example/SKILL.md')), false, client);
   }
+  assert.equal(existsSync(join(root, '.codex/skills/projeto/example/SKILL.md')), false);
+  assert.ok(existsSync(join(root, '.codex/agents/revisor/AGENT.md')));
   for (const client of ['.claude', '.github', '.gemini', '.zcode', '.minimax', '.dsh']) {
     assert.ok(existsSync(join(root, client, 'skills/example/SKILL.md')), client);
     assert.equal(existsSync(join(root, client, 'skills/projeto/example/SKILL.md')), false, client);
@@ -142,7 +144,7 @@ test('cada selecao filtra todos os tipos de linha e sincroniza somente suas raiz
     assert.equal(manifest, adapterManifest(root, { clients: client }));
     for (const row of manifest.split('\n').filter(row => row && !row.startsWith('#'))) {
       const [kind, target] = row.split('|');
-      assert.ok(['agente', 'formato', 'descoberta', 'nativo', 'gitignore'].includes(kind));
+      assert.ok(['agente', 'formato', 'fallback', 'descoberta', 'nativo', 'gitignore'].includes(kind));
       assert.ok(roots.includes(target.split('/')[0]), `${client}: ${row}`);
     }
     assert.equal(synchronize({ localIgnores: false, generateEntrypoints: false, root, output() {} }).exitCode, 0);

@@ -17,7 +17,7 @@ jobs:
   verify:
     name: ${{ matrix.label }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -30,6 +30,10 @@ jobs:
             node: 24
             profile: portable-cli
             label: Windows / Node 24 / CLI
+          - os: windows-latest
+            node: 24
+            profile: portable-selection
+            label: Windows / Node 24 / client selection
           - os: windows-latest
             node: 24
             profile: portable-projects
@@ -50,6 +54,10 @@ jobs:
             node: 24
             profile: portable-cli
             label: macOS / Node 24 / CLI
+          - os: macos-15-intel
+            node: 24
+            profile: portable-selection
+            label: macOS / Node 24 / client selection
           - os: macos-15-intel
             node: 24
             profile: portable-projects

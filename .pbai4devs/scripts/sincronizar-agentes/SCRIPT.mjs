@@ -21,7 +21,7 @@ const auxiliary = ['templates', 'scripts', 'tools', 'external-skills', 'state', 
 const reserved = new Set(['.git', '.pbai4devs', '.agent-tests']);
 const compare = (a, b) => a < b ? -1 : a > b ? 1 : 0;
 const sorted = values => [...new Set(values)].sort(compare);
-const layouts = new Set(['agrupado', 'plano', 'arquivo', 'mdc', 'instrucoes', 'prompt', 'agente']);
+const layouts = new Set(['agrupado', 'plano', 'arquivo', 'mdc', 'instrucoes', 'prompt', 'agente', 'nenhum']);
 const fail = message => { throw new Error(message); };
 const normalize = text => text.replace(/\r\n?/g, '\n');
 const read = file => normalize(readFileSync(file, 'utf8'));
@@ -29,6 +29,77 @@ const stat = file => {
   try { return lstatSync(file); }
   catch (error) { if (['ENOENT', 'ENOTDIR'].includes(error.code)) return null; throw error; }
 };
+
+function replaceJsonMember(bytes, member, value) {
+  const text = bytes.toString('utf8');
+  if (!Buffer.from(text, 'utf8').equals(bytes)) fail('Invalid UTF-8 in derived state.');
+  let i = 0;
+  const space = () => { while (/\s/.test(text[i] || '') && i < text.length) i++; };
+  const stringEnd = () => {
+    if (text[i++] !== '"') fail('Invalid JSON member.');
+    while (i < text.length) {
+      const char = text[i++];
+      if (char === '\\') { i++; continue; }
+      if (char === '"') return;
+    }
+    fail('Unterminated JSON string.');
+  };
+  space(); if (text[i++] !== '{') fail('Invalid derived state.');
+  const properties = [];
+  while (true) {
+    space(); if (text[i] === '}') break;
+    const start = i; stringEnd(); const key = JSON.parse(text.slice(start, i));
+    space(); if (text[i++] !== ':') fail('Invalid JSON member.');
+    space(); const valueStart = i;
+    if (text[i] === '"') stringEnd();
+    else if (text[i] === '{' || text[i] === '[') {
+      const stack = [];
+      do {
+        const char = text[i];
+        if (char === '"') { stringEnd(); continue; }
+        i++;
+        if (char === '{' || char === '[') stack.push(char);
+        else if (char === '}' || char === ']') stack.pop();
+      } while (stack.length && i < text.length);
+      if (stack.length) fail('Invalid derived state.');
+    } else { while (i < text.length && text[i] !== ',' && text[i] !== '}') i++; while (i > valueStart && /\s/.test(text[i - 1])) i--; }
+    const end = i; properties.push({ key, start, valueStart, end });
+    space(); if (text[i] === ',') { i++; continue; } if (text[i] === '}') break;
+    fail('Invalid JSON member separator.');
+  }
+  const matches = properties.filter(item => item.key === member);
+  if (matches.length > 1) fail('Ambiguous derived state member.');
+  if (!matches.length) {
+    if (value === undefined) return bytes;
+    const insertion = `${properties.length ? ',' : ''}\n  ${JSON.stringify(member)}: ${JSON.stringify(value, null, 2)}\n`;
+    const next = text.slice(0, i) + insertion + text.slice(i);
+    try { JSON.parse(next); } catch { fail('Unable to preserve derived state safely.'); }
+    return Buffer.from(next);
+  }
+  const current = matches[0], index = properties.indexOf(current);
+  let next;
+  if (value !== undefined) next = text.slice(0, current.valueStart) + JSON.stringify(value, null, 2) + text.slice(current.end);
+  else if (index > 0) next = text.slice(0, properties[index - 1].end) + text.slice(current.end);
+  else if (properties.length > 1) next = text.slice(0, current.start) + text.slice(properties[1].start);
+  else next = text.slice(0, current.start) + text.slice(current.end);
+  try { JSON.parse(next); } catch { fail('Unable to preserve derived state safely.'); }
+  return Buffer.from(next);
+}
+
+
+// Compare owned fields structurally, preserving all other JSON bytes.
+function derivedContent(original, previous, next) {
+  if (!original) return JSON.stringify(next, null, 2) + '\n';
+  const keys = ['schemaVersion', 'entries', 'outputs', 'files', 'blocks', 'removedBlocks', 'removedFiles'];
+  const canonical = value => value && typeof value === 'object' && !Array.isArray(value)
+    ? Object.fromEntries(Object.keys(value).sort(compare).map(key => [key, canonical(value[key])]))
+    : Array.isArray(value) ? value.map(canonical) : value;
+  let result = original;
+  for (const key of keys) {
+    if (JSON.stringify(canonical(previous[key])) !== JSON.stringify(canonical(next[key]))) result = replaceJsonMember(result, key, next[key]);
+  }
+  return result.toString('utf8');
+}
 
 export function header(text) {
   const lines = normalize(text).split('\n');
@@ -76,7 +147,7 @@ function link(target, source) {
 
 export { resourcePath } from '../lib/resource-path.mjs';
 
-export function synchronize({ root = projectRoot, check = false, force = false, localIgnores = true, generateEntrypoints = true, recordDerivedState = true, output = console.log } = {}) {
+export function synchronize({ root = projectRoot, check = false, force = false, localIgnores = true, generateEntrypoints = true, recordDerivedState = true, outputBlocked, output = console.log } = {}) {
   requireNode();
   root = realpathSync(resolve(root));
   const absolute = value => join(root, ...value.split('/'));
@@ -156,6 +227,7 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
   const protectedPath = value => /^(workflows(?:\/|$)|settings\.json$|extensions\.json$)/.test(value.slice(value.indexOf('/') + 1).toLowerCase());
   const agents = new Map();
   const formats = new Map();
+  const fallbacks = new Map();
   const discoveries = new Set();
   const ignoreRoots = new Set();
   const natives = [];
@@ -182,14 +254,20 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
       && !['readme.md', 'instructions.md'].includes(posix.basename(path).toLowerCase())
       && (/\.(md|mdc)$/i.test(path) || path.startsWith('.gemini/commands/') && path.endsWith('.toml'));
   };
+  const validIgnoreBlock = path => typeof path === 'string' && /^\.[A-Za-z0-9][A-Za-z0-9._-]*\/\.gitignore$/.test(path) && !reserved.has(path.split('/')[0].toLowerCase());
   for (const [name, values] of [['files', previousEntries.files ?? {}], ['blocks', previousEntries.blocks ?? {}]]) {
-    if (!values || typeof values !== 'object' || Array.isArray(values) || Object.entries(values).some(([path, hash]) => !(validResourcePath(path) || name === 'blocks' && canonicalEntrypoint(path)) || !/^[a-f0-9]{64}$/.test(hash))) fail(`Registro de ${name} derivados invalido.`);
+    if (!values || typeof values !== 'object' || Array.isArray(values) || Object.entries(values).some(([path, hash]) => !(validResourcePath(path) || name === 'blocks' && (canonicalEntrypoint(path) || validIgnoreBlock(path))) || !/^[a-f0-9]{64}$/.test(hash))) fail(`Registro de ${name} derivados invalido.`);
     for (const path of Object.keys(values)) safe(canonicalEntrypoint(path) ? resolveEntrypoint(root, canonicalEntrypoint(path)) : path);
   }
   const removedBlocks = new Set(previousEntries.removedBlocks ?? []);
   if (!Array.isArray(previousEntries.removedBlocks ?? []) || [...removedBlocks].some(path => typeof path !== 'string' || !(validResourcePath(path) || canonicalEntrypoint(path)))) fail('Registro de blocos removidos invalido.');
   for (const path of removedBlocks) safe(canonicalEntrypoint(path) ? resolveEntrypoint(root, canonicalEntrypoint(path)) : path);
-  const priorFiles = { ...installed?.files, ...previousEntries.files };
+  const removedFiles = previousEntries.removedFiles ?? {};
+  if (!removedFiles || typeof removedFiles !== 'object' || Array.isArray(removedFiles) || Object.entries(removedFiles).some(([path, hash]) => !validResourcePath(path) || !/^[a-f0-9]{64}$/.test(hash))) fail('Registro de arquivos removidos invalido.');
+  if (Object.entries(removedFiles).some(([path, hash]) => installed?.files?.[path] && installed.files[path] !== hash)) fail('Registro de arquivos removidos diverge do estado instalado.');
+  for (const path of Object.keys(removedFiles)) safe(path);
+  const effectiveRemovedFiles = Object.fromEntries(Object.entries(removedFiles).filter(([path, hash]) => installed?.files?.[path] === hash));
+  const priorFiles = { ...Object.fromEntries(Object.entries(installed?.files ?? {}).filter(([path, hash]) => effectiveRemovedFiles[path] !== hash)), ...previousEntries.files };
   const priorBlocks = { ...Object.fromEntries(Object.entries(installed?.blocks ?? {}).filter(([path]) => !removedBlocks.has(path))), ...previousEntries.blocks };
   const ownedPaths = new Set([...Object.keys(priorFiles), ...Object.keys(priorBlocks), ...Object.keys(previousEntries.entries), ...Object.keys(previousOutputs)]);
   const nativeRoots = new Set(rows.map(row => row.split('|')).filter(([type]) => ['agente', 'gitignore'].includes(type)).map(([, target]) => target));
@@ -199,6 +277,28 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
     if (!nativeRoots.has(value.split('/')[0]) && !canonicalEntrypoint(value) && value !== 'README.md') return false;
     const boundary = nativePathBoundary(root, value, ownedPaths, { preserveRootAliases: true });
     return boundary ? remember(boundary.path, boundary.reason) : false;
+  }
+  const fallbackChecks = new Map();
+  function blockedOutput(path) {
+    if (outputBlocked) return outputBlocked(path);
+    let boundary = nativePathBoundary(root, path, ownedPaths, { preserveRootAliases: true });
+    if (!boundary) {
+      const info = stat(safe(path));
+      if (info && !info.isFile()) boundary = { path, reason: 'non-file' };
+    }
+    if (!boundary) return { blocked: false };
+    remember(boundary.path, boundary.reason);
+    const info = lstatSync(absolute(boundary.path));
+    return { blocked: true, ...boundary, identity: [info.dev, info.ino, info.mode, info.size, info.mtimeMs, info.ctimeMs] };
+  }
+  function unavailable(path) {
+    const status = blockedOutput(path);
+    if (fallbackChecks.has(path) && JSON.stringify(fallbackChecks.get(path)) !== JSON.stringify(status)) fail(`Caminho de skill mudou durante o planejamento: ${path}`);
+    fallbackChecks.set(path, status);
+    return status.blocked;
+  }
+  function assertFallbackChecks() {
+    for (const [path, status] of fallbackChecks) if (JSON.stringify(blockedOutput(path)) !== JSON.stringify(status)) fail(`Caminho de skill mudou apos o planejamento: ${path}`);
   }
   function claimed(value) {
     if (ownedPaths.has(value)) return true;
@@ -241,7 +341,8 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
       agents.set(target, mode);
     } else if (type === 'formato') {
       if (fields.length !== 4 || !Object.hasOwn(principals, source) || !layouts.has(metadata)) fail(`Formato invalido: ${row}`);
-      if (source === 'skills' && !['agrupado', 'plano'].includes(metadata)) fail(`Skills exigem formato agrupado ou plano: ${row}`);
+      if (source === 'skills' && !['agrupado', 'plano', 'nenhum'].includes(metadata)) fail(`Skills exigem formato agrupado, plano ou nenhum: ${row}`);
+      if (metadata === 'nenhum' && source !== 'skills') fail(`Formato incompativel com recurso: ${row}`);
       if ((metadata === 'mdc' || metadata === 'instrucoes') && source !== 'rules' || metadata === 'prompt' && source !== 'commands' || metadata === 'agente' && source !== 'agents') fail(`Formato incompativel com recurso: ${row}`);
       const key = `${target}/${source}`;
       if (formats.has(key)) fail(`Formato duplicado: ${key}`);
@@ -249,6 +350,9 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
     } else if (type === 'descoberta') {
       if (fields.length !== 3 || target !== '.agents' || source !== 'antigravity' || discoveries.has(target)) fail(`Descoberta invalida: ${row}`);
       discoveries.add(target);
+    } else if (type === 'fallback') {
+      if (fields.length !== 4 || metadata !== 'skills' || target === source || fallbacks.has(target)) fail(`Fallback invalido: ${row}`);
+      fallbacks.set(target, source);
     } else if (type === 'gitignore') {
       if (fields.length !== 2) fail('gitignore aceita somente a pasta de destino.');
       ignoreRoot(target);
@@ -269,6 +373,7 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
   }
   if (!agents.size) fail('Nenhum agente cadastrado.');
   for (const key of formats.keys()) if (!agents.has(key.split('/')[0])) fail(`Formato fora dos agentes: ${key}`);
+  for (const [target, source] of fallbacks) if (!agents.has(target) || !agents.has(source) || formats.get(`${target}/skills`) !== 'nenhum' || formats.get(`${source}/skills`) === 'nenhum') fail(`Fallback fora dos agentes: ${target}`);
   for (const root of discoveries) if (!agents.has(root)) fail(`Descoberta fora dos agentes: ${root}`);
   const managed = value => [...agents.keys()].some(agent => value.startsWith(agent + '/'));
   const built = buildCatalog(root);
@@ -287,7 +392,19 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
   }
   for (const [source, kind] of sources) {
     for (const [agent, mode] of agents) {
-      let path = resourcePath(source, kind, formats.get(`${agent}/${kind}`) || mode);
+      const format = formats.get(`${agent}/${kind}`) || mode;
+      if (format === 'nenhum') {
+        const primary = kind === 'skills' && fallbacks.get(agent);
+        if (!primary) continue;
+        const primaryFormat = formats.get(`${primary}/${kind}`) || agents.get(primary);
+        const primaryTarget = `${primary}/${resourcePath(source, kind, primaryFormat)}`;
+        if (!unavailable(primaryTarget)) continue;
+        const target = `${agent}/${resourcePath(source, kind, mode)}`;
+        if (unavailable(target)) fail(`Skill indisponivel: ${source}; caminhos ${primaryTarget} e ${target} obstruidos.`);
+        add(target, source);
+        continue;
+      }
+      let path = resourcePath(source, kind, format);
       if (agent === '.gemini' && kind === 'commands') path = path.replace(/\.md$/, '.toml');
       add(`${agent}/${path}`, source);
     }
@@ -385,7 +502,7 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
       const unchanged = current === null || priorHashes.includes(createHash('sha256').update(current).digest('hex'));
       if (!unchanged) { remember(manifest, 'edited-generated-file'); continue; }
       const nextHash = createHash('sha256').update(content).digest('hex');
-      if (installed?.files?.[manifest] !== nextHash) discoveryOutputs[manifest] = nextHash;
+      if (installed?.files?.[manifest] !== nextHash || Object.hasOwn(previousOutputs, manifest)) discoveryOutputs[manifest] = nextHash;
       if (!info || readFileSync(absolute(manifest), 'utf8') !== content) {
         if (info && force) backup.add(manifest);
         registries.set(manifest, content);
@@ -416,6 +533,10 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
       merged = mergeGitignore(current, patterns);
     }
     catch (error) { fail(`${target}: ${error.message}`); }
+    if (target !== '.pbai4devs/.gitignore') {
+      const start = merged.text.indexOf(ignoreBegin), finish = merged.text.indexOf(ignoreEnd);
+      if (start >= 0 && finish > start) managedBlocks[target] = createHash('sha256').update(merged.text.slice(start, finish + ignoreEnd.length)).digest('hex');
+    }
     if (merged.text !== current) {
       ignoreFiles.set(target, merged.text);
       if (force && info && merged.hasBlock) backup.add(target);
@@ -568,8 +689,11 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
   if (Object.keys(derivedBlocks).length) next.blocks = derivedBlocks;
   for (const path of Object.keys(managedBlocks)) removedBlocks.delete(path);
   if (removedBlocks.size) next.removedBlocks = sorted(removedBlocks);
-  const registryContent = JSON.stringify(next, null, 2) + '\n';
-  if (recordDerivedState && (Object.keys(nextEntries).length || Object.keys(discoveryOutputs).length || Object.keys(generatedFiles).length || Object.keys(derivedBlocks).length || removedBlocks.size || stat(safe(entryRegistry))) && (!stat(safe(entryRegistry)) || readFileSync(absolute(entryRegistry), 'utf8') !== registryContent)) registries.set(entryRegistry, registryContent);
+  for (const path of expected.keys()) delete effectiveRemovedFiles[path];
+  for (const path of remove) if (validResourcePath(path) && installed?.files?.[path] && !expected.has(path)) effectiveRemovedFiles[path] = installed.files[path];
+  if (Object.keys(effectiveRemovedFiles).length) next.removedFiles = Object.fromEntries(Object.entries(effectiveRemovedFiles).sort(([a], [b]) => compare(a, b)));
+  const registryContent = derivedContent(registryBytes, previousEntries, next);
+  if (recordDerivedState && (Object.keys(nextEntries).length || Object.keys(discoveryOutputs).length || Object.keys(generatedFiles).length || Object.keys(derivedBlocks).length || removedBlocks.size || Object.keys(effectiveRemovedFiles).length || stat(safe(entryRegistry))) && (!stat(safe(entryRegistry)) || readFileSync(absolute(entryRegistry), 'utf8') !== registryContent)) registries.set(entryRegistry, registryContent);
   const ownedOutputs = sorted([...targets, ...built.outputs.keys(), '.pbai4devs/espelhos.conf', ...rootEntries.keys(), ...(recordDerivedState && (stat(safe(entryRegistry)) || registries.has(entryRegistry)) ? [entryRegistry] : []),
     ...[...discoveries].flatMap(agent => ['skills', 'rules', 'agents'].map(kind => `${agent}/${kind}.json`)),
     ...[...ignoreTemplates.keys()].filter(target => {
@@ -633,6 +757,7 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
   const summary = { changed: changed.length + rootEntryChanges.length, stale: removals.length, conflicts: conflicts.size, missing: missing.length, legacy: legacy.length, registries: registries.size, gitignores: ignoreFiles.size, manifests: configExists ? 0 : 1, localIgnores: localStatus.changed + localStatus.missing.length + localStatus.trackedOutputs.length + (localStatus.status === 'no-git' ? 1 : 0) };
   const dirty = Object.values(summary).some(Boolean);
   output(`${summary.changed} desatualizadas; ${summary.stale} obsoletas; ${summary.conflicts} conflitos; ${summary.missing} origens nativas ausentes; ${summary.legacy} documentos antigos; ${summary.registries} indices derivados; ${summary.gitignores} gitignores; ${summary.localIgnores} exclusoes locais.`);
+  assertFallbackChecks();
   if (localStatus.status === 'no-git') output('Git ausente: apos git init, execute a sincronizacao para proteger os arquivos locais.');
   const preservedPaths = sorted(preserved.keys()).map(path => preserved.get(path));
   if (check) return { ...summary, ownedOutputs, managedBlocks, preserved: preservedPaths, exitCode: dirty ? 1 : 0 };
@@ -700,6 +825,7 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
     chmodSync(safe(value), content.mode);
   }
   try {
+    assertFallbackChecks();
     if (localPlan) assertLocalIgnoreUnchanged(localPlan);
     if (Object.keys(affectedHashes).length) {
       if (!assertGitReadableForChanges() && hadGit) fail('Git deixou de estar disponivel antes da sincronizacao; arquivos preservados.');
@@ -712,6 +838,7 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
     for (const [value, text] of ignoreFiles) mutate(value, () => atomic(value, text), text);
     for (const [value, text] of rootEntryChanges) mutate(value, () => atomic(value, text), text);
     if (configChanged) mutate(config, () => atomic(config, finalConfig), finalConfig);
+    assertFallbackChecks();
     // Directory ownership is not recorded: keep even empty parent directories.
     if (localPlan) applyLocalIgnore(localPlan);
   } catch (error) {

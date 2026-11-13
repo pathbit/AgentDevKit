@@ -79,9 +79,10 @@
       "name": "Codex",
       "root": ".codex",
       "formats": {
-        "skills": "agrupado"
+        "skills": "nenhum"
       },
-      "reason": "Skills agrupadas; a entrada nativa de projeto é .agents/skills. Outros recursos em .codex são referências, não registros de agentes.",
+      "skillFallback": ".agents",
+      "reason": "Skills usam apenas .agents/skills para evitar descoberta duplicada; os demais recursos em .codex são referências.",
       "sources": [
         "https://learn.chatgpt.com/docs/build-skills",
         "https://github.com/openai/codex/blob/392ced7d3a9160fd35d40c606359869215f50522/codex-rs/ext/skills/src/loader/host.rs"

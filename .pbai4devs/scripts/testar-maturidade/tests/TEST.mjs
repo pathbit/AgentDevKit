@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import childProcess, { spawnSync } from 'node:child_process';
+import { syncBuiltinESMExports } from 'node:module';
 import { createHash } from 'node:crypto';
 import test from 'node:test';
 import { projectRoot, requireNode } from '../../lib/runtime.mjs';
@@ -55,21 +56,61 @@ test('copia recursos e configurações, excluindo payloads, caches e segredos', 
   assert.deepEqual(result.roots, ['.pbai4devs', '.codex', '.github', '.agents', '.agent', '.gemini', '.vscode']);
 });
 
-test('regeneração preserva pastas alheias e recusa sobrescrevê-las', t => {
+test('destino explícito existente é recusado sem alterar projetos humanos ou gerados', t => {
   const { root, put, outputRoot } = fixture(t);
   put('examples/generated/anotacoes/keep.txt', 'preservado');
   put('examples/README.md', 'Guia humano.');
   const options = { sourceRoot: root, outputRoot, scenarios: [SCENARIOS[0]], initializeGit: false };
-  prepareExamples(options); prepareExamples(options);
+  assert.throws(() => prepareExamples(options), /saída já existe/);
   assert.equal(readFileSync(join(outputRoot, 'anotacoes/keep.txt'), 'utf8'), 'preservado');
   assert.equal(readFileSync(join(root, 'examples/README.md'), 'utf8'), 'Guia humano.');
-  put('examples/generated/descoberta/keep.txt', 'humano');
-  assert.throws(() => prepareExamples({ ...options, scenarios: [SCENARIOS[1]] }), /não é gerenciado/);
-  assert.equal(readFileSync(join(outputRoot, 'descoberta/keep.txt'), 'utf8'), 'humano');
-  assert.throws(() => prepareExamples({ ...options, scenarios: [{ ...SCENARIOS[0], id: '../outside' }] }), /IDs únicos e seguros/);
+  const output = join(outputRoot, 'nova-execucao');
+  const [example] = prepareExamples({ ...options, outputRoot: output });
+  writeFileSync(join(example.root, 'anotacao-humana.txt'), 'não apagar');
+  const report = readFileSync(join(output, 'REPORT.json'));
+  assert.throws(() => prepareExamples({ ...options, outputRoot: output, scenarios: [SCENARIOS[1]] }), /saída já existe/);
+  assert.throws(() => prepareExamples({ ...options, outputRoot: join(example.root, 'nova'), scenarios: [SCENARIOS[1]] }), /execução anterior/);
+  assert.deepEqual(readFileSync(join(output, 'REPORT.json')), report);
+  assert.equal(readFileSync(join(example.root, 'anotacao-humana.txt'), 'utf8'), 'não apagar');
+  assert.throws(() => prepareExamples({ ...options, outputRoot: join(outputRoot, 'invalid'), scenarios: [{ ...SCENARIOS[0], id: '../outside' }] }), /IDs únicos e seguros/);
+  assert.equal(existsSync(join(outputRoot, 'invalid')), false);
 });
 
-test('destino padrão redefine apenas relatório próprio e mantém resultados fora do Git', t => {
+test('troca de ancestral por symlink antes da criação não escreve no destino externo', t => {
+  const { root, outputRoot } = fixture(t);
+  const outside = mkdtempSync(join(dirname(root), 'maturity-outside-'));
+  t.after(() => rmSync(outside, { recursive: true, force: true }));
+  mkdirSync(outputRoot, { recursive: true });
+  const externalSentinel = join(outside, 'sentinel.txt');
+  writeFileSync(externalSentinel, 'externo preservado\n');
+  const linkProbe = join(root, 'probe-link');
+  try { symlinkSync(outside, linkProbe, process.platform === 'win32' ? 'junction' : 'dir'); }
+  catch (error) { if (['EPERM', 'EACCES'].includes(error.code)) { t.skip('Sem permissão para links simbólicos.'); return; } throw error; }
+  unlinkSync(linkProbe);
+  const canonical = realpathSync(outputRoot);
+  const original = childProcess.spawnSync;
+  let injected = false;
+  childProcess.spawnSync = function (file, args, options) {
+    if (!injected && file === process.execPath && args?.[0] === '-e' && options?.cwd === canonical) {
+      injected = true;
+      renameSync(outputRoot, `${outputRoot}-original`);
+      symlinkSync(outside, outputRoot, process.platform === 'win32' ? 'junction' : 'dir');
+    }
+    return original.call(this, file, args, options);
+  };
+  syncBuiltinESMExports();
+  try {
+    assert.throws(() => prepareExamples({ sourceRoot: root, outputRoot: join(outputRoot, 'nova'), scenarios: [SCENARIOS[0]], initializeGit: false }), /diretório exclusivo|ancestral|link simbólico/i);
+    assert.equal(injected, true);
+    assert.deepEqual(readdirSync(outside), ['sentinel.txt']);
+    assert.equal(readFileSync(externalSentinel, 'utf8'), 'externo preservado\n');
+  } finally {
+    childProcess.spawnSync = original;
+    syncBuiltinESMExports();
+  }
+});
+
+test('cada destino padrão é exclusivo, preserva provas anteriores e permanece ignorado', t => {
   const { root, outputRoot } = fixture(t);
   const git = (...args) => {
     const result = spawnSync('git', ['-C', root, ...args], { encoding: 'utf8', shell: false });
@@ -77,48 +118,58 @@ test('destino padrão redefine apenas relatório próprio e mantém resultados f
   };
   git('init', '--template=', '--quiet');
   const options = { sourceRoot: root, scenarios: [SCENARIOS[0]], initializeGit: false };
-  const examples = prepareExamples(options);
-  assert.equal(examples[0].root, join(outputRoot, SCENARIOS[0].id));
-  const reportFile = join(outputRoot, 'REPORT.json');
-  writeFileSync(reportFile, JSON.stringify({ owner: 'testar-maturidade', status: 'passed', results: [{ stale: true }] }));
-  prepareExamples(options);
-  assert.deepEqual(JSON.parse(readFileSync(reportFile)), { owner: 'testar-maturidade', version: 1,
-    status: 'prepared', scenarios: [SCENARIOS[0].id], results: [] });
-  assert.match(git('check-ignore', '--verbose', 'examples/generated/REPORT.json'), /examples\/generated\/\.gitignore:2:\*/);
-  assert.match(git('check-ignore', '--verbose', 'examples/generated/somente-agentes/README.md'), /examples\/generated\/\.gitignore:2:\*/);
-  const human = JSON.stringify({ owner: 'human', notes: 'preservar' });
-  writeFileSync(reportFile, human);
-  assert.throws(() => prepareExamples(options), /Relatório.*não pertence/);
-  assert.equal(readFileSync(reportFile, 'utf8'), human);
+  const [first] = prepareExamples(options);
+  const firstOutput = dirname(first.root);
+  assert.equal(dirname(firstOutput), outputRoot);
+  const human = 'Prova humana que não pode ser apagada.\n';
+  writeFileSync(join(first.root, 'human.txt'), human);
+  const reportFile = join(firstOutput, 'REPORT.json');
+  const oldReport = readFileSync(reportFile);
+  const [second] = prepareExamples(options);
+  assert.notEqual(dirname(second.root), firstOutput);
+  assert.equal(readFileSync(join(first.root, 'human.txt'), 'utf8'), human);
+  assert.deepEqual(readFileSync(reportFile), oldReport);
+  for (const file of [join(firstOutput, 'REPORT.json'), join(first.root, 'README.md'), join(second.root, 'README.md')]) {
+    git('check-ignore', '--quiet', '--', file);
+  }
 });
 
-test('preserva ignore humano e continua aceitando destinos legados', t => {
+test('preserva ignore humano em pastas ancestrais e aceita destinos novos permitidos', t => {
   const { root, put } = fixture(t);
   const options = { sourceRoot: root, scenarios: [SCENARIOS[0]], initializeGit: false };
   put('examples/generated/.gitignore', '!README.md\n');
-  assert.throws(() => prepareExamples(options), /Ignore.*não pertence/);
+  put('examples/generated/.maturity-suite.json', '{"owner":"testar-maturidade"}\n');
+  put('examples/generated/somente-agentes/.maturity-case.json', '{"owner":"testar-maturidade","id":"somente-agentes"}\n');
+  put('examples/generated/somente-agentes/anotacao.txt', 'Conteúdo humano anterior.\n');
+  put('examples/generated/REPORT.json', '{"resultado":"anterior"}\n');
+  const [generated] = prepareExamples(options);
+  assert.equal(dirname(dirname(generated.root)), join(root, 'examples/generated'));
   assert.equal(readFileSync(join(root, 'examples/generated/.gitignore'), 'utf8'), '!README.md\n');
-  for (const target of ['tmp/examples', '.agent-tests/cases']) {
+  assert.equal(readFileSync(join(root, 'examples/generated/somente-agentes/anotacao.txt'), 'utf8'), 'Conteúdo humano anterior.\n');
+  assert.equal(readFileSync(join(root, 'examples/generated/REPORT.json'), 'utf8'), '{"resultado":"anterior"}\n');
+  for (const target of ['tmp/examples/caso-novo', '.agent-tests/cases']) {
     const outputRoot = join(root, target);
     const [example] = prepareExamples({ ...options, outputRoot });
     assert.equal(example.root, join(outputRoot, SCENARIOS[0].id));
   }
 });
 
-test('preparação interrompida não conserva resultado anterior nem declara sucesso', t => {
+test('preparação interrompida não altera resultado anterior nem declara sucesso', t => {
   const { root, put, outputRoot } = fixture(t);
   const options = { sourceRoot: root, scenarios: [SCENARIOS[0]], initializeGit: false };
-  prepareExamples(options);
-  const report = join(outputRoot, 'REPORT.json');
-  const index = join(outputRoot, 'README.md');
-  writeFileSync(report, JSON.stringify({ owner: 'testar-maturidade', status: 'passed', results: [{}] }));
-  writeFileSync(index, readFileSync(index, 'utf8').replaceAll('prepared', 'passed'));
+  const [first] = prepareExamples(options);
+  const firstOutput = dirname(first.root);
+  const report = join(firstOutput, 'REPORT.json');
+  const previous = readFileSync(report);
   put('.pbai4devs/state/agentdevkit.json', JSON.stringify({ blocks: null }));
   assert.throws(() => prepareExamples(options), /Estado da instalação/);
-  assert.equal(existsSync(report), false);
+  assert.deepEqual(readFileSync(report), previous);
+  const failed = readdirSync(outputRoot).filter(name => join(outputRoot, name) !== firstOutput);
+  assert.equal(failed.length, 1);
+  const index = join(outputRoot, failed[0], 'README.md');
   assert.match(readFileSync(index, 'utf8'), /status: preparing/);
+  assert.equal(existsSync(join(outputRoot, failed[0], 'REPORT.json')), false);
   assert.doesNotMatch(readFileSync(index, 'utf8'), /status: passed|\| passed \|/);
-  assert.doesNotMatch(readFileSync(index, 'utf8'), /\n{3,}/);
 });
 
 test('usa entradas distribuídas do hub e mantém fallback legado', t => {
@@ -216,6 +267,38 @@ test('localiza apontamentos pelo formato de cada tipo e por overrides nativos', 
   ]);
 });
 
+test('respeita tipo sem espelho e o formato TOML nativo dos comandos Gemini', t => {
+  const { root, put } = fixture(t);
+  put('.pbai4devs/espelhos.conf', [
+    'agente|.agents|agrupado',
+    'agente|.codex|agrupado', 'formato|.codex|skills|nenhum',
+    'agente|.gemini|agrupado', 'formato|.gemini|commands|arquivo',
+  ].join('\n') + '\n');
+  const skill = resourceTargets(root, '.pbai4devs/skills/projeto/demo/SKILL.md');
+  assert.deepEqual(skill, ['.agents/skills/projeto/demo/SKILL.md', '.gemini/skills/projeto/demo/SKILL.md']);
+  assert.ok(!skill.some(target => target.startsWith('.codex/')));
+  const command = resourceTargets(root, '.pbai4devs/commands/projeto/demo/COMMAND.md', 'commands');
+  assert.ok(command.includes('.codex/commands/projeto/demo/COMMAND.md'));
+  assert.ok(command.includes('.gemini/commands/projeto/demo.toml'));
+  assert.ok(!command.includes('.gemini/commands/projeto/demo.md'));
+});
+
+test('identifica o fallback Codex apenas para a skill cuja rota primária está obstruída', t => {
+  const { root, put } = fixture(t);
+  put('.pbai4devs/espelhos.conf', [
+    'agente|.agents|agrupado', 'agente|.codex|agrupado',
+    'formato|.codex|skills|nenhum', 'fallback|.codex|.agents|skills',
+  ].join('\n') + '\n');
+  const blocked = '.pbai4devs/skills/projeto/demo/SKILL.md';
+  const available = '.pbai4devs/skills/projeto/outra/SKILL.md';
+  const target = join(root, '.agents/skills/projeto/demo/SKILL.md');
+  mkdirSync(target, { recursive: true });
+  assert.deepEqual(resourceTargets(root, blocked), ['.codex/skills/projeto/demo/SKILL.md']);
+  assert.deepEqual(resourceTargets(root, available), ['.agents/skills/projeto/outra/SKILL.md']);
+  rmSync(target, { recursive: true });
+  assert.deepEqual(resourceTargets(root, blocked), ['.agents/skills/projeto/demo/SKILL.md']);
+});
+
 test('checkout de fontes sem manifesto deriva clientes em memória', t => {
   const { root, put } = fixture(t);
   const manifest = join(root, '.pbai4devs/espelhos.conf');
@@ -275,6 +358,47 @@ test('oito cópias exercitam os seis níveis e preservam layouts legado/monorepo
   assert.ok(existsSync(join(monorepo.root, 'apps/painel com espaços/package.json')));
   assert.ok(existsSync(join(monorepo.root, 'packages/cálculo/package.json')));
   assert.equal(existsSync(join(monorepo.root, 'src')), false);
+});
+
+test('cenários configurados completam fixtures ausentes sem alterar a origem ou arquivos copiados', t => {
+  const { root, put, outputRoot } = fixture(t);
+  const files = ['.gitignore', '.gitattributes', '.editorconfig'];
+  const source = Object.fromEntries(files.map(file => [file, `# configuração própria de ${file}\n`]));
+  // As duas fontes ausentes reproduzem uma instalação distribuída; o arquivo
+  // existente prova que a preparação não substitui configurações copiadas.
+  rmSync(join(root, '.gitattributes'));
+  rmSync(join(root, '.editorconfig'));
+  put('.gitignore', source['.gitignore']);
+  const scenarios = SCENARIOS.filter(example => ['app-configurada', 'manutencao', 'app-inicial'].includes(example.id));
+  const examples = prepareExamples({ sourceRoot: root, outputRoot: join(outputRoot, 'parcial'), scenarios, initializeGit: false });
+  assert.equal(readFileSync(join(root, '.gitignore'), 'utf8'), source['.gitignore']);
+  for (const file of ['.gitattributes', '.editorconfig']) assert.equal(existsSync(join(root, file)), false, file);
+  for (const example of examples) {
+    assert.equal(readFileSync(join(example.root, '.gitignore'), 'utf8'), source['.gitignore']);
+    if (!example.configured) {
+      for (const file of ['.gitattributes', '.editorconfig']) assert.equal(existsSync(join(example.root, file)), false, file);
+      continue;
+    }
+    for (const file of ['.gitattributes', '.editorconfig']) assert.ok(readFileSync(join(example.root, file), 'utf8').trim(), file);
+    const inspected = spawnSync(process.execPath, ['.pbai4devs/scripts/inspecionar-projeto/SCRIPT.mjs', '--check'], { cwd: example.root, encoding: 'utf8' });
+    assert.ifError(inspected.error);
+    assert.equal(inspected.status, 0, inspected.stderr || inspected.stdout);
+    assert.equal(JSON.parse(inspected.stdout).contract.complete, true, example.id);
+  }
+  // Retest with every file absent, as in the released npm tarball.
+  rmSync(join(root, '.gitignore'));
+  const configured = scenarios.find(example => example.id === 'app-configurada');
+  const missing = prepareExamples({ sourceRoot: root, outputRoot: join(outputRoot, 'ausentes'), scenarios: [configured], initializeGit: false })[0];
+  for (const file of files) {
+    assert.equal(existsSync(join(root, file)), false, file);
+    assert.ok(readFileSync(join(missing.root, file), 'utf8').trim(), file);
+  }
+  for (const file of files) put(file, source[file]);
+  const preserved = prepareExamples({ sourceRoot: root, outputRoot: join(outputRoot, 'presentes'), scenarios: [configured], initializeGit: false })[0];
+  for (const file of files) {
+    assert.equal(readFileSync(join(root, file), 'utf8'), source[file]);
+    assert.equal(readFileSync(join(preserved.root, file), 'utf8'), source[file]);
+  }
 });
 
 test('fixtures padrão, legado e monorepo executam HTTP real e encerram', t => {

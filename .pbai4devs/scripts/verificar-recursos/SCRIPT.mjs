@@ -49,9 +49,20 @@ function ownership(root) {
   if (checkedStat(root, derivedFile)) {
     const derived = readState(derivedFile);
     if (derived?.schemaVersion !== 1 || !validMap(derived.entries) || Object.keys(derived.entries).some(path => !canonicalEntrypoint(path))
-      || !validMap(derived.files ?? {}) || !validMap(derived.blocks ?? {})
+      || !validMap(derived.files ?? {}) || !validMap(derived.blocks ?? {}) || !validMap(derived.removedFiles ?? {})
       || !Array.isArray(derived.removedBlocks ?? []) || (derived.removedBlocks ?? []).some(path => typeof path !== 'string')
       || !validMap(derived.outputs ?? {}) || Object.keys(derived.outputs ?? {}).some(path => !/^\.[a-z0-9][a-z0-9-]*\/(?:skills|rules|agents)\.json$/.test(path))) fail('Estado de entradas derivadas invalido.');
+    for (const [path, hash] of Object.entries(derived.removedFiles ?? {})) {
+      const [nativeRoot, scope] = path.split('/');
+      if (!/^\.[A-Za-z0-9][A-Za-z0-9._-]*$/.test(nativeRoot) || ['.git', '.pbai4devs', '.agent-tests'].includes(nativeRoot.toLowerCase())
+        || !scope || [...auxiliary, 'workflows'].includes(scope.toLowerCase()) || ['readme.md', 'instructions.md'].includes(basename(path).toLowerCase())
+        || !(/\.(?:md|mdc)$/i.test(path) || path.startsWith('.gemini/commands/') && path.endsWith('.toml'))) fail('Registro de arquivos removidos invalido.');
+      const location = checkedPath(root, path);
+      if (state.files[path] && state.files[path] !== hash) fail(`Registro de arquivos removidos divergente: ${path}`);
+      if (state.files[path] !== hash || derived.files?.[path] || derived.blocks?.[path] || derived.entries?.[path]) continue;
+      if (checkedStat(root, location)) fail(`Arquivo removido foi recriado; revise o conteúdo: ${path}`);
+      delete files[path];
+    }
     Object.assign(files, derived.entries, derived.outputs, derived.files);
     for (const [path, hash] of Object.entries({ ...derived.entries, ...derived.files })) {
       const location = checkedPath(root, path);

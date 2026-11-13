@@ -122,6 +122,36 @@ test('conteúdo humano concorrente não é apagado durante rollback', t => {
   assert.equal(fs.readFileSync(join(root, generated), 'utf8'), human);
 });
 
+test('falha ao registrar remoção derivada restaura fallback e preserva índice', t => {
+  const root = fixture(t), fallback = '.codex/skills/demo/SKILL.md';
+  write(root, '.pbai4devs/espelhos.conf', [
+    'agente|.agents|agrupado', 'agente|.codex|plano',
+    'formato|.codex|skills|nenhum', 'fallback|.codex|.agents|skills',
+  ].join('\n') + '\n');
+  write(root, '.agents/skills', 'obstrução humana');
+  write(root, '.gitignore', '# ignore humano\n');
+  assert.equal(spawnSync('git', ['-C', root, 'add', '.gitignore']).status, 0);
+  run(root);
+  const initial = fs.readFileSync(join(root, fallback));
+  write(root, '.pbai4devs/state/agentdevkit.json', JSON.stringify({ schemaVersion: 1, files: { [fallback]: hash(initial) }, blocks: {} }));
+  fs.rmSync(join(root, '.pbai4devs/state/derived.json'), { force: true });
+  fs.rmSync(join(root, '.agents/skills')); // A obstrução pertence à fixture.
+  const before = snapshot(root), index = fs.readFileSync(join(root, '.git/index'));
+  const originalRename = fs.renameSync;
+  let injected = false;
+  t.mock.method(fs, 'renameSync', (from, to) => {
+    if (!injected && to === join(root, '.pbai4devs/state/derived.json')) { injected = true; throw new Error('falha injetada no registro derivado'); }
+    return originalRename(from, to);
+  });
+  syncBuiltinESMExports();
+  t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
+  assert.throws(() => run(root), /falha injetada no registro derivado/);
+  assert.equal(injected, true);
+  assert.deepEqual(snapshot(root), before);
+  assert.deepEqual(fs.readFileSync(join(root, '.git/index')), index);
+  assert.deepEqual(fs.readFileSync(join(root, fallback)), initial);
+});
+
 test('conteúdo humano é preservado quando a escrita lança erro após promover o arquivo', t => {
   const root = fixture(t), rename = fs.renameSync;
   const failure = new Error('falha depois de promover');

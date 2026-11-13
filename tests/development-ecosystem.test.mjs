@@ -74,9 +74,10 @@ test('instala recursos de desenvolvimento nos clientes selecionados e preserva p
   for (const [group, skill] of skills) {
     const source = `.pbai4devs/skills/${group}/${skill}/SKILL.md`;
     assert.ok(existsSync(join(root, source)), source);
-    for (const pointer of [`.agents/skills/${group}/${skill}/SKILL.md`, `.codex/skills/${group}/${skill}/SKILL.md`, `.claude/skills/${skill}/SKILL.md`, `.github/skills/${skill}/SKILL.md`]) {
+    for (const pointer of [`.agents/skills/${group}/${skill}/SKILL.md`, `.claude/skills/${skill}/SKILL.md`, `.github/skills/${skill}/SKILL.md`]) {
       assert.ok(read(pointer).includes(source), `${pointer} deve apontar para ${source}`);
     }
+    assert.equal(existsSync(join(root, `.codex/skills/${group}/${skill}/SKILL.md`)), false);
   }
   for (const agent of agents) {
     const source = `.pbai4devs/agents/${agent}/AGENT.md`;

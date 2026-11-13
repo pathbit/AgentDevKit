@@ -92,6 +92,10 @@ test('CI que não termina interrompe a espera no prazo sem publicar', async () =
 
 test('limites dos jobs dão margem à espera do CI e aos dois registries', () => {
   const workflow = readFileSync(join(root, '.github/workflows/release.yml'), 'utf8');
+  const ci = readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8');
+  const ciMinutes = Number(ci.match(/timeout-minutes:\s*(\d+)/)?.[1]);
+  // O teste anterior verifica a espera real de 35 minutos do resolvedor.
+  assert.ok(ciMinutes > 0 && ciMinutes + 5 <= 35);
   const resolveJob = workflow.split('  resolve:\n')[1].split('\n  publish:')[0];
   const minutes = Number(resolveJob.match(/timeout-minutes:\s*(\d+)/)?.[1]);
   assert.ok(minutes >= 40);

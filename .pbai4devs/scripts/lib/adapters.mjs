@@ -6,15 +6,16 @@ import { isGeneratedOutput } from './gitignore.mjs';
 
 const policy = JSON.parse(readFileSync(new URL('../../templates/clients/ADAPTERS.json', import.meta.url), 'utf8'));
 const kinds = new Set(['skills', 'agents', 'commands', 'rules']);
-const layouts = new Set(['agrupado', 'plano', 'arquivo', 'mdc', 'agente', 'prompt', 'instrucoes']);
+const layouts = new Set(['agrupado', 'plano', 'arquivo', 'mdc', 'agente', 'prompt', 'instrucoes', 'nenhum']);
 const entryNames = new Set(['AGENTS.md', 'CLAUDE.md', 'GEMINI.md']);
 const safeRoot = value => typeof value === 'string' && /^\.[a-z0-9][a-z0-9-]*$/.test(value) && !['.git', '.pbai4devs', '.agent-tests'].includes(value);
 const stringList = value => Array.isArray(value) && value.every(item => typeof item === 'string');
 if (policy.schemaVersion !== 1 || !Array.isArray(policy.adapters) || !policy.adapters.length || !stringList(policy.entrypoints) || policy.entrypoints.some(name => !entryNames.has(name))) throw new Error('Politica de clientes invalida.');
 const ids = new Set(), roots = new Set(), aliases = {};
 for (const adapter of policy.adapters) {
-  if (!adapter || typeof adapter.id !== 'string' || !/^[a-z][a-z0-9-]*$/.test(adapter.id) || adapter.id === 'all' || ids.has(adapter.id) || typeof adapter.name !== 'string' || !safeRoot(adapter.root) || roots.has(adapter.root) || !adapter.formats || Object.entries(adapter.formats).some(([kind, layout]) => !kinds.has(kind) || !layouts.has(layout))) throw new Error('Adaptador invalido.');
+  if (!adapter || typeof adapter.id !== 'string' || !/^[a-z][a-z0-9-]*$/.test(adapter.id) || adapter.id === 'all' || ids.has(adapter.id) || typeof adapter.name !== 'string' || !safeRoot(adapter.root) || roots.has(adapter.root) || !adapter.formats || Object.entries(adapter.formats).some(([kind, layout]) => !kinds.has(kind) || !layouts.has(layout) || layout === 'nenhum' && kind !== 'skills')) throw new Error('Adaptador invalido.');
   if (/[\r\n]/.test(adapter.name) || typeof adapter.reason !== 'string' || /[\r\n]/.test(adapter.reason) || (adapter.discovery !== undefined && adapter.discovery !== 'antigravity')) throw new Error('Descricao ou descoberta de adaptador invalida.');
+  if (adapter.skillFallback !== undefined && (!safeRoot(adapter.skillFallback) || adapter.skillFallback === adapter.root || adapter.formats.skills !== 'nenhum')) throw new Error('Fallback de skills invalido.');
   for (const field of ['aliases', 'requires', 'extraRoots', 'entrypoints', 'sources']) if (!stringList(adapter[field])) throw new Error('Lista invalida no adaptador: ' + field);
   if (adapter.extraRoots.some(root => !safeRoot(root)) || adapter.entrypoints.some(name => !entryNames.has(name)) || adapter.sources.some(url => !url.startsWith('https://'))) throw new Error('Caminho ou fonte invalida no adaptador.');
   for (const field of ['agentMetadata', 'ruleMetadata']) if (adapter[field] !== undefined && !/^[a-z0-9-]+\.ya?ml$/.test(adapter[field])) throw new Error('Metadados invalidos no adaptador.');
@@ -22,6 +23,7 @@ for (const adapter of policy.adapters) {
 }
 for (const adapter of policy.adapters) {
   if (adapter.requires.some(id => !ids.has(id))) throw new Error('Dependencia de adaptador desconhecida.');
+  if (adapter.skillFallback && !policy.adapters.some(other => other.root === adapter.skillFallback && adapter.requires.includes(other.id))) throw new Error('Fallback exige cliente de origem.');
   for (const alias of adapter.aliases) {
     if (!/^[a-z][a-z0-9-]*$/.test(alias) || ids.has(alias) || alias === 'all' || Object.hasOwn(aliases, alias)) throw new Error('Alias de adaptador invalido.');
     aliases[alias] = adapter.id;
@@ -102,6 +104,7 @@ export function adapterManifest(root, { clients } = {}) {
   for (const adapter of selection.adapters) {
     rows.push(`# ${adapter.id}: ${adapter.reason}`, `agente|${adapter.root}|agrupado`);
     for (const [kind, mode] of Object.entries(adapter.formats)) rows.push(`formato|${adapter.root}|${kind}|${mode}`);
+    if (adapter.skillFallback) rows.push(`fallback|${adapter.root}|${adapter.skillFallback}|skills`);
     if (adapter.discovery) rows.push(`descoberta|${adapter.root}|${adapter.discovery}`);
     for (const [kind, key] of [['agents', 'agentMetadata'], ['rules', 'ruleMetadata']]) {
       if (!adapter[key]) continue;

@@ -913,6 +913,9 @@ test('formatos desconhecidos ou fora do cliente falham antes de mutar', t => {
   for (const row of [
     'formato|.missing|skills|agrupado', 'formato|.codex|unknown|agrupado',
     'formato|.codex|skills|mdc', 'formato|.codex|rules|prompt',
+    'formato|.codex|agents|nenhum', 'formato|.codex|commands|nenhum',
+    'fallback|.codex|.missing|skills', 'fallback|.codex|.codex|skills',
+    'fallback|.codex|.agents|rules',
     'formato|.codex|skills|plano\nformato|.codex|skills|agrupado',
     'descoberta|.codex|antigravity', 'descoberta|.agents|antigravity',
   ]) {
@@ -921,4 +924,23 @@ test('formatos desconhecidos ou fora do cliente falham antes de mutar', t => {
   }
   assert.equal(resourcePath('.pbai4devs/commands/team/check/COMMAND.md', 'commands', 'arquivo'), 'commands/team/check.md');
   assert.throws(() => resourcePath(source, 'skills', 'arquivo'), /Skills/);
+});
+
+test('sincronização direta recusa troca concorrente da obstrução de fallback', t => {
+  const root = fixture(t, true);
+  write(root, source, skill);
+  write(root, '.pbai4devs/espelhos.conf', [
+    'agente|.agents|agrupado', 'agente|.codex|agrupado',
+    'formato|.codex|skills|nenhum', 'fallback|.codex|.agents|skills',
+  ].join('\n') + '\n');
+  write(root, '.agents/skills/projeto', 'Obstrução humana.');
+  let called = false;
+  assert.throws(() => synchronize({ root, localIgnores: false, generateEntrypoints: false, output() {
+    if (called) return;
+    called = true;
+    rmSync(join(root, '.agents/skills/projeto')); // Simula mudança humana após o planejamento.
+  } }), /mudou apos o planejamento/);
+  assert.equal(called, true);
+  assert.equal(existsSync(join(root, '.codex')), false);
+  assert.equal(existsSync(join(root, '.agents/skills/projeto/demo/SKILL.md')), false);
 });

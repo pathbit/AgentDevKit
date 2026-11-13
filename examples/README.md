@@ -90,7 +90,8 @@ npm run examples
 npm run test:examples
 ```
 
-O primeiro comando prepara oito projetos; o segundo regenera e testa.
+O primeiro comando prepara oito projetos; o segundo prepara e testa outros
+oito em uma pasta nova. Cada comando informa o caminho da execução.
 Para executar apenas um cenário:
 
 ```sh
@@ -104,16 +105,17 @@ examples/
 ├── README.md                    guia versionado
 ├── .gitignore                   ignora generated/
 └── generated/                   saídas locais
-    ├── README.md                índice dos oito cenários
-    ├── REPORT.json              prepared, passed ou failed
-    └── somente-agentes/
-        ├── .pbai4devs/          recursos compartilhados
-        ├── .claude/             apontamentos do Claude
-        ├── .codex/              apontamentos do Codex
-        ├── .cursor/             apontamentos do Cursor
-        ├── .github/             apontamentos do Copilot
-        ├── .vscode/             configuração do editor
-        └── .opencode/           apontamentos do OpenCode
+    └── maturity-<id>/           uma execução independente
+        ├── README.md            índice dos cenários
+        ├── REPORT.json          prepared, passed ou failed
+        └── somente-agentes/
+            ├── .pbai4devs/      recursos compartilhados
+            ├── .claude/         apontamentos do Claude
+            ├── .codex/          apontamentos do Codex
+            ├── .cursor/         apontamentos do Cursor
+            ├── .github/         apontamentos do Copilot
+            ├── .vscode/         configuração do editor
+            └── .opencode/       apontamentos do OpenCode
 ```
 
 Com todos os clientes selecionados, também aparecem `.agents`, `.agent`,
@@ -131,9 +133,9 @@ As pastas são locais; os templates e assets do gerador são a fonte versionada.
 | legado | Layout e configurações preexistentes |
 | monorepo | Dois módulos e caminhos com espaços |
 
-Somente diretórios marcados pelo gerador são substituídos. Arquivos humanos
-da origem permanecem no lugar. Um novo `prepare` redefine o relatório para
-`prepared`, sem reutilizar resultados de uma execução anterior.
+Cada execução cria uma pasta própria e preserva projetos e relatórios anteriores,
+inclusive arquivos humanos adicionados a eles. Um destino explícito existente
+é recusado antes de qualquer alteração.
 
 Os testes exercitam scripts e APIs locais. Aprovações de produto e pareceres
 do gate são dados sintéticos; não comprovam revisão humana, Docker, interface
