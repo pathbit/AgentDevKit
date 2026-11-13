@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, delimiter, dirname, join, resolve } from 'node:path';
+import { delimiter, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 import { npmExecutable, releaseRoot, sha256 } from './assets.mjs';
 import { assertApprovedSource, githubRequest, verifyDistribution } from './publish.mjs';
 
@@ -89,9 +90,20 @@ function supportsOidc(value) {
   return major > 11 || major === 11 && (minor > 5 || minor === 5 && patch >= 1);
 }
 
+function npmCacheReader(npm) {
+  let cacache;
+  try { cacache = createRequire(npm)('cacache'); }
+  catch { invalid('O npm instalado não disponibiliza cacache para verificar o pacote.'); }
+  if (typeof cacache?.get?.byDigest !== 'function') invalid('O npm instalado não disponibiliza cacache para verificar o pacote.');
+  return async ({ cache, integrity }) => {
+    try { return await cacache.get.byDigest(join(cache, '_cacache'), integrity); }
+    catch { invalid('Não foi possível conferir o tarball baixado no cache do npm.'); }
+  };
+}
+
 export async function publishRegistryPackage({ directory, resolution, env = process.env,
   execute = spawnSync, sleep = pause, maxAttempts = 121, pollMs = 10000,
-  packageName = expectedName, request, target = 'npm' } = {}) {
+  packageName = expectedName, request, target = 'npm', readCache, cacheReaderFactory = npmCacheReader } = {}) {
   if (Number(process.versions.node.split('.')[0]) < 24) invalid('Use Node.js 24+.');
   if (typeof target !== 'string' || !Object.hasOwn(registries, target)) invalid('Registry não autorizado; use npm ou github.');
   const { registry, url } = registries[target];
@@ -106,6 +118,8 @@ export async function publishRegistryPackage({ directory, resolution, env = proc
     const isolated = isolatedEnvironment(env, temporary, registry);
     const consumerEnvironment = target === 'github' ? githubPackagesEnvironment(env, isolated, temporary, registry) : isolated;
     const npm = npmExecutable(env);
+    const cacheReader = readCache ?? cacheReaderFactory(npm);
+    if (typeof cacheReader !== 'function') invalid('O npm instalado não disponibiliza cacache para verificar o pacote.');
     const invoke = async (args, { cwd = temporary, cache, allowMissing = false, environment = consumerEnvironment } = {}) => {
       let result;
       try {
@@ -170,14 +184,10 @@ export async function publishRegistryPackage({ directory, resolution, env = proc
       if (attempt + 1 < maxAttempts) await sleep(pollMs);
     }
     if (!available) invalid(`${existing ? 'Pacote já registrado' : 'Publicação aceita'}; disponibilidade pendente para ${spec}. Confira o status no npm e consulte a mesma versão; não republique automaticamente.`);
-    const cacheArchiveDir = join(temporary, 'cache-verified');
-    mkdirSync(cacheArchiveDir);
-    const offlineConsumer = { ...consumerEnvironment, npm_config_offline: 'true', npm_config_prefer_online: 'false' };
-    const cached = json(await invoke(['pack', spec, '--offline', '--ignore-scripts', '--json', '--pack-destination', cacheArchiveDir], { cache: availabilityCache, environment: offlineConsumer }));
-    const cachedFile = cached?.[0]?.filename;
-    if (!Array.isArray(cached) || cached.length !== 1 || typeof cachedFile !== 'string' || basename(cachedFile) !== cachedFile || !/^[A-Za-z0-9][A-Za-z0-9._-]*\.tgz$/.test(cachedFile)) invalid('Tarball do cache inválido.');
-    const cachedPath = join(cacheArchiveDir, cachedFile), cachedStat = lstatSync(cachedPath);
-    if (!cachedStat.isFile() || cachedStat.isSymbolicLink() || sha256(readFileSync(cachedPath)) !== verified.manifest.sha256) invalid('Tarball baixado do registry diverge do artefato aprovado.');
+    const cached = await cacheReader({ cache: availabilityCache, integrity });
+    if (!Buffer.isBuffer(cached) || sha256(cached) !== verified.manifest.sha256) invalid('Tarball baixado do registry diverge do artefato aprovado.');
+    const cachedPath = join(temporary, 'registry-verified.tgz');
+    writeFileSync(cachedPath, cached, { flag: 'wx', mode: 0o600 });
     const githubPackage = target === 'github' ? await verifyGithubVisibility(api, resolution.repository) : null;
     const probe = join(temporary, 'probe');
     const consumer = join(temporary, 'consumer');
@@ -191,9 +201,10 @@ export async function publishRegistryPackage({ directory, resolution, env = proc
     for (const key of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_COMMON_DIR', 'GIT_INDEX_FILE']) delete gitEnv[key];
     const initialized = spawnSync('git', ['init', '--quiet', consumer], { cwd: probe, env: gitEnv, encoding: 'utf8', timeout: 30000, windowsHide: true });
     if (initialized.error || initialized.status !== 0) invalid('Não foi possível iniciar Git no projeto temporário da prova.');
+    const offlineConsumer = { ...isolated, npm_config_offline: 'true', npm_config_prefer_online: 'false' };
     const prove = async (command, args, label = command) => {
       const output = await invoke(['exec', '--yes', '--ignore-scripts', `--registry=${registry}`,
-        `--package=${spec}`, '--', 'agentdevkit', ...args, '--json'], { cwd: probe, cache, environment: offlineConsumer });
+        `--package=${cachedPath}`, '--', 'agentdevkit', ...args, '--json'], { cwd: probe, cache, environment: offlineConsumer });
       const reported = json(output);
       if (reported?.ok !== true || reported.command !== command || reported.version !== resolution.version) invalid(`A prova ${label} pelo npm exec não confirmou o artefato.`);
       assertArchive();
