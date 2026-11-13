@@ -47,6 +47,8 @@ export function executeNode(root, args, env = process.env) {
 export const portableProfiles = Object.freeze({
   'portable-cli': Object.freeze(['cli.test.mjs', 'adapters.test.mjs', 'development-ecosystem.test.mjs', 'security-ecosystem.test.mjs', 'file-modes.test.mjs']),
   'portable-selection': Object.freeze(['client-selection.test.mjs']),
+  'portable-selection-codex': Object.freeze(['client-selection-obstructions-codex.test.mjs']),
+  'portable-selection-all': Object.freeze(['client-selection-obstructions-all.test.mjs']),
   'portable-projects': Object.freeze(['client-ignore.test.mjs', 'native-coexistence.test.mjs', 'oss-preservation.test.mjs']),
   'portable-migration': Object.freeze(['state-migration.test.mjs', 'preservation-lifecycle.test.mjs']),
   'portable-resources': Object.freeze(['documentation-compatibility.test.mjs', 'github-packages.test.mjs', 'next.test.mjs', 'managed-content.test.mjs', 'managed-content-helper.test.mjs', 'managed-toml.test.mjs', 'managed-preservation.test.mjs', 'release-pipeline.test.mjs', 'release-resilience.test.mjs', 'resource-coverage.test.mjs']),
@@ -75,13 +77,17 @@ export function verifyPortableClassification(files, { profiles = portableProfile
   }
 }
 
-// Run the installation-heavy selection suite separately to avoid I/O contention
-// with other project fixtures. Every remaining suite is still run exactly once.
+// Isolate installation-heavy selection suites from the other project fixtures.
+// Each suite remains classified and is executed exactly once.
 export function fullTestGroups(files) {
   const names = files.filter(name => name.endsWith('.test.mjs') && name !== 'distribution.test.mjs').sort();
-  const selection = 'client-selection.test.mjs';
-  if (!names.includes(selection)) throw new Error('Suíte de seleção ausente do perfil completo.');
-  return [[selection], names.filter(name => name !== selection)];
+  const selection = [
+    'client-selection.test.mjs',
+    'client-selection-obstructions-codex.test.mjs',
+    'client-selection-obstructions-all.test.mjs',
+  ];
+  if (selection.some(name => !names.includes(name))) throw new Error('Suíte de seleção ausente do perfil completo.');
+  return [selection, names.filter(name => !selection.includes(name))];
 }
 
 export function markVerified(directory, env = process.env) {

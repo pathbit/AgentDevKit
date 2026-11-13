@@ -1,29 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, symlinkSync } from 'node:fs';
+import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { main, parseArgs } from '../src/cli.mjs';
 import { applyPlan, inspect, planInstallation } from '../src/install.mjs';
 
-const project = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const bin = join(project, 'bin/agentdevkit.mjs');
-const statePath = '.pbai4devs/state/agentdevkit.json';
-function fixture(t) {
-  mkdirSync(join(project, '.agent-tests'), { recursive: true });
-  const root = mkdtempSync(join(project, '.agent-tests/client-selection-'));
-  assert.equal(spawnSync('git', ['init', '--quiet', root]).status, 0);
-  t.after(() => rmSync(root, { recursive: true, force: true })); return root;
-}
-const read = (root, path) => readFileSync(join(root, path), 'utf8');
-const state = root => JSON.parse(read(root, statePath));
-function put(root, path, value) { mkdirSync(dirname(join(root, path)), { recursive: true }); writeFileSync(join(root, path), value); }
-function cli(root, args, status = 0) {
-  const result = spawnSync(process.execPath, [bin, ...args, '--target', root, '--json'], { encoding: 'utf8', timeout: 180000 });
-  assert.equal(result.status, status, `agentdevkit ${args.join(' ')}: ${result.error?.stack || ''}\nsignal: ${result.signal || 'none'}\n${result.stdout || ''}${result.stderr || ''}`); return JSON.parse(result.stdout);
-}
+import { fixture, read, state, statePath, put, cli } from './fixtures/client-selection-helpers.mjs';
 
 test('seleção valida aliases e entradas antes de escrever; consulta é somente leitura', t => {
   assert.deepEqual(parseArgs(['init', '--agents', 'CODEX,claude-code,codex']).clients, ['claude', 'codex']);
@@ -112,79 +96,6 @@ test('Codex usa uma única rota de skills e migra somente apontamentos próprios
   });
 });
 
-test('Codex preserva obstruções e usa fallback apenas nas skills afetadas', async t => {
-  for (const selection of ['codex', 'all']) for (const kind of ['root-link', 'skills-file', 'group-file', 'leaf-link', 'leaf-directory']) await t.test(`${selection}/${kind}`, t => {
-    const root = fixture(t);
-    const git = (...args) => {
-      const result = spawnSync('git', ['-C', root, ...args], { encoding: 'utf8' });
-      assert.equal(result.status, 0, result.stderr);
-      return result.stdout;
-    };
-    put(root, '.gitignore', '# project\nnode_modules/\n');
-    put(root, 'human.txt', 'staged\n');
-    git('add', '--', '.gitignore', 'human.txt');
-    put(root, 'human.txt', 'working\n');
-    const outside = join(root, 'outside');
-    const primary = '.agents/skills/qualidade/planejar-qa/SKILL.md';
-    const fallback = '.codex/skills/qualidade/planejar-qa/SKILL.md';
-    const unaffectedPrimary = '.agents/skills/projeto/criar-skill/SKILL.md';
-    const unaffectedFallback = '.codex/skills/projeto/criar-skill/SKILL.md';
-    let obstacle;
-    if (kind === 'root-link' || kind === 'leaf-link') {
-      obstacle = kind === 'root-link' ? '.agents' : primary;
-      mkdirSync(outside, { recursive: true });
-      put(root, 'outside/keep.txt', 'external human\n');
-      mkdirSync(dirname(join(root, obstacle)), { recursive: true });
-      try { symlinkSync(kind === 'root-link' ? outside : join(outside, 'keep.txt'), join(root, obstacle), kind === 'root-link' ? 'dir' : 'file'); }
-      catch (error) { if (['EPERM', 'EACCES'].includes(error.code)) { t.skip('No symlink privilege'); return; } throw error; }
-    } else if (kind === 'leaf-directory') {
-      obstacle = primary;
-      mkdirSync(join(root, obstacle), { recursive: true });
-      put(root, `${obstacle}/human.txt`, 'human directory\n');
-    } else {
-      obstacle = kind === 'skills-file' ? '.agents/skills' : '.agents/skills/qualidade';
-      put(root, obstacle, 'human obstruction\n');
-    }
-    const beforeIndex = readFileSync(join(root, '.git/index'));
-    const beforeIgnore = read(root, '.gitignore');
-    const installed = cli(root, ['init', '--agents', selection]);
-    assert.ok(installed.preserved.some(item => item.path === obstacle));
-    assert.ok(existsSync(join(root, fallback)), 'skill afetada deve ter fallback');
-    if (!['root-link', 'skills-file'].includes(kind)) {
-      assert.ok(existsSync(join(root, unaffectedPrimary)), 'skill sem obstrução fica na rota nativa');
-      assert.equal(existsSync(join(root, unaffectedFallback)), false, 'skill sem obstrução não deve duplicar');
-    }
-    assert.equal(read(root, 'human.txt'), 'working\n');
-    assert.equal(git('show', ':human.txt'), 'staged\n');
-    assert.deepEqual(readFileSync(join(root, '.git/index')), beforeIndex);
-    assert.equal(read(root, '.gitignore'), beforeIgnore);
-    if (kind === 'root-link' || kind === 'leaf-link') assert.equal(read(root, 'outside/keep.txt'), 'external human\n');
-    if (kind === 'leaf-directory') assert.equal(read(root, `${obstacle}/human.txt`), 'human directory\n');
-    if (kind === 'skills-file' || kind === 'group-file') assert.equal(read(root, obstacle), 'human obstruction\n');
-    assert.equal(cli(root, ['doctor']).ok, true);
-    assert.equal(cli(root, ['sync', '--check']).ok, true);
-    rmSync(join(root, obstacle), { recursive: true, force: true }); // Test-owned fixture only.
-    const syncScript = join(root, '.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs');
-    for (const args of [[], [], ['--check']]) {
-      const result = spawnSync(process.execPath, [syncScript, ...args], { cwd: root, encoding: 'utf8', timeout: 180000 });
-      assert.equal(result.status, 0, result.stderr || result.stdout);
-    }
-    assert.equal(cli(root, ['doctor']).ok, true, 'doctor deve reconhecer as alterações do sincronizador standalone');
-    const verifier = spawnSync(process.execPath, [join(root, '.pbai4devs/scripts/verificar-recursos/SCRIPT.mjs')], { cwd: root, encoding: 'utf8', timeout: 180000 });
-    assert.equal(verifier.status, 0, verifier.stderr || verifier.stdout);
-    cli(root, ['update']);
-    assert.ok(existsSync(join(root, primary)), 'rota nativa volta quando a obstrução é removida');
-    assert.equal(existsSync(join(root, fallback)), false, 'fallback intacto é removido após recuperação');
-    assert.equal(cli(root, ['update', '--dry-run']).plan.length, 0);
-    assert.equal(cli(root, ['doctor']).ok, true);
-    const checkedAgain = spawnSync(process.execPath, [syncScript, '--check'], { cwd: root, encoding: 'utf8', timeout: 180000 });
-    assert.equal(checkedAgain.status, 0, checkedAgain.stderr || checkedAgain.stdout);
-    const verifiedAgain = spawnSync(process.execPath, [join(root, '.pbai4devs/scripts/verificar-recursos/SCRIPT.mjs')], { cwd: root, encoding: 'utf8', timeout: 180000 });
-    assert.equal(verifiedAgain.status, 0, verifiedAgain.stderr || verifiedAgain.stdout);
-    assert.deepEqual(readFileSync(join(root, '.git/index')), beforeIndex);
-    assert.equal(read(root, '.gitignore'), beforeIgnore);
-  });
-});
 
 test('Codex falha sem alterar o projeto se as duas rotas estiverem obstruídas', t => {
   const root = fixture(t);

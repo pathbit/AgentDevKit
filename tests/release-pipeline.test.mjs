@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { npmExecutable, sha256 } from '../scripts/release/assets.mjs';
 import { executeNode, fullTestGroups, guardSourceOnlyGit, markVerified, nodeProcessTimeoutMs, portableProfiles, runPipeline, verifyPortableClassification } from '../scripts/release/pipeline.mjs';
 import { assertApprovedSource, githubRequest, publishVerifiedPackage, releaseTag, resolveVerifiedPackage, verifyDistribution } from '../scripts/release/publish.mjs';
+import { obstructionKinds } from './fixtures/client-selection-obstructions.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const repository = 'pathbit/AgentDevKit', commit = 'a'.repeat(40), version = '1.2.3';
@@ -86,9 +87,11 @@ test('check Git distingue fontes de saídas e não gera arquivos no checkout', t
 
 test('perfis portáteis cobrem cada suíte uma vez e o comando local executa todos', () => {
   assert.deepEqual(portableProfiles['portable-selection'], ['client-selection.test.mjs']);
+  assert.deepEqual(portableProfiles['portable-selection-codex'], ['client-selection-obstructions-codex.test.mjs']);
+  assert.deepEqual(portableProfiles['portable-selection-all'], ['client-selection-obstructions-all.test.mjs']);
   assert.deepEqual(portableProfiles['portable-projects'], ['client-ignore.test.mjs', 'native-coexistence.test.mjs', 'oss-preservation.test.mjs']);
   assert.deepEqual(portableProfiles['portable-migration'], ['state-migration.test.mjs', 'preservation-lifecycle.test.mjs']);
-  const expected = ['adapters.test.mjs', 'cli.test.mjs', 'client-selection.test.mjs', 'client-ignore.test.mjs', 'development-ecosystem.test.mjs', 'documentation-compatibility.test.mjs', 'github-packages.test.mjs', 'native-coexistence.test.mjs', 'next.test.mjs', 'managed-content.test.mjs', 'managed-content-helper.test.mjs', 'managed-toml.test.mjs', 'managed-preservation.test.mjs', 'security-ecosystem.test.mjs', 'source-layout.test.mjs', 'state-migration.test.mjs', 'preservation-lifecycle.test.mjs', 'file-modes.test.mjs', 'oss-preservation.test.mjs', 'release-pipeline.test.mjs', 'release-resilience.test.mjs', 'resource-coverage.test.mjs'].sort();
+  const expected = ['adapters.test.mjs', 'cli.test.mjs', 'client-selection.test.mjs', 'client-selection-obstructions-codex.test.mjs', 'client-selection-obstructions-all.test.mjs', 'client-ignore.test.mjs', 'development-ecosystem.test.mjs', 'documentation-compatibility.test.mjs', 'github-packages.test.mjs', 'native-coexistence.test.mjs', 'next.test.mjs', 'managed-content.test.mjs', 'managed-content-helper.test.mjs', 'managed-toml.test.mjs', 'managed-preservation.test.mjs', 'security-ecosystem.test.mjs', 'source-layout.test.mjs', 'state-migration.test.mjs', 'preservation-lifecycle.test.mjs', 'file-modes.test.mjs', 'oss-preservation.test.mjs', 'release-pipeline.test.mjs', 'release-resilience.test.mjs', 'resource-coverage.test.mjs'].sort();
   const combined = Object.values(portableProfiles).flat();
   assert.equal(new Set(combined).size, combined.length);
   assert.deepEqual(combined.toSorted(), expected);
@@ -125,17 +128,26 @@ test('classificação exige justificar cada suíte e detecta ausências e duplic
 test('perfil completo isola a seleção e executa todas as demais suítes uma vez', () => {
   const files = readdirSync(join(root, 'tests'));
   const groups = fullTestGroups(files);
-  assert.deepEqual(groups[0], ['client-selection.test.mjs']);
+  assert.deepEqual(groups[0], ['client-selection.test.mjs', 'client-selection-obstructions-codex.test.mjs', 'client-selection-obstructions-all.test.mjs']);
   const expected = files.filter(name => name.endsWith('.test.mjs') && name !== 'distribution.test.mjs').sort();
   assert.deepEqual(groups.flat().sort(), expected);
   assert.equal(new Set(groups.flat()).size, expected.length);
   assert.throws(() => fullTestGroups(files.filter(name => name !== 'client-selection.test.mjs')), /seleção ausente/);
+  for (const file of groups[0]) assert.throws(() => fullTestGroups(files.filter(name => name !== file)), /seleção ausente/);
   const calls = [], failure = new Error('falha do segundo grupo');
   assert.throws(() => runPipeline('full', { root, run(_root, args) {
     calls.push(args);
     if (calls.length === 2) throw failure;
   } }), error => error === failure);
   assert.deepEqual(calls, groups.map(group => ['--test', '--test-concurrency=4', ...group.map(file => `tests/${file}`)]));
+});
+
+test('as suítes de obstrução cobrem as duas seleções e os cinco casos', () => {
+  assert.deepEqual(obstructionKinds, ['root-link', 'skills-file', 'group-file', 'leaf-link', 'leaf-directory']);
+  for (const selection of ['codex', 'all']) {
+    const file = join(root, `tests/client-selection-obstructions-${selection}.test.mjs`);
+    assert.match(readFileSync(file, 'utf8'), new RegExp(`registerObstructionTests\\('${selection}'\\)`));
+  }
 });
 
 test('matriz roda cada grupo portátil exatamente uma vez em cada SO e falhas bloqueiam o CI', () => {

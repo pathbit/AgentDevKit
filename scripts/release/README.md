@@ -12,9 +12,11 @@ autenticação por host e links para instalação e pré-requisitos.
 
 `pipeline.mjs full` verifica produto, infraestrutura, Markdown e o tarball
 exato uma vez. `portable` executa todos os grupos de portabilidade localmente;
-no CI, `portable-cli`, `portable-selection`, `portable-projects`,
-`portable-migration`, `portable-resources` e `portable-layout` rodam em jobs
-separados no Windows e no macOS. `smoke` verifica compatibilidade com Node 26.
+no CI, `portable-cli`, `portable-selection`, `portable-selection-codex`,
+`portable-selection-all`, `portable-projects`, `portable-migration`,
+`portable-resources` e `portable-layout` rodam em jobs separados no Windows e
+no macOS. Os dois grupos de obstruções testam cinco cenários por seleção;
+o perfil completo executa todas as suítes. `smoke` verifica Node 26.
 `check` confere os recursos.
 
 `publish.mjs resolve` localiza um CI de push aprovado do mesmo commit da tag.
