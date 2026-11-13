@@ -128,7 +128,9 @@ export async function publishRegistryPackage({ directory, resolution, env = proc
       if (sha256(readFileSync(archivePath)) !== verified.manifest.sha256) invalid('O tarball mudou durante a publicação.');
     };
     // --dry-run inspects the approved tgz; it does not create another package.
-    const inspected = json(await invoke(['pack', archivePath, '--dry-run', '--ignore-scripts', '--json'], { environment: isolated }));
+    const inspected = json(await invoke(['pack', archivePath, '--dry-run', '--ignore-scripts', '--json'], {
+      environment: { ...isolated, npm_config_offline: 'true' },
+    }));
     if (!Array.isArray(inspected) || inspected.length !== 1 || inspected[0].name !== packageName
       || inspected[0].version !== resolution.version || !sameIntegrity(inspected[0].integrity, integrity)) invalid('Nome, versão ou integridade interna do tarball inválidos.');
     assertArchive();

@@ -397,6 +397,7 @@ test('inspeção real preserva TGZ antigo e atual sem presumir o caminho do exec
         assert.match(dryRun.stderr, /Publishing to https:\/\/registry\.npmjs\.org/);
         assert.doesNotMatch(dryRun.stderr, /Publishing to https:\/\/npm\.pkg\.github\.com/);
       }
+      assert.equal(config.env.npm_config_offline, 'true');
       return spawnSync(command, args, config);
     };
     assert.equal((await publishRegistryPackage(m.options)).status, 'skipped');
