@@ -4,6 +4,11 @@ description: Alterações verificáveis por versão do AgentDevKit.
 
 # Changelog
 
+## 0.0.20 — 2026-11-13
+
+- Atualização da ferramenta agent-browser compatível com sua distribuição atual.
+- Orientações para consultar e recuperar versões pelas tags publicadas.
+
 ## 0.0.19 — 2026-11-13
 
 - Pastas dos clientes são ignoradas localmente por padrão, com exceções do projeto.

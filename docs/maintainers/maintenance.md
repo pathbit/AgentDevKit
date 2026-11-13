@@ -85,6 +85,28 @@ Também envia o mesmo pacote ao [npm público e GitHub Packages](packages.md),
 confere a integridade nos dois destinos e testa versão, instalação, diagnóstico
 e sincronização. O consumo pelo npm é anônimo; pelo GitHub, autenticado.
 
+A tag é a origem da publicação: `v0.0.19`, a release `v0.0.19` e os pacotes
+`0.0.19` apontam para a mesma entrega. A execução manual também exige a tag;
+não crie outra tag para uma versão nem mova uma tag já publicada.
+
+Para consultar o código de uma versão sem trocar os arquivos atuais:
+
+```console
+git fetch --tags
+git worktree add --detach ../AgentDevKit-v0.0.19 v0.0.19
+```
+
+Em um projeto atendido, fixe a versão desejada do pacote e revise o plano antes
+de aplicá-la:
+
+```console
+npx @pathbit/agentdevkit@0.0.19 update --dry-run --json
+```
+
+O comando usa aquela versão do kit; não reverte automaticamente o histórico
+Git nem arquivos próprios do projeto. Confira os conflitos e faça backup antes
+de aplicar uma versão anterior.
+
 Se o artifact expirou ou um job do CI falhou, use **Re-run all jobs** no CI
 original do push e aguarde todos os jobs. **Re-run failed jobs** pode manter o
 pacote de uma tentativa anterior, que a release não aceita. Depois reexecute

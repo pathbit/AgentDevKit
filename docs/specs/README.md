@@ -26,6 +26,7 @@ description: Incrementos verificáveis do AgentDevKit.
 - [Compatibilidade com projetos reais][oss]: projetos públicos e exemplos reproduzíveis.
 - [Ignore do projeto](project-ignore/SPEC.md): preservar o arquivo da raiz.
 - [Ignore de clientes](client-ignore/SPEC.md): padrão local e exceções do projeto.
+- [Ferramenta e versões](tool-release/SPEC.md): atualização segura e tags de release.
 
 Cada incremento vincula requisitos, critérios, testes e evidências locais.
 

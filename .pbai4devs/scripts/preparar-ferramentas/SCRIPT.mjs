@@ -49,6 +49,20 @@ export function validateToolConfig(name, value) {
       }
     }
   }
+  if (value.optionalExecutables !== undefined) {
+    if (download.provider !== 'npm' || !value.optionalExecutables || typeof value.optionalExecutables !== 'object' || Array.isArray(value.optionalExecutables) || !Object.keys(value.optionalExecutables).length) fail(`Mapa de executaveis opcionais invalido: ${name}`);
+    for (const [platform, files] of Object.entries(value.optionalExecutables)) {
+      if (!value.platforms.includes(platform) || !Array.isArray(files) || !files.length) fail(`Plataforma de executaveis opcionais invalida: ${name}/${platform}`);
+      const seen = new Set();
+      for (const item of files) {
+        if (!item || typeof item !== 'object' || Array.isArray(item) || Object.keys(item).sort().join(',') !== 'file,package'
+          || !/^(?:@[a-z0-9._-]+\/)?[a-z0-9._-]+$/.test(item.package || '') || seen.has(item.package)
+          || typeof item.file !== 'string' || !item.file || item.file.includes('\0') || item.file.includes('\\') || item.file.includes(':')
+          || item.file.split('/').some(part => !part || part === '.' || part === '..')) fail(`Executavel opcional deve ser relativo ao pacote: ${name}`);
+        seen.add(item.package);
+      }
+    }
+  }
   if (value.scripts?.entry !== 'SCRIPT.mjs' || Object.keys(value.scripts).length !== 1) fail(`Script invalido; use scripts.entry=SCRIPT.mjs: ${name}`);
   if (value.nodeMinimum !== undefined) fail(`nodeMinimum foi substituido pelo requisito comum Node >=24: ${name}`);
   const environmentKeys = new Set();
@@ -162,7 +176,7 @@ export function binaryInvocation(prefix, name, args = [], binaryName = name.spli
   if (typeof bin !== 'string' || !bin || bin.includes('\0')) fail(`Executavel ausente ou invalido: ${name}`);
   const binary = resolve(base, bin); const traversal = relative(base, binary);
   if (isAbsolute(traversal) || traversal === '..' || traversal.startsWith('..' + (process.platform === 'win32' ? '\\' : '/'))) fail('Executavel fora do pacote.');
-  const resolved = relative(prefix, realpathSync(binary));
+  const resolved = relative(realpathSync(prefix), realpathSync(binary));
   if (isAbsolute(resolved) || resolved === '..' || resolved.startsWith('..' + (process.platform === 'win32' ? '\\' : '/'))) fail('Executavel fora da instalacao local.');
   const header = Buffer.alloc(128); const handle = openSync(binary, 'r');
   try { readSync(handle, header, 0, header.length, 0); } finally { closeSync(handle); }
@@ -203,25 +217,57 @@ function execute(prefix, entry, args, capture = false, input, environment, runti
   return result.status ?? 1;
 }
 
-function prepareExecutables(prefix, entry, platform) {
-  const files = entry.executables?.[platform];
-  if (!files || process.platform === 'win32') return;
+async function prepareExecutables(prefix, entry, platform, pkg, lock, fetchOptional) {
+  const files = entry.executables?.[platform] || [];
+  const optional = entry.optionalExecutables?.[platform] || [];
+  if (!files.length && !optional.length) return;
   const within = (base, file) => { const child = relative(base, file); return !isAbsolute(child) && child !== '..' && !child.startsWith(`..${sep}`); };
   const stage = realpathSync(prefix);
   const packageRoot = realpathSync(join(prefix, 'node_modules', entry.download.package));
   if (!within(stage, packageRoot)) fail(`Pacote fora do staging: ${entry.name}`);
-  const targets = files.map(file => {
-    const target = realpathSync(join(packageRoot, file));
-    if (!within(packageRoot, target)) fail(`Executavel fora do pacote: ${entry.name}/${file}`);
+  const declared = optional.filter(item => Object.hasOwn(pkg.optionalDependencies || {}, item.package));
+  const targets = [];
+  const collect = (base, file, label) => {
+    const target = realpathSync(join(base, file));
+    if (!within(base, target)) fail(`Executavel fora do pacote: ${label}`);
     const info = lstatSync(target);
-    if (!info.isFile()) fail(`Executavel nao e arquivo regular: ${entry.name}/${file}`);
-    return { target, mode: (info.mode & 0o777) | 0o111 };
-  });
-  for (const { target, mode } of targets) chmodSync(target, mode);
+    if (!info.isFile()) fail(`Executavel nao e arquivo regular: ${label}`);
+    targets.push({ target, mode: (info.mode & 0o777) | 0o111 });
+  };
+  // Older releases contain all of their binaries in the main package. Newer
+  // releases declare a host package; inspect every legacy file that exists so
+  // the upstream launcher cannot prefer an unchecked file over that package.
+  for (const file of files) {
+    let exists = false;
+    try { lstatSync(join(packageRoot, file)); exists = true; } catch (error) { if (error.code !== 'ENOENT') throw error; }
+    if (exists || !declared.length) collect(packageRoot, file, `${entry.name}/${file}`);
+  }
+  if (declared.length) {
+    let installed = 0;
+    for (const item of declared) {
+      const version = pkg.optionalDependencies[item.package];
+      if (!versionPattern.test(version || '')) fail(`Versao de executavel opcional invalida: ${item.package}`);
+      const directory = sourcePath(prefix, join('node_modules', item.package));
+      try { lstatSync(directory); } catch (error) { if (error.code === 'ENOENT') continue; throw error; }
+      const optionalRoot = realpathSync(directory);
+      if (!within(realpathSync(join(prefix, 'node_modules')), optionalRoot)) fail(`Pacote opcional fora de node_modules: ${item.package}`);
+      const manifest = json(join(optionalRoot, 'package.json'));
+      const record = lock.packages?.[`node_modules/${item.package}`];
+      const official = await fetchOptional(item.package, version);
+      const tarball = new URL(official.dist?.tarball);
+      if (official.name !== item.package || official.version !== version || tarball.origin !== registry.slice(0, -1)
+        || !decodeURIComponent(tarball.pathname).startsWith(`/${item.package}/-/`) || tarball.search || tarball.hash
+        || !official.dist?.integrity?.startsWith('sha512-') || manifest.name !== item.package || manifest.version !== version
+        || record?.version !== version || record.integrity !== official.dist.integrity || record.resolved !== official.dist.tarball) fail(`Pacote opcional instalado nao corresponde ao registro oficial: ${item.package}`);
+      collect(optionalRoot, item.file, `${item.package}/${item.file}`); installed++;
+    }
+    if (!installed) fail(`Executavel opcional ausente para ${entry.name}/${platform}; instale as dependencias opcionais.`);
+  }
+  if (process.platform !== 'win32') for (const { target, mode } of targets) chmodSync(target, mode);
 }
 
 export class ToolManager {
-  constructor({ root = projectRoot, catalog, fetchRelease, install, npm = npmCli, nodeVersion = process.versions.node, platform = process.platform, arch = process.arch } = {}) {
+  constructor({ root = projectRoot, catalog, fetchRelease, fetchOptional, install, npm = npmCli, nodeVersion = process.versions.node, platform = process.platform, arch = process.arch } = {}) {
     this.root = resolve(root); this.home = join(this.root, '.pbai4devs/tools'); this.target = `${platform}-${arch}`;
     this.nodeVersion = nodeVersion; this.npm = npm;
     this.catalog = catalog ?? loadCatalog(this.root);
@@ -232,11 +278,19 @@ export class ToolManager {
       if (!response.ok) fail(`Registro indisponivel: HTTP ${response.status}`);
       return response.json();
     });
+    this.fetchOptional = fetchOptional || (async (name, version) => {
+      const response = await fetch(`${registry}${encodeURIComponent(name)}/${version}`, { signal: AbortSignal.timeout(20000) });
+      if (!response.ok) fail(`Registro indisponivel para ${name}: HTTP ${response.status}`);
+      return response.json();
+    });
     this.installPackage = install || (async (prefix, packageName, version, entry, runtime) => {
       if (entry.download.provider === 'github-release') return installNative(prefix, entry, this.target);
       const environment = toolEnvironment(entry, this.local(entry.name), runtime);
-      const result = spawnSync(runtime.file, [this.npm(runtime, environment), 'install', '--prefix', prefix, '--cache', join(this.home, '.cache/npm'), '--registry', entry.download.registry, '--ignore-scripts', '--omit=dev', '--no-audit', '--no-fund', '--save-exact', `${packageName}@${version}`], {
-        cwd: prefix, encoding: 'utf8', timeout: 180000,
+      // npm resolves cwd but not --prefix, yielding invalid lock paths when
+      // ancestors are aliases such as macOS /var -> /private/var.
+      const npmPrefix = realpathSync(storagePath(this.root, prefix, 'directory'));
+      const result = spawnSync(runtime.file, [this.npm(runtime, environment), 'install', '--prefix', npmPrefix, '--cache', join(this.home, '.cache/npm'), '--registry', entry.download.registry, '--ignore-scripts', '--omit=dev', '--no-audit', '--no-fund', '--save-exact', `${packageName}@${version}`], {
+        cwd: npmPrefix, encoding: 'utf8', timeout: 180000,
         env: { ...environment, npm_config_engine_strict: 'true', npm_config_update_notifier: 'false', PUPPETEER_SKIP_DOWNLOAD: 'true', PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1' }
       });
       if (result.error || result.status !== 0) fail(`npm: ${result.error?.message || result.stderr?.trim() || result.status}`, result.status ?? 1);
@@ -438,7 +492,7 @@ export class ToolManager {
       else {
         const pkg = json(join(stage, 'node_modules', entry.download.package, 'package.json')); const lock = json(join(stage, 'package-lock.json'));
         if (pkg.name !== entry.download.package || pkg.version !== release.version || lock.packages?.[`node_modules/${entry.download.package}`]?.integrity !== release.dist.integrity) fail('Pacote instalado nao corresponde ao registro.');
-        prepareExecutables(stage, entry, this.target);
+        await prepareExecutables(stage, entry, this.target, pkg, lock, this.fetchOptional);
       }
       execute(stage, entry, entry.probe, true, entry.probeInput, toolEnvironment(entry, local, runtime), runtime);
       this.storage(name); storagePath(this.root, target, 'directory');

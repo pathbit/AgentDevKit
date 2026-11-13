@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, readdirSync, existsSync, copyFileSync, symlinkSync, unlinkSync, chmodSync, statSync, renameSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, readdirSync, existsSync, copyFileSync, symlinkSync, unlinkSync, chmodSync, statSync, renameSync, realpathSync } from 'node:fs';
 import { resolve, join, dirname, delimiter } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
@@ -519,6 +519,26 @@ writeFileSync(join(prefix, 'npm-proof.json'), JSON.stringify({args,path:process.
   assert.equal(JSON.parse(readFileSync(join(local, 'CURRENT.json'), 'utf8')).nodePath, process.execPath);
 });
 
+test('npm recebe staging canonico quando a raiz usa alias simbolico', async t => {
+  const config = tool(); const { root } = fixture(t, { 'test-tool': config });
+  const alias = join(root, 'project-alias');
+  if (!createSymlink(t, root, alias, 'dir')) return;
+  const npm = join(root, 'fake-npm.cjs');
+  writeFileSync(npm, `const { mkdirSync, writeFileSync, realpathSync } = require('node:fs');
+const { join } = require('node:path');
+${packageFiles.toString()}
+const prefix = process.argv[process.argv.indexOf('--prefix') + 1];
+if (prefix !== realpathSync(prefix) || process.cwd() !== prefix) process.exit(91);
+packageFiles(prefix, 'test-tool', '1.0.0');
+writeFileSync(join(prefix, 'canonical-proof.json'), JSON.stringify({prefix,cwd:process.cwd()}));
+`);
+  const manager = new ToolManager({ root: alias, catalog: { 'test-tool': config }, npm: () => npm, fetchRelease: async () => release('1.0.0') });
+  const installed = await manager.install('test-tool');
+  const proof = JSON.parse(readFileSync(join(installed.prefix, 'canonical-proof.json'), 'utf8'));
+  assert.equal(proof.cwd, proof.prefix); assert.ok(proof.prefix.startsWith(realpathSync(root)));
+  assert.equal(manager.check('test-tool').version, '1.0.0');
+});
+
 test('setup padrao prepara todas as ferramentas compativeis e confirma cada instalacao', async t => {
   const unsupported = { ...tool('unsupported-tool'), platforms: [process.platform === 'darwin' ? 'linux-x64' : 'darwin-arm64'] };
   const { root, manager, state, local } = fixture(t, { 'test-tool': tool(), 'unsupported-tool': unsupported });
@@ -597,6 +617,58 @@ test('executables valida plataforma e caminhos relativos sem autorizar comandos 
   for (const file of ['/tmp/probe', '../probe', 'bin/../probe', './probe', 'bin//probe', 'bin/', 'C:/probe', 'C:\\probe', 'bin\\probe', '', 'bad\0path', null]) {
     assert.throws(() => validateToolConfig('test-tool', { ...base, executables: { 'linux-x64': [file] } }), /relativo/);
   }
+});
+
+test('executaveis opcionais validam pacotes e caminhos sem permitir escapes', () => {
+  const target = platformKey(); const base = tool();
+  const good = { [target]: [{ package: '@owner/cli-host', file: 'bin/probe' }] };
+  assert.deepEqual(validateToolConfig('test-tool', { ...base, optionalExecutables: good }).optionalExecutables, good);
+  for (const item of [
+    { package: '../outside', file: 'bin/probe' }, { package: '@owner/cli-host', file: '../outside' },
+    { package: '@owner/cli-host', file: '/absolute' }, { package: '@owner/cli-host', file: 'C:\\outside' },
+    { package: '@owner/cli-host', file: 'bin/probe', extra: true }
+  ]) assert.throws(() => validateToolConfig('test-tool', { ...base, optionalExecutables: { [target]: [item] } }), /opcional|relativo/);
+  assert.throws(() => validateToolConfig('test-tool', { ...base, optionalExecutables: { [target]: [good[target][0], good[target][0]] } }), /relativo/);
+});
+
+test('atualizacao aceita layout opcional e preserva versao anterior se dependencia falhar', async t => {
+  const target = platformKey(); const name = '@owner/cli-host';
+  const config = { ...tool(), executables: { [target]: ['bin/legacy'] }, optionalExecutables: { [target]: [{ package: name, file: 'bin/probe' }] } };
+  const { manager, state, local, root } = fixture(t, { 'test-tool': config });
+  let scenario = 'legacy'; const outside = join(root, 'outside-native'); const probe = join(root, 'probe-executado'); writeFileSync(outside, 'untouched'); chmodSync(outside, 0o644);
+  const officialTarball = version => `https://registry.npmjs.org/${name}/-/cli-host-${version}.tgz`;
+  manager.fetchOptional = async (pkgName, version) => ({ name: pkgName, version, dist: { tarball: officialTarball(version), integrity: 'sha512-fixture' } });
+  manager.installPackage = (prefix, pkgName, version) => {
+    packageFiles(prefix, pkgName, version);
+    const base = join(prefix, 'node_modules', pkgName); mkdirSync(join(base, 'bin'));
+    if (scenario === 'legacy') { writeFileSync(join(base, 'bin/legacy'), 'legacy'); return; }
+    const manifestFile = join(base, 'package.json'); const manifest = JSON.parse(readFileSync(manifestFile));
+    manifest.optionalDependencies = { [name]: version }; writeFileSync(manifestFile, JSON.stringify(manifest));
+    writeFileSync(join(base, 'cli.cjs'), `require('node:fs').writeFileSync(${JSON.stringify(probe)}, 'executado'); console.log(${JSON.stringify(version)});`);
+    if (scenario === 'missing') return;
+    const optional = join(prefix, 'node_modules', name);
+    if (scenario === 'package-link') { mkdirSync(dirname(optional), { recursive: true }); symlinkSync(root, optional, 'dir'); return; }
+    mkdirSync(join(optional, 'bin'), { recursive: true });
+    writeFileSync(join(optional, 'package.json'), JSON.stringify({ name, version: scenario === 'version' ? '9.9.9' : version }));
+    const lockFile = join(prefix, 'package-lock.json'); const lock = JSON.parse(readFileSync(lockFile));
+    lock.packages[`node_modules/${name}`] = { version, integrity: scenario === 'integrity' ? 'sha512-other-registry' : 'sha512-fixture', resolved: scenario === 'registry' ? `https://example.invalid/${name}/-/cli-host-${version}.tgz` : officialTarball(version) };
+    writeFileSync(lockFile, JSON.stringify(lock));
+    if (scenario === 'escape') symlinkSync(outside, join(optional, 'bin/probe'));
+    else { writeFileSync(join(optional, 'bin/probe'), 'probe'); chmodSync(join(optional, 'bin/probe'), 0o644); }
+    if (scenario === 'legacy-escape') symlinkSync(outside, join(base, 'bin/legacy'));
+  };
+  await manager.install('test-tool'); const before = readFileSync(join(local, 'CURRENT.json'), 'utf8'); state.version = '2.0.0';
+  for (scenario of ['missing', 'version', 'integrity', 'registry', ...(process.platform === 'win32' ? [] : ['escape', 'package-link', 'legacy-escape'])]) {
+    await assert.rejects(manager.update('test-tool'), /ausente|corresponde|fora do pacote|nao pode ser um link/);
+    assert.equal(readFileSync(join(local, 'CURRENT.json'), 'utf8'), before);
+    assert.equal(manager.check('test-tool').version, '1.0.0');
+    assert.equal(existsSync(probe), false);
+    assert.ok(readdirSync(local).every(entry => !entry.startsWith('.stage-')));
+  }
+  if (process.platform !== 'win32') assert.equal(statSync(outside).mode & 0o777, 0o644);
+  scenario = 'optional'; const updated = await manager.update('test-tool');
+  assert.equal(updated.version, '2.0.0'); assert.equal(manager.check('test-tool').version, '2.0.0');
+  if (process.platform !== 'win32') assert.equal(statSync(join(updated.prefix, 'node_modules', name, 'bin/probe')).mode & 0o777, 0o755);
 });
 
 test('executables prepara somente binarios da plataforma no staging antes de executar probe real', { skip: process.platform === 'win32' }, async t => {
