@@ -18,7 +18,7 @@ const run = { head_sha: commit, head_branch: 'master', event: 'push', path: reso
   repository: { full_name: repository }, head_repository: { full_name: repository } };
 const request = async (_method, path) => path.includes('/actions/runs/')
   ? run : { object: { type: 'commit', sha: commit } };
-const npmRuntime = { npm_execpath: npmExecutable() };
+const npmRuntime = { npm_execpath: npmExecutable(), PATH: process.env.PATH };
 const env = { ...process.env, ...npmRuntime, GITHUB_ACTIONS: 'false', NPM_TOKEN: 'test-secret-do-not-log', GH_TOKEN: 'test-github-secret' };
 
 function fixture(t, archive = Buffer.from('exact approved archive bytes'), releaseVersion = version) {
@@ -46,7 +46,14 @@ function mock(fixture, options = {}) {
     const action = args[1];
     calls.push({ command, args, config });
     if (action === '--version') return success(options.npmVersion || '11.6.2');
-    if (action === 'pack') return success([{ name: packageName, version, integrity: fixture.integrity, ...options.metadata }]);
+    if (action === 'pack') {
+      if (args.includes('--pack-destination')) {
+        const filename = options.cachedFilename || 'cached.tgz';
+        if (filename === 'cached.tgz') writeFileSync(join(args[args.indexOf('--pack-destination') + 1], filename), options.cachedArchive || fixture.archive);
+        return success([{ filename }]);
+      }
+      return success([{ name: packageName, version, integrity: fixture.integrity, ...options.metadata }]);
+    }
     if (action === 'view') {
       const result = views.length > 1 ? views.shift() : views[0];
       return result === null ? failure('E404') : typeof result === 'string' ? failure(result) : success(result);
@@ -59,6 +66,7 @@ function mock(fixture, options = {}) {
     if (action === 'exec') {
       const selected = args[args.indexOf('--') + 2];
       const command = selected === '--version' ? 'version' : selected;
+      if (command === 'init') assert.ok(existsSync(join(args[args.indexOf('--target') + 1], '.git')));
       const label = command === 'sync' ? 'sync --check' : command;
       return options.execResults?.[label] || options.execResult || success({ ok: true, command, version: options.metadata?.version || version });
     }
@@ -75,23 +83,23 @@ test('publica o TGZ aprovado e prova instalação pelo registry em cache novo', 
   assert.deepEqual(result.probe, { status: 'passed', version, commands: ['version', 'init', 'doctor', 'sync --check'], anonymous: true });
   assert.equal(result.url, 'https://www.npmjs.com/package/@pathbit/agentdevkit');
   assert.equal(result.authentication, 'token');
-  assert.deepEqual(m.calls.map(call => call.args[1]), ['pack', 'view', 'publish', 'view', 'cache', 'exec', 'exec', 'exec', 'exec']);
+  assert.deepEqual(m.calls.map(call => call.args[1]), ['pack', 'view', 'publish', 'view', 'cache', 'pack', 'exec', 'exec', 'exec', 'exec']);
   assert.deepEqual(m.calls[0].args.slice(1), ['pack', f.path, '--dry-run', '--ignore-scripts', '--json']);
   assert.deepEqual(m.calls[2].args.slice(1), ['publish', f.path, '--registry=https://registry.npmjs.org', '--access=public', '--ignore-scripts', '--json']);
   assert.deepEqual(m.calls[4].args.slice(1), ['cache', 'add', `${packageName}@${version}`, '--registry=https://registry.npmjs.org', '--ignore-scripts', '--json']);
-  assert.deepEqual(m.calls[5].args.slice(1), ['exec', '--yes', '--ignore-scripts', '--registry=https://registry.npmjs.org', `--package=${packageName}@${version}`, '--', 'agentdevkit', '--version', '--json']);
-  const target = join(dirname(m.calls[5].config.cwd), 'consumer');
-  assert.deepEqual(m.calls[6].args.slice(8), ['init', '--target', target, '--agents', 'codex,claude', '--lang', 'en', '--yes', '--json']);
-  assert.deepEqual(m.calls[7].args.slice(8), ['doctor', '--target', target, '--json']);
-  assert.deepEqual(m.calls[8].args.slice(8), ['sync', '--check', '--target', target, '--json']);
-  for (const call of m.calls.slice(5)) {
-    assert.equal(call.config.cwd, m.calls[5].config.cwd);
-    assert.equal(call.config.env.npm_config_cache, m.calls[5].config.env.npm_config_cache);
+  assert.deepEqual(m.calls[6].args.slice(1), ['exec', '--yes', '--ignore-scripts', '--registry=https://registry.npmjs.org', `--package=${packageName}@${version}`, '--', 'agentdevkit', '--version', '--json']);
+  const target = join(dirname(m.calls[6].config.cwd), 'consumer');
+  assert.deepEqual(m.calls[7].args.slice(8), ['init', '--target', target, '--agents', 'codex,claude', '--lang', 'en', '--yes', '--json']);
+  assert.deepEqual(m.calls[8].args.slice(8), ['doctor', '--target', target, '--json']);
+  assert.deepEqual(m.calls[9].args.slice(8), ['sync', '--check', '--target', target, '--json']);
+  for (const call of m.calls.slice(6)) {
+    assert.equal(call.config.cwd, m.calls[6].config.cwd);
+    assert.equal(call.config.env.npm_config_cache, m.calls[6].config.env.npm_config_cache);
     assert.equal(call.config.shell, false);
   }
-  assert.notEqual(m.calls[0].config.env.npm_config_cache, m.calls[5].config.env.npm_config_cache);
-  assert.notEqual(m.calls[4].config.env.npm_config_cache, m.calls[5].config.env.npm_config_cache);
-  assert.equal(m.calls[5].config.env.npm_config_offline, 'false');
+  assert.notEqual(m.calls[0].config.env.npm_config_cache, m.calls[6].config.env.npm_config_cache);
+  assert.equal(m.calls[4].config.env.npm_config_cache, m.calls[6].config.env.npm_config_cache);
+  assert.equal(m.calls[6].config.env.npm_config_offline, 'true');
   assert.ok(!existsSync(m.calls[0].config.cwd));
   assert.deepEqual(readFileSync(f.path), f.archive);
 });
@@ -102,7 +110,20 @@ test('versão já publicada com mesmos bytes é idempotente e ainda prova o cons
   const result = await publishRegistryPackage(m.options);
   assert.equal(result.status, 'skipped');
   assert.equal(result.authentication, 'not-needed');
-  assert.deepEqual(m.calls.map(call => call.args[1]), ['pack', 'view', 'cache', 'exec', 'exec', 'exec', 'exec']);
+  assert.deepEqual(m.calls.map(call => call.args[1]), ['pack', 'view', 'cache', 'pack', 'exec', 'exec', 'exec', 'exec']);
+});
+
+test('tarball baixado divergente nunca é executado', async t => {
+  const f = fixture(t), m = mock(f, { views: [{ integrity: f.integrity }], cachedArchive: Buffer.from('outros bytes') });
+  await assert.rejects(publishRegistryPackage(m.options), /diverge do artefato aprovado/);
+  assert.ok(!m.calls.some(call => call.args[1] === 'exec'));
+  assert.ok(!m.calls.some(call => call.args[1] === 'publish'));
+});
+
+test('nome de tarball fora do cache é recusado antes da leitura', async t => {
+  const f = fixture(t), m = mock(f, { views: [{ integrity: f.integrity }], cachedFilename: '../outside.tgz' });
+  await assert.rejects(publishRegistryPackage(m.options), /Tarball do cache inválido/);
+  assert.ok(!m.calls.some(call => call.args[1] === 'exec'));
 });
 
 test('conflito de conteúdo nunca publica nem executa', async t => {
@@ -196,7 +217,7 @@ test('janela padrão expirada informa pendência e nunca tenta publicar novament
   assert.deepEqual(readFileSync(f.path), f.archive);
 });
 
-test('versão existente espera o tarball sem publicar novamente e usa cache separado', async t => {
+test('versão existente espera o tarball sem publicar novamente e usa cache verificado', async t => {
   const f = fixture(t), m = mock(f, { views: [{ integrity: f.integrity }], downloads: [false, false, true] });
   const result = await publishRegistryPackage(m.options);
   assert.equal(result.status, 'skipped');
@@ -209,7 +230,7 @@ test('versão existente espera o tarball sem publicar novamente e usa cache sepa
     assert.equal(call.config.env.npm_config_cache, downloads[0].config.env.npm_config_cache);
     assert.deepEqual(Object.keys(call.config.env).filter(key => /token|secret|password|(?:^|_)auth(?:_|$)/i.test(key)), []);
   }
-  assert.notEqual(downloads[0].config.env.npm_config_cache, m.calls.find(call => call.args[1] === 'exec').config.env.npm_config_cache);
+  assert.equal(downloads[0].config.env.npm_config_cache, m.calls.find(call => call.args[1] === 'exec').config.env.npm_config_cache);
 });
 
 test('versão existente sem tarball usa a mesma janela padrão e reconhece E404 textual', async t => {
@@ -388,7 +409,7 @@ test('inspeção real preserva TGZ antigo e atual sem presumir o caminho do exec
     m.options.resolution = { ...resolution, version: release.version, tag: `v${release.version}` };
     const delegate = m.options.execute;
     m.options.execute = (command, args, config) => {
-      if (args[1] !== 'pack') return delegate(command, args, config);
+      if (args[1] !== 'pack' || args.includes('--pack-destination')) return delegate(command, args, config);
       if (release.version === '0.0.3') {
         const dryRun = spawnSync(command, [args[0], 'publish', real.path, '--registry=https://registry.npmjs.org', '--access=public', '--ignore-scripts', '--dry-run', '--json'], {
           ...config, env: { ...config.env, npm_config_offline: 'true', npm_config_loglevel: 'notice' },
@@ -445,7 +466,7 @@ test('GitHub publica os mesmos bytes e autentica consultas e consumo somente nes
     assert.equal(config.env.ACTIONS_ID_TOKEN_REQUEST_URL, undefined);
     assert.ok(!args.join(' ').includes('github-package-secret'));
     assert.ok(!npmrc.includes('github-package-secret')); assert.ok(!npmrc.includes(env.NPM_TOKEN));
-    if (args[1] === 'pack') {
+    if (args[1] === 'pack' && !args.includes('--pack-destination')) {
       assert.equal(config.env.GITHUB_PACKAGES_TOKEN, undefined); assert.doesNotMatch(npmrc, /authToken/);
     } else {
       assert.equal(config.env.GITHUB_PACKAGES_TOKEN, 'github-package-secret');
