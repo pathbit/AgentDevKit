@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto';
-import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { closeSync, constants, existsSync, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { isMain, projectRoot, requireNode } from '../lib/runtime.mjs';
@@ -11,9 +11,13 @@ const portable = value => value.split(sep).join('/');
 const nonempty = value => typeof value === 'string' && value.trim().length > 0;
 const completed = value => nonempty(value) && !/^(?:a definir|pendente|pending|todo|tbd|\.\.\.)[.!]?$/i.test(value.trim());
 const digest = file => createHash('sha256').update(readFileSync(file)).digest('hex');
+const decodeGit = data => {
+  try { return data ? new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(data) : ''; }
+  catch { fail('Caminho ou saida Git nao e UTF-8 valido.'); }
+};
 
 function pathInRoot(root, input) {
-  if (!nonempty(input) || /[\0\r\n]/.test(input)) fail('Caminho invalido.');
+  if (!nonempty(input) || !input.isWellFormed() || /[\0\r\n]/.test(input)) fail('Caminho invalido.');
   const name = portable(relative(root, resolve(root, input)));
   if (!name || name === '..' || name.startsWith('../') || isAbsolute(name) || name.split('/').some(part => part.toLowerCase() === '.git')) fail(`Caminho fora do escopo: ${input}`);
   let current = root;
@@ -25,16 +29,85 @@ function pathInRoot(root, input) {
   return name;
 }
 
-function git(root, args, allowFailure = false) {
-  const result = spawnSync('git', args, { cwd: root, encoding: 'utf8', timeout: 15000, windowsHide: true, env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', GIT_NO_REPLACE_OBJECTS: '1' } });
+function git(root, args, allowFailure = false, input) {
+  const raw = spawnSync('git', ['-c', 'core.fsmonitor=false', ...args], { cwd: root, input, timeout: 15000, windowsHide: true, env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', GIT_NO_REPLACE_OBJECTS: '1', GIT_NO_LAZY_FETCH: '1' } });
+  const result = { ...raw, stdout: decodeGit(raw.stdout), stderr: raw.stderr?.toString('utf8') || '' };
   if ((result.error || result.status !== 0) && !allowFailure) fail(`Git: ${result.error?.message || result.stderr?.trim() || 'operacao falhou'}`);
   return result;
 }
 
+function indexStatEqual(a, b) {
+  return a.dev === b.dev && a.ino === b.ino && a.mode === b.mode && a.size === b.size && a.mtimeNs === b.mtimeNs && a.ctimeNs === b.ctimeNs;
+}
+
+// Inspect the index without asking Git to load it: loading a split index can
+// touch sharedindex metadata even when optional locks are disabled.
+function inspectIndex(root) {
+  const split = git(root, ['config', '--bool', '--get', 'core.splitIndex'], true);
+  if (split.error || ![0, 1].includes(split.status) || (split.status === 0 && !['true', 'false'].includes(split.stdout.trim()))) fail('Nao foi possivel verificar split-index Git.');
+  if (split.status === 0 && split.stdout.trim() === 'true') fail('Split-index Git nao suportado para revisao; preserve a configuracao e consulte o responsavel.');
+  const name = git(root, ['rev-parse', '--git-path', 'index']).stdout.replace(/\r?\n$/, '');
+  if (!name || /[\0\r\n]/.test(name)) fail('Caminho do indice Git nao suportado.');
+  const path = resolve(root, name);
+  let before;
+  try { before = lstatSync(path, { bigint: true }); } catch (error) { if (error.code === 'ENOENT') return { path, missing: true }; throw error; }
+  if (!before.isFile() || before.isSymbolicLink() || before.ino === 0n || before.size > 134217728n) fail('Indice Git nao e arquivo regular suportado.');
+  const fd = openSync(path, constants.O_RDONLY | (constants.O_NOFOLLOW || 0));
+  let data, after;
+  try {
+    const opened = fstatSync(fd, { bigint: true });
+    if (!opened.isFile() || !indexStatEqual(before, opened)) fail('Indice Git mudou antes da leitura.');
+    data = readFileSync(fd);
+    const finished = fstatSync(fd, { bigint: true }); after = lstatSync(path, { bigint: true });
+    if (!indexStatEqual(opened, finished) || !indexStatEqual(finished, after) || BigInt(data.length) !== before.size) fail('Indice Git mudou durante a leitura.');
+  } finally { closeSync(fd); }
+  if (data.length < 32 || data.toString('ascii', 0, 4) !== 'DIRC') fail('Indice Git invalido.');
+  const hashes = [['sha1', 20], ['sha256', 32]].filter(([algo, size]) => data.length >= size + 12 && createHash(algo).update(data.subarray(0, -size)).digest().equals(data.subarray(-size)));
+  if (hashes.length !== 1) fail('Checksum ou formato do indice Git nao comprovado.');
+  const objectSize = hashes[0][1], end = data.length - objectSize, version = data.readUInt32BE(4), count = data.readUInt32BE(8);
+  if (![2, 3, 4].includes(version)) fail('Versao do indice Git nao suportada.');
+  let offset = 12, submodule = false, hidden = false, sparse = false;
+  for (let i = 0; i < count; i++) {
+    const start = offset, fixed = 42 + objectSize;
+    if (start + fixed > end) fail('Entrada do indice Git truncada.');
+    const mode = data.readUInt32BE(start + 24), flags = data.readUInt16BE(start + 40 + objectSize);
+    if ((mode & 0o170000) === 0o160000) submodule = true;
+    if ((mode & 0o170000) === 0o040000) sparse = true;
+    if (flags & 0x8000) hidden = true;
+    offset = start + fixed;
+    if (flags & 0x4000) {
+      if (version < 3 || offset + 2 > end) fail('Entrada estendida do indice Git invalida.');
+      if (data.readUInt16BE(offset) & 0x4000) hidden = true;
+      offset += 2;
+    }
+    if (version === 4) {
+      let size = 0, byte;
+      do { if (offset >= end || ++size > 10) fail('Caminho comprimido do indice Git invalido.'); byte = data[offset++]; } while (byte & 0x80);
+    }
+    const nul = data.indexOf(0, offset);
+    if (nul < offset || nul >= end) fail('Caminho do indice Git truncado.');
+    offset = version === 4 ? nul + 1 : start + Math.ceil((nul + 1 - start) / 8) * 8;
+    if (offset > end || (version !== 4 && data.subarray(nul, offset).some(byte => byte !== 0))) fail('Entrada do indice Git invalida.');
+  }
+  while (offset < end) {
+    if (offset + 8 > end) fail('Extensao do indice Git truncada.');
+    const signature = data.toString('ascii', offset, offset + 4), size = data.readUInt32BE(offset + 4);
+    if (signature === 'link') fail('Split-index Git nao suportado para revisao; preserve a configuracao e consulte o responsavel.');
+    if (signature === 'sdir') sparse = true;
+    offset += 8 + size;
+    if (offset > end) fail('Extensao do indice Git truncada.');
+  }
+  return { path, stat: after, hash: createHash('sha256').update(data).digest('hex'), submodule, hidden, sparse };
+}
+
 function repository(root) {
+  if (Object.entries(process.env).some(([key, value]) => key.toUpperCase().startsWith('GIT_TRACE') && value && value !== '0')) fail('Variaveis GIT_TRACE ativas nao sao suportadas na revisao.');
+  if (Object.entries(process.env).some(([key, value]) => key.toUpperCase().startsWith('GIT_TEST_') && value)) fail('Variaveis GIT_TEST_ nao sao suportadas na revisao.');
   const canonical = realpathSync(root);
   const top = git(canonical, ['rev-parse', '--show-toplevel']).stdout.trim();
   if (realpathSync(top) !== canonical) fail('Use a raiz do repositorio.');
+  requireCompleteObjects(canonical, 'revisao de entrega');
+  inspectIndex(canonical);
   return canonical;
 }
 
@@ -53,20 +126,45 @@ function tracked(root, file) {
 
 function ignoredPaths(root, files) {
   if (!files.length) return new Set();
-  const result = spawnSync('git', ['check-ignore', '--no-index', '--stdin', '-z'], { cwd: root, input: files.join('\0') + '\0', encoding: 'utf8', timeout: 15000, windowsHide: true, env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', GIT_NO_REPLACE_OBJECTS: '1' } });
+  const raw = spawnSync('git', ['-c', 'core.fsmonitor=false', 'check-ignore', '--no-index', '--stdin', '-z'], { cwd: root, input: Buffer.from(files.join('\0') + '\0'), timeout: 15000, windowsHide: true, env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', GIT_NO_REPLACE_OBJECTS: '1', GIT_NO_LAZY_FETCH: '1' } });
+  const result = { ...raw, stdout: decodeGit(raw.stdout), stderr: raw.stderr?.toString('utf8') || '' };
   if (result.error || ![0, 1].includes(result.status)) fail(`Git: ${result.error?.message || result.stderr?.trim() || 'falha ao conferir ignores'}`);
   return new Set(result.stdout.split('\0').filter(Boolean));
 }
 
 function stagedDeletions(root) {
-  return new Set(git(root, ['diff', '--cached', '--diff-filter=D', '--no-renames', '--name-only', '-z', '--']).stdout.split('\0').filter(Boolean));
+  return new Set(git(root, ['diff', '--cached', '--diff-filter=D', '--no-renames', '--ignore-submodules=none', '--name-only', '-z', '--']).stdout.split('\0').filter(Boolean));
+}
+
+function ensureNoAppliedFilters(root, indexed) {
+  const configured = git(root, ['config', '--get-regexp', '^filter\\.'], true);
+  if (configured.error || ![0, 1].includes(configured.status)) fail('Nao foi possivel verificar filtros Git.');
+  if (configured.status !== 0 || !indexed) return;
+  const paths = new Set(indexed.split('\0').filter(Boolean));
+  const result = git(root, ['check-attr', '-z', '--stdin', '--all'], false, Buffer.from(indexed));
+  const fields = result.stdout.split('\0');
+  if (fields.pop() !== '' || fields.length % 3) fail('Resposta ambigua dos atributos Git.');
+  for (let i = 0; i < fields.length; i += 3) {
+    if (!paths.has(fields[i])) fail('Caminho inesperado nos atributos Git.');
+    if (fields[i + 1] === 'filter') fail('Coleta automatica nao suporta filtro Git aplicado; use --scope para revisar caminhos especificos.');
+  }
 }
 
 function changedFiles(root) {
-  const baseline = head(root);
-  const versioned = git(root, baseline ? ['diff', '--name-only', '-z', 'HEAD', '--'] : ['ls-files', '-z']).stdout;
-  const untracked = git(root, ['ls-files', '--others', '--exclude-standard', '-z']).stdout;
-  return [...new Set((versioned + '\0' + untracked).split('\0').filter(Boolean))].sort();
+  const before = inspectIndex(root);
+  if (before.submodule || before.sparse || before.hidden) fail('Coleta automatica nao suporta submodulo, sparse-index ou flags que ocultam alteracoes; use --scope.');
+  const indexed = git(root, ['ls-files', '-z']).stdout;
+  ensureNoAppliedFilters(root, indexed);
+  const status = git(root, ['status', '--porcelain=v1', '-z', '--no-renames', '--untracked-files=all', '--ignore-submodules=none']).stdout;
+  const entries = status.split('\0');
+  if (entries.pop() !== '') fail('Status Git incompleto.');
+  const names = entries.map(entry => {
+    if (entry.length < 4 || entry[2] !== ' ' || !/^[ MADRCUT?!]{2}$/.test(entry.slice(0, 2)) || entry.slice(0, 2) === '!!') fail('Status Git ambiguo.');
+    return entry.slice(3);
+  });
+  const after = inspectIndex(root);
+  if (before.path !== after.path || !!before.missing !== !!after.missing || (!before.missing && (!indexStatEqual(before.stat, after.stat) || before.hash !== after.hash))) fail('Indice Git mudou durante a coleta; resultado descartado.');
+  return [...new Set(names)].sort();
 }
 
 function snapshot(root, mode, paths, documents = [], spec = null) {
@@ -100,11 +198,25 @@ function expectedDocuments(root, state, extra = []) {
   return [...new Set([...candidates.filter(file => !local.has(file) || versioned.has(file)), ...extra.map(file => pathInRoot(root, file))])].sort();
 }
 
+function requireCompleteObjects(root, operation) {
+  const partial = git(root, ['config', '--get-regexp', '^(extensions\\.partialclone|remote\\..*\\.promisor)$'], true);
+  if (partial.error || ![0, 1].includes(partial.status)) fail('Nao foi possivel verificar clone parcial.');
+  if (partial.status === 0) fail(`Clone parcial ou remote promisor nao suportado para ${operation}.`);
+}
+
+function stagedBlobDigest(root, object, path) {
+  if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(object)) fail(`Objeto preparado invalido: ${path}`);
+  const blob = spawnSync('git', ['-c', 'core.fsmonitor=false', 'cat-file', 'blob', object], { cwd: root, timeout: 15000, windowsHide: true, maxBuffer: 64 * 1024 * 1024, env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', GIT_NO_REPLACE_OBJECTS: '1', GIT_NO_LAZY_FETCH: '1' } });
+  if (blob.error || blob.status !== 0 || !blob.stdout) fail(`Blob preparado indisponivel ou muito grande: ${path}`);
+  return createHash('sha256').update(blob.stdout).digest('hex');
+}
+
 function checkIndex(root, state) {
-  const staged = new Set(git(root, ['diff', '--cached', '--name-only', '-z', '--']).stdout.split('\0').filter(Boolean));
+  const staged = new Set(git(root, ['diff', '--cached', '--name-only', '-z', '--no-renames', '--ignore-submodules=none', '--']).stdout.split('\0').filter(Boolean));
   const deleted = stagedDeletions(root);
   const indexed = new Set(git(root, ['ls-files', '-z']).stdout.split('\0').filter(Boolean));
   const local = ignoredPaths(root, state.files.filter(file => file.indexAction === 'untrack').map(file => file.path));
+  let checkedObjects = false;
   for (const file of state.files) {
     if (file.indexAction === 'untrack') {
       if (!staged.has(file.path) || !deleted.has(file.path) || indexed.has(file.path) || file.sha256 === null || !existsSync(join(root, file.path)) || !local.has(file.path)) fail(`Acao de desindexacao mudou: ${file.path}`);
@@ -112,9 +224,19 @@ function checkIndex(root, state) {
     }
     if (file.indexAction !== undefined) fail(`Acao de indice invalida: ${file.path}`);
     if (!staged.has(file.path)) continue;
+    // Diff can hide mismatches behind index flags or a clean filter. Compare
+    // the raw staged blob to the reviewed bytes without running either.
+    const flags = git(root, ['--literal-pathspecs', 'ls-files', '-v', '--stage', '-z', '--', file.path]).stdout.split('\0').filter(Boolean);
+    if (flags.length !== (indexed.has(file.path) ? 1 : 0)) fail(`Flags do indice Git ambiguas: ${file.path}`);
     const deletedButPresent = !indexed.has(file.path) && file.sha256 !== null;
-    const differs = git(root, ['--literal-pathspecs', 'diff', '--quiet', '--no-ext-diff', '--', file.path], true);
-    if (deletedButPresent || differs.error || differs.status !== 0) fail(`Indice Git difere do arquivo testado: ${file.path}`);
+    if (deletedButPresent) fail(`Indice Git difere do arquivo testado: ${file.path}`);
+    if (!flags.length) continue;
+    const match = /^([A-Za-z]) (\d{6}) ([a-f0-9]+) ([0-3])\t([\s\S]+)$/.exec(flags[0]);
+    if (!match || match[5] !== file.path || match[4] !== '0') fail(`Flags do indice Git ambiguas: ${file.path}`);
+    if (match[1] === 'S' || /^[a-z]$/.test(match[1])) fail(`Arquivo preparado usa assume-unchanged ou skip-worktree: ${file.path}`);
+    if (!['100644', '100755'].includes(match[2])) fail(`Tipo de arquivo preparado nao comprovado: ${file.path}`);
+    if (!checkedObjects) { requireCompleteObjects(root, 'revisao de indice'); checkedObjects = true; }
+    if (stagedBlobDigest(root, match[3], file.path) !== file.sha256) fail(`Indice Git difere dos bytes testados: ${file.path} (confira filtros e CRLF).`);
   }
 }
 
@@ -216,6 +338,49 @@ function validateReview(file, { root = projectRoot, requireSeal = true } = {}) {
 
 export function checkReview(file, { root = projectRoot } = {}) { return validateReview(file, { root, requireSeal: true }).result; }
 
+// A review may cover only part of a project. A commit includes the entire index,
+// so every staged path must be covered by a sealed review before committing.
+export function checkCommit(reports, { root = projectRoot } = {}) {
+  requireNode(); root = repository(root);
+  if (!Array.isArray(reports) || !reports.length) fail('Informe um ou mais relatorios selados, sem repeticao.');
+  reports = reports.map(file => pathInRoot(root, file));
+  if (new Set(reports).size !== reports.length) fail('Informe relatorios selados sem repeticao.');
+  const baselineHead = head(root);
+  const staged = () => git(root, ['diff', '--cached', '--raw', '-z', '--no-abbrev', '--no-renames', '--no-ext-diff', '--no-textconv', '--ignore-submodules=none', '--']).stdout;
+  const before = staged();
+  if (!before) fail('Nenhuma alteracao preparada para commit.');
+  const reviews = reports.map(file => validateReview(file, { root, requireSeal: true }));
+  if (head(root) !== baselineHead || staged() !== before) fail('HEAD ou indice preparado mudou durante a verificacao.');
+  const fields = before.split('\0');
+  if (fields.pop() !== '' || fields.length % 2) fail('Diff preparado incompleto ou ambiguo.');
+  const paths = new Map();
+  for (let i = 0; i < fields.length; i += 2) {
+    const match = /^:(\d{6}) (\d{6}) ([a-f0-9]+) ([a-f0-9]+) ([AMD])$/.exec(fields[i]);
+    if (!match) fail('Tipo de alteracao preparada nao suportado.');
+    const [, oldMode, newMode, , object, action] = match, path = pathInRoot(root, fields[i + 1]);
+    const valid = action === 'A' ? oldMode === '000000' && newMode === '100644'
+      : action === 'D' ? oldMode === '100644' && newMode === '000000'
+        : oldMode === '100644' && newMode === '100644';
+    if (!valid || paths.has(path) || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(object)) fail(`Tipo ou modo preparado nao comprovado: ${path}`);
+    paths.set(path, { action, object });
+  }
+  const covered = new Map(reviews.flatMap(review => review.snapshot.files.map(file => [file.path, file])));
+  const missing = [...paths.keys()].filter(path => !covered.has(path));
+  if (missing.length) fail(`Arquivos preparados sem revisao selada: ${missing.join(', ')}`);
+  requireCompleteObjects(root, 'check-commit');
+  for (const [path, entry] of paths) {
+    if (entry.action === 'D') {
+      const reviewed = covered.get(path);
+      if (reviewed.sha256 !== null && reviewed.indexAction !== 'untrack') fail(`Exclusao preparada difere do arquivo revisado: ${path}`);
+      continue;
+    }
+    if (stagedBlobDigest(root, entry.object, path) !== covered.get(path).sha256) fail(`Blob preparado difere dos bytes revisados: ${path}`);
+  }
+  for (const file of reports) validateReview(file, { root, requireSeal: true });
+  if (head(root) !== baselineHead || staged() !== before) fail('HEAD ou indice preparado mudou durante a verificacao.');
+  return { status: 'passed', head: baselineHead, reports: reports.length, staged: paths.size, stagedSha256: createHash('sha256').update(before).digest('hex') };
+}
+
 // This deliberately permits only a fast-forward and regular non-executable
 // files. Existing review snapshots do not record modes or merge results.
 export function checkMerge(reports, destination, { root = projectRoot } = {}) {
@@ -240,11 +405,11 @@ export function checkMerge(reports, destination, { root = projectRoot } = {}) {
   if (head(root) !== source) fail('HEAD diverge da branch de origem.');
   if (git(root, ['merge-base', '--is-ancestor', target, source], true).status !== 0) fail('Apenas fast-forward comprovado e suportado; revise o resultado integrado para historico divergente.');
   const bytes = args => {
-    const result = spawnSync('git', args, { cwd: root, timeout: 15000, windowsHide: true, maxBuffer: 64 * 1024 * 1024, env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', GIT_NO_REPLACE_OBJECTS: '1' } });
+    const result = spawnSync('git', ['-c', 'core.fsmonitor=false', ...args], { cwd: root, timeout: 15000, windowsHide: true, maxBuffer: 64 * 1024 * 1024, env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', GIT_NO_REPLACE_OBJECTS: '1', GIT_NO_LAZY_FETCH: '1' } });
     if (result.error || result.status !== 0) fail(`Git: ${result.error?.message || result.stderr?.toString().trim() || 'operacao falhou'}`);
     return result.stdout;
   };
-  const decode = data => { try { return new TextDecoder('utf-8', { fatal: true }).decode(data); } catch { fail('Caminho Git nao e UTF-8 valido.'); } };
+  const decode = data => { try { return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(data); } catch { fail('Caminho Git nao e UTF-8 valido.'); } };
   const raw = bytes(['diff', '--raw', '-z', '--no-abbrev', '--no-renames', '--no-ext-diff', '--no-textconv', '--ignore-submodules=none', target, source, '--']);
   const parts = decode(raw).split('\0');
   if (parts.pop() !== '' || parts.length % 2) fail('Diff Git incompleto ou ambiguo.');
@@ -292,12 +457,13 @@ export function sealReview(file, options) {
   return checkReview(file, options);
 }
 
-const usage = 'Uso: revisar-entrega prepare --id <slug> [--execution <slug>] [--spec <arquivo>] [--scope <arquivo>] [--document <arquivo>] [--output <artefato>]; seal|check <revisao.json>; check-merge --destino refs/heads/<branch> <revisao.json> [...]';
+const usage = 'Uso: revisar-entrega prepare --id <slug> [--execution <slug>] [--spec <arquivo>] [--scope <arquivo>] [--document <arquivo>] [--output <artefato>]; seal|check <revisao.json>; check-commit <revisao.json> [...]; check-merge --destino refs/heads/<branch> <revisao.json> [...]';
 export function main(args = process.argv.slice(2)) {
   requireNode(); const [mode, ...rest] = args;
   if (!mode || ['--help', '-h'].includes(mode)) { console.log(usage); return 0; }
   if (mode === 'check' && rest.length === 1) { console.log(JSON.stringify(checkReview(rest[0]))); return 0; }
   if (mode === 'seal' && rest.length === 1) { console.log(JSON.stringify(sealReview(rest[0]))); return 0; }
+  if (mode === 'check-commit' && rest.length) { console.log(JSON.stringify(checkCommit(rest))); return 0; }
   if (mode === 'check-merge' && rest.length >= 3 && rest[0] === '--destino') { console.log(JSON.stringify(checkMerge(rest.slice(2), rest[1]))); return 0; }
   if (mode !== 'prepare') fail(usage);
   const options = { scope: [], documents: [] };

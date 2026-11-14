@@ -15,7 +15,9 @@ Reutilize nomes, formatos, decisões, links e estrutura existentes; um documento
 como `ARCHITECTURE.md` pode cumprir o papel de design sem ser renomeado.
 Organize primeiro por índices e links. Não apague, mova ou substitua arquivos
 para padronizá-los. Acrescente apenas fatos comprovados e preserve o conteúdo
-anterior; trate contradições com o usuário antes de editar.
+anterior. Se houver contradição relevante sem solução nas instruções ou
+evidências disponíveis, apresente os fatos e pergunte ao usuário; aguarde a
+resposta antes de editar o documento afetado. Continue tarefas independentes.
 
 Use o [catálogo](../../../templates/README.md) como lista de lacunas, nunca como
 substituto de um documento existente. Crie somente o que a fase e o pedido

@@ -8,6 +8,11 @@ Entrada: referência da mudança, spec quando houver e arquivos do escopo.
 Pré-requisitos: implementação pronta e Node.js 24+. Sem spec em uma correção
 urgente, defina critérios próprios AC-001 e registre o motivo.
 
+A coleta automática recusa submódulos, sparse-index, flags que ocultam mudanças
+e filtros Git aplicados; nesses casos, use `--scope` para caminhos comprováveis.
+Split-index e clones parciais são recusados em todos os modos. As consultas Git
+desativam fsmonitor somente no subprocesso; nenhuma configuração é alterada.
+
 1. Siga [atualizar-documentacao][documentacao]
    e [verificar-trabalho](../../skills/projeto/verificar-trabalho/SKILL.md).
 2. Use `executar-script` para `revisar-entrega prepare --id <referencia>`, com
@@ -23,6 +28,13 @@ urgente, defina critérios próprios AC-001 e registre o motivo.
 4. Execute `revisar-entrega seal <relatorio>` para registrar os hashes após a
    revisão e `revisar-entrega check <relatorio>` pelo mesmo seletor. Falha,
    critério sem prova ou revisão pendente bloqueiam o commit/merge.
+
+Antes do commit, execute `revisar-entrega check-commit <relatorio>
+[outros-relatorios...]`. A união das revisões seladas deve cobrir todos os
+arquivos preparados, inclusive ambas as pontas de renomeações. O check aceita
+somente arquivos regulares com modo Git `100644` cujos blobs correspondam aos
+bytes revisados. Filtros ou CRLF que mudem esses bytes são recusados.
+Ele não é atômico: repita-o se o índice ou os arquivos mudarem antes do commit.
 
 Antes de um merge fast-forward, na origem, execute `revisar-entrega check-merge
 --destino refs/heads/<destino> <relatorio> [outros-relatorios...]`. A verificação

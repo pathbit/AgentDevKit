@@ -4,6 +4,14 @@ description: Alterações verificáveis por versão do AgentDevKit.
 
 # Changelog
 
+## 0.0.26 — 2026-11-14
+
+- Preserva os bytes do índice nas consultas do gate para os casos suportados e
+  recusa configurações que não consegue verificar com segurança.
+- Exige cobertura e comparação dos arquivos preparados em `check-commit`;
+  bloqueia flags, nomes, modos e transformações não comprovados.
+- Aguarda a decisão antes de editar documentos com contradições não resolvidas.
+
 ## 0.0.25 — 2026-11-14
 
 - Verifica a cobertura e o conteúdo revisado antes de um merge fast-forward;

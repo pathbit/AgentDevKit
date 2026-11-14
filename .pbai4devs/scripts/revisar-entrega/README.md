@@ -13,6 +13,9 @@ node .pbai4devs/scripts/revisar-entrega/SCRIPT.mjs prepare --id minha-mudanca
 Use `--spec caminho/SPEC.md` para extrair os critérios `AC-001` da spec.
 `--scope arquivo` limita uma revisão; sem ele, o snapshot reúne alterações Git.
 Use `--document arquivo` para incluir PRD, design e outros documentos.
+Na coleta automática, submódulos, índice esparso, flags que ocultam mudanças e
+filtros Git aplicados são bloqueados; use `--scope` quando o escopo for
+conhecido. Índice dividido e clone parcial são recusados em qualquer modo.
 README, AGENTS, CLAUDE e GEMINI versionáveis na raiz entram automaticamente na
 revisão, mesmo sem alterações. Saídas locais ignoradas fora do índice não são
 documentos obrigatórios; documentos rastreados continuam cobertos mesmo quando
@@ -20,6 +23,17 @@ uma regra de ignore corresponde ao nome.
 Preencha decisões, resultados e evidências no JSON retornado; peça revisão
 independente, execute `seal <caminho/revisao.json>` e depois
 `check <caminho/revisao.json>` antes de concluir.
+
+`check` valida somente o escopo dos relatórios. Antes de um commit, use
+`check-commit <relatorio> [outros-relatorios...]`: todos os arquivos preparados
+devem estar cobertos por revisões seladas. O comando aceita somente arquivos
+regulares com modo Git `100644` e compara os bytes preparados aos revisados;
+normalizações por filtros ou CRLF que mudem os bytes são bloqueadas. Cada blob
+preparado está limitado a 64 MiB.
+
+Antes de um merge fast-forward, use `check-merge --destino refs/heads/<branch>
+<relatorio> [outros-relatorios...]` na origem. Ele compara o commit e todo o diff
+com as revisões seladas; confirme os hashes retornados antes de integrar.
 
 O check recusa resultados pendentes, evidências ausentes/versionadas e arquivos
 alterados depois da revisão. Relatórios ficam em
