@@ -125,5 +125,14 @@ do kit. Conteúdo humano não é substituído por `--force`.
 
 `doctor` verifica o kit, não o produto inteiro. `next` pode terminar com
 sucesso enquanto orienta uma etapa ainda pendente.
+Após produto e design, ele usa os caminhos de roadmap e specs registrados no
+estado. Para orientar uma spec existente, exige uma única referência aberta
+`[ ]` ou em andamento `[-]` no roadmap. Com mais de uma spec, entrega encerrada,
+vínculo ausente ou leitura ambígua, orienta a revisão do roadmap. Um status
+declarado não comprova aprovação: a skill confere decisões e evidências. Com uma
+spec aberta e declarada aprovada, `implementar-spec` verifica o plano antes de
+encaminhar a configuração técnica; `next` não presume aprovação do plano.
+Se o inventário for truncado, `next` orienta inspeção manual, sem escolher uma
+fase ou presumir que um projeto existente está vazio.
 
 [Wiki](../README.md) · [Solução de problemas](troubleshooting.md)

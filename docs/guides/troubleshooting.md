@@ -39,6 +39,10 @@ agente; arquivos próprios também podem manter uma pasta após a desmarcação.
 | `E_MANAGED_BLOCK` | Revise marcadores ou formato; preserve suas instruções. |
 | `E_CHANGED` | Um arquivo mudou durante a operação; gere outro plano. |
 
+No macOS, `/tmp` e `/var/folders` são aceitos quando forem os aliases de
+sistema esperados. Destinos que atravessam links humanos continuam recusados,
+inclusive quando apontados por `TMPDIR`, `TEMP` ou `TMP`.
+
 ## Conflitos e backups
 
 Simule antes de substituir uma alteração própria:

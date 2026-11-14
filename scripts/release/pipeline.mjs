@@ -134,7 +134,7 @@ export function runPipeline(profile, { root = releaseRoot, env = process.env, ru
     console.log(`Perfil ${profile}: ${portableProfiles[profile].join(', ')}`);
     test(portableProfiles[profile], ['--test-concurrency=2']);
     if (profile === 'portable-resources') {
-      for (const name of ['preparar-ferramentas', 'sincronizar-agentes', 'verificar-recursos', 'executar-script', 'inspecionar-projeto', 'testar-maturidade']) run(root, ['--test', `${hub}/scripts/${name}/tests/TEST.mjs`], env);
+      for (const name of ['preparar-ferramentas', 'sincronizar-agentes', 'verificar-recursos', 'executar-script', 'inspecionar-projeto', 'testar-maturidade', 'verificar-configuracao']) run(root, ['--test', `${hub}/scripts/${name}/tests/TEST.mjs`], env);
     }
     return;
   }

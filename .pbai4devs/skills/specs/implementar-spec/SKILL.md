@@ -18,8 +18,20 @@ antes de implementar.
    seus IDs/revisões. Não invente uma solução já atendida por elas.
 3. Depois da aprovação, crie ou retome `feature/<slug-da-spec>` de `develop`.
    Se faltar `develop`, use `main` quando seguro; sem base/remoto, combine como
-   proceder. Preserve alterações. Registre a aprovação no roadmap e confira a
-   configuração real; complete-a com `configurar-projeto` antes de codificar.
+   proceder. Preserve alterações. Registre a aprovação no roadmap e complete a
+   configuração real com `configurar-projeto` antes de codificar.
+   Antes de qualquer patch de código da spec, execute:
+
+   ```sh
+   node .pbai4devs/scripts/executar-script/SCRIPT.mjs verificar-configuracao
+   ```
+
+   Releia o estado e confira as evidências da infraestrutura obrigatória. Se o
+   estado estiver ausente, inválido ou pendente, ou uma prova falhar, pare sem
+   escrever código; retome quando o impedimento for resolvido. Código zero do
+   script só confirma o estado registrado, não comprova as evidências nem impede
+   escrita por um agente que ignore o resultado. Não peça novamente aprovações
+   já concedidas.
 4. Use o modelo de tarefas em `<documentos.tarefas>/<slug-da-spec>/TASKS.md`.
    Vincule spec/release e registre tarefas, dependências, critérios e evidências.
    Atualize `[ ]`, `[-]` e `[x]` ao avançar; conclusão exige prova. Ao retomar,

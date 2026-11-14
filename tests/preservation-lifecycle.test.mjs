@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -45,6 +45,50 @@ function fixture(t) {
   put('.gitignore', ignore);
   return { root, git, put, read, cli, ignore };
 }
+
+test('consultas Git sem locks opcionais preservam bytes do índice e alterações', t => {
+  const root = mkdtempSync(join(tmpdir(), 'adk-git-consultas-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const env = { ...process.env, GIT_CONFIG_NOSYSTEM: '1',
+    GIT_CONFIG_GLOBAL: join(root, 'sem-config-global'), GIT_TERMINAL_PROMPT: '0' };
+  const git = (args, extra = {}) => {
+    const result = spawnSync('git', ['-C', root, ...args], {
+      encoding: 'utf8', env: { ...env, ...extra }, windowsHide: true,
+    });
+    assert.equal(result.status, 0, `${args.join(' ')}: ${result.error?.message || ''}\n${result.stderr}`);
+    return result.stdout;
+  };
+  git(['init', '--quiet']);
+  const clean = join(root, 'limpo.txt'), modified = join(root, 'trabalho.txt');
+  writeFileSync(clean, 'Conteúdo mantido.\n');
+  writeFileSync(modified, 'Original.\n');
+  git(['add', '--', 'limpo.txt', 'trabalho.txt']);
+  git(['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid',
+    'commit', '--quiet', '-m', 'test: criar fixture']);
+  writeFileSync(modified, 'Preparado.\n');
+  git(['add', '--', 'trabalho.txt']);
+  writeFileSync(modified, 'Não preparado.\n');
+  writeFileSync(join(root, 'novo.txt'), 'Não rastreado.\n');
+  const beforeMtime = statSync(clean).mtimeMs;
+  utimesSync(clean, new Date('2001-01-01T00:00:00Z'), new Date('2001-01-01T00:00:00Z'));
+  assert.notEqual(statSync(clean).mtimeMs, beforeMtime, 'a fixture precisa de stat cache desatualizado');
+
+  const readOnly = { GIT_OPTIONAL_LOCKS: '0' };
+  const entries = git(['ls-files', '--stage', '-z'], readOnly);
+  const index = readFileSync(join(root, '.git', 'index'));
+  const status = git(['status', '--porcelain=v1', '--untracked-files=all'], readOnly);
+  const staged = git(['diff', '--cached', '--no-color', '--', 'trabalho.txt'], readOnly);
+  const unstaged = git(['diff', '--no-color', '--', 'trabalho.txt'], readOnly);
+  assert.match(status, /MM trabalho\.txt/);
+  assert.match(status, /\?\? novo\.txt/);
+  assert.match(staged, /\+Preparado\./);
+  assert.match(unstaged, /\+Não preparado\./);
+  assert.match(git(['log', '-1', '--format=%s'], readOnly), /test: criar fixture/);
+  assert.deepEqual(readFileSync(join(root, '.git', 'index')), index);
+  assert.equal(git(['ls-files', '--stage', '-z'], readOnly), entries);
+  assert.equal(readFileSync(modified, 'utf8'), 'Não preparado.\n');
+  assert.equal(readFileSync(join(root, 'novo.txt'), 'utf8'), 'Não rastreado.\n');
+});
 
 test('README legado próprio e sua pasta não são removidos por heurística ou force', t => {
   const f = fixture(t);

@@ -4,6 +4,16 @@ description: Alterações verificáveis por versão do AgentDevKit.
 
 # Changelog
 
+## 0.0.23 — 2026-11-13
+
+- Corrige a resolução de destinos inexistentes diretamente sob a raiz.
+- Aceita aliases temporários confiáveis do macOS e recusa destinos que
+  atravessam links humanos, inclusive os indicados por variáveis de ambiente.
+- Orienta roadmap e spec antes da configuração técnica e acrescenta uma
+  verificação do estado antes da implementação.
+- Aplica a verificação também aos especialistas e orienta consultas Git que
+  preservam os bytes do índice.
+
 ## 0.0.22 — 2026-11-13
 
 - Descoberta de skills do Codex sem duplicação, com alternativa segura quando a

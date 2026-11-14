@@ -26,6 +26,7 @@ node .pbai4devs/scripts/executar-script/SCRIPT.mjs diagnosticar-ambiente
 | --- | --- |
 | `diagnosticar-ambiente` | Runtimes, pacotes e navegadores disponíveis |
 | `inspecionar-projeto` | Detecta manifests, comandos e estrutura |
+| `verificar-configuracao` | Confere o estado antes de implementar código |
 | `preparar-ferramentas` | Instala/atualiza ferramentas locais |
 | `gerenciar-skills-externas` | Instala/check/read de skills curadas locais |
 | `auditar-seguranca` | Scanners offline, bases locais e relatórios redigidos |

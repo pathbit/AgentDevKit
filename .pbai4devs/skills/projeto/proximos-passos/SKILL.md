@@ -17,7 +17,9 @@ Faça apenas as perguntas que impedem avançar.
 Continue o trabalho já autorizado; não reinicie fases concluídas nem apresente
 suposições como aprovações.
 
-Projeto novo segue preparação → PRD → UX/design → configuração → specs →
-implementação → revisão. Projeto existente parte de suas evidências atuais;
+Projeto novo segue preparação → PRD → UX → design (arquitetura e tecnologia) →
+roadmap → spec aprovada → plano aprovado → configuração técnica → implementação
+→ revisão. UX pode ser não aplicável com justificativa aprovada.
+Projeto existente parte de suas evidências atuais;
 instalar o kit não autoriza recriar documentos ou substituir decisões.
 Se não houver pendências no escopo, diga isso claramente.

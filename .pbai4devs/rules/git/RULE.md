@@ -1,9 +1,13 @@
 ---
 trigger: model_decision
-description: Aplique ao preparar, integrar ou publicar alterações Git.
+description: Aplique ao consultar, preparar, integrar ou publicar alterações Git.
 ---
 
 # Regras Git
+
+Em consultas sem alterações, defina `GIT_OPTIONAL_LOCKS=0` no ambiente do
+subprocesso para evitar atualizações opcionais dos bytes do índice. Isso não
+substitui as travas necessárias para operações que alteram o Git.
 
 Use Conventional Commits (`tipo(escopo): descrição`, escopo opcional), inclusive
 em checkpoints e merges; destaque mudanças incompatíveis com `!` ou

@@ -27,6 +27,11 @@ O Makefile deve oferecer `help`, `doctor`, `setup`, `up`, `down`, `logs`,
 `test`, `lint` e `build`, com comandos reais da stack. Etapas ainda indefinidas
 devem falhar com mensagem útil; não simule sucesso. Documente os comandos,
 dependências e URL/porta no README; valide Compose e saúde antes de concluir.
+Antes de existir aplicação, valide o runtime, o Compose e os serviços de
+infraestrutura necessários. Build, saúde e fluxo da aplicação inexistente
+permanecem pendentes; não crie código de negócio para simular essas provas. Se
+uma dependência obrigatória estiver indisponível, mantenha a configuração
+pendente e registre o impedimento. Após a implementação, prove a aplicação.
 
 Use o [modelo de ambiente](../../templates/ambiente-local/TEMPLATE.md) para
 perguntas e arquivos-base. Versões da aplicação seguem as decisões do projeto;

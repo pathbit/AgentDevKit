@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync, existsSync, rmSync, symlinkSync } from 'node:fs';
-import { resolve, join, dirname } from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync, existsSync, realpathSync, rmSync, symlinkSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { basename, resolve, join, dirname, parse } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { run } from '../bin/agentdevkit.mjs';
@@ -159,6 +161,97 @@ test('link simbolico no destino nao e seguido', t => {
   assert.equal(nested.error.code, 'E_TARGET'); assert.equal(existsSync(join(outside, 'existing/new')), false);
 });
 
+test('variáveis de temporários não autorizam link humano no destino', t => {
+  const root = fixture(t), real = join(root, 'real'), link = join(root, 'user-link');
+  mkdirSync(join(real, 'existing'), { recursive: true });
+  try { symlinkSync(real, link, process.platform === 'win32' ? 'junction' : 'dir'); }
+  catch (error) { if (['EPERM', 'EACCES', 'ENOSYS'].includes(error.code)) { t.skip('No symlink privilege'); return; } throw error; }
+  const keys = ['TMPDIR', 'TEMP', 'TMP'];
+  const previous = Object.fromEntries(keys.map(key => [key, process.env[key]]));
+  try {
+    for (const key of keys) process.env[key] = join(link, 'existing');
+    assert.throws(() => resolveTarget(join(link, 'existing', 'new')), { code: 'E_TARGET' });
+    const result = cli(join(link, 'existing', 'new'), ['init', '--yes', '--dry-run'], 1);
+    assert.equal(result.error.code, 'E_TARGET');
+    assert.equal(existsSync(join(real, 'existing', 'new')), false);
+  } finally {
+    for (const key of keys) {
+      if (previous[key] === undefined) delete process.env[key];
+      else process.env[key] = previous[key];
+    }
+  }
+});
+
+test('macOS aceita apenas alias temporário de sistema, preservando Git e recusando links internos', { skip: process.platform !== 'darwin' }, t => {
+  const root = mkdtempSync('/private/tmp/adk-system-alias-');
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const logical = join('/tmp', basename(root));
+  assert.equal(resolveTarget(logical), root);
+  assert.equal(resolveTarget(join(logical, 'new')), join(root, 'new'));
+  assert.throws(() => resolveTarget(join(logical, '.GIT', 'new')), { code: 'E_TARGET' });
+
+  const absent = cli(join(logical, 'new'), ['init', '--yes', '--dry-run', '--agents', 'codex']);
+  assert.equal(absent.ok, true);
+  assert.equal(existsSync(join(root, 'new')), false);
+  assert.equal(cli(join(logical, 'new'), ['init', '--yes', '--agents', 'codex']).ok, true);
+  assert.ok(existsSync(join(root, 'new', '.pbai4devs', 'state', 'agentdevkit.json')));
+
+  const projectRoot = join(root, 'project'); mkdirSync(projectRoot);
+  assert.equal(spawnSync('git', ['init', '--quiet', projectRoot]).status, 0);
+  const original = '# Instrução humana\n', ignored = 'node_modules/\n';
+  writeFileSync(join(projectRoot, 'AGENTS.md'), original);
+  writeFileSync(join(projectRoot, '.gitignore'), ignored);
+  assert.equal(spawnSync('git', ['-C', projectRoot, 'add', 'AGENTS.md', '.gitignore']).status, 0);
+  const index = readFileSync(join(projectRoot, '.git', 'index'));
+  assert.equal(cli(join(logical, 'project'), ['init', '--yes', '--agents', 'codex']).ok, true);
+  assert.ok(readFileSync(join(projectRoot, 'AGENTS.md'), 'utf8').startsWith(original));
+  assert.equal(readFileSync(join(projectRoot, '.gitignore'), 'utf8'), ignored);
+  assert.deepEqual(readFileSync(join(projectRoot, '.git', 'index')), index);
+  assert.ok(existsSync(join(projectRoot, '.agents', 'skills')));
+
+  const outside = join(root, 'outside'), link = join(root, 'link'); mkdirSync(outside);
+  symlinkSync(outside, link, 'dir');
+  assert.throws(() => resolveTarget(join(logical, 'link', 'nested')), { code: 'E_TARGET' });
+  assert.equal(existsSync(join(outside, 'nested')), false);
+
+  const systemTemp = tmpdir();
+  if (systemTemp === '/var/folders' || systemTemp.startsWith('/var/folders/')) {
+    const temporaryRoot = mkdtempSync(join(systemTemp, 'adk-system-alias-'));
+    t.after(() => rmSync(temporaryRoot, { recursive: true, force: true }));
+    assert.equal(resolveTarget(temporaryRoot), realpathSync(temporaryRoot));
+  }
+});
+
+test('macOS recusa alias de sistema com proprietário ou destino inesperado', { skip: process.platform !== 'darwin' }, () => {
+  const modulePath = join(project, 'src', 'install.mjs');
+  const script = `
+    import fs from 'node:fs';
+    import { syncBuiltinESMExports } from 'node:module';
+    import { pathToFileURL } from 'node:url';
+    const originalStat = fs.lstatSync, originalRealpath = fs.realpathSync;
+    const mode = process.argv[2];
+    fs.lstatSync = (path, ...options) => {
+      const result = originalStat(path, ...options);
+      if (path === '/tmp' && mode === 'owner') result.uid = 501;
+      if (path === '/private/tmp' && mode === 'destination-owner') result.uid = 501;
+      return result;
+    };
+    fs.realpathSync = (path, ...options) => {
+      if (path === '/tmp' && mode === 'destination') return '/private/var';
+      if (path === '/tmp' && mode === 'missing') throw Object.assign(new Error('missing'), { code: 'ENOENT' });
+      return originalRealpath(path, ...options);
+    };
+    syncBuiltinESMExports();
+    const { resolveTarget } = await import(pathToFileURL(process.argv[1]).href);
+    try { resolveTarget('/tmp/adk-spoof-test/new'); process.exitCode = 1; }
+    catch (error) { if (error.code !== 'E_TARGET') throw error; }
+  `;
+  for (const mode of ['owner', 'destination-owner', 'destination', 'missing']) {
+    const result = spawnSync(process.execPath, ['--input-type=module', '-e', script, modulePath, mode], { encoding: 'utf8' });
+    assert.equal(result.status, 0, `${mode}: ${result.stderr}`);
+  }
+});
+
 test('destinos reservados sao rejeitados em qualquer caixa sem escrever no Git', t => {
   const root = fixture(t);
   for (const name of ['.git', '.GIT', '.Git', 'node_modules', 'NODE_MODULES', 'Node_Modules', '.pbai4devs', '.PBAI4DEVS', '.PbAi4Devs']) {
@@ -168,6 +261,18 @@ test('destinos reservados sao rejeitados em qualquer caixa sem escrever no Git',
   }
   mkdirSync(join(root, 'existing'));
   assert.throws(() => resolveTarget('existing/../.GIT', root), { code: 'E_TARGET' });
+});
+
+test('destinos ausentes sob a raiz mantêm nome e ordem sem criar diretórios', () => {
+  const root = parse(project).root, suffix = randomUUID();
+  for (const name of [`adk-uncreated-probe-${suffix}`, `tmp-adk-uncreated-${suffix}`]) {
+    const first = join(root, name), child = join(first, 'child'), nested = join(child, 'nested');
+    assert.equal(existsSync(first), false);
+    assert.equal(resolveTarget(child), join(realpathSync(root), name, 'child'));
+    assert.equal(resolveTarget(nested), join(realpathSync(root), name, 'child', 'nested'));
+    assert.throws(() => resolveTarget(join(first, '.GIT', 'nested')), { code: 'E_TARGET' });
+    assert.equal(existsSync(first), false);
+  }
 });
 
 test('entrada CLI funciona por symlink npm sem executar ao ser importada', t => {

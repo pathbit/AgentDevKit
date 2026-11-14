@@ -42,20 +42,25 @@ aprovações já dadas.
 2. Prepare as ferramentas definidas em `.pbai4devs/tools/<nome>/TOOL.json` com
    `preparar-ferramentas`; confira versões e compatibilidade com SO/arquitetura.
    Reutilize instalações e lockfiles; não repita init nem troque a stack.
-3. Aplique a [estrutura e o ambiente obrigatórios][estrutura],
-   preenchendo os modelos de Makefile, Compose e dockerignore. Configure os
-   serviços reais, healthchecks, portas, volumes e comandos da tecnologia.
+3. Aplique a [estrutura e o ambiente obrigatórios][estrutura], preenchendo os
+   modelos de Makefile, Compose e dockerignore. Configure os serviços de
+   infraestrutura necessários, healthchecks, portas, volumes e comandos.
+   Antes de concluir a configuração, não implemente código da aplicação;
+   `src/` e `tests/` podem existir vazios ou conter apenas configuração.
 4. Configure VS Code e recomende EditorConfig, sem regras conflitantes.
    Termine `.gitignore` com o modelo CUSTOM IGNORE e os padrões da tecnologia;
    confirme que templates, scripts, testes e fixtures continuam versionáveis.
 5. Documente versões, estrutura, setup, comandos, origem do template/init e
    decisões no README/estado. Use `atualizar-documentacao` para contribuição,
    configuração e ADRs aplicáveis. Preserve arquivos e convenções existentes.
-6. Use `verificar-trabalho`: valide Compose, build, saúde dos serviços e testes
-   acordados; confira a estrutura com `inspecionar-projeto --check`.
-   Com aplicação, prove o fluxo real no navegador/desktop conforme
-   seu tipo; sem aplicação, registre a prova funcional pendente. Marque
-   `configuracao_tecnica: concluido` somente com evidência da configuração.
+6. Use `verificar-trabalho`: valide runtime, configuração Compose e saúde dos
+   serviços de infraestrutura necessários; confira a estrutura com
+   `inspecionar-projeto --check`. Se Docker ou outra dependência obrigatória
+   estiver inacessível, mantenha a configuração pendente e informe a prova
+   faltante. Sem aplicação, registre build, saúde e fluxo dela como pendentes;
+   não os reporte como aprovados. Com aplicação existente, prove o fluxo real
+   conforme seu tipo. Marque `configuracao_tecnica: concluido` somente com
+   evidência da configuração prévia e dos serviços aplicáveis.
 
 Após alterações técnicas, conclua `revisar-entrega`. Sincronize apontamentos
 somente quando recursos dos agentes forem alterados.

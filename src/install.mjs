@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { chmodSync, closeSync, existsSync, fstatSync, lstatSync, openSync, readFileSync, readSync, writeFileSync, readdirSync, mkdirSync, mkdtempSync, realpathSync, renameSync, rmSync, rmdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { synchronize, isReference } from '../.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs';
 import { isGeneratedOutput, planLocalIgnore, checkLocalIgnore, assertLocalIgnoreUnchanged, applyLocalIgnore, indexContentMatches } from '../.pbai4devs/scripts/lib/gitignore.mjs';
 import { nativePathBoundary } from '../.pbai4devs/scripts/lib/native-paths.mjs';
@@ -138,12 +138,28 @@ const checkTarget = path => {
   if (path.split(sep).some(part => reservedTargets.has(part.toLowerCase()))) fail('E_TARGET', 'Unsafe target directory.');
 };
 
+// Only normalize macOS aliases owned by the system. Environment-controlled
+// TMPDIR is not evidence that a symbolic link is safe to follow.
+function normalizeSystemTemporaryAlias(target) {
+  if (process.platform !== 'darwin') return target;
+  for (const { alias, allowed, physical } of [
+    { alias: '/tmp', allowed: '/tmp', physical: '/private/tmp' },
+    { alias: '/var', allowed: '/var/folders', physical: '/private/var' },
+  ]) {
+    if (target !== allowed && !target.startsWith(`${allowed}${sep}`)) continue;
+    const link = stat(alias), directory = stat(physical);
+    if (!link?.isSymbolicLink() || link.uid !== 0 || !directory?.isDirectory() || directory.uid !== 0) return target;
+    try { if (realpathSync(alias) !== physical) return target; }
+    catch (error) { if (error.code === 'ENOENT' || error.code === 'ELOOP') return target; throw error; }
+    return join(physical, relative(alias, target));
+  }
+  return target;
+}
+
 export function resolveTarget(input, cwd = process.cwd()) {
   let target = resolve(cwd, input || '.');
   checkTarget(target);
-  // The OS may expose its own temporary directory through a system alias.
-  const temporary = resolve(tmpdir()), insideTemporary = relative(temporary, target);
-  if (insideTemporary === '' || (!insideTemporary.startsWith(`..${sep}`) && insideTemporary !== '..' && !isAbsolute(insideTemporary))) target = join(realpathSync(temporary), insideTemporary);
+  target = normalizeSystemTemporaryAlias(target);
   let ancestor = target;
   while (true) {
     const info = stat(ancestor);
@@ -151,7 +167,7 @@ export function resolveTarget(input, cwd = process.cwd()) {
     const parent = dirname(ancestor); if (parent === ancestor) break; ancestor = parent;
   }
   const missing = []; let parent = target;
-  while (!stat(parent)) { missing.unshift(parent.slice(dirname(parent).length + 1)); parent = dirname(parent); }
+  while (!stat(parent)) { missing.unshift(basename(parent)); parent = dirname(parent); }
   const info = stat(parent);
   if (info.isSymbolicLink() || !info.isDirectory()) fail('E_TARGET', 'Target must be a real directory, without a symbolic link.');
   const canonical = join(realpathSync(parent), ...missing);
