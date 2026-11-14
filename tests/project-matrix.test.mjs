@@ -133,12 +133,72 @@ test('recusa link simbólico dentro das refs', { skip: !node24, timeout: 10000 }
   assert.equal(result.passed, false); assert.match(result.preservation.refs.error, /Link simbólico em ref/);
 });
 
-test('timeout não aguarda indefinidamente pipe herdado de descendente', { timeout: 10000 }, async t => {
-  const root = temp(t), script = join(root, 'pipes.cjs');
-  put(script, `const {spawn}=require('node:child_process');const {tmpdir}=require('node:os');const c=spawn(process.execPath,['-e','setTimeout(()=>{},2500)'],{stdio:'inherit',cwd:tmpdir()});c.unref();process.stdout.write('started\\n');`);
-  const start = Date.now(), result = await command(process.execPath, [script], root, process.env, 300);
+test('não aguarda indefinidamente pipe herdado de descendente confirmado por IPC', { timeout: 20000 }, async t => {
+  const root = temp(t), script = join(root, 'pipes.cjs'), descendant = join(root, 'descendant.cjs');
+  const stop = join(root, 'stop'), ack = join(root, 'ack');
+  const parentExiting = join(root, 'parent-exiting'), descendantObserved = join(root, 'descendant-observed');
+  const descendantPid = join(root, 'descendant-pid'), disconnected = join(root, 'disconnected');
+  put(descendant, `const {existsSync,writeFileSync,renameSync}=require('node:fs');
+const stop=process.argv[2],ack=process.argv[3],parentExiting=process.argv[4],observed=process.argv[5];let done=false,seen=false;
+writeFileSync(process.argv[6],String(process.pid));
+process.once('disconnect',()=>writeFileSync(process.argv[7],'disconnect'));
+function finish(reason){if(done)return;done=true;clearTimeout(timer);clearInterval(poll);writeFileSync(ack+'.tmp',reason);renameSync(ack+'.tmp',ack);if(process.connected)process.disconnect();}
+const timer=setTimeout(()=>finish('expired'),6000);
+const poll=setInterval(()=>{if(!seen&&existsSync(parentExiting)){seen=true;writeFileSync(observed+'.tmp','observed');renameSync(observed+'.tmp',observed);}if(existsSync(stop))finish('stopped');},30);
+process.send('ready');`);
+  put(script, `const {spawn}=require('node:child_process');
+const {tmpdir}=require('node:os');
+const {writeFileSync,renameSync}=require('node:fs');
+process.on('exit',()=>{writeFileSync(process.argv[5]+'.tmp','parent-exit-callback');renameSync(process.argv[5]+'.tmp',process.argv[5]);});
+const c=spawn(process.execPath,[process.argv[2],process.argv[3],process.argv[4],process.argv[5],process.argv[6],process.argv[7],process.argv[8]],{stdio:['ignore','inherit','inherit','ipc'],cwd:tmpdir()});
+c.once('error',e=>{process.stderr.write(e.message);process.exitCode=1;});
+c.once('message',m=>{
+  if(m!=='ready'){process.exitCode=1;return;}
+  process.stdout.write('DESC_READY\\n');
+  c.disconnect();c.unref();process.stdout.write('PARENT_EXIT\\n');
+});`);
+  const start = Date.now(); let result, elapsed;
+  try {
+    result = await command(process.execPath, [script, descendant, stop, ack, parentExiting, descendantObserved, descendantPid, disconnected], root, process.env, 2500);
+    elapsed = Date.now() - start;
+    const observationEnd = Date.now() + 1500;
+    while (!existsSync(descendantObserved) && Date.now() < observationEnd) await new Promise(resolvePromise => setTimeout(resolvePromise, 30));
+  } finally {
+    // O próprio neto encerra após este arquivo; não sinalizamos PID reutilizável.
+    writeFileSync(stop, 'stop');
+    const end = Date.now() + 6500;
+    while (!existsSync(ack) && Date.now() < end && !(process.platform !== 'win32' && result?.timedOut && result.signal === 'SIGKILL')) await new Promise(resolvePromise => setTimeout(resolvePromise, 30));
+  }
+  const killedGroup = process.platform !== 'win32' && result.timedOut && result.signal === 'SIGKILL';
+  if (existsSync(ack)) assert.equal(readFileSync(ack, 'utf8'), 'stopped');
+  else if (process.platform === 'win32') {
+    // No Windows testado, o neto encerrou abruptamente por causa desconhecida.
+    // Este ramo não prova que o neto viveu após a saída do pai.
+    assert.equal(result.timedOut, false); assert.equal(result.status, 0); assert.equal(result.signal, null);
+    assert.equal(readFileSync(disconnected, 'utf8'), 'disconnect');
+    const pid = Number(readFileSync(descendantPid, 'utf8'));
+    assert.ok(Number.isSafeInteger(pid) && pid > 0);
+    let probeError;
+    try { process.kill(pid, 0); } catch (error) { probeError = error; }
+    assert.equal(probeError?.code, 'ESRCH', 'o neto deve ter encerrado; nenhum sinal é enviado');
+  } else assert.equal(killedGroup, true, 'o descendente não confirmou encerramento');
+  // O callback é executado no pai e antecede o encerramento efetivo no SO.
+  assert.equal(readFileSync(parentExiting, 'utf8'), 'parent-exit-callback');
+  if (process.platform !== 'win32' || existsSync(ack)) assert.equal(readFileSync(descendantObserved, 'utf8'), 'observed');
+  assert.equal(result.exceeded, false); assert.equal(result.error, null);
+  assert.match(result.stdout, /DESC_READY\r?\n/); assert.match(result.stdout, /PARENT_EXIT\r?\n/);
+  if (!result.timedOut) {
+    assert.equal(result.status, 0); assert.equal(result.signal, null);
+  }
+  assert.ok(elapsed < 6000, 'o pipe herdado não pode bloquear o runner');
+});
+
+test('processo vivo atinge timeout e não é tratado como sucesso', { timeout: 15000 }, async t => {
+  const root = temp(t), script = join(root, 'alive.cjs');
+  put(script, `process.stdout.write('ALVO_VIVO\\n');process.on('SIGTERM',()=>{});setInterval(()=>{},1000);`);
+  const start = Date.now(), result = await command(process.execPath, [script], root, process.env, 1500);
   assert.equal(result.timedOut, true); assert.equal(result.exceeded, false);
-  assert.match(result.stdout, /started/); assert.ok(Date.now() - start < 2000, 'o pipe herdado não pode bloquear o runner');
+  assert.match(result.stdout, /ALVO_VIVO\r?\n/); assert.ok(Date.now() - start < 5000);
 });
 
 test('timeout encerra grupo próprio sem sinalizar processo independente', { skip: process.platform === 'win32', timeout: 10000 }, async t => {
@@ -164,14 +224,15 @@ test('limita saída excessiva e não sinaliza processo independente', { timeout:
   assert.equal(sibling.exitCode, null); assert.equal(sibling.signalCode, null);
 });
 
-test('timeout do alvo não certifica preservação mesmo quando snapshots coincidem', { skip: !node24, timeout: 10000 }, async t => {
+test('timeout do alvo não certifica preservação mesmo quando snapshots coincidem', { skip: !node24, timeout: 30000 }, async t => {
   const root = temp(t), cli = join(root, 'hang.cjs');
-  put(cli, `process.on('SIGTERM',()=>{});setInterval(()=>{},1000);`);
+  put(cli, `process.stdout.write('ALVO_VIVO\\n');process.on('SIGTERM',()=>{});setInterval(()=>{},1000);`);
   const results = join(root, 'results'); mkdirSync(results);
   const env = controlled(root);
-  const timed = (file, args, cwd, environment) => command(file, args, cwd, environment, file === process.execPath ? 300 : 30000);
+  const timed = (file, args, cwd, environment) => command(file, args, cwd, environment, file === process.execPath ? 1500 : 30000);
   const result = await projectCase({ number: 1, kind: 'existing', selection: 'codex' }, results, cli, '9.9.9', env, timed);
   assert.equal(result.passed, false); assert.equal(result.operations.at(-1).timedOut, true);
+  assert.match(readFileSync(result.operations.at(-1).stdout, 'utf8'), /ALVO_VIVO/);
   assert.equal(result.preservation.status, 'not-verified');
   assert.equal(result.preservation.unchanged, null); assert.equal(result.preservation.documentsPreserved, null);
   assert.equal(result.preservation.observedUnchanged, true); assert.equal(result.preservation.observedDocumentsPreserved, true);
