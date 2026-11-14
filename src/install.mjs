@@ -457,7 +457,14 @@ function replaceJsonMember(bytes, member, value) {
     fail('E_STATE', 'Invalid JSON member separator.');
   }
   const matches = properties.filter(item => item.key === member);
-  if (matches.length !== 1) fail('E_STATE', 'Ambiguous derived state member.');
+  if (matches.length > 1) fail('E_STATE', 'Ambiguous state member.');
+  if (!matches.length) {
+    if (value === undefined) return bytes;
+    const insertion = `${properties.length ? ',' : ''}\n  ${JSON.stringify(member)}: ${JSON.stringify(value, null, 2)}\n`;
+    const next = text.slice(0, i) + insertion + text.slice(i);
+    try { JSON.parse(next); } catch { fail('E_STATE', 'Unable to preserve state safely.'); }
+    return Buffer.from(next);
+  }
   const current = matches[0], index = properties.indexOf(current);
   let next;
   if (value !== undefined) next = text.slice(0, current.valueStart) + JSON.stringify(value, null, 2) + text.slice(current.end);
@@ -468,29 +475,44 @@ function replaceJsonMember(bytes, member, value) {
   return Buffer.from(next);
 }
 
+function reconcileStateBytes(original, previous, next) {
+  if (!original) return Buffer.from(`${JSON.stringify(next, null, 2)}\n`);
+  const canonical = value => value && typeof value === 'object' && !Array.isArray(value)
+    ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])]))
+    : Array.isArray(value) ? value.map(canonical) : value;
+  let result = original;
+  for (const key of ['schemaVersion', 'version', 'language', 'clients', 'files', 'blocks']) {
+    if (JSON.stringify(canonical(previous?.[key])) !== JSON.stringify(canonical(next[key]))) result = replaceJsonMember(result, key, next[key]);
+  }
+  return result;
+}
+
 function readDerivedState(target) {
-  let entries = {}, outputs = {}, blocks = {}, files = {}, removedBlocks = [], removedFiles = {};
+  let entries = {}, outputs = {}, blocks = {}, files = {}, catalogs = {}, config = null, removedBlocks = [], removedFiles = {};
   const derived = read(target, actualStatePath(target).replace(/agentdevkit\.json$/, 'derived.json'));
   if (derived) {
     try {
       const value = JSON.parse(derived);
       if (value.schemaVersion !== 1 || !value.entries || typeof value.entries !== 'object' || Array.isArray(value.entries)
-        || ['outputs', 'blocks', 'files', 'removedFiles'].some(key => value[key] !== undefined && (!value[key] || typeof value[key] !== 'object' || Array.isArray(value[key])))) fail('E_STATE', 'Invalid derived entrypoint state.');
-      entries = value.entries; outputs = value.outputs ?? {}; blocks = value.blocks ?? {}; files = value.files ?? {}; removedFiles = value.removedFiles ?? {};
+        || ['outputs', 'blocks', 'files', 'catalogs', 'removedFiles'].some(key => value[key] !== undefined && (!value[key] || typeof value[key] !== 'object' || Array.isArray(value[key])))) fail('E_STATE', 'Invalid derived entrypoint state.');
+      entries = value.entries; outputs = value.outputs ?? {}; blocks = value.blocks ?? {}; files = value.files ?? {}; catalogs = value.catalogs ?? {}; removedFiles = value.removedFiles ?? {};
+      if (value.config !== undefined && (typeof value.config !== 'string' || !/^[a-f0-9]{64}$/.test(value.config))) fail('E_STATE', 'Invalid derived configuration state.');
+      config = value.config ?? null;
       removedBlocks = value.removedBlocks ?? [];
       if (!Array.isArray(removedBlocks) || removedBlocks.some(path => typeof path !== 'string' || !nativeManagedText(path))) fail('E_STATE', 'Invalid removed block state.');
       for (const [path, digest] of Object.entries(entries)) if (!canonicalEntrypoint(path) || !/^[a-f0-9]{64}$/.test(digest)) fail('E_STATE', 'Invalid derived entrypoint state.');
       for (const [path, digest] of Object.entries(outputs)) if (!allowedManaged(path) || !/^\.[^/]+\/(?:skills|agents|rules)\.json$/.test(path) || !/^[a-f0-9]{64}$/.test(digest)) fail('E_STATE', 'Invalid derived output state.');
-      for (const [path, digest] of Object.entries(blocks)) if (!(nativeManagedText(path) || adapterRoots.some(root => path === `${root}/.gitignore`)) || !/^[a-f0-9]{64}$/.test(digest)) fail('E_STATE', 'Invalid derived block state.');
+      for (const [path, digest] of Object.entries(blocks)) if (!(nativeManagedText(path) || path === '.pbai4devs/.gitignore' || adapterRoots.some(root => path === `${root}/.gitignore`)) || !/^[a-f0-9]{64}$/.test(digest)) fail('E_STATE', 'Invalid derived block state.');
       for (const [path, digest] of Object.entries(files)) if (!allowedManaged(path) || !/\.(?:md|mdc|toml)$/.test(path) || !/^[a-f0-9]{64}$/.test(digest)) fail('E_STATE', 'Invalid derived file state.');
+      for (const [path, digest] of Object.entries(catalogs)) if (!/^\.pbai4devs\/(?:catalog|skills|agents|rules)\.json$/.test(path) || !/^[a-f0-9]{64}$/.test(digest)) fail('E_STATE', 'Invalid derived catalogue state.');
       for (const [path, digest] of Object.entries(removedFiles)) if (canonicalEntrypoint(path) || !(nativeMarkdown(path) || nativeToml(path)) || !/^[a-f0-9]{64}$/.test(digest)) fail('E_STATE', 'Invalid removed file state.');
       const installed = loadState(target);
       if (Object.entries(removedFiles).some(([path, digest]) => installed?.files?.[path] && installed.files[path] !== digest)) fail('E_STATE', 'Removed file state differs from installation.');
     }
     catch { fail('E_STATE', 'Invalid derived entrypoint state.'); }
-    for (const path of [...Object.keys(entries), ...Object.keys(outputs), ...Object.keys(blocks), ...Object.keys(files), ...Object.keys(removedFiles), ...removedBlocks]) safePath(target, path);
+    for (const path of [...Object.keys(entries), ...Object.keys(outputs), ...Object.keys(blocks), ...Object.keys(files), ...Object.keys(catalogs), ...Object.keys(removedFiles), ...removedBlocks]) safePath(target, path);
   }
-  return { entries, outputs, blocks, files, removedBlocks, removedFiles };
+  return { entries, outputs, blocks, files, catalogs, config, removedBlocks, removedFiles };
 }
 
 export function planInstallation({ target, language = 'pt', mode = 'init', force = false, clients }) {
@@ -511,11 +533,12 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
       if (original === null ? content !== null : !content?.equals(original)) fail('E_CHANGED', `File changed while planning: ${path}`);
     } else nativeInputs.set(path, content);
   };
-  const { entries: derivedEntries, outputs: derivedOutputs, blocks: derivedBlocks, files: derivedFiles, removedBlocks, removedFiles } = readDerivedState(target);
+  const { entries: derivedEntries, outputs: derivedOutputs, blocks: derivedBlocks, files: derivedFiles, catalogs: derivedCatalogs, config: derivedConfig, removedBlocks, removedFiles } = readDerivedState(target);
+  const derivedConfigFiles = derivedConfig ? { '.pbai4devs/espelhos.conf': derivedConfig } : {};
   if (previous) previous = { ...previous, files: Object.fromEntries(Object.entries(previous.files).filter(([path, digest]) => removedFiles[path] !== digest)) };
   const previousBlocks = Object.fromEntries(Object.entries(previous?.blocks || {}).filter(([path]) => !removedBlocks.includes(path)));
   const knownBlocks = { ...previousBlocks, ...derivedBlocks };
-  const ownedPaths = [...Object.keys(previous?.files || {}), ...Object.keys(previousBlocks), ...Object.keys(derivedEntries), ...Object.keys(derivedOutputs), ...Object.keys(derivedBlocks), ...Object.keys(derivedFiles)];
+  const ownedPaths = [...Object.keys(previous?.files || {}), ...Object.keys(previousBlocks), ...Object.keys(derivedEntries), ...Object.keys(derivedOutputs), ...Object.keys(derivedBlocks), ...Object.keys(derivedFiles), ...Object.keys(derivedCatalogs), ...Object.keys(derivedConfigFiles)];
   const entryPaths = new Map(entryNames.map(name => [name, resolveEntrypoint(target, name)]));
   const blockHash = path => knownBlocks[path]
     ?? (canonicalEntrypoint(path) ? Object.entries(knownBlocks).find(([candidate]) => canonicalEntrypoint(candidate) === canonicalEntrypoint(path))?.[1] : undefined);
@@ -597,7 +620,17 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
     const ownIgnore = read(target, '.pbai4devs/.gitignore');
     if (ownIgnore) write(stage, '.pbai4devs/.gitignore', ownIgnore);
     writeAdapterManifest(stage, { clients: selected });
-    const synchronized = synchronize({ root: stage, force: true, localIgnores: false, generateEntrypoints: false, recordDerivedState: false, outputBlocked, output() {} });
+    // Supply the already-validated ownership records to the private stage so
+    // the synchronizer can distinguish an owned ignore block from a user's.
+    // These temporary records never replace or bypass checks on the target.
+    const stagingState = '.pbai4devs/state/agentdevkit.json', stagingDerived = '.pbai4devs/state/derived.json';
+    if (previous) write(stage, stagingState, JSON.stringify(previous));
+    if (Object.keys(derivedEntries).length || Object.keys(derivedOutputs).length || Object.keys(derivedBlocks).length || Object.keys(derivedFiles).length || Object.keys(derivedCatalogs).length || derivedConfig || removedBlocks.length || Object.keys(removedFiles).length) {
+      write(stage, stagingDerived, JSON.stringify({ schemaVersion: 1, entries: derivedEntries, outputs: derivedOutputs, blocks: derivedBlocks, files: derivedFiles, catalogs: derivedCatalogs, ...(derivedConfig ? { config: derivedConfig } : {}), removedBlocks, removedFiles }));
+    }
+    let synchronized;
+    try { synchronized = synchronize({ root: stage, force: true, localIgnores: false, generateEntrypoints: false, recordDerivedState: false, outputBlocked, output() {} }); }
+    finally { rmSync(join(stage, stagingState), { force: true }); rmSync(join(stage, stagingDerived), { force: true }); }
     for (const canonical of active.entrypoints) {
       const name = entryPaths.get(canonical);
       if (preserveNative(name)) continue;
@@ -673,14 +706,14 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
     // A standalone sync records its proven outputs separately. During a later
     // check/sync, compare that overlay before declaring the installation state
     // stale; update still consolidates it into the main state transactionally.
-    let stateContent = Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`);
+    let stateContent = reconcileStateBytes(installedState ? read(target, actualStatePath(target)) : null, installedState, manifest);
     if (mode === 'sync' && installedState && !changingClients) {
       const files = { ...installedState.files }, blocks = { ...installedState.blocks };
       for (const [path, digest] of Object.entries(removedFiles)) {
         if (files[path] === digest && !stat(safePath(target, path))) delete files[path];
       }
       for (const path of removedBlocks) delete blocks[path];
-      for (const [path, digest] of Object.entries({ ...derivedFiles, ...derivedOutputs, ...derivedEntries })) { files[path] = digest; delete blocks[path]; }
+      for (const [path, digest] of Object.entries({ ...derivedFiles, ...derivedOutputs, ...derivedEntries, ...derivedCatalogs, ...derivedConfigFiles })) { files[path] = digest; delete blocks[path]; }
       for (const [path, digest] of Object.entries(derivedBlocks)) { blocks[path] = digest; delete files[path]; }
       const same = (a, b) => {
         const keys = Object.keys(a).sort();
@@ -692,23 +725,70 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
     desired.set(statePath, stateContent);
     const derivedPath = actualStatePath(target).replace(/agentdevkit\.json$/, 'derived.json');
     const derivedBytes = !migration ? read(target, derivedPath) : null;
-    if (derivedBytes && Object.keys(removedFiles).length) {
+    let nextDerivedBytes = derivedBytes;
+    if (nextDerivedBytes && Object.keys(removedFiles).length) {
       const finalState = JSON.parse(stateContent);
       const remaining = Object.fromEntries(Object.entries(removedFiles).filter(([path, digest]) =>
         finalState.files[path] === digest && !stat(safePath(target, path))));
       if (Object.keys(remaining).length !== Object.keys(removedFiles).length) {
         observeNative(derivedPath, derivedBytes);
-        desired.set(derivedPath, replaceJsonMember(derivedBytes, 'removedFiles', Object.keys(remaining).length ? remaining : undefined));
+        nextDerivedBytes = replaceJsonMember(nextDerivedBytes, 'removedFiles', Object.keys(remaining).length ? remaining : undefined);
       }
     }
+    if (nextDerivedBytes && Object.keys(derivedCatalogs).length) {
+      const finalState = JSON.parse(stateContent);
+      const remaining = Object.fromEntries(Object.entries(derivedCatalogs).filter(([path]) => {
+        const content = desired.get(path);
+        return !content || finalState.files[path] !== hash(content);
+      }));
+      if (Object.keys(remaining).length !== Object.keys(derivedCatalogs).length) {
+        observeNative(derivedPath, derivedBytes);
+        nextDerivedBytes = replaceJsonMember(nextDerivedBytes, 'catalogs', Object.keys(remaining).length ? remaining : undefined);
+      }
+    }
+    if (nextDerivedBytes && Object.keys(derivedBlocks).length) {
+      const finalState = JSON.parse(stateContent);
+      const remaining = Object.fromEntries(Object.entries(derivedBlocks).filter(([path, digest]) => {
+        const content = desired.get(path);
+        // A deselected generated block is removed later in this transaction.
+        // Drop its overlay only if its current bytes are still proven; edited
+        // blocks remain conflicts and no metadata is committed on failure.
+        if (!content && !canonicalEntrypoint(path) && !finalState.blocks[path] && !finalState.files[path]) {
+          const current = read(target, path);
+          return Boolean(current && blockDigest(path, current) !== digest);
+        }
+        return !content || finalState.blocks[path] !== blockDigest(path, content);
+      }));
+      if (Object.keys(remaining).length !== Object.keys(derivedBlocks).length) {
+        observeNative(derivedPath, derivedBytes);
+        nextDerivedBytes = replaceJsonMember(nextDerivedBytes, 'blocks', Object.keys(remaining).length ? remaining : undefined);
+      }
+    }
+    if (nextDerivedBytes && derivedConfig) {
+      const finalState = JSON.parse(stateContent), path = '.pbai4devs/espelhos.conf', content = desired.get(path);
+      if (content && finalState.files[path] === hash(content)) {
+        observeNative(derivedPath, derivedBytes);
+        nextDerivedBytes = replaceJsonMember(nextDerivedBytes, 'config', undefined);
+      }
+    }
+    if (nextDerivedBytes && !nextDerivedBytes.equals(derivedBytes)) desired.set(derivedPath, nextDerivedBytes);
     const changes = [], conflicts = [];
     const aliasedEntrypoint = path => canonicalEntrypoint(path) && entryPaths.get(canonicalEntrypoint(path)) !== path;
+    const generatedInternal = new Set(['.pbai4devs/catalog.json', '.pbai4devs/skills.json', '.pbai4devs/agents.json', '.pbai4devs/rules.json', '.pbai4devs/espelhos.conf']);
     for (const [path, content] of desired) {
       const current = read(target, path);
       if (nativeInputs.has(path) && (nativeInputs.get(path) === null ? current !== null : !current?.equals(nativeInputs.get(path)))) fail('E_CHANGED', `File changed while planning: ${path}`);
-      if (current?.equals(content)) continue;
+      const wholeFileOwned = current && [previous?.files[path], derivedOutputs[path], derivedEntries[path], derivedFiles[path], derivedCatalogs[path], derivedConfigFiles[path]].some(digest => digest && digest === hash(current));
+      const existingBlock = current && (nativeManagedText(path) || canonicalEntrypoint(path) || path.endsWith('/.gitignore')) ? blockDigest(path, current) : null;
+      if (existingBlock && !wholeFileOwned && knownBlocks[path] !== existingBlock) conflicts.push(path);
+      if (current?.equals(content)) {
+        // Identical bytes do not prove ownership of a pre-existing catalogue.
+        // Refuse adoption: a later sync could otherwise overwrite user data.
+        if (!wholeFileOwned && (generatedInternal.has(path) || native(path) && !existingBlock && !mixedPaths.has(path) && !preserved.has(path))) conflicts.push(path);
+        continue;
+      }
       const managed = path === derivedPath && derivedBytes && current?.equals(derivedBytes)
-        || [previous?.files[path], derivedOutputs[path], derivedEntries[path], derivedFiles[path]].some(digest => digest && hash(current || '') === digest)
+        || [previous?.files[path], derivedOutputs[path], derivedEntries[path], derivedFiles[path], derivedCatalogs[path], derivedConfigFiles[path]].some(digest => digest && hash(current || '') === digest)
         || knownBlocks[path] && blockDigest(path, current || Buffer.alloc(0)) === knownBlocks[path];
       const appendBlock = mixedPaths.has(path) || canonicalEntrypoint(path) || path === '.gitignore' || path.endsWith('/.gitignore');
       const conflict = current && path !== statePath && !managed && !appendBlock;
@@ -828,7 +908,9 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
     const localIgnore = planLocalIgnore(target, { outputs: ownedOutputs, templateRoot: stage });
     const localIgnoreCheck = checkLocalIgnore(localIgnore, { replacedBlocks: replacedIgnoreBlocks(target, changes, previous) });
     conflicts.push(...(untrack?.conflicts || []), ...localIgnoreCheck.missing);
-    return { target, language, mode, changes, conflicts: [...new Set(conflicts)].sort(), canApply: (!conflicts.length || force) && !untrack?.conflicts?.length && !localIgnoreCheck.missing.length, manifest, retiredRoots, ownedOutputs, untrack, localIgnore, localIgnoreCheck, migration, fallbackChecks: [...fallbackChecks], fallbackOwnedPaths: ownedPaths, preserved: [...preserved.values()].sort((a, b) => a.path.localeCompare(b.path)) };
+    // A conflict means ownership or the managed bytes could not be proven.
+    // Backups do not authorize replacing user content, even with --force.
+    return { target, language, mode, changes, conflicts: [...new Set(conflicts)].sort(), canApply: !conflicts.length && !untrack?.conflicts?.length && !localIgnoreCheck.missing.length, manifest, retiredRoots, ownedOutputs, untrack, localIgnore, localIgnoreCheck, migration, fallbackChecks: [...fallbackChecks], fallbackOwnedPaths: ownedPaths, preserved: [...preserved.values()].sort((a, b) => a.path.localeCompare(b.path)) };
   } finally { rmSync(stage, { recursive: true, force: true }); }
 }
 
@@ -1019,7 +1101,7 @@ export function inspect(target) {
       if (content) issues.push({ code: 'modified', path });
       continue;
     }
-    if (!content || hash(content) !== digest && hash(content) !== derived.outputs[path] && hash(content) !== derived.files[path] && hash(content) !== derived.entries[path]) issues.push({ code: content ? 'modified' : 'missing', path });
+    if (!content || hash(content) !== digest && hash(content) !== derived.outputs[path] && hash(content) !== derived.files[path] && hash(content) !== derived.entries[path] && hash(content) !== derived.catalogs[path] && !(path === '.pbai4devs/espelhos.conf' && hash(content) === derived.config)) issues.push({ code: content ? 'modified' : 'missing', path });
   }
   for (const [path, digest] of Object.entries({ ...state.blocks, ...derived.blocks })) {
     if (derived.removedBlocks.includes(path) && !Object.hasOwn(derived.blocks, path)) continue;

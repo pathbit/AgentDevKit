@@ -56,9 +56,10 @@ Compare cada `conflicts` com o que deseja manter. Edite a origem em
 recurso. Use `sync` para atualizar suas derivações. `update` reaplica os
 recursos do pacote invocado e pode conflitar com essa personalização.
 
-Quando a substituição for intencional, repita com `--force`. Arquivos
-existentes afetados recebem backup antes da escrita, inclusive em operações
-normais. O campo `backup` informa uma pasta relativa ao projeto:
+`--force` não substitui arquivos próprios nem blocos alterados. Resolva o
+conflito preservando o conteúdo que deseja manter e confira novamente o plano.
+Arquivos gerenciados afetados recebem backup antes da escrita, inclusive em
+operações normais. O campo `backup` informa uma pasta relativa ao projeto:
 
 ```text
 .agent-tests/agentdevkit/backups/<identificador>/
@@ -105,9 +106,10 @@ ou caminhos já gerenciados em links.
 Destinos dentro de `.git`, `node_modules` ou `.pbai4devs` são recusados,
 inclusive com variações de maiúsculas/minúsculas.
 
-Na CLI e no script `sincronizar-agentes`, `--force` repara conflitos gerenciados
-com backup. Recursos nativos humanos e links preservados continuam intactos.
-Para manter a instalação e sua seleção de clientes, prefira a CLI.
+No script `sincronizar-agentes`, `--force` repara conflitos gerenciados com
+backup. A CLI bloqueia conflitos de propriedade mesmo com `--force`. Recursos
+nativos humanos e links preservados continuam intactos. Para manter a instalação
+e sua seleção de clientes, prefira a CLI.
 
 ## Download, plataforma ou ferramenta falhando
 

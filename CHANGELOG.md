@@ -4,6 +4,13 @@ description: Alterações verificáveis por versão do AgentDevKit.
 
 # Changelog
 
+## 0.0.24 — 2026-11-14
+
+- Preserva catálogos, configuração e blocos existentes sem comprovação de
+  propriedade, inclusive ao usar `--force` ou sincronização direta.
+- Mantém o estado coerente quando a sincronização atualiza saídas gerenciadas.
+- Acrescenta testes de colisão, arquivos idênticos e preservação do índice Git.
+
 ## 0.0.23 — 2026-11-13
 
 - Corrige a resolução de destinos inexistentes diretamente sob a raiz.

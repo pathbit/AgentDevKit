@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import childProcess, { spawnSync } from 'node:child_process';
@@ -110,6 +111,32 @@ test('troca de ancestral por symlink antes da criação não escreve no destino 
   }
 });
 
+test('troca de saída durante escrita é detectada, sem alegar atomicidade', t => {
+  const { root, outputRoot } = fixture(t);
+  const target = join(outputRoot, 'race-output'), outside = mkdtempSync(join(root, 'race-outside-'));
+  const sentinel = join(outside, 'sentinel'); writeFileSync(sentinel, 'Não alterar.\n');
+  const original = fs.writeFileSync; let injected = false;
+  try {
+    fs.writeFileSync = (file, ...args) => {
+      if (!injected && String(file) === join(target, '.maturity-suite.json')) {
+        renameSync(target, `${target}-moved`); symlinkSync(outside, target, 'dir'); injected = true;
+      }
+      return original.call(fs, file, ...args);
+    };
+    syncBuiltinESMExports();
+    assert.throws(() => prepareExamples({ sourceRoot: root, outputRoot: target, scenarios: [SCENARIOS[0]], initializeGit: false }), /link|alterado/i);
+  } catch (error) {
+    if (!injected && ['EPERM', 'EACCES', 'ENOTSUP'].includes(error.code)) { t.skip('Links simbólicos indisponíveis.'); return; }
+    throw error;
+  } finally { fs.writeFileSync = original; syncBuiltinESMExports(); }
+  assert.equal(injected, true);
+  assert.equal(readFileSync(sentinel, 'utf8'), 'Não alterar.\n');
+  // O write já em curso pode ter criado o marcador no destino externo: a
+  // verificação detecta a troca, mas não é uma operação atômica de diretório.
+  assert.equal(existsSync(join(outside, '.maturity-suite.json')), true);
+  assert.equal(existsSync(join(outside, 'REPORT.json')), false);
+});
+
 test('cada destino padrão é exclusivo, preserva provas anteriores e permanece ignorado', t => {
   const { root, outputRoot } = fixture(t);
   const git = (...args) => {
@@ -172,16 +199,16 @@ test('preparação interrompida não altera resultado anterior nem declara suces
   assert.doesNotMatch(readFileSync(index, 'utf8'), /status: passed|\| passed \|/);
 });
 
-test('usa entradas distribuídas do hub e mantém fallback legado', t => {
+test('sem estado comprovado conserva entradas humanas mesmo com template', t => {
   const { root, put } = fixture(t);
   const template = '---\ndescription: Entrada genérica.\n---\n\n# Agentes do projeto\n';
   put('AGENTS.md', '# Produto do distribuidor\n\n[PRD](docs/prd.md)\n');
   put('.pbai4devs/templates/entrypoints/AGENTS.md', template);
   const destination = join(root, 'copy');
   const copied = copyAgentStructure(root, destination);
-  assert.equal(readFileSync(join(destination, 'AGENTS.md'), 'utf8'), template);
+  assert.equal(readFileSync(join(destination, 'AGENTS.md'), 'utf8'), '# Produto do distribuidor\n\n[PRD](docs/prd.md)\n');
   assert.equal(readFileSync(join(destination, 'CLAUDE.md'), 'utf8'), 'fixture\n');
-  assert.equal(copied.entrypoints['AGENTS.md'], '.pbai4devs/templates/entrypoints/AGENTS.md');
+  assert.equal(copied.entrypoints['AGENTS.md'], 'AGENTS.md');
   assert.equal(copied.entrypoints['CLAUDE.md'], 'CLAUDE.md');
   assert.equal(readFileSync(join(root, 'AGENTS.md'), 'utf8'), '# Produto do distribuidor\n\n[PRD](docs/prd.md)\n');
 });
@@ -323,6 +350,99 @@ test('prepare gera apontamentos reais mesmo sem pastas de clientes na origem', t
   for (const target of resourceTargets(sourceRoot, skill)) assert.ok(existsSync(join(example.root, target)), target);
   for (const client of roots) assert.equal(existsSync(join(sourceRoot, client)), false, client);
   for (const file of ['src/cli.mjs', 'bin/agentdevkit.mjs', 'scripts/release/pipeline.mjs', 'tests/cli.test.mjs']) assert.equal(existsSync(join(example.root, file)), false, file);
+});
+
+for (const withState of [false, true]) test(`prepare preserva catálogos humanos na cópia e na origem (estado=${withState})`, t => {
+  const { root } = fixture(t), sourceRoot = join(root, `source-catalog-${withState}`);
+  copyAgentStructure(projectRoot, sourceRoot);
+  const state = join(sourceRoot, '.pbai4devs/state/agentdevkit.json');
+  const derived = join(sourceRoot, '.pbai4devs/state/derived.json');
+  rmSync(state, { force: true }); rmSync(derived, { force: true }); // Só cópias criadas nesta fixture.
+  if (withState) {
+    mkdirSync(dirname(state), { recursive: true });
+    writeFileSync(state, JSON.stringify({ schemaVersion: 1, version: '0.0.24', language: 'pt', clients: ['codex'], files: {}, blocks: {} }) + '\n');
+  }
+  const originals = {};
+  for (const name of ['catalog.json', 'skills.json', 'agents.json', 'rules.json']) {
+    const file = join(sourceRoot, '.pbai4devs', name), content = `{ "arquivo humano": ${JSON.stringify(name)} }\n`;
+    writeFileSync(file, content); originals[name] = content;
+  }
+  for (const path of ['.pbai4devs/.gitignore', '.codex/.gitignore']) {
+    const file = join(sourceRoot, path);
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, '# BEGIN AGENT IGNORE\n# Alteração humana dentro do bloco\n!/nao-apagar/\n# END AGENT IGNORE\n');
+  }
+  const skill = '.pbai4devs/skills/projeto/equipe-local/SKILL.md';
+  const skillFile = join(sourceRoot, skill);
+  mkdirSync(dirname(skillFile), { recursive: true });
+  writeFileSync(skillFile, '---\nname: equipe-local\ndescription: Conteúdo próprio.\n---\n\n# Equipe local\n');
+  const sourceIgnore = readFileSync(join(sourceRoot, '.gitignore'));
+  const sourceConfig = readFileSync(join(sourceRoot, '.pbai4devs/espelhos.conf'));
+  const [example] = prepare({ sourceRoot, scenarios: [SCENARIOS[0]], initializeGit: false });
+  assert.equal(example.copied.catalogSnapshots.length, 4);
+  for (const [name, content] of Object.entries(originals)) {
+    assert.equal(readFileSync(join(sourceRoot, '.pbai4devs', name), 'utf8'), content);
+    assert.equal(readFileSync(join(example.root, '.agent-tests/testar-maturidade/original-catalogs', name), 'utf8'), content);
+    assert.doesNotMatch(readFileSync(join(example.root, '.pbai4devs', name), 'utf8'), /arquivo humano/);
+  }
+  for (const path of ['.pbai4devs/.gitignore', '.codex/.gitignore']) {
+    const original = readFileSync(join(sourceRoot, path));
+    const saved = example.copied.overriddenSnapshots.find(item => item.source === path);
+    assert.ok(saved, path);
+    assert.deepEqual(readFileSync(join(example.root, saved.snapshot)), original);
+    assert.match(original.toString('utf8'), /Alteração humana/);
+    assert.doesNotMatch(readFileSync(join(example.root, path), 'utf8'), /Alteração humana/);
+  }
+  assert.equal(readFileSync(join(example.root, skill), 'utf8'), readFileSync(skillFile, 'utf8'));
+  assert.deepEqual(readFileSync(join(sourceRoot, '.gitignore')), sourceIgnore);
+  assert.deepEqual(readFileSync(join(sourceRoot, '.pbai4devs/espelhos.conf')), sourceConfig);
+  const report = JSON.parse(readFileSync(join(dirname(example.root), 'REPORT.json'), 'utf8'));
+  assert.deepEqual(report.copies[0].catalogSnapshots, example.copied.catalogSnapshots);
+  assert.match(readFileSync(join(example.root, 'README.md'), 'utf8'), /não um teste no projeto original/);
+  assert.equal(existsSync(state), withState);
+});
+
+test('arquiva arquivos substituídos mesmo quando o cliente não está selecionado', t => {
+  const { root, put } = fixture(t);
+  put('.pbai4devs/espelhos.conf', 'agente|.codex|plano\n');
+  const files = ['.vscode/settings.json', '.github/workflows/legacy.yml'];
+  for (const path of files) put(path, `Conteúdo de equipe: ${path}\r\n`);
+  const [example] = prepareExamples({ sourceRoot: root, scenarios: [SCENARIOS.find(item => item.id === 'legado')], initializeGit: false });
+  for (const path of files) {
+    const saved = example.copied.overriddenSnapshots.filter(item => item.source === path);
+    assert.equal(saved.length, 1, path);
+    assert.deepEqual(readFileSync(join(example.root, saved[0].snapshot)), readFileSync(join(root, path)));
+  }
+});
+
+test('arquivo de cliente não selecionado com ancestral simbólico é recusado', t => {
+  const { root, put } = fixture(t);
+  put('.pbai4devs/espelhos.conf', 'agente|.codex|plano\n');
+  const outside = mkdtempSync(join(root, 'outside-'));
+  writeFileSync(join(outside, 'settings.json'), 'Conteúdo externo.\n');
+  rmSync(join(root, '.vscode'), { recursive: true });
+  try { symlinkSync(outside, join(root, '.vscode'), 'dir'); }
+  catch (error) { if (['EPERM', 'EACCES', 'ENOTSUP'].includes(error.code)) { t.skip('Links simbólicos indisponíveis.'); return; } throw error; }
+  assert.throws(() => prepareExamples({ sourceRoot: root, scenarios: [SCENARIOS.find(item => item.id === 'legado')], initializeGit: false }), /link/i);
+  assert.equal(readFileSync(join(outside, 'settings.json'), 'utf8'), 'Conteúdo externo.\n');
+});
+
+test('arquivos da fonte substituídos por fixtures têm cópias byte a byte', t => {
+  const { root, put } = fixture(t);
+  const files = ['README.md', 'Makefile', '.dockerignore', '.env.example', '.pbai4devs/state/README.md', '.pbai4devs/state/configuracao/ESTADO.md', '.vscode/settings.json', '.github/workflows/legacy.yml'];
+  const contents = Object.fromEntries(files.map(file => [file, `Conteúdo humano sintético: ${file}\r\n`]));
+  for (const [file, content] of Object.entries(contents)) put(file, content);
+  const cases = [SCENARIOS.find(item => item.id === 'app-configurada'), SCENARIOS.find(item => item.id === 'legado')];
+  const examples = prepareExamples({ sourceRoot: root, scenarios: cases, initializeGit: false });
+  for (const example of examples) {
+    for (const { source, snapshot } of example.copied.overriddenSnapshots) {
+      assert.equal(readFileSync(join(example.root, snapshot), 'utf8'), contents[source], source);
+      assert.equal(readFileSync(join(root, source), 'utf8'), contents[source], source);
+    }
+    for (const path of ['README.md', 'Makefile', '.pbai4devs/state/README.md', '.pbai4devs/state/configuracao/ESTADO.md']) assert.ok(example.copied.overriddenSnapshots.some(item => item.source === path), path);
+    const expected = example.id === 'legado' ? ['.vscode/settings.json', '.github/workflows/legacy.yml'] : ['.dockerignore', '.env.example'];
+    for (const path of expected) assert.ok(example.copied.overriddenSnapshots.some(item => item.source === path), path);
+  }
 });
 
 test('saída não pode sobrepor recursos de origem nem escapar das áreas de teste', t => {

@@ -14,6 +14,7 @@ import './HUMAN_OWNERSHIP.mjs';
 import './COEXISTENCE.mjs';
 import './MANAGED_CONTENT.mjs';
 import './PRESERVATION.mjs';
+import './CATALOG_OWNERSHIP.mjs';
 import { validateCatalog as validateExternalCatalog } from '../../gerenciar-skills-externas/SCRIPT.mjs';
 import { stateDirectory } from '../../lib/state-path.mjs';
 
@@ -276,21 +277,22 @@ test('gera gitignore canonico e de clientes; registro gitignore nao espelha recu
   assertCheckReadonly(root, {}, 0);
 });
 
-test('repara somente bloco gitignore e force salva o original sem perder regras externas', t => {
+test('preserva bloco gitignore editado e atualiza bloco conhecido sem perder regras externas', t => {
   const root = fixture(t, true); run(root);
   const prefix = '# Regras do usuario\r\n/private-cache/\r\n';
   const suffix = '# Excecao local\r\n!keep.log\r\n';
+  const original = read(root, '.codex/.gitignore');
   const old = `${prefix}${ignoreBegin}\r\n/custom-inside/\r\n${ignoreEnd}\r\n${suffix}`;
   write(root, '.codex/.gitignore', old);
   assertCheckReadonly(root); assertCheckReadonly(root, { force: true });
-  const result = run(root, { force: true });
-  assert.equal(readFileSync(join(result.backupRoot, '.codex/.gitignore'), 'utf8'), old);
-  const repaired = readFileSync(join(root, '.codex/.gitignore'), 'utf8');
-  assert.ok(repaired.startsWith(prefix)); assert.ok(repaired.endsWith(suffix));
-  assert.ok(!repaired.includes('/custom-inside/')); assert.ok(repaired.includes('/cache/'));
+  assert.throws(() => run(root, { force: true }), /Conteudo proprio preservado/);
+  assert.equal(read(root, '.codex/.gitignore'), old);
+  write(root, '.codex/.gitignore', `${prefix}${original}${suffix}`);
   write(root, '.pbai4devs/templates/gitignore/agents.ignore', '# Novo padrao\n{{ALLOWLIST}}\n/cache/\n/session/\n');
   assertCheckReadonly(root);
-  run(root);
+  const result = run(root, { force: true });
+  assert.equal(readFileSync(join(result.backupRoot, '.codex/.gitignore'), 'utf8'), `${prefix}${original}${suffix}`);
+  assert.ok(read(root, '.codex/.gitignore').startsWith(prefix));
   assert.ok(read(root, '.codex/.gitignore').includes('/session/'));
   assert.ok(readFileSync(join(root, '.codex/.gitignore'), 'utf8').endsWith(suffix));
   assertCheckReadonly(root, {}, 0);
@@ -374,6 +376,9 @@ test('registros são derivados, determinísticos e --check nunca os corrige', t 
   run(root);
   write(root, '.pbai4devs/skills.json', '{"incorreto":true}\n');
   assertCheckReadonly(root);
+  assert.throws(() => run(root, { force: true }), /Conteudo proprio preservado/);
+  assert.equal(read(root, '.pbai4devs/skills.json'), '{"incorreto":true}\n');
+  rmSync(join(root, '.pbai4devs/skills.json'));
   run(root);
   assert.ok(Array.isArray(JSON.parse(read(root, '.pbai4devs/skills.json')).entries));
   rmSync(join(root, '.pbai4devs/adapters/antigravity/agents/revisor.md'));
@@ -455,7 +460,7 @@ test('atualiza fontes, adiciona clientes, remove recursos e migra agrupado para 
   assertCheckReadonly(root, {}, 0);
 });
 
-test('remove linhas legadas e preserva arquivos sem prova de propriedade', t => {
+test('preserva linhas legadas humanas sem prova de propriedade', t => {
   const root = fixture(t);
   run(root);
   write(root, 'docs/produto/prd/demo/PRD.md', '# Produto real\n');
@@ -463,13 +468,26 @@ test('remove linhas legadas e preserva arquivos sem prova de propriedade', t => 
   write(root, '.claude/manual/DOC.md', pointer('../../manual/guia%20com%20espa%C3%A7o/DOC.md'));
   write(root, '.github/prompts/missing.prompt.md', pointer());
   write(root, '.pbai4devs/espelhos.conf', read(root, '.pbai4devs/espelhos.conf') + 'documento|manual\n' + 'nativo|.github/prompts/missing.prompt.md|.pbai4devs/commands/missing/COMMAND.md\n');
+  const config = read(root, '.pbai4devs/espelhos.conf');
   assertCheckReadonly(root);
-  run(root);
-  assert.doesNotMatch(read(root, '.pbai4devs/espelhos.conf'), /documento\||missing/);
+  assert.throws(() => run(root, { force: true }), /Conteudo proprio preservado/);
+  assert.equal(read(root, '.pbai4devs/espelhos.conf'), config);
   assert.equal(existsSync(join(root, '.claude/manual/DOC.md')), true);
   assert.equal(existsSync(join(root, '.github/prompts/missing.prompt.md')), true);
   assert.ok(existsSync(join(root, 'docs/produto/prd/demo/PRD.md')));
   assert.ok(existsSync(join(root, 'manual/guia com espaço/DOC.md')));
+  assertCheckReadonly(root);
+});
+
+test('limpa configuração legada comprovadamente gerenciada e registra novo hash', t => {
+  const root = fixture(t);
+  const path = '.pbai4devs/espelhos.conf';
+  write(root, path, read(root, path) + 'documento|manual\n');
+  recordOwned(root, [path]);
+  run(root);
+  assert.doesNotMatch(read(root, path), /documento\|/);
+  const derived = JSON.parse(read(root, '.pbai4devs/state/derived.json'));
+  assert.equal(derived.config, createHash('sha256').update(readFileSync(join(root, path))).digest('hex'));
   assertCheckReadonly(root, {}, 0);
 });
 
@@ -745,13 +763,15 @@ test('criar editar e remover recursos atualiza todos os tipos e os índices nati
   assertCheckReadonly(root, {}, 0);
 });
 
-test('JSON derivado corrompido é detectado e reparado com backup sem editar fontes', t => {
+test('JSON derivado alterado é preservado até remoção deliberada pelo usuário', t => {
   const root = completeCatalogFixture(t);
   run(root);
   for (const path of ['.pbai4devs/catalog.json', '.pbai4devs/skills.json', '.pbai4devs/agents.json', '.pbai4devs/rules.json']) write(root, path, '{corrompido');
   assertCheckReadonly(root, { force: true });
-  const result = run(root, { force: true });
-  for (const path of ['.pbai4devs/catalog.json', '.pbai4devs/skills.json', '.pbai4devs/agents.json', '.pbai4devs/rules.json']) assert.equal(read(result.backupRoot, path), '{corrompido');
+  assert.throws(() => run(root, { force: true }), /Conteudo proprio preservado/);
+  for (const path of ['.pbai4devs/catalog.json', '.pbai4devs/skills.json', '.pbai4devs/agents.json', '.pbai4devs/rules.json']) assert.equal(read(root, path), '{corrompido');
+  for (const path of ['.pbai4devs/catalog.json', '.pbai4devs/skills.json', '.pbai4devs/agents.json', '.pbai4devs/rules.json']) rmSync(join(root, path));
+  run(root);
   assert.equal(JSON.parse(read(root, '.pbai4devs/catalog.json')).schemaVersion, 1);
   assertCheckReadonly(root, {}, 0);
 });

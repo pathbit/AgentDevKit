@@ -181,7 +181,9 @@ test('migra índices comprovadamente gerados por sincronização standalone', as
   const { root } = fixture(t);
   const path = '.agents/skills.json';
   const preparation = planInstallation({ target: root, clients: ['codex'] });
-  for (const change of preparation.changes) if (change.path.startsWith('.pbai4devs/') && change.path !== '.pbai4devs/state/agentdevkit.json') put(root, change.path, change.content);
+  const generated = new Set(['.pbai4devs/.gitignore', '.pbai4devs/espelhos.conf', '.pbai4devs/catalog.json', '.pbai4devs/skills.json', '.pbai4devs/agents.json', '.pbai4devs/rules.json']);
+  // The standalone sync must create these outputs itself to prove ownership.
+  for (const change of preparation.changes) if (change.path.startsWith('.pbai4devs/') && change.path !== '.pbai4devs/state/agentdevkit.json' && !generated.has(change.path)) put(root, change.path, change.content);
   assert.equal(existsSync(join(root, '.pbai4devs/state/agentdevkit.json')), false);
   const standalone = synchronize({ root, output() {} });
   assert.equal(standalone.exitCode, 0);

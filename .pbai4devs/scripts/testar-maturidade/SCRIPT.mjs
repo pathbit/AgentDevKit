@@ -15,6 +15,7 @@ const assets = join(dirname(fileURLToPath(import.meta.url)), 'assets');
 const owner = 'testar-maturidade';
 const marker = '.maturity-case.json';
 const suiteMarker = '.maturity-suite.json';
+const generatedCatalogs = new Set(['.pbai4devs/catalog.json', '.pbai4devs/skills.json', '.pbai4devs/agents.json', '.pbai4devs/rules.json']);
 const outputIgnore = '# Exemplos gerados permanecem locais.\n*\n';
 const defaultOutput = root => join(root, 'examples/generated');
 const prepareResources = root => {
@@ -58,6 +59,7 @@ function createChild(root, parent, name, { allowExisting = false } = {}) {
   noLinks(root, join(parent, name));
   const output = stat(join(parent, name));
   if (!output?.isDirectory() || output.isSymbolicLink()) fail('Diretório de saída inválido.');
+  return output;
 }
 function ensureDirectories(root, target) {
   let current = root;
@@ -144,7 +146,7 @@ function copyAllowed(relativePath, directory = false) {
   return true;
 }
 
-export function copyAgentStructure(sourceRoot, destination) {
+export function copyAgentStructure(sourceRoot, destination, { archiveCatalogs = false, archiveOverrides = new Set(), archiveEntrypoints = false } = {}) {
   const roots = ['.pbai4devs', ...registeredRoots(sourceRoot)];
   const stateFile = join(sourceRoot, stateDirectory(sourceRoot), 'agentdevkit.json');
   const stateInfo = stat(stateFile);
@@ -152,7 +154,7 @@ export function copyAgentStructure(sourceRoot, destination) {
   const installation = stateInfo ? json(stateFile) : null;
   if (stateInfo && (!installation || !installation.blocks || typeof installation.blocks !== 'object' || Array.isArray(installation.blocks))) fail('Estado da instalação deve registrar os blocos gerenciados.');
   function managedEntry(name) {
-    if (!installation) return true;
+    if (!installation) return false;
     const expected = installation.blocks[name];
     if (typeof expected !== 'string') return false;
     const content = readFileSync(join(sourceRoot, name), 'utf8');
@@ -161,7 +163,7 @@ export function copyAgentStructure(sourceRoot, destination) {
     const start = content.indexOf(begin), finish = content.indexOf(end);
     return finish > start && digest(content.slice(start, finish + end.length)) === expected;
   }
-  const files = []; const entrypoints = {}; let skipped = 0;
+  const files = []; const entrypoints = {}; const catalogSnapshots = []; const overriddenSnapshots = []; const seenSources = new Set(); let skipped = 0;
   function copy(file, targetFile = file) {
     const source = join(sourceRoot, file);
     const item = stat(source); if (!item) return;
@@ -171,6 +173,14 @@ export function copyAgentStructure(sourceRoot, destination) {
       mkdirSync(join(destination, targetFile), { recursive: true });
       for (const name of readdirSync(source).sort()) copy(join(file, name), join(targetFile, name));
     } else if (item.isFile()) {
+      seenSources.add(portable(file));
+      if (archiveCatalogs && generatedCatalogs.has(portable(file))) {
+        targetFile = `.agent-tests/testar-maturidade/original-catalogs/${basename(file)}`;
+        catalogSnapshots.push({ source: portable(file), snapshot: targetFile });
+      } else if (archiveOverrides.has(portable(file))) {
+        targetFile = `.agent-tests/testar-maturidade/original-files/${portable(file)}`;
+        overriddenSnapshots.push({ source: portable(file), snapshot: targetFile });
+      }
       const target = join(destination, targetFile); mkdirSync(dirname(target), { recursive: true }); copyFileSync(source, target); files.push(portable(targetFile));
     } else fail(`Arquivo não regular na origem: ${file}`);
   }
@@ -183,11 +193,29 @@ export function copyAgentStructure(sourceRoot, destination) {
     const selected = managedEntry(name) && stat(join(sourceRoot, template)) ? template : name;
     const info = stat(join(sourceRoot, selected));
     if (info && !info.isFile()) fail(`Entrada de agente deve ser arquivo regular: ${selected}`);
+    if (archiveEntrypoints && selected !== name) {
+      const snapshot = `.agent-tests/testar-maturidade/original-files/${name}`;
+      copy(name, snapshot); overriddenSnapshots.push({ source: name, snapshot });
+    }
     copy(selected, name);
     if (info) entrypoints[name] = selected;
   }
+  // A fixture can create files belonging to an unselected client; archive
+  // those source files as well, without traversing symbolic-link ancestors.
+  for (const path of archiveOverrides) if (!seenSources.has(path)) {
+    noLinks(sourceRoot, join(sourceRoot, path));
+    copy(path);
+  }
   const sourceDigest = digest(files.map(file => `${file}\0${digest(readFileSync(join(destination, file)))}`).join('\n'));
-  return { roots, copiedFiles: files.length, skipped, files, sourceDigest, entrypoints, toolDefinitions: files.filter(file => /^\.pbai4devs\/tools\/[^/]+\/TOOL\.json$/.test(file)).length };
+  return { roots, copiedFiles: files.length, skipped, files, sourceDigest, entrypoints, catalogSnapshots, overriddenSnapshots, toolDefinitions: files.filter(file => /^\.pbai4devs\/tools\/[^/]+\/TOOL\.json$/.test(file)).length };
+}
+
+function fixtureOverrides(scenario, sourceRoot) {
+  const paths = ['README.md', '.pbai4devs/.gitignore', ...registeredRoots(sourceRoot).map(root => `${root}/.gitignore`), '.pbai4devs/state/configuracao/ESTADO.md', '.pbai4devs/estado/configuracao/ESTADO.md'];
+  if (scenario.planning !== 'none' || scenario.app) paths.push('.pbai4devs/state/README.md', '.pbai4devs/estado/README.md');
+  if (scenario.configured) paths.push('.dockerignore', '.env.example', 'Makefile');
+  if (scenario.layout === 'legacy') paths.push('Makefile', '.github/workflows/legacy.yml', '.vscode/settings.json');
+  return new Set(paths);
 }
 
 function planning(root, scenario) {
@@ -299,33 +327,41 @@ export function prepareExamples({ sourceRoot = projectRoot, outputRoot, scenario
   const parent = outputRoot === undefined ? base : dirname(base);
   ensureDirectories(sourceRoot, parent);
   const name = outputRoot === undefined ? `maturity-${randomUUID()}` : basename(base);
-  createChild(sourceRoot, parent, name);
+  const created = createChild(sourceRoot, parent, name);
   outputRoot = join(parent, name);
-  write(outputRoot, suiteMarker, JSON.stringify({ owner, version: 1 }, null, 2) + '\n');
-  write(outputRoot, '.gitignore', outputIgnore);
-  writeIndex(outputRoot, [], 'preparing');
+  const canonicalOutput = realpathSync(outputRoot);
+  const verifyOutput = (path = outputRoot) => {
+    noLinks(sourceRoot, path);
+    const current = stat(outputRoot);
+    if (!current?.isDirectory() || current.dev !== created.dev || current.ino !== created.ino || realpathSync(outputRoot) !== canonicalOutput) fail('Diretório de saída alterado durante a execução.');
+  };
+  const guarded = (path, operation) => { verifyOutput(path); const value = operation(); verifyOutput(path); return value; };
+  guarded(outputRoot, () => write(outputRoot, suiteMarker, JSON.stringify({ owner, version: 1 }, null, 2) + '\n'));
+  guarded(outputRoot, () => write(outputRoot, '.gitignore', outputIgnore));
+  guarded(outputRoot, () => writeIndex(outputRoot, [], 'preparing'));
   const examples = [];
   for (const scenario of scenarios) {
     const destination = join(outputRoot, scenario.id);
-    mkdirSync(destination);
-    write(destination, marker, JSON.stringify({ owner, version: 1, id: scenario.id }, null, 2) + '\n');
-    const copied = copyAgentStructure(sourceRoot, destination);
-    planning(destination, scenario);
-    const app = application(destination, scenario);
-    write(destination, 'README.md', document(scenario.title, `${scenario.note}\n\nEste é um exemplo gerado. Estados de aprovação/publicação são dados de teste.\nRevisão do gate é simulação contratual, não revisão humana.\n\nOs scripts dos agentes foram copiados, sem pacotes ou credenciais conhecidas.\nO filtro não detecta segredos em conteúdo arbitrário.\n${app.tests.length ? `\nPara repetir os testes: \`${scenario.layout === 'legacy' ? 'npm run test:legacy' : 'npm test'}\`.\nO harness executa os testes Node diretamente, sem instalar dependências.\nO teste abre HTTP em porta efêmera e encerra o servidor.\n` : '\nNão há aplicação; a prova real exercita os scripts copiados.\n'}`, `fase: ${scenario.expected}\n`));
-    renderResources(destination);
-    if (initializeGit) gitInit(destination);
+    guarded(outputRoot, () => mkdirSync(destination));
+    guarded(destination, () => write(destination, marker, JSON.stringify({ owner, version: 1, id: scenario.id }, null, 2) + '\n'));
+    const copied = guarded(destination, () => copyAgentStructure(sourceRoot, destination, { archiveCatalogs: true, archiveOverrides: fixtureOverrides(scenario, sourceRoot), archiveEntrypoints: true }));
+    guarded(destination, () => planning(destination, scenario));
+    const app = guarded(destination, () => application(destination, scenario));
+    guarded(destination, () => write(destination, 'README.md', document(scenario.title, `${scenario.note}\n\nEste é um exemplo gerado, não um teste no projeto original. Estados de aprovação/publicação são dados de teste.\nRevisão do gate é simulação contratual, não revisão humana.\nCatálogos originais e arquivos substituídos pela fixture ficam em \`.agent-tests/testar-maturidade/\`; os catálogos operacionais são regenerados.\n\nOs scripts dos agentes foram copiados, sem pacotes ou credenciais conhecidas.\nO filtro não detecta segredos em conteúdo arbitrário.\n${app.tests.length ? `\nPara repetir os testes: \`${scenario.layout === 'legacy' ? 'npm run test:legacy' : 'npm test'}\`.\nO harness executa os testes Node diretamente, sem instalar dependências.\nO teste abre HTTP em porta efêmera e encerra o servidor.\n` : '\nNão há aplicação; a prova real exercita os scripts copiados.\n'}`, `fase: ${scenario.expected}\n`)));
+    guarded(destination, () => renderResources(destination));
+    if (initializeGit) guarded(destination, () => gitInit(destination));
     examples.push({ ...scenario, root: destination, copied, application: app });
   }
-  write(outputRoot, 'REPORT.json', JSON.stringify({ owner, version: 1, status: 'prepared', scenarios: [...ids], results: [] }, null, 2) + '\n');
-  writeIndex(outputRoot, examples, 'prepared');
+  guarded(outputRoot, () => write(outputRoot, 'REPORT.json', JSON.stringify({ owner, version: 1, status: 'prepared', scenarios: [...ids], copies: examples.map(example => ({ id: example.id, catalogSnapshots: example.copied.catalogSnapshots, overriddenSnapshots: example.copied.overriddenSnapshots })), results: [] }, null, 2) + '\n'));
+  guarded(outputRoot, () => writeIndex(outputRoot, examples, 'prepared'));
+  Object.defineProperty(examples, 'verifyOutput', { value: verifyOutput });
   return examples;
 }
 
 function writeIndex(outputRoot, examples, status) {
   const rows = examples.map(item => `| [${item.id}](${item.id}/README.md) | ${item.expected} | ${item.status || 'prepared'} |`).join('\n');
   const progress = status === 'preparing' ? '\nPreparação em andamento nesta execução.\n' : '';
-  write(outputRoot, 'README.md', document('Exemplos de maturidade', `Projetos sintéticos com cópias locais da estrutura de agentes.\nNenhum resultado certifica produção, revisão humana ou outros sistemas operacionais.\n${progress}\n| Cenário | Nível esperado | Resultado |\n| --- | --- | --- |${rows ? '\n' + rows : ''}\n\nRelatório: \`REPORT.json\`. Logs e evidências por projeto ficam em \`.agent-tests/\`.\nCada execução usa uma pasta nova e preserva as anteriores.\n`, `status: ${status}\n`));
+  write(outputRoot, 'README.md', document('Exemplos de maturidade', `Projetos sintéticos com cópias locais da estrutura de agentes; não são testes no projeto original.\nCatálogos operacionais são regenerados e suas cópias originais ficam em cada \`.agent-tests/testar-maturidade/\`.\nNenhum resultado certifica produção, revisão humana ou outros sistemas operacionais.\n${progress}\n| Cenário | Nível esperado | Resultado |\n| --- | --- | --- |${rows ? '\n' + rows : ''}\n\nRelatório: \`REPORT.json\`. Logs e evidências por projeto ficam em \`.agent-tests/\`.\nCada execução usa uma pasta nova e preserva as anteriores.\n`, `status: ${status}\n`));
 }
 
 function hashes(root, files) { return Object.fromEntries(files.map(file => [file, digest(readFileSync(join(root, file)))])); }
@@ -399,13 +435,14 @@ function resourceLifecycle(example, run) {
   if (readFileSync(join(root, catalogPath), 'utf8') !== before.catalog || readFileSync(join(root, registryPath), 'utf8') !== before.registry) fail('O ciclo não restaurou os catálogos originais.');
   const corrupted = '{"tampered":true}\n'; write(root, catalogPath, corrupted);
   run(sync, ['--check'], 1, 'catalog-drift-detected');
-  const repair = run(sync, ['--force'], 0, 'catalog-drift-repaired');
-  const backup = repair.output.match(/Backup local: (.+)/)?.[1]?.trim();
-  if (!backup || readFileSync(join(root, backup, catalogPath), 'utf8') !== corrupted) fail('Correção forçada não preservou backup do JSON alterado.');
+  const blocked = run(sync, ['--force'], 2, 'catalog-drift-preserved');
+  if (!blocked.output.includes('Conteudo proprio preservado')) fail('A colisão não informou a preservação do catálogo.');
+  if (readFileSync(join(root, catalogPath), 'utf8') !== corrupted) fail('Sincronização alterou o JSON sintético sem ownership.');
+  write(root, catalogPath, before.catalog); // Restore only the content this fixture deliberately changed.
   rmSync(join(root, catalogPath)); run(sync, ['--check'], 1, 'catalog-missing-detected');
   run(sync, [], 0, 'catalog-missing-repaired'); run(sync, ['--check'], 0, 'lifecycle-clean');
   if (readFileSync(join(root, catalogPath), 'utf8') !== before.catalog || readFileSync(join(root, registryPath), 'utf8') !== before.registry) fail('Catálogos não foram restaurados após corrupção/remoção.');
-  return { status: 'passed', operations: ['create', 'edit-description', 'rename', 'delete', 'corrupt-json', 'remove-json'], clients: rows.length, backup, sourceRestored: true };
+  return { status: 'passed', operations: ['create', 'edit-description', 'rename', 'delete', 'protect-modified-json', 'remove-json'], clients: rows.length, sourceRestored: true };
 }
 
 function reviewContract(example, run, proof) {
@@ -444,7 +481,7 @@ function reviewContract(example, run, proof) {
 export function testExample(example) {
   const commands = []; const logRoot = '.agent-tests/maturity';
   const run = runner(example.root, logRoot, commands);
-  const result = { id: example.id, expected: example.expected, status: 'failed', copied: { files: example.copied.copiedFiles, roots: example.copied.roots, skipped: example.copied.skipped, sourceDigest: example.copied.sourceDigest, entrypoints: example.copied.entrypoints }, commands, limits: ['Executado somente no SO/runtime deste host.', 'Estado de produto e revisão do gate são dados sintéticos.', 'Build Docker, UI e implantação não são exercitados.', 'Cópia exclui credenciais por nomes conhecidos, sem varredura semântica de segredos.'] };
+  const result = { id: example.id, expected: example.expected, status: 'failed', copied: { files: example.copied.copiedFiles, roots: example.copied.roots, skipped: example.copied.skipped, sourceDigest: example.copied.sourceDigest, entrypoints: example.copied.entrypoints, catalogSnapshots: example.copied.catalogSnapshots, overriddenSnapshots: example.copied.overriddenSnapshots }, commands, limits: ['Cenário sintético: não testa o projeto original no local.', 'Executado somente no SO/runtime deste host.', 'Estado de produto e revisão do gate são dados sintéticos.', 'Build Docker, UI e implantação não são exercitados.', 'Cópia exclui credenciais por nomes conhecidos, sem varredura semântica de segredos.'] };
   const preserved = hashes(example.root, example.application.protected);
   try {
     const sync = '.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs';
@@ -493,11 +530,14 @@ export function testExample(example) {
 
 export function runExamples(options = {}) {
   const examples = prepareExamples(options);
-  const results = examples.map(example => { const result = testExample(example); console.log(`${example.id}=${result.status}${result.error ? ': ' + result.error : ''}`); return result; });
+  const results = examples.map(example => { examples.verifyOutput(example.root); const result = testExample(example); examples.verifyOutput(example.root); console.log(`${example.id}=${result.status}${result.error ? ': ' + result.error : ''}`); return result; });
   const outputRoot = dirname(examples[0].root);
   const report = { owner, version: 1, status: results.every(item => item.status === 'passed') ? 'passed' : 'failed', platform: process.platform, arch: process.arch, node: process.version, results, limits: ['Provas reais somente das operações descritas e APIs locais.', 'Pareceres do gate são simulações explícitas, sem revisão humana.', 'Não certifica produção nem sistemas operacionais não executados.'] };
+  examples.verifyOutput();
   write(outputRoot, 'REPORT.json', JSON.stringify(report, null, 2) + '\n');
+  examples.verifyOutput();
   writeIndex(outputRoot, examples.map(example => ({ ...example, status: results.find(result => result.id === example.id).status })), report.status);
+  examples.verifyOutput();
   return { outputRoot, report };
 }
 

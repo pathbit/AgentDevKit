@@ -29,21 +29,30 @@ execuções e projetos anteriores não são substituídos nem removidos. Cada
 exemplo recebe Git local, sem commits nem identidade alterada. O diretório
 gerado contém um ignore próprio, inclusive em projetos consumidores. Se a
 preparação falhar, o índice da nova execução permanece em `preparing`.
+O gerador verifica links e identidade da saída antes e depois das etapas, mas
+isso não é uma proteção atômica. Um processo concorrente com permissão para
+trocar diretórios ainda pode redirecionar uma escrita entre as verificações;
+execute-o em uma área sem esse acesso concorrente.
 O hub `.pbai4devs` e os clientes registrados são copiados, incluindo comandos
 nativos em TOML. Sem manifesto local, os templates definem os clientes em
 memória, respeitando a seleção salva. `.vscode` exige registro. Apenas as entradas
 `AGENTS.md`, `CLAUDE.md` e `GEMINI.md` presentes na origem são incluídas na raiz.
 Os templates substituem somente entradas com blocos gerenciados válidos;
 entradas próprias ou editadas são preservadas. Sem estado de instalação,
-o mantenedor usa `.pbai4devs/templates/entrypoints/`, com fallback para a raiz.
+as entradas existentes são copiadas sem presumir propriedade do kit.
 Os testes resolvem cada apontamento pelo formato declarado do cliente e recurso.
 
-As cópias geram os derivados locais antes dos testes, sem alterar a origem.
+As cópias guardam os catálogos originais em `.agent-tests/testar-maturidade/original-catalogs/`
+e geram catálogos operacionais novos, sem alterar os arquivos da origem.
+Arquivos da origem substituídos pela fixture ficam em `original-files/` nessa
+mesma pasta. O relatório identifica cada cópia: o cenário não é um teste do
+projeto original no local.
 Não copiam o código do produto em `bin/`, `src/`, `scripts/` ou `tests/`,
 nem essas pastas na localização antiga dentro do hub.
 Executam sincronização/reparo/idempotência, catálogo, verificação de
 recursos, diagnóstico, inspeção e gates negativos/positivo. Em dois casos,
-criação/edição/renomeação/remoção e corrupção dos índices exercitam o ciclo todo.
+criação, edição, renomeação, remoção e preservação de índices alterados
+exercitam o ciclo todo.
 Aplicações executam testes HTTP reais em
 portas efêmeras, encerradas ao fim. Legado e monorepo preservam seus arquivos.
 Ferramentas copiadas ficam sem downloads: o check negativo é esperado.

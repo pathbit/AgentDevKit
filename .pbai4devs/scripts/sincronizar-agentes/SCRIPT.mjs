@@ -9,8 +9,8 @@ import { buildCatalog } from '../lib/catalog.mjs';
 import { resourcePath } from '../lib/resource-path.mjs';
 import { adapterManifest, resolveAdapters } from '../lib/adapters.mjs';
 import { nativePathBoundary } from '../lib/native-paths.mjs';
-import { canonicalEntrypoint, resolveEntrypoint, entrypointReference, renderEntrypointImports, mergeManagedContent, stripManagedContent } from '../lib/managed-content.mjs';
-import { mergeTomlContent, stripTomlContent } from '../lib/managed-toml.mjs';
+import { canonicalEntrypoint, resolveEntrypoint, entrypointReference, renderEntrypointImports, extractManagedBlock, mergeManagedContent, stripManagedContent } from '../lib/managed-content.mjs';
+import { extractTomlManagedBlock, mergeTomlContent, stripTomlContent } from '../lib/managed-toml.mjs';
 import { mergeGitignore, validateIgnoreClients, renderClientIgnore, isGeneratedOutput, planLocalIgnore, applyLocalIgnore, checkLocalIgnore, assertLocalIgnoreUnchanged, planUntrack, ignoreBegin, ignoreEnd } from '../lib/gitignore.mjs';
 import { stateDirectory } from '../lib/state-path.mjs';
 
@@ -90,7 +90,7 @@ function replaceJsonMember(bytes, member, value) {
 // Compare owned fields structurally, preserving all other JSON bytes.
 function derivedContent(original, previous, next) {
   if (!original) return JSON.stringify(next, null, 2) + '\n';
-  const keys = ['schemaVersion', 'entries', 'outputs', 'files', 'blocks', 'removedBlocks', 'removedFiles'];
+  const keys = ['schemaVersion', 'entries', 'outputs', 'files', 'blocks', 'removedBlocks', 'removedFiles', 'catalogs', 'config'];
   const canonical = value => value && typeof value === 'object' && !Array.isArray(value)
     ? Object.fromEntries(Object.keys(value).sort(compare).map(key => [key, canonical(value[key])]))
     : Array.isArray(value) ? value.map(canonical) : value;
@@ -247,6 +247,11 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
   if (previousEntries?.schemaVersion !== 1 || !previousEntries.entries || typeof previousEntries.entries !== 'object' || Array.isArray(previousEntries.entries) || Object.entries(previousEntries.entries).some(([name, hash]) => !canonicalEntrypoint(name) || !/^[a-f0-9]{64}$/.test(hash))) fail('Registro de entradas derivadas invalido.');
   const previousOutputs = previousEntries.outputs ?? {};
   if (!previousOutputs || typeof previousOutputs !== 'object' || Array.isArray(previousOutputs) || Object.entries(previousOutputs).some(([path, hash]) => !/^\.[A-Za-z0-9][A-Za-z0-9._-]*\/(skills|rules|agents)\.json$/.test(path) || reserved.has(path.split('/')[0].toLowerCase()) || !/^[a-f0-9]{64}$/.test(hash))) fail('Registro de saidas derivadas invalido.');
+  const previousCatalogs = previousEntries.catalogs ?? {};
+  const catalogPaths = new Set(['.pbai4devs/catalog.json', '.pbai4devs/skills.json', '.pbai4devs/agents.json', '.pbai4devs/rules.json']);
+  if (!previousCatalogs || typeof previousCatalogs !== 'object' || Array.isArray(previousCatalogs) || Object.entries(previousCatalogs).some(([path, hash]) => !catalogPaths.has(path) || !/^[a-f0-9]{64}$/.test(hash))) fail('Registro de catalogos derivados invalido.');
+  for (const path of Object.keys(previousCatalogs)) safe(path);
+  if (previousEntries.config !== undefined && (typeof previousEntries.config !== 'string' || !/^[a-f0-9]{64}$/.test(previousEntries.config))) fail('Registro de configuracao derivada invalido.');
   const validResourcePath = path => {
     if (typeof path !== 'string' || !/^\.[A-Za-z0-9][A-Za-z0-9._-]*\/.+/.test(path)) return false;
     const [root, scope] = path.split('/');
@@ -254,7 +259,7 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
       && !['readme.md', 'instructions.md'].includes(posix.basename(path).toLowerCase())
       && (/\.(md|mdc)$/i.test(path) || path.startsWith('.gemini/commands/') && path.endsWith('.toml'));
   };
-  const validIgnoreBlock = path => typeof path === 'string' && /^\.[A-Za-z0-9][A-Za-z0-9._-]*\/\.gitignore$/.test(path) && !reserved.has(path.split('/')[0].toLowerCase());
+  const validIgnoreBlock = path => path === '.pbai4devs/.gitignore' || typeof path === 'string' && /^\.[A-Za-z0-9][A-Za-z0-9._-]*\/\.gitignore$/.test(path) && !reserved.has(path.split('/')[0].toLowerCase());
   for (const [name, values] of [['files', previousEntries.files ?? {}], ['blocks', previousEntries.blocks ?? {}]]) {
     if (!values || typeof values !== 'object' || Array.isArray(values) || Object.entries(values).some(([path, hash]) => !(validResourcePath(path) || name === 'blocks' && (canonicalEntrypoint(path) || validIgnoreBlock(path))) || !/^[a-f0-9]{64}$/.test(hash))) fail(`Registro de ${name} derivados invalido.`);
     for (const path of Object.keys(values)) safe(canonicalEntrypoint(path) ? resolveEntrypoint(root, canonicalEntrypoint(path)) : path);
@@ -475,11 +480,23 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
   }
   const registries = new Map();
   const discoveryOutputs = {};
+  const catalogOutputs = {};
   for (const [target, content] of built.outputs) {
     const info = stat(safe(target));
     if (info && !info.isFile()) fail(`Registro nao e arquivo: ${target}`);
     const current = info ? readFileSync(absolute(target)) : null;
     captureInput(target, current);
+    const currentHash = current && createHash('sha256').update(current).digest('hex');
+    const known = current && [installed?.files?.[target], previousCatalogs[target]].some(digest => digest && digest === currentHash);
+    if (current && !known) {
+      // Identical bytes do not establish ownership. An unowned catalogue can
+      // remain if already current, but it cannot be adopted or regenerated.
+      remember(target, 'existing-catalog');
+      if (current.toString('utf8') !== content) { conflicts.add(target); protectedConflicts.add(target); }
+      continue;
+    }
+    const nextHash = createHash('sha256').update(content).digest('hex');
+    if (installed?.files?.[target] !== nextHash) catalogOutputs[target] = nextHash;
     if (!current || current.toString('utf8') !== content) {
       registries.set(target, content);
       if (force && info) backup.add(target);
@@ -533,10 +550,22 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
       merged = mergeGitignore(current, patterns);
     }
     catch (error) { fail(`${target}: ${error.message}`); }
-    if (target !== '.pbai4devs/.gitignore') {
-      const start = merged.text.indexOf(ignoreBegin), finish = merged.text.indexOf(ignoreEnd);
-      if (start >= 0 && finish > start) managedBlocks[target] = createHash('sha256').update(merged.text.slice(start, finish + ignoreEnd.length)).digest('hex');
+    if (merged.hasBlock) {
+      const start = current.indexOf(ignoreBegin), finish = current.indexOf(ignoreEnd);
+      const blockHash = start >= 0 && finish > start ? createHash('sha256').update(current.slice(start, finish + ignoreEnd.length)).digest('hex') : null;
+      const fileHash = createHash('sha256').update(current).digest('hex');
+      const known = [installed?.blocks?.[target], previousEntries.blocks?.[target]].some(hash => hash && hash === blockHash)
+        || priorFiles[target] && priorFiles[target] === fileHash;
+      if (!known) {
+        // A marker or identical contents is not proof that this block belongs
+        // to the kit. Do not adopt, replace or remove it even with --force.
+        remember(target, 'existing-ignore-block');
+        if (merged.text !== current) { conflicts.add(target); protectedConflicts.add(target); }
+        continue;
+      }
     }
+    const start = merged.text.indexOf(ignoreBegin), finish = merged.text.indexOf(ignoreEnd);
+    if (start >= 0 && finish > start) managedBlocks[target] = createHash('sha256').update(merged.text.slice(start, finish + ignoreEnd.length)).digest('hex');
     if (merged.text !== current) {
       ignoreFiles.set(target, merged.text);
       if (force && info && merged.hasBlock) backup.add(target);
@@ -568,6 +597,10 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
       if (!command) fail(`Comando Gemini exige COMMAND.md: ${source}`);
       const current = mixed ? targetBytes : null;
       const merged = mixed ? mergeTomlContent(current, `@{${source}}`, { expectedHash: priorBlocks[target] }) : null;
+      if (current && !priorBlocks[target] && priorFiles[target] !== createHash('sha256').update(current).digest('hex') && extractTomlManagedBlock(current)) {
+        // An identical block can remain, but its bytes are not ownership proof.
+        remember(target, 'existing-managed-block'); expected.set(target, current); continue;
+      }
       const content = merged ? merged.text : `${tomlMarker}\ndescription = ${JSON.stringify(command.description)}\nprompt = ${JSON.stringify(`@{${source}}\n\n{{args}}`)}\n`;
       if (mixed) { captureInput(target, current); managedBlocks[target] = merged.sha256; remember(target, 'existing-file-extended'); }
       else rememberGenerated(target, content);
@@ -588,6 +621,9 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
     const inclusion = ruleInclusion ? `@[origem](${link(target, source)})` : `Leia e siga [origem](${link(target, source)}).`;
     const current = mixed ? targetBytes : null;
     const merged = mixed ? mergeManagedContent(current, inclusion, { expectedHash: priorBlocks[target] }) : null;
+    if (current && !priorBlocks[target] && priorFiles[target] !== createHash('sha256').update(current).digest('hex') && extractManagedBlock(current)) {
+      remember(target, 'existing-managed-block'); expected.set(target, current); continue;
+    }
     const content = merged ? merged.text : `${frontmatter}\n${title}\n\n${marker}\n${inclusion}\n`;
     if (mixed) { captureInput(target, current); managedBlocks[target] = merged.sha256; remember(target, 'existing-file-extended'); }
     else rememberGenerated(target, content);
@@ -644,6 +680,9 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
       const previousBlockHash = priorBlocks[name] ?? Object.entries(priorBlocks).find(([path]) => canonicalEntrypoint(path) === canonical)?.[1];
       if (current && (previousBlockHash || createHash('sha256').update(current).digest('hex') !== previousHash)) {
         const merged = mergeManagedContent(current, entrypointReference(root, canonical), { expectedHash: previousBlockHash });
+        if (!previousBlockHash && previousHash !== createHash('sha256').update(current).digest('hex') && extractManagedBlock(current)) {
+          remember(name, 'existing-managed-block'); continue;
+        }
         captureInput(name, current);
         managedBlocks[name] = merged.sha256;
         rootEntries.set(name, merged.text);
@@ -682,8 +721,20 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
     removedBlocks.add(target);
     remember(target, 'existing-file-extended');
   }
+  const omittedRows = new Set([...legacy, ...missing.map(native => native.index)]);
+  const finalConfig = rows.filter((row, index) => !omittedRows.has(index)).join('\n').replace(/\n*$/, '\n');
+  const configChanged = !configExists || configText !== finalConfig;
+  const configHash = configExists ? createHash('sha256').update(readFileSync(absolute(config))).digest('hex') : null;
+  const configKnown = configExists && [installed?.files?.[config], previousEntries.config].some(hash => hash && hash === configHash);
+  if (configExists && !configKnown) {
+    remember(config, 'existing-configuration');
+    if (configChanged) { conflicts.add(config); protectedConflicts.add(config); }
+  }
   const next = { schemaVersion: 1, entries: nextEntries };
   if (Object.keys(discoveryOutputs).length) next.outputs = discoveryOutputs;
+  if (Object.keys(catalogOutputs).length) next.catalogs = catalogOutputs;
+  const nextConfigHash = createHash('sha256').update(finalConfig).digest('hex');
+  if ((!configExists || configKnown) && installed?.files?.[config] !== nextConfigHash) next.config = nextConfigHash;
   if (Object.keys(generatedFiles).length) next.files = generatedFiles;
   const derivedBlocks = Object.fromEntries(Object.entries(managedBlocks).filter(([path, hash]) => installed?.blocks?.[path] !== hash || Object.hasOwn(previousEntries.blocks ?? {}, path)));
   if (Object.keys(derivedBlocks).length) next.blocks = derivedBlocks;
@@ -693,7 +744,7 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
   for (const path of remove) if (validResourcePath(path) && installed?.files?.[path] && !expected.has(path)) effectiveRemovedFiles[path] = installed.files[path];
   if (Object.keys(effectiveRemovedFiles).length) next.removedFiles = Object.fromEntries(Object.entries(effectiveRemovedFiles).sort(([a], [b]) => compare(a, b)));
   const registryContent = derivedContent(registryBytes, previousEntries, next);
-  if (recordDerivedState && (Object.keys(nextEntries).length || Object.keys(discoveryOutputs).length || Object.keys(generatedFiles).length || Object.keys(derivedBlocks).length || removedBlocks.size || Object.keys(effectiveRemovedFiles).length || stat(safe(entryRegistry))) && (!stat(safe(entryRegistry)) || readFileSync(absolute(entryRegistry), 'utf8') !== registryContent)) registries.set(entryRegistry, registryContent);
+  if (recordDerivedState && (Object.keys(nextEntries).length || Object.keys(discoveryOutputs).length || Object.keys(catalogOutputs).length || next.config || Object.keys(generatedFiles).length || Object.keys(derivedBlocks).length || removedBlocks.size || Object.keys(effectiveRemovedFiles).length || stat(safe(entryRegistry))) && (!stat(safe(entryRegistry)) || readFileSync(absolute(entryRegistry), 'utf8') !== registryContent)) registries.set(entryRegistry, registryContent);
   const ownedOutputs = sorted([...targets, ...built.outputs.keys(), '.pbai4devs/espelhos.conf', ...rootEntries.keys(), ...(recordDerivedState && (stat(safe(entryRegistry)) || registries.has(entryRegistry)) ? [entryRegistry] : []),
     ...[...discoveries].flatMap(agent => ['skills', 'rules', 'agents'].map(kind => `${agent}/${kind}.json`)),
     ...[...ignoreTemplates.keys()].filter(target => {
@@ -709,9 +760,6 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
   const removals = topPaths(remove);
   const backups = topPaths(backup);
   const rootEntryChanges = [...rootEntries].filter(([name, content]) => !stat(absolute(name)) || readFileSync(absolute(name), 'utf8') !== content);
-  const omittedRows = new Set([...legacy, ...missing.map(native => native.index)]);
-  const finalConfig = rows.filter((row, index) => !omittedRows.has(index)).join('\n').replace(/\n*$/, '\n');
-  const configChanged = !configExists || configText !== finalConfig;
   // Every planned write/removal may cover a different staged version. Compare
   // the worktree bytes with the index before touching any path, even in force
   // mode, and repeat immediately before applying the transaction.

@@ -344,6 +344,6 @@ test('ownership legado não isenta negações humanas fora do bloco nem blocos a
   assert.equal(read(root, path), human);
   write(root, path, block.replace('!/catalog.json', '!/skills.json') + '\n');
   const modified = read(root, path), changed = cli(root, ['update', '--force'], 1);
-  assert.ok(changed.localIgnore.missing.includes('.pbai4devs/skills.json'));
+  assert.ok(changed.localIgnore?.missing.includes('.pbai4devs/skills.json') || changed.error?.detail.includes(path));
   assert.equal(read(root, path), modified);
 });

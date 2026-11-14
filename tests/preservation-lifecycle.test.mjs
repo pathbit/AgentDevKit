@@ -403,6 +403,118 @@ for (const filter of [false, true]) test(`staged com CRLF ${filter ? 'e filtro e
   assert.equal(f.read(source), original);
 });
 
+for (const name of ['catalog.json', 'skills.json', 'agents.json', 'rules.json']) {
+  test(`catálogo próprio ${name} bloqueia init inclusive com force`, t => {
+    const f = fixture(t), path = `.pbai4devs/${name}`;
+    const human = '{"owner":"human","note":"preservar bytes"}\n';
+    f.put(path, human);
+    f.git('add', '-f', '--', '.gitignore', path);
+    const index = readFileSync(join(f.root, '.git', 'index'));
+    const exclude = readFileSync(join(f.root, '.git', 'info', 'exclude'));
+    for (const args of [['init', '--agents', 'codex', '--dry-run'], ['init', '--agents', 'codex', '--force']]) {
+      const result = spawnSync(process.execPath, [bin, ...args, '--target', f.root, '--json'], { encoding: 'utf8', timeout: 180000 });
+      assert.equal(result.status, 1, `${args.join(' ')}: ${result.stderr}\n${result.stdout}`);
+      const output = JSON.parse(result.stdout);
+      assert.equal(output.ok, false);
+      assert.ok(output.conflicts.includes(path), result.stdout);
+      assert.equal(f.read(path), human);
+      assert.equal(f.read('.gitignore'), f.ignore);
+      assert.deepEqual(readFileSync(join(f.root, '.git', 'index')), index);
+      assert.deepEqual(readFileSync(join(f.root, '.git', 'info', 'exclude')), exclude);
+      assert.equal(existsSync(join(f.root, state)), false);
+    }
+  });
+}
+
+test('catálogo editado após instalação bloqueia update inclusive com force', t => {
+  const f = fixture(t), path = '.pbai4devs/catalog.json';
+  f.git('add', '--', '.gitignore');
+  f.cli('init', '--agents', 'codex');
+  const catalog = JSON.parse(f.read(path));
+  catalog.humanNote = 'Não sobrescrever.';
+  const human = `${JSON.stringify(catalog, null, 2)}\n`;
+  f.put(path, human);
+  const oldState = f.read(state), index = readFileSync(join(f.root, '.git', 'index'));
+  const exclude = readFileSync(join(f.root, '.git', 'info', 'exclude'));
+  for (const args of [['update', '--dry-run'], ['update', '--force'], ['sync', '--force']]) {
+    const result = spawnSync(process.execPath, [bin, ...args, '--target', f.root, '--json'], { encoding: 'utf8', timeout: 180000 });
+    assert.equal(result.status, 1, `${args.join(' ')}: ${result.stderr}\n${result.stdout}`);
+    const output = JSON.parse(result.stdout);
+    assert.equal(output.ok, false);
+    assert.ok(output.conflicts.includes(path), result.stdout);
+    assert.equal(f.read(path), human);
+    assert.equal(f.read(state), oldState);
+    assert.equal(f.read('.gitignore'), f.ignore);
+    assert.deepEqual(readFileSync(join(f.root, '.git', 'index')), index);
+    assert.deepEqual(readFileSync(join(f.root, '.git', 'info', 'exclude')), exclude);
+  }
+});
+
+test('campos humanos do estado principal preservam bytes durante mudança de clientes e update', t => {
+  const f = fixture(t);
+  f.git('add', '--', '.gitignore');
+  f.cli('init', '--agents', 'codex');
+  const original = f.read(state), human = '"teamNotes" : { "ticket" : "não apagar", "history" : [1, 2] }';
+  f.put(state, original.replace(/\}\s*$/, `,\n  ${human}\n}\n`));
+  const index = readFileSync(join(f.root, '.git', 'index'));
+  f.cli('agents', 'codex,claude');
+  assert.ok(f.read(state).includes(human));
+  assert.deepEqual(JSON.parse(f.read(state)).teamNotes, { ticket: 'não apagar', history: [1, 2] });
+  f.cli('update');
+  assert.ok(f.read(state).includes(human));
+  assert.deepEqual(JSON.parse(f.read(state)).teamNotes, { ticket: 'não apagar', history: [1, 2] });
+  f.cli('doctor'); f.cli('sync', '--check');
+  assert.equal(f.read('.gitignore'), f.ignore);
+  assert.deepEqual(readFileSync(join(f.root, '.git', 'index')), index);
+});
+
+test('catálogos e configuração idênticos não são adotados como gerenciados', t => {
+  const source = fixture(t);
+  source.cli('init', '--agents', 'codex');
+  for (const name of ['catalog.json', 'skills.json', 'agents.json', 'rules.json', 'espelhos.conf']) {
+    const f = fixture(t), path = `.pbai4devs/${name}`, identical = source.read(path);
+    f.put(path, identical);
+    f.git('add', '-f', '--', '.gitignore', path);
+    const index = readFileSync(join(f.root, '.git', 'index'));
+    const exclude = readFileSync(join(f.root, '.git', 'info', 'exclude'));
+    for (const args of [['init', '--agents', 'codex', '--dry-run'], ['init', '--agents', 'codex', '--force']]) {
+      const result = spawnSync(process.execPath, [bin, ...args, '--target', f.root, '--json'], { encoding: 'utf8', timeout: 180000 });
+      assert.equal(result.status, 1, `${path} ${args.join(' ')}: ${result.stderr}\n${result.stdout}`);
+      const output = JSON.parse(result.stdout);
+      assert.equal(output.ok, false);
+      assert.ok(output.conflicts.includes(path), result.stdout);
+      assert.equal(f.read(path), identical);
+      assert.equal(f.read('.gitignore'), f.ignore);
+      assert.deepEqual(readFileSync(join(f.root, '.git', 'index')), index);
+      assert.deepEqual(readFileSync(join(f.root, '.git', 'info', 'exclude')), exclude);
+      assert.equal(existsSync(join(f.root, state)), false);
+    }
+  }
+});
+
+for (const path of ['.pbai4devs/.gitignore', '.agents/.gitignore', 'AGENTS.md']) {
+  test(`bloco preexistente idêntico em ${path} não é adotado sem ownership`, t => {
+    const source = fixture(t), f = fixture(t);
+    source.put('AGENTS.md', '# Regras humanas\n\nManter conteúdo.\n');
+    source.cli('init', '--agents', 'codex');
+    const identical = source.read(path);
+    f.put(path, identical);
+    f.git('add', '-f', '--', '.gitignore', path);
+    const index = readFileSync(join(f.root, '.git', 'index'));
+    const exclude = readFileSync(join(f.root, '.git', 'info', 'exclude'));
+    const result = spawnSync(process.execPath, [bin, 'init', '--agents', 'codex', '--force', '--target', f.root, '--json'], { encoding: 'utf8', timeout: 180000 });
+    assert.equal(result.status, 1, `${result.stderr}\n${result.stdout}`);
+    const output = JSON.parse(result.stdout);
+    assert.equal(output.ok, false);
+    assert.ok(output.conflicts?.includes(path) || output.error, result.stdout);
+    assert.equal(f.read(path), identical);
+    assert.equal(f.read('.gitignore'), f.ignore);
+    assert.deepEqual(readFileSync(join(f.root, '.git', 'index')), index);
+    assert.deepEqual(readFileSync(join(f.root, '.git', 'info', 'exclude')), exclude);
+    assert.equal(existsSync(join(f.root, state)), false);
+  });
+}
+
 test('exclusão staged de catálogo bloqueia o plano e informa caminho e operação', t => {
   const f = fixture(t), catalog = '.pbai4devs/catalog.json';
   f.cli('init', '--agents', 'codex');
