@@ -63,6 +63,10 @@ Diretórios antigos sem comprovação de propriedade podem permanecer vazios.
 Ao mudar a seleção, pastas compartilhadas continuam quando outro cliente
 precisa delas; arquivos adicionais da equipe devem ser preservados.
 
+Na versão `0.0.21`, `init --force` e `update --force` podem substituir um
+`.pbai4devs/catalog.json` preexistente. Preserve uma cópia fora do projeto
+antes de executar esses comandos nessa versão.
+
 Antes de aplicar em projeto existente, confira o plano e depois o diagnóstico:
 
 ```console
@@ -77,6 +81,8 @@ Use `init --dry-run --json`, `sync --dry-run --json` ou
 `plan`, `conflicts`, `preserved`, `untrackedPaths` e `localIgnore` antes de
 aplicar. Conflitos sem solução interrompem a operação; não presuma que uma
 colisão de nomes torna um arquivo propriedade do kit.
+As verificações não são atômicas com outras alterações no sistema de arquivos:
+evite editar os arquivos envolvidos enquanto a operação estiver em andamento.
 
 O sincronizador independente também pode ser executado pelo
 [script local](../../.pbai4devs/scripts/sincronizar-agentes/README.md). Seu

@@ -109,6 +109,9 @@ Essas regras são locais, não acompanham o clone; execute `init` ou `sync`
 em cada clone com Git inicializado, antes de usar `git add`. Sem Git, a
 exclusão fica pendente até `git init` e sincronização.
 Worktrees do mesmo repositório podem compartilhar esse arquivo de exclusões.
+Nesse caso, uma regra criada ao instalar em uma delas também pode ocultar
+arquivos humanos não rastreados em outra. Confira a visibilidade dos arquivos
+em cada worktree antes de preparar alterações para o Git.
 
 Para versionar uma pasta de cliente, o projeto pode acrescentar uma exceção
 literal ao seu próprio `.gitignore` da raiz, por exemplo:
