@@ -67,6 +67,11 @@ O [controle das specs](spec-audit.md) reúne o estado da auditoria de cada uma.
 - [ ] Executar a suíte completa do estado final, incluindo o pacote instalado,
   e acompanhar a matriz real em Linux, Windows e macOS. Os casos NTFS, skips,
   volumes sem hardlinks e limites de concorrência devem ter resultado explícito.
+- [ ] Projetar recuperação conservadora para falhas concorrentes: avaliar
+  backups, registro de operação pendente e revisão do estado parcial sem
+  apagar ou substituir caminhos que possam ter sido alterados por pessoas.
+  A verificação seguida de remoção ou restauração tem uma janela de corrida;
+  resolver o rollback, isoladamente, não comprova segurança durante o apply.
 - [ ] Atualizar a documentação e registrar evidências e revisão independente
   do diff final antes de criar commit, tag ou publicar uma nova versão.
 
