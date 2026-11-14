@@ -4,6 +4,12 @@ description: Alterações verificáveis por versão do AgentDevKit.
 
 # Changelog
 
+## 0.0.27 — 2026-11-14
+
+- Esclarece que desativar locks opcionais não garante a preservação dos bytes
+  do índice Git e orienta a interromper consultas sem método seguro comprovado.
+- Delimita a garantia do teste de consultas à fixture realmente exercitada.
+
 ## 0.0.26 — 2026-11-14
 
 - Preserva os bytes do índice nas consultas do gate para os casos suportados e

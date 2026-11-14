@@ -46,7 +46,7 @@ function fixture(t) {
   return { root, git, put, read, cli, ignore };
 }
 
-test('consultas Git sem locks opcionais preservam bytes do índice e alterações', t => {
+test('consultas com diff limitado a trabalho.txt preservam índice nesta fixture', t => {
   const root = mkdtempSync(join(tmpdir(), 'adk-git-consultas-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const env = { ...process.env, GIT_CONFIG_NOSYSTEM: '1',
@@ -73,6 +73,8 @@ test('consultas Git sem locks opcionais preservam bytes do índice e alteraçõe
   utimesSync(clean, new Date('2001-01-01T00:00:00Z'), new Date('2001-01-01T00:00:00Z'));
   assert.notEqual(statSync(clean).mtimeMs, beforeMtime, 'a fixture precisa de stat cache desatualizado');
 
+  // Esta fixture não prova que GIT_OPTIONAL_LOCKS=0 preserve o índice em
+  // consultas arbitrárias: o diff abaixo não inclui o arquivo com stat antigo.
   const readOnly = { GIT_OPTIONAL_LOCKS: '0' };
   const entries = git(['ls-files', '--stage', '-z'], readOnly);
   const index = readFileSync(join(root, '.git', 'index'));
