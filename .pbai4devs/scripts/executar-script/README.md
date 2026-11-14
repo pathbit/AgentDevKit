@@ -28,6 +28,27 @@ Na saída padrão, `--executar` reúne o caminho do runtime, o diagnóstico, o
 cabeçalho do seletor e a saída do alvo; ela não é um JSON único nem uma saída
 bruta do alvo. O seletor direto também inclui seu próprio cabeçalho.
 
+Use `--raw` antes do nome do script para enviar ao stderr os metadados e o
+diagnóstico do kit, mantendo a saída do alvo em stdout:
+
+```sh
+node .pbai4devs/scripts/executar-script/SCRIPT.mjs --raw inspecionar-projeto
+cd .pbai4devs/scripts/preparar-ferramentas
+node BOOTSTRAP.mjs --executar --raw inspecionar-projeto
+cd ../../..
+```
+
+Nesse modo, runtime, plano, diagnóstico e cabeçalho vão a stderr, junto dos
+erros do alvo; stderr pode conter formatos misturados. Sem outras saídas do
+ambiente, `--raw --plan` e `--raw --help` deixam stdout vazio e mostram o plano
+ou ajuda em stderr.
+Opções depois do nome pertencem ao alvo, inclusive `--raw` e `--plan`.
+
+Preloads ou instrumentação do ambiente, como `NODE_OPTIONS`, podem escrever em
+stdout antes de o kit processar `--raw`, inclusive em plano ou ajuda, ou
+interferir na identificação do runtime. Para processar bytes estritos, controle
+esse ambiente; o kit preserva `NODE_OPTIONS` e não o remove automaticamente.
+
 Com Node 24+ já disponível, o seletor pode ser chamado diretamente:
 
 ```console

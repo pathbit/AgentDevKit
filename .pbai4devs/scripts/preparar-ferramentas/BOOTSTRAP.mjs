@@ -179,17 +179,18 @@ export async function main(args = process.argv.slice(2), options = {}) {
   const runtimeOnly = args[0] === '--runtime-only';
   const execute = args[0] === '--executar';
   const selected = execute ? args.slice(1) : [];
-  let plan = false, noInstall = false;
-  while (execute && ['--plan', '--no-install'].includes(selected[0])) {
+  let plan = false, noInstall = false, raw = false;
+  while (execute && ['--plan', '--no-install', '--raw'].includes(selected[0])) {
     if (selected[0] === '--plan') { if (plan) failure('--plan duplicado.'); plan = true; }
-    else { if (noInstall) failure('--no-install duplicado.'); noInstall = true; }
+    else if (selected[0] === '--no-install') { if (noInstall) failure('--no-install duplicado.'); noInstall = true; }
+    else { if (raw) failure('--raw duplicado.'); raw = true; }
     selected.shift();
   }
   if (runtimeOnly && args.length !== 1) failure('--runtime-only nao aceita selecao ou outros argumentos.');
-  if (execute && !selected[0]) failure('Use --executar [--no-install] [--plan] <nome-ou-caminho> [argumentos].');
+  if (execute && !selected[0]) failure('Use --executar [--no-install] [--plan] [--raw] <nome-ou-caminho> [argumentos].');
   if (!runtimeOnly && !execute && args.some(arg => arg.startsWith('-'))) failure('Use --runtime-only ou uma selecao de ferramentas.');
   if (execute && ['--help', '-h'].includes(selected[0])) {
-    process.stdout.write('Uso: --executar [--no-install] [--plan] <nome-ou-caminho> [argumentos]\n');
+    (raw ? process.stderr : process.stdout).write('Uso: --executar [--no-install] [--plan] [--raw] <nome-ou-caminho> [argumentos]\n');
     return 0;
   }
   if (execute) {
@@ -197,7 +198,7 @@ export async function main(args = process.argv.slice(2), options = {}) {
     resolveScript(selected[0], { root: options.root || projectRoot });
   }
   const runtime = await ensureRuntime({ ...options, allowDownload: !plan && !noInstall, searchPath: execute });
-  process.stdout.write(`node=${runtime.node}\n`);
+  (raw ? process.stderr : process.stdout).write(`node=${runtime.node}\n`);
   if (runtimeOnly) return 0;
   if (execute) {
     const run = options.run || spawnSync;
@@ -205,11 +206,11 @@ export async function main(args = process.argv.slice(2), options = {}) {
     const env = environmentWithNode(options.environment || process.env, runtime.node);
     const processOptions = { stdio: 'inherit', env, cwd: root, windowsHide: true };
     if (!plan) {
-      const diagnostic = run(runtime.node, [join(root, '.pbai4devs/scripts/diagnosticar-ambiente/SCRIPT.mjs')], processOptions);
+      const diagnostic = run(runtime.node, [join(root, '.pbai4devs/scripts/diagnosticar-ambiente/SCRIPT.mjs')], raw ? { ...processOptions, stdio: ['inherit', 2, 'inherit'] } : processOptions);
       if (diagnostic.error) throw diagnostic.error;
       if (diagnostic.status !== 0) return diagnostic.status ?? 1;
     }
-    const result = run(runtime.node, [join(root, '.pbai4devs/scripts/executar-script/SCRIPT.mjs'), ...(plan ? ['--plan'] : []), ...selected], processOptions);
+    const result = run(runtime.node, [join(root, '.pbai4devs/scripts/executar-script/SCRIPT.mjs'), ...(raw ? ['--raw'] : []), ...(plan ? ['--plan'] : []), ...selected], processOptions);
     if (result.error) throw result.error;
     return result.status ?? 1;
   }

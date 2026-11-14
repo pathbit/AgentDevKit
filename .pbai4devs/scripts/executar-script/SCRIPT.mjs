@@ -57,11 +57,17 @@ export function resolveScript(input, { root = projectRoot } = {}) {
 
 export function main(input = process.argv.slice(2), options = {}) {
   requireNode();
-  const args = [...input]; const plan = args[0] === '--plan'; if (plan) args.shift();
-  if (['--help', '-h'].includes(args[0])) { console.log('Uso: node SCRIPT.mjs [--plan] <nome-ou-caminho> [argumentos]'); return 0; }
-  if (!args.length) fail('Uso: node SCRIPT.mjs [--plan] <nome-ou-caminho> [argumentos]');
+  const args = [...input]; let plan = false, raw = false;
+  while (['--plan', '--raw'].includes(args[0])) {
+    if (args[0] === '--plan') { if (plan) fail('--plan duplicado.'); plan = true; }
+    else { if (raw) fail('--raw duplicado.'); raw = true; }
+    args.shift();
+  }
+  const usage = 'Uso: node SCRIPT.mjs [--plan] [--raw] <nome-ou-caminho> [argumentos]';
+  if (['--help', '-h'].includes(args[0])) { (raw ? process.stderr : process.stdout).write(`${usage}\n`); return 0; }
+  if (!args.length) fail(usage);
   const selected = resolveScript(args.shift(), options);
-  console.log(`${selected.executor === 'node' ? 'runtime=node' : 'executor=playwright-mcp'}\nfile=${relative(selected.root, selected.file).split(sep).join('/')}`);
+  (raw ? process.stderr : process.stdout).write(`${selected.executor === 'node' ? 'runtime=node' : 'executor=playwright-mcp'}\nfile=${relative(selected.root, selected.file).split(sep).join('/')}\n`);
   if (plan) return 0;
   if (selected.executor === 'playwright-mcp') {
     console.error('Use o conector Playwright pelo agente; este script nao e um programa Node.');

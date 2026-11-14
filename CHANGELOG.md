@@ -4,6 +4,12 @@ description: Alterações verificáveis por versão do AgentDevKit.
 
 # Changelog
 
+## 0.0.29 — 2026-11-14
+
+- Oferece `--raw` para separar a saída do script dos metadados do kit, com
+  os limites de instrumentação do ambiente documentados.
+- Esclarece a preservação do índice em consultas sem escrita de `git-commit`.
+
 ## 0.0.28 — 2026-11-14
 
 - Encadeia preparo do runtime, diagnóstico e execução por `--executar`, com

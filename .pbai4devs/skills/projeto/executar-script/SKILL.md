@@ -28,6 +28,11 @@ Confira pré-requisitos, efeitos e autorização, e execute sem `--plan`.
 O seletor direto continua disponível e não faz preparo nem diagnóstico.
 O bootstrap reúne na saída informações do runtime, diagnóstico e execução;
 identifique cada trecho antes de relatar o resultado do script.
+Para redirecionar metadados e diagnóstico do kit a stderr, use `--raw` antes do
+nome; erros também compartilham stderr. Sem saídas extras do ambiente, planos e
+ajuda em modo raw deixam stdout vazio. Preloads em `NODE_OPTIONS` podem escrever
+em stdout antes do kit; para bytes estritos, controle o ambiente sem alterá-lo
+automaticamente. Argumentos após o nome pertencem ao alvo.
 Consulte a [referência](../../../scripts/executar-script/README.md).
 
 Se indicar `playwright-mcp`, use o conector conforme a
