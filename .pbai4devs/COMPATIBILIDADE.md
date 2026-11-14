@@ -79,6 +79,11 @@ MiniMax, Copilot CLI/SDK e DeepSeek usam filhos imediatos. ZCode exige skills
 planas em plugins. Mantemos esses layouts; não presumimos recursão em agentes ou
 comandos quando o fornecedor só documenta arquivos diretos.
 
+Nas versões `0.0.21` e `0.0.30`, regras Copilot geradas sem YAML nativo
+explícito usam `applyTo: '**'` independentemente do `trigger` da origem. Uma
+regra manual ou com glob pode, portanto, alcançar um escopo maior que o
+pretendido. Confira os metadados gerados; o carregamento varia entre clientes.
+
 Antigravity busca um nível por padrão. Os arquivos `.agents/skills.json`,
 `rules.json` e `agents.json` registram explicitamente cada referência;
 o sincronizador os atualiza ao criar, mover ou remover recursos. Eles são
@@ -96,6 +101,9 @@ Com Claude e Copilot selecionados, o Copilot CLI pode receber referências
 equivalentes de `.claude/rules` e `.github/instructions`. As duas rotas são
 mantidas para seus respectivos clientes; o suporte a instruções varia entre
 [ambientes do Copilot](https://docs.github.com/en/copilot/reference/custom-instructions-support).
+Em teste local com Copilot CLI `1.0.109`, referências `.claude/rules` manuais
+e com glob também entraram no contexto inicial. Não presuma que os metadados
+da rota Copilot restrinjam as referências vindas de outros clientes.
 
 O instalador gera a seleção e a política em `espelhos.conf`; `sincronizar`
 reconstrói os apontamentos somente com Node e os arquivos do hub instalado.
