@@ -174,7 +174,7 @@ function assertIgnoredOutput(parent, sourceRoot, outputRoot, expectedTop) {
   let topName = repository.stdout.endsWith('\n') ? repository.stdout.slice(0, -1) : repository.stdout;
   if (process.platform === 'win32' && topName.endsWith('\r')) topName = topName.slice(0, -1);
   if (repository.status !== 0 || !topName) fail('Saída local exige repositório Git válido.');
-  const top = realpathSync(topName), gitMarker = stat(join(top, '.git'));
+  const top = realpathSync.native(topName), gitMarker = stat(join(top, '.git'));
   if (!gitMarker || gitMarker.isSymbolicLink() || !pathWithin(top, sourceRoot) || !pathWithin(top, outputRoot) || (expectedTop && expectedTop !== top)) fail('Saída local deve permanecer no mesmo repositório da origem.');
   const target = portable(relative(top, outputRoot));
   // Git needs a trailing slash to recognize an absent directory. Once the
@@ -440,9 +440,19 @@ function gitInit(root) {
 }
 
 export function createExampleOutput({ sourceRoot = projectRoot, outputRoot, prefix = 'agentdevkit-maturity-', allowMissingGit = false } = {}) {
-  requireNode(); sourceRoot = realpathSync(resolve(sourceRoot));
+  requireNode(); sourceRoot = realpathSync.native(resolve(sourceRoot));
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*-$/.test(prefix)) fail('Prefixo de saída inválido.');
-  const base = canonicalTemporaryAlias(outputRoot ?? tmpdir());
+  let base = canonicalTemporaryAlias(outputRoot ?? tmpdir());
+  // Check the spelling supplied by the caller before resolving existing
+  // ancestors, so canonicalization cannot silently accept a symlink.
+  noLinks(parse(base).root, base);
+  let existingBase = base;
+  while (!stat(existingBase) && dirname(existingBase) !== existingBase) existingBase = dirname(existingBase);
+  const before = stat(existingBase), canonicalBase = realpathSync.native(existingBase);
+  noLinks(parse(base).root, base);
+  const after = stat(existingBase), canonicalInfo = stat(canonicalBase);
+  if (!before || !after || !canonicalInfo || before.dev !== after.dev || before.ino !== after.ino || before.dev !== canonicalInfo.dev || before.ino !== canonicalInfo.ino) fail('Caminho ancestral alterado durante a validação.');
+  base = join(canonicalBase, relative(existingBase, base));
   const parent = outputRoot === undefined ? base : dirname(base);
   const guardRoot = parse(parent).root;
   noLinks(guardRoot, parent);

@@ -18,6 +18,13 @@ const hash = value => createHash('sha256').update(value).digest('hex');
 const portable = value => value.split(sep).join('/');
 const fail = (code, message) => { throw Object.assign(new Error(message), { code }); };
 const stat = path => { try { return lstatSync(path); } catch (error) { if (error.code === 'ENOENT') return null; throw error; } };
+const canonicalExisting = path => {
+  if (typeof realpathSync.native === 'function') {
+    try { return realpathSync.native(path); }
+    catch (error) { if (!['ENOSYS', 'ENOTSUP', 'EINVAL'].includes(error.code)) throw error; }
+  }
+  return realpathSync(path);
+};
 
 // Protect staged human bytes that differ from the working tree, without
 // treating an unchanged HEAD entry as a staged edit or rewriting the index.
@@ -49,7 +56,19 @@ function stagedDivergences(root) {
   const topLines = gitOutputLines(top.stdout.toString('utf8'));
   if (topLines.length !== 1 || !topLines[0]) fail('E_GIT', 'Unable to inspect Git worktree root.');
   gitCwd = topLines[0];
-  const prefix = portable(relative(gitCwd, root));
+  let prefix;
+  try {
+    // Git can return a long or physical spelling while the requested target
+    // uses a system alias (for example, a Windows 8.3 or macOS /var path).
+    const physicalTop = canonicalExisting(gitCwd);
+    const physicalTarget = resolve(canonicalExisting(anchor), relative(anchor, resolve(root)));
+    const local = relative(physicalTop, physicalTarget);
+    if (isAbsolute(local) || local === '..' || local.startsWith(`..${sep}`)) fail('E_GIT', 'Target is outside the inspected Git worktree.');
+    prefix = portable(local);
+  } catch (error) {
+    if (error.code === 'E_GIT') throw error;
+    fail('E_GIT', 'Unable to safely resolve Git worktree paths.');
+  }
   const prefixParts = prefix ? prefix.split('/') : [];
   // `git diff` against the worktree respects assume-unchanged and
   // skip-worktree, so compare the actual bytes to the index blobs instead.
@@ -247,17 +266,31 @@ function write(root, path, content, mode) {
   if (mode !== undefined) chmodSync(target, mode);
 }
 
-function atomicWrite(root, path, content, mode, onPublished, beforePublish, exclusive = false) {
+function atomicWrite(root, path, content, mode, onPublished, beforePublish, exclusive = false, holdIdentity = false, onIdentityPressure) {
   const file = safePath(root, path);
   mkdirSync(dirname(file), { recursive: true });
   const temporary = `${file}.agentdevkit-${randomUUID()}`;
-  let primaryError;
+  let primaryError, guard;
   try {
     writeFileSync(temporary, content, { flag: 'wx', ...(mode === undefined ? {} : { mode }) });
     if (mode !== undefined) chmodSync(temporary, mode);
     const writtenMode = stat(temporary).mode & 0o777;
     const publishedStat = lstatSync(temporary, { bigint: true });
-    const publishedIdentity = publishedStat.ino ? { dev: publishedStat.dev, ino: publishedStat.ino } : null;
+    let publishedIdentity = null;
+    if (holdIdentity && publishedStat.ino) {
+      try {
+        guard = openSync(temporary, 'r');
+        const held = fstatSync(guard, { bigint: true });
+        if (held.isFile() && held.dev === publishedStat.dev && held.ino === publishedStat.ino) publishedIdentity = { dev: held.dev, ino: held.ino };
+      } catch (error) {
+        if (['EMFILE', 'ENFILE'].includes(error.code)) onIdentityPressure?.();
+        /* Without a retained inode, rollback must preserve this path. */
+      }
+    }
+    const recordPublication = () => {
+      onPublished?.(writtenMode, publishedIdentity, publishedIdentity ? guard : undefined);
+      if (publishedIdentity) guard = undefined; // Ownership transferred to the transaction.
+    };
     beforePublish?.();
     {
       try { if (exclusive) linkSync(temporary, file); else renameSync(temporary, file); }
@@ -268,17 +301,18 @@ function atomicWrite(root, path, content, mode, onPublished, beforePublish, excl
         let published = false;
         try {
           const source = exclusive ? lstatSync(temporary, { bigint: true }) : publishedStat, target = lstatSync(file, { bigint: true });
-          published = Boolean(!source.isSymbolicLink() && !target.isSymbolicLink() && source.ino && source.dev === target.dev && source.ino === target.ino);
+          published = Boolean(error.code !== 'EEXIST' && !source.isSymbolicLink() && !target.isSymbolicLink() && source.ino && source.dev === target.dev && source.ino === target.ino);
         } catch { /* Unverifiable outcomes are left untouched. */ }
-        if (published) onPublished?.(writtenMode, publishedIdentity);
+        if (published) recordPublication();
         else try { error.uncertainPaths = [...new Set([...(error.uncertainPaths || []), path])]; } catch { /* Keep the original error. */ }
         throw error;
       }
     }
-    onPublished?.(writtenMode, publishedIdentity);
+    recordPublication();
     return writtenMode;
   } catch (error) { primaryError = error; throw error; }
   finally {
+    if (guard !== undefined) try { closeSync(guard); } catch { /* Do not replace the original result. */ }
     try { rmSync(temporary, { force: true }); }
     catch (failure) {
       const error = primaryError || failure;
@@ -1040,7 +1074,13 @@ export function applyPlan(plan) {
   }));
   for (const change of plan.changes) if ((before.get(change.path) ? hash(before.get(change.path)) : null) !== change.beforeHash) fail('E_CHANGED', `File changed after planning: ${change.path}`);
   for (const [path, content] of before) if (content) write(target, `${backup}/${path}`, content, beforeModes.get(path));
-  const applied = [], removedDirectories = [];
+  const applied = [], removedDirectories = [], identityGuards = [];
+  let identityPressure = false;
+  const releaseIdentityGuards = () => {
+    identityPressure = true;
+    for (const item of applied) item.identity = null;
+    for (const guard of identityGuards.splice(0)) try { closeSync(guard.fd); } catch { /* Preserve the operation result. */ }
+  };
   const assertOriginal = path => {
     const file = safePath(target, path), info = stat(file), bytes = before.get(path);
     if (bytes === null ? info !== null : !info?.isFile() || !readFileSync(file).equals(bytes) || (info.mode & 0o777) !== beforeModes.get(path)) fail('E_CHANGED', `File changed before writing: ${path}`);
@@ -1064,9 +1104,20 @@ export function applyPlan(plan) {
         }
         rmSync(file, { force: true }); applied.push(signature);
       }
-      else atomicWrite(target, change.path, content, beforeModes.get(change.path) ?? change.mode, (mode, identity) => {
-        signature.mode = mode; signature.identity = identity; applied.push(signature);
-      }, () => assertOriginal(change.path), before.get(change.path) === null);
+      else {
+        const exclusive = before.get(change.path) === null;
+        if (!exclusive && identityGuards.length >= 16) {
+          const index = identityGuards.findIndex(guard => guard.created);
+          if (index !== -1) {
+            const [evicted] = identityGuards.splice(index, 1); evicted.signature.identity = null;
+            try { closeSync(evicted.fd); } catch { /* Preserve the operation result. */ }
+          }
+        }
+        atomicWrite(target, change.path, content, beforeModes.get(change.path) ?? change.mode, (mode, identity, guard) => {
+          signature.mode = mode; signature.identity = identity; applied.push(signature);
+          if (guard !== undefined) identityGuards.push({ fd: guard, signature, created: exclusive });
+        }, () => assertOriginal(change.path), exclusive, !identityPressure && identityGuards.length < 16, releaseIdentityGuards);
+      }
     }
     if (plan.migration) {
       for (const directory of plan.migration.directories) {
@@ -1089,6 +1140,7 @@ export function applyPlan(plan) {
     const ignored = applyLocalIgnore(changesFallback ? planLocalIgnore(target, { outputs: plan.ownedOutputs }) : plan.localIgnore);
     return { changed: Boolean(plan.changes.length || ignored.changed), backup: [...before.values()].some(Boolean) ? backup : null, localIgnorePending: ignored.pending };
   } catch (error) {
+    if (['EMFILE', 'ENFILE'].includes(error.code)) releaseIdentityGuards();
     const rollbackErrors = [], preserved = [...(Array.isArray(error.uncertainPaths) ? error.uncertainPaths : [])];
     for (const removed of [...removedDirectories].sort((a, b) => a.path.length - b.path.length)) {
       let directory, current;
@@ -1131,6 +1183,10 @@ export function applyPlan(plan) {
     }
     if (rollbackErrors.length) throw attachErrorDiagnostics(Object.assign(new AggregateError([error, ...rollbackErrors], `${error.message}; rollback incompleto: ${rollbackErrors.map(failure => failure.message).join('; ')}`, { cause: error }), { code: error.code || 'E_OPERATION', hardlinkUnsupported: error.hardlinkUnsupported }));
     throw error;
+  } finally {
+    // An open descriptor prevents an unlinked published inode from being reused
+    // for an indistinguishable human replacement during this transaction.
+    for (const guard of identityGuards) try { closeSync(guard.fd); } catch { /* Preserve the operation result. */ }
   }
 }
 

@@ -28,7 +28,7 @@ test('destino OSS respeita ignore efetivo e recusa Git redirecionado sem alterar
     assert.throws(() => outputDirectory(f.target, { root: f.root, environment: { ...f.environment, [name]: value } }), /redirecionado/);
     assert.equal(existsSync(join(f.root, f.target)), false);
   }
-  assert.equal(outputDirectory(f.target, { root: f.root, environment: f.environment }), join(f.root, f.target));
+  assert.equal(outputDirectory(f.target, { root: f.root, environment: f.environment }), join(realpathSync.native(f.root), f.target));
   assert.equal(existsSync(join(f.root, f.target)), false);
   assert.deepEqual(readFileSync(f.index), originalIndex);
   assert.deepEqual(readFileSync(f.config), originalConfig);
@@ -37,7 +37,7 @@ test('destino OSS respeita ignore efetivo e recusa Git redirecionado sem alterar
   const excludes = join(f.root, 'global-ignore'), config = join(f.root, 'global-gitconfig');
   writeFileSync(excludes, 'tmp/\n');
   writeFileSync(config, `[core]\n\texcludesFile = ${JSON.stringify(excludes)}\n`);
-  assert.equal(outputDirectory(f.target, { root: f.root, environment: { ...f.environment, GIT_CONFIG_GLOBAL: config } }), join(f.root, f.target));
+  assert.equal(outputDirectory(f.target, { root: f.root, environment: { ...f.environment, GIT_CONFIG_GLOBAL: config } }), join(realpathSync.native(f.root), f.target));
   writeFileSync(excludes, '');
   assert.throws(() => outputDirectory(f.target, { root: f.root, environment: { ...f.environment, GIT_CONFIG_GLOBAL: config } }), /ignorada/);
   assert.deepEqual(readFileSync(f.index), originalIndex);
@@ -111,6 +111,18 @@ test('preparo OSS cria saída exclusiva com proteção local e preserva o índic
   assert.throws(() => prepared.verifyOutput(), /Proteção da saída alterada/);
 });
 
+test('preparo OSS aceita caminhos equivalentes com nomes curtos ou longos', t => {
+  const f = outputFixture(t), index = readFileSync(f.index), config = readFileSync(f.config);
+  // GitHub Windows runners often expose TEMP with an 8.3 component. Exercise
+  // both spellings when available and the same contract on other platforms.
+  const nativeRoot = realpathSync.native(f.root);
+  const output = join(nativeRoot, f.target);
+  const prepared = prepareOutput(output, f.root);
+  assert.equal(prepared.outputRoot, output);
+  assert.doesNotThrow(() => prepared.verifyOutput());
+  assert.deepEqual(readFileSync(f.index), index); assert.deepEqual(readFileSync(f.config), config);
+});
+
 test('preparo OSS recusa ancestral trocado por link depois da validação', t => {
   const f = outputFixture(t), outside = mkdtempSync(join(tmpdir(), 'agentdevkit-oss-outside-'));
   t.after(() => rmSync(outside, { recursive: true, force: true }));
@@ -130,16 +142,30 @@ test('preparo OSS recusa ancestral trocado por link depois da validação', t =>
   assert.deepEqual(readFileSync(f.index), index);
 });
 
+test('preparo OSS recusa link no caminho informado antes de canonizá-lo', t => {
+  const f = outputFixture(t), outside = mkdtempSync(join(tmpdir(), 'agentdevkit-oss-outside-'));
+  t.after(() => rmSync(outside, { recursive: true, force: true }));
+  try { symlinkSync(outside, join(f.root, 'tmp'), process.platform === 'win32' ? 'junction' : 'dir'); }
+  catch (error) {
+    if (process.platform === 'win32' && ['EPERM', 'EACCES', 'ENOSYS'].includes(error.code)) { t.skip(`Link indisponível no Windows: ${error.code}`); return; }
+    throw error;
+  }
+  const index = readFileSync(f.index);
+  assert.throws(() => prepareOutput(join(f.root, f.target), f.root), /link/i);
+  assert.equal(existsSync(join(outside, 'oss')), false);
+  assert.deepEqual(readFileSync(f.index), index);
+});
+
 test('consulta OSS não executa fsmonitor configurado nem modifica o Git', t => {
   const f = outputFixture(t), marker = join(f.root, 'fsmonitor-marker'), hook = join(f.root, 'fsmonitor.sh');
-  writeFileSync(hook, '#!/bin/sh\nprintf called >> "$OSS_FSMONITOR_MARKER"\nprintf "\\0"\n'); chmodSync(hook, 0o700);
-  f.git(['config', 'core.fsmonitor', hook]);
-  const environment = { ...f.environment, OSS_FSMONITOR_MARKER: marker };
+  writeFileSync(hook, '#!/bin/sh\nprintf called >> fsmonitor-marker\nprintf "\\0"\n'); chmodSync(hook, 0o700);
+  f.git(['config', 'core.fsmonitor', './fsmonitor.sh']);
+  const environment = f.environment;
   const control = spawnSync('git', ['-C', f.root, 'ls-files'], { env: environment, encoding: 'utf8' });
   assert.equal(control.status, 0, control.stderr);
   assert.equal(existsSync(marker), true, 'O controle precisa comprovar que o hook executaria.'); unlinkSync(marker);
   const before = [readFileSync(f.index), readFileSync(f.config)];
-  assert.equal(outputDirectory(f.target, { root: f.root, environment }), join(f.root, f.target));
+  assert.equal(outputDirectory(f.target, { root: f.root, environment }), join(realpathSync.native(f.root), f.target));
   assert.equal(existsSync(marker), false);
   assert.deepEqual([readFileSync(f.index), readFileSync(f.config)], before);
 });

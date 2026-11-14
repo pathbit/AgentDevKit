@@ -63,8 +63,9 @@ export function gitPathsOverlap(left, right, { root, platform = process.platform
           const leftStat = resolveIdentity(a.slice(0, i + 1)), rightStat = resolveIdentity(b.slice(0, i + 1));
           if (leftStat && rightStat && leftStat.ino && rightStat.ino)
             distinct = leftStat.dev !== rightStat.dev || leftStat.ino !== rightStat.ino;
-          if (!distinct && allowMissingTarget && leftStat?.ino && rightStat?.missing
-              && (i === b.length - 1 || i === a.length - 1 && leftStat.isFile())) {
+          // An absent child of the same existing parent cannot be another
+          // spelling of the existing child, including when it is a directory.
+          if (!distinct && allowMissingTarget && leftStat?.ino && rightStat?.missing) {
             const leftParent = i ? resolveIdentity(a.slice(0, i)) : lstatSync(root, { bigint: true });
             const rightParent = i ? resolveIdentity(b.slice(0, i)) : leftParent;
             if (leftParent?.ino && rightParent?.ino && !leftParent.isSymbolicLink() && !rightParent.isSymbolicLink())

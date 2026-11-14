@@ -76,6 +76,16 @@ Não existe comando `undo`. Copiar o backup inteiro não remove arquivos que a
 operação criou; um rollback completo exige conferir o plano e o diff do Git.
 Os backups são locais e ignorados; não substituem o controle de versão.
 
+Após uma falha, caminhos cuja identidade não pôde ser comprovada são
+preservados e informados para revisão. O número de identidades acompanhadas é
+limitado; sob pressão de descritores, outras alterações também podem ser
+preservadas. Com um limite muito baixo de descritores, como 32, a operação pode
+falhar: revise os caminhos informados e aumente o limite antes de tentar de novo.
+A verificação e a remoção ou restauração
+de um arquivo são operações separadas: uma edição concorrente exatamente nesse
+intervalo ainda pode ser perdida. Evite editar os mesmos caminhos durante a
+instalação ou sincronização e revise o resultado antes de retomar o trabalho.
+
 ## Estado ou apontamentos inconsistentes
 
 Se a instalação ainda usa `.pbai4devs/estado`, execute `agentdevkit update`

@@ -528,8 +528,10 @@ export function planUntrack(root, expectedHashes = {}) {
   const topResult = gitCommand(root, ['rev-parse', '--show-toplevel']);
   const topLines = topResult.status === 0 ? gitOutputLines(topResult.stdout) : [];
   if (topResult.status === 0 && (topLines.length !== 1 || !topLines[0])) throw new Error('Localizacao Git invalida.');
-  const top = topResult.status === 0 ? topLines[0] : root;
-  const rootPrefix = topResult.status === 0 ? portable(relative(top, root)) : '';
+  const top = topResult.status === 0 ? canonicalExisting(topLines[0]) : root;
+  const local = relative(top, root);
+  if (isAbsolute(local) || local === '..' || local.startsWith(`..${sep}`)) throw new Error('Projeto fora da arvore Git.');
+  const rootPrefix = topResult.status === 0 ? portable(local) : '';
   const rootParts = rootPrefix ? rootPrefix.split('/') : [];
   const result = gitCommand(top, ['ls-files', '--stage', '-z'], undefined, null);
   if (result.status !== 0) {

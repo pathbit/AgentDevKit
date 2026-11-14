@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Planeja em memória; somente os caminhos gerenciados pelo manifesto são alterados.
-import { chmodSync, cpSync, linkSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, rmdirSync, writeFileSync } from 'node:fs';
+import { chmodSync, closeSync, cpSync, fstatSync, linkSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, rmdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, posix, resolve } from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
@@ -879,7 +879,13 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
     let parent = posix.dirname(value);
     while (parent !== '.') { if (stat(safe(parent))?.isDirectory()) originalDirectories.add(parent); parent = posix.dirname(parent); }
   }
-  const touched = new Set(), createdDirectories = new Set(), uncertainWrites = new Set(), publishedIdentities = new Map();
+  const touched = new Set(), createdDirectories = new Set(), uncertainWrites = new Set(), publishedIdentities = new Map(), identityGuards = [];
+  let identityPressure = false;
+  const releaseIdentityGuards = () => {
+    identityPressure = true;
+    for (const path of publishedIdentities.keys()) publishedIdentities.set(path, null);
+    for (const guard of identityGuards.splice(0)) try { closeSync(guard.fd); } catch { /* Preserve the operation result. */ }
+  };
   const summary = { changed: changed.length + rootEntryChanges.length, stale: removals.length, conflicts: conflicts.size, missing: missing.length, legacy: legacy.length, registries: registries.size, gitignores: ignoreFiles.size, manifests: configExists ? 0 : 1, localIgnores: localStatus.changed + localStatus.missing.length + localStatus.trackedOutputs.length + (localStatus.pending?.filter(isBlockingLocalIgnore).length || 0) + (localStatus.status === 'no-git' ? 1 : 0) };
   const dirty = Object.values(summary).some(Boolean);
   output(`${summary.changed} desatualizadas; ${summary.stale} obsoletas; ${summary.conflicts} conflitos; ${summary.missing} origens nativas ausentes; ${summary.legacy} documentos antigos; ${summary.registries} indices derivados; ${summary.gitignores} gitignores; ${summary.localIgnores} exclusoes locais.`);
@@ -940,29 +946,51 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
     let original = originals.get(boundary);
     for (const segment of value.slice(boundary.length).split('/').filter(Boolean)) original = original?.children?.[segment];
     const exclusive = !original;
+    if (!exclusive && identityGuards.length >= 16) {
+      const index = identityGuards.findIndex(guard => guard.created);
+      if (index !== -1) {
+        const [evicted] = identityGuards.splice(index, 1); publishedIdentities.set(evicted.path, null);
+        try { closeSync(evicted.fd); } catch { /* Preserve the operation result. */ }
+      }
+    }
     ensureDirectory(value);
     const temporary = `${target}.sync.${randomUUID()}`;
-    let primaryError;
+    let primaryError, guard;
     try {
       writeFileSync(temporary, text, { flag: 'wx' }); if (mode !== undefined) chmodSync(temporary, mode);
       const created = lstatSync(temporary, { bigint: true });
-      const identity = created.ino ? { dev: created.dev, ino: created.ino } : null;
+      let identity = null;
+      if (created.ino && !identityPressure && identityGuards.length < 16) {
+        try {
+          guard = openSync(temporary, 'r');
+          const held = fstatSync(guard, { bigint: true });
+          if (held.isFile() && held.dev === created.dev && held.ino === created.ino) identity = { dev: held.dev, ino: held.ino };
+        } catch (error) {
+          if (['EMFILE', 'ENFILE'].includes(error.code)) releaseIdentityGuards();
+          /* Without a retained inode, rollback must preserve this path. */
+        }
+      }
+      const recordPublication = () => {
+        publishedIdentities.set(value, identity);
+        if (identity) { identityGuards.push({ fd: guard, path: value, created: exclusive }); guard = undefined; }
+      };
       try {
         if (exclusive) linkSync(temporary, target); else renameSync(temporary, target);
       } catch (error) {
         if (exclusive) explainUnsupportedHardlink(error);
         let published = false;
-        try { const current = lstatSync(target, { bigint: true }); published = Boolean(identity && !current.isSymbolicLink() && current.dev === identity.dev && current.ino === identity.ino); } catch { /* Preserve when ambiguous. */ }
-        if (published) publishedIdentities.set(value, identity); else uncertainWrites.add(value);
+        try { const current = lstatSync(target, { bigint: true }); published = Boolean(error.code !== 'EEXIST' && identity && !current.isSymbolicLink() && current.dev === identity.dev && current.ino === identity.ino); } catch { /* Preserve when ambiguous. */ }
+        if (published) recordPublication(); else uncertainWrites.add(value);
         throw error;
       }
-      publishedIdentities.set(value, identity);
+      recordPublication();
       if (identity) {
         let current; try { current = lstatSync(target, { bigint: true }); } catch { /* Preserve when ambiguous. */ }
         if (!current || current.isSymbolicLink() || current.dev !== identity.dev || current.ino !== identity.ino) uncertainWrites.add(value);
       }
     } catch (error) { primaryError = error; throw error; }
     finally {
+      if (guard !== undefined) try { closeSync(guard); } catch { /* Preserve the original result. */ }
       try { rmSync(temporary, { force: true }); }
       catch (failure) {
         const error = primaryError || failure;
@@ -1011,6 +1039,7 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
     // Directory ownership is not recorded: keep even empty parent directories.
     if (localPlan) applyLocalIgnore(localPlan);
   } catch (error) {
+    if (['EMFILE', 'ENFILE'].includes(error.code)) releaseIdentityGuards();
     const failures = [], preservedPaths = [];
     for (const value of [...touched].reverse()) {
       try {
@@ -1035,6 +1064,10 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
       throw attachErrorDiagnostics(combined);
     }
     throw error;
+  } finally {
+    // Keep published inodes alive until rollback can no longer confuse them
+    // with human replacements that happen to have the same bytes and mode.
+    for (const guard of identityGuards) try { closeSync(guard.fd); } catch { /* Preserve the operation result. */ }
   }
   return { ...summary, ownedOutputs, managedBlocks, preserved: preservedPaths, exitCode: 0, ...(backupRoot ? { backupRoot } : {}) };
 }

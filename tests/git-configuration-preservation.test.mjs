@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, existsSync, chmodSync, linkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, dirname } from 'node:path';
+import { join, dirname, isAbsolute, relative, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
@@ -156,9 +156,13 @@ test('comandos JSON aceitam negações genéricas e conservam Git e ignores byte
   const before = paths.map(path => readFileSync(join(root, path)));
   for (const args of [['init', '--agents', 'claude'], ['update'], ['sync'], ['sync', '--check'], ['doctor']]) {
     const result = run(root, process.execPath, [bin, ...args, '--target', root, '--json']);
-    assert.equal(result.status, 0, result.stdout + result.stderr);
-    const data = JSON.parse(result.stdout); assert.notEqual(data.ok, false);
-    assert.ok(!data.localIgnore?.pending.some(item => item.code === 'ignore-ambiguous'));
+    const winCheck = process.platform === 'win32' && (args[0] === 'doctor' || args.includes('--check'));
+    assert.equal(result.status, winCheck ? 1 : 0, result.stdout + result.stderr);
+    const data = JSON.parse(result.stdout); assert.equal(data.ok, !winCheck);
+    const ambiguous = data.localIgnore?.pending.filter(item => item.code === 'ignore-ambiguous') || [];
+    if (process.platform === 'win32') {
+      for (const rule of ['!docs/*.md', '!docs/*.json']) assert.ok(ambiguous.some(item => item.path.endsWith(rule)), rule);
+    } else assert.equal(ambiguous.length, 0);
     assert.ok(data.warnings.some(warning => warning.includes('visiveis')), args.join(' '));
     paths.forEach((path, i) => assert.deepEqual(readFileSync(join(root, path)), before[i], `${args.join(' ')}: ${path}`));
   }
@@ -292,7 +296,9 @@ test('aliases Unicode e ancestrais staged são detectados conservadoramente', t 
   assert.equal(gitPathsOverlap('.claude/skills/straße', '.claude/skills/STRASSE/SKILL.md'), true);
   assert.equal(gitPathsOverlap('.codex/commands/proximos-paẞos/COMMAND.md', '.codex/commands/proximos-passos/COMMAND.md'), true);
   assert.equal(gitPathsOverlap('relatório.txt', '.pbai4devs/SKILL.md'), false);
-  assert.equal(gitPathsOverlap('.claude/straße/SKILL.md', '.claude/other/SKILL.md'), false);
+  assert.equal(gitPathsOverlap('.claude/straße/SKILL.md', '.claude/other/SKILL.md', { platform: 'darwin' }), false);
+  assert.equal(gitPathsOverlap('.claude/straße/SKILL.md', '.claude/other/SKILL.md', { platform: 'win32' }), true);
+  assert.equal(gitPathsOverlap('.claude/straße/SKILL.md', '.claude/other/SKILL.md', { platform: 'win32', identity: () => 'distinct' }), false);
   assert.equal(gitPathsOverlap('.claude/skills/demo./SKILL.md', '.claude/skills/demo/SKILL.md', { platform: 'win32' }), true);
   assert.equal(gitPathsOverlap('.claude/PROGRA~1/SKILL.md', '.claude/Program Files/SKILL.md', { platform: 'win32' }), true);
   assert.equal(gitPathsOverlap('.claude/PROGRA~1.con', '.claude/Program Files.config', { platform: 'win32' }), true);
@@ -335,6 +341,60 @@ test('identidade física simulada no Windows exige arquivos existentes e distint
   assert.equal(gitPathsOverlap('absent.md', 'Z~1.TXT', { root, platform: 'win32', allowMissingTarget: true }), true);
   linkSync(join(root, 'README.md'), join(root, 'Z~1.TXT'));
   assert.equal(gitPathsOverlap('README.md', 'Z~1.TXT', { root, platform: 'win32' }), true);
+});
+
+test('Windows não confunde diretórios staged existentes com ancestrais ausentes de outros destinos', { timeout: 120000 }, t => {
+  const outer = mkdtempSync(join(tmpdir(), 'adk-win-nested-')); t.after(() => rmSync(outer, { recursive: true, force: true }));
+  git(outer, 'init', '-q');
+  const root = join(outer, '.agent-tests', 'development-ecosystem-fixture'); mkdirSync(root, { recursive: true });
+  git(root, 'init', '-q');
+  const humans = ['.claude/skills/planejar-qa/SKILL.md', '.cursor/skills/projeto/criar-spec/SKILL.md', '.gemini/skills/planejar-qa/SKILL.md'];
+  for (const human of humans) put(root, human, 'conteúdo humano staged\n');
+  git(root, 'add', '-f', ...humans);
+  const index = readFileSync(join(root, '.git/index'));
+  const config = readFileSync(join(root, '.git/config'));
+  const human = humans[0];
+  assert.equal(gitPathsOverlap(human, '.claude/agents/revisor.md', { root, platform: 'win32', allowMissingTarget: true }), false);
+  assert.equal(gitPathsOverlap(human, '.claude/skills/git-diff/SKILL.md', { root, platform: 'win32', allowMissingTarget: true }), false);
+  assert.equal(gitPathsOverlap(humans[1], '.cursor/agents/revisor.md', { root, platform: 'win32', allowMissingTarget: true }), false);
+  assert.equal(gitPathsOverlap(humans[2], '.gemini/skills/git-diff/SKILL.md', { root, platform: 'win32', allowMissingTarget: true }), false);
+  assert.equal(gitPathsOverlap(human, '.claude/skills/planejar-qa/SKILL.md', { root, platform: 'win32', allowMissingTarget: true }), true);
+  assert.equal(gitPathsOverlap('.claude/agents/revisor.md', human, { root, platform: 'win32', allowMissingTarget: true }), true);
+  const platform = Object.getOwnPropertyDescriptor(process, 'platform');
+  try {
+    Object.defineProperty(process, 'platform', { value: 'win32' });
+    const plan = planInstallation({ target: root, mode: 'init', clients: ['codex', 'claude', 'copilot', 'cursor', 'gemini'] });
+    for (const path of ['.claude/agents/revisor.md', '.claude/skills/git-diff/SKILL.md', '.cursor/agents/revisor.md', '.gemini/agents/revisor.md', '.gemini/skills/git-diff/SKILL.md'])
+      assert.ok(plan.changes.some(change => change.path === path && change.action === 'create'), path);
+  } finally { Object.defineProperty(process, 'platform', platform); }
+  for (const path of humans) assert.equal(readFileSync(join(root, path), 'utf8'), 'conteúdo humano staged\n');
+  assert.deepEqual(readFileSync(join(root, '.git/index')), index);
+  assert.deepEqual(readFileSync(join(root, '.git/config')), config);
+  stageSynthetic(root, '.gemini/agents/revisor.md', 'conteúdo humano apenas staged\n');
+  const stagedIndex = readFileSync(join(root, '.git/index'));
+  try {
+    Object.defineProperty(process, 'platform', { value: 'win32' });
+    assert.throws(() => planInstallation({ target: root, mode: 'init', clients: ['gemini'] }), error => error.code === 'E_STAGED' && error.message.includes('.gemini/agents/revisor.md'));
+  } finally { Object.defineProperty(process, 'platform', platform); }
+  assert.deepEqual(readFileSync(join(root, '.git/index')), stagedIndex);
+  assert.deepEqual(readFileSync(join(root, '.git/config')), config);
+  const legacy = '.pbai4devs/estado/outros/minhas-notas.txt';
+  put(root, legacy, 'estado humano\n');
+  assert.equal(gitPathsOverlap(legacy, '.pbai4devs/state/outros/minhas-notas.txt', { root, platform: 'win32', allowMissingTarget: true }), false);
+});
+
+test('protege índice quando caminho temporário e Git usam nomes físicos diferentes', { timeout: 120000 }, t => {
+  const outer = mkdtempSync(join(tmpdir(), 'adk-physical-git-')); t.after(() => rmSync(outer, { recursive: true, force: true }));
+  const physical = fs.realpathSync.native(outer);
+  if (outer.toLowerCase() === physical.toLowerCase()) return t.skip('O diretório temporário não oferece alias físico neste sistema.');
+  git(outer, 'init', '-q');
+  const root = join(outer, 'nested'); mkdirSync(root);
+  const path = 'nested/.gemini/agents/revisor.md';
+  stageSynthetic(outer, path, 'conteúdo humano apenas staged\n');
+  const index = readFileSync(join(outer, '.git/index'));
+  assert.throws(() => planInstallation({ target: root, mode: 'init', clients: ['gemini'] }), error => error.code === 'E_STAGED' && error.message.includes('.gemini/agents/revisor.md'));
+  assert.deepEqual(readFileSync(join(outer, '.git/index')), index);
+  assert.equal(existsSync(join(root, '.gemini/agents/revisor.md')), false);
 });
 
 test('criação do instalador recusa arquivo humano surgido após validação', { timeout: 120000 }, t => {
@@ -383,7 +443,10 @@ test('falha de limpeza do stage informa diretório temporário real e preserva e
   const status = await cliMain(['init', '--agents', 'codex', '--target', root, '--yes', '--json'], { cwd: root, stdout: writer, stderr: writer, stdin: { isTTY: false } });
   const result = JSON.parse(output); assert.notEqual(status, 0); assert.equal(result.error.code, 'ENOTSUP'); assert.match(result.error.detail, /hard.?links?/i);
   assert.ok(existsSync(stage)); assert.ok(result.error.cleanupFailures.some(item => item.path === stage && item.message === 'stage ocupado'));
-  assert.ok((result.error.preservedPaths || []).every(path => path.startsWith(`${stage}/`)));
+  assert.ok((result.error.preservedPaths || []).every(path => {
+    const local = relative(stage, path);
+    return local && !isAbsolute(local) && local !== '..' && !local.startsWith(`..${sep}`);
+  }));
   assert.deepEqual(readFileSync(join(root, '.git/index')), index); assert.deepEqual(fs.readdirSync(root).sort(), ['.git', 'human.txt']);
 });
 
@@ -402,7 +465,7 @@ test('falha após publicação exclusiva é revertida quando ainda pertence ao i
   const root = mkdtempSync(join(tmpdir(), 'adk-link-ambiguous-')); t.after(() => rmSync(root, { recursive: true, force: true }));
   git(root, 'init', '-q', '-b', 'main');
   const plan = planInstallation({ target: root, mode: 'init', clients: ['codex'] });
-  const selected = plan.changes.find(change => change.action === 'create' && change.path.startsWith('.pbai4devs/'));
+  const selected = plan.changes.find(change => change.action === 'create');
   const destination = join(root, selected.path), link = fs.linkSync;
   t.mock.method(fs, 'linkSync', (from, to) => { link(from, to); if (to === destination) throw new Error('resultado ambíguo'); });
   syncBuiltinESMExports(); t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
@@ -532,21 +595,152 @@ test('rollback do instalador preserva substituto humano de bytes e modo idêntic
   const plan = planInstallation({ target: root, mode: 'init', clients: ['codex'] });
   const creates = plan.changes.filter(change => change.action === 'create'); assert.ok(creates.length >= 2);
   const first = join(root, creates[0].path), second = join(root, creates[1].path), link = fs.linkSync;
-  let humanIdentity;
+  let humanIdentity, originalIdentity;
   t.mock.method(fs, 'linkSync', (from, to) => {
     link(from, to);
     if (to === second) {
       const bytes = readFileSync(first), mode = fs.statSync(first).mode & 0o777;
+      originalIdentity = fs.statSync(first, { bigint: true }).ino;
       fs.unlinkSync(first); writeFileSync(first, bytes, { mode }); humanIdentity = fs.statSync(first, { bigint: true }).ino;
       throw new Error('falha posterior');
     }
   });
   syncBuiltinESMExports(); t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
   assert.throws(() => applyPlan(plan), /falha posterior/);
-  assert.ok(humanIdentity); assert.equal(fs.statSync(first, { bigint: true }).ino, humanIdentity);
+  assert.ok(humanIdentity); assert.notEqual(humanIdentity, originalIdentity);
+  assert.equal(fs.statSync(first, { bigint: true }).ino, humanIdentity);
 });
 
-for (const kind of ['falha após link', 'EEXIST']) test(`rollback do sync preserva substituto humano idêntico: ${kind}`, t => {
+for (const fail of [false, true]) test(`instalador fecha descritores de identidade após ${fail ? 'rollback' : 'sucesso'}`, { timeout: 120000 }, t => {
+  const root = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-install-guards-'))); t.after(() => rmSync(root, { recursive: true, force: true }));
+  git(root, 'init', '-q', '-b', 'main');
+  const plan = planInstallation({ target: root, mode: 'init', clients: ['codex'] });
+  const second = join(root, plan.changes.filter(change => change.action === 'create')[1].path);
+  const open = fs.openSync, close = fs.closeSync, link = fs.linkSync, pending = new Set(); let opened = 0;
+  t.mock.method(fs, 'openSync', (path, ...args) => { const fd = open(path, ...args); if (args[0] === 'r' && String(path).includes('.agentdevkit-')) { pending.add(fd); opened++; } return fd; });
+  t.mock.method(fs, 'closeSync', fd => { pending.delete(fd); return close(fd); });
+  if (fail) t.mock.method(fs, 'linkSync', (from, to) => { link(from, to); if (to === second) throw new Error('falha posterior'); });
+  syncBuiltinESMExports(); t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
+  if (fail) assert.throws(() => applyPlan(plan), /falha posterior/); else applyPlan(plan);
+  assert.ok(opened > 0); assert.equal(pending.size, 0);
+});
+
+test('rollback preserva arquivo cuja identidade não pôde ser retida', { timeout: 120000 }, t => {
+  const root = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-install-unguarded-'))); t.after(() => rmSync(root, { recursive: true, force: true }));
+  git(root, 'init', '-q', '-b', 'main');
+  const plan = planInstallation({ target: root, mode: 'init', clients: ['codex'] });
+  const creates = plan.changes.filter(change => change.action === 'create');
+  const first = join(root, creates[0].path), second = join(root, creates[1].path), open = fs.openSync, link = fs.linkSync;
+  t.mock.method(fs, 'openSync', (path, ...args) => { if (args[0] === 'r' && String(path).startsWith(`${first}.agentdevkit-`)) throw Object.assign(new Error('descritor indisponível'), { code: 'EMFILE' }); return open(path, ...args); });
+  t.mock.method(fs, 'linkSync', (from, to) => { link(from, to); if (to === second) throw new Error('falha posterior'); });
+  syncBuiltinESMExports(); t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
+  assert.throws(() => applyPlan(plan), error => { assert.match(error.message, /falha posterior/); assert.ok(error.rollbackPreservedPaths.includes(creates[0].path)); return true; });
+  assert.ok(existsSync(first));
+});
+
+test('pressão de descritores invalida guardas anteriores do instalador', { timeout: 120000 }, t => {
+  const root = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-install-pressure-'))); t.after(() => rmSync(root, { recursive: true, force: true }));
+  git(root, 'init', '-q', '-b', 'main');
+  const plan = planInstallation({ target: root, mode: 'init', clients: ['codex'] });
+  const creates = plan.changes.filter(change => change.action === 'create');
+  const first = join(root, creates[0].path), second = join(root, creates[1].path), third = join(root, creates[2].path), open = fs.openSync, link = fs.linkSync;
+  t.mock.method(fs, 'openSync', (path, ...args) => { if (args[0] === 'r' && String(path).startsWith(`${second}.agentdevkit-`)) throw Object.assign(new Error('descritores esgotados'), { code: 'EMFILE' }); return open(path, ...args); });
+  t.mock.method(fs, 'linkSync', (from, to) => { link(from, to); if (to === third) throw new Error('falha após pressão'); });
+  syncBuiltinESMExports(); t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
+  assert.throws(() => applyPlan(plan), error => { assert.match(error.message, /falha após pressão/); assert.ok(error.rollbackPreservedPaths.includes(creates[0].path)); return true; });
+  assert.ok(existsSync(first));
+});
+
+test('instalador preserva hardlink concorrente mesmo com inode idêntico em EEXIST', { timeout: 120000 }, t => {
+  const root = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-install-eexist-inode-'))); t.after(() => rmSync(root, { recursive: true, force: true }));
+  git(root, 'init', '-q', '-b', 'main');
+  const plan = planInstallation({ target: root, mode: 'init', clients: ['codex'] });
+  const change = plan.changes.find(item => item.action === 'create'), target = join(root, change.path), link = fs.linkSync;
+  t.mock.method(fs, 'linkSync', (from, to) => { link(from, to); if (to === target) throw Object.assign(new Error('destino concorrente'), { code: 'EEXIST' }); });
+  syncBuiltinESMExports(); t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
+  assert.throws(() => applyPlan(plan), error => { assert.equal(error.code, 'EEXIST'); assert.ok(error.rollbackPreservedPaths.includes(change.path)); return true; });
+  assert.ok(existsSync(target));
+});
+
+test('limite de descritores preserva e informa arquivo sem identidade no rollback', { timeout: 120000 }, t => {
+  const root = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-install-guard-limit-'))); t.after(() => rmSync(root, { recursive: true, force: true }));
+  git(root, 'init', '-q', '-b', 'main');
+  const plan = planInstallation({ target: root, mode: 'init', clients: ['codex'] });
+  const creates = plan.changes.filter(change => change.action === 'create'); assert.ok(creates.length > 17);
+  const last = join(root, creates[17].path), open = fs.openSync, close = fs.closeSync, link = fs.linkSync, pending = new Set(); let opened = 0;
+  t.mock.method(fs, 'openSync', (path, ...args) => { const fd = open(path, ...args); if (args[0] === 'r' && String(path).includes('.agentdevkit-')) { pending.add(fd); opened++; } return fd; });
+  t.mock.method(fs, 'closeSync', fd => { pending.delete(fd); return close(fd); });
+  t.mock.method(fs, 'linkSync', (from, to) => { link(from, to); if (to === last) throw new Error('falha após limite'); });
+  syncBuiltinESMExports(); t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
+  assert.throws(() => applyPlan(plan), error => { assert.match(error.message, /falha após limite/); assert.ok(error.rollbackPreservedPaths.includes(creates[16].path)); return true; });
+  assert.equal(opened, 16); assert.equal(pending.size, 0); assert.ok(existsSync(join(root, creates[16].path)));
+  assert.equal(existsSync(join(root, creates[0].path)), false);
+});
+
+test('rollback do sync preserva substituto idêntico criado após publicação', t => {
+  const root = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-sync-published-'))); t.after(() => rmSync(root, { recursive: true, force: true }));
+  git(root, 'init', '-q', '-b', 'main'); put(root, '.pbai4devs/espelhos.conf', 'agente|.claude|plano\n');
+  for (const name of ['agents.ignore', 'shared.ignore', 'local.ignore', 'clients.json']) put(root, `.pbai4devs/templates/gitignore/${name}`, readFileSync(join(repo, '.pbai4devs/templates/gitignore', name)));
+  put(root, '.pbai4devs/skills/demo/SKILL.md', '---\nname: demo\ndescription: Fixture.\n---\n\n# Demo\n');
+  const link = fs.linkSync; let first, originalIdentity, humanIdentity;
+  t.mock.method(fs, 'linkSync', (from, to) => {
+    link(from, to);
+    if (!first) { first = to; return; }
+    const bytes = readFileSync(first), mode = fs.statSync(first).mode & 0o777;
+    originalIdentity = fs.statSync(first, { bigint: true }).ino;
+    fs.unlinkSync(first); writeFileSync(first, bytes, { mode, flag: 'wx' }); humanIdentity = fs.statSync(first, { bigint: true }).ino;
+    throw new Error('falha após publicação');
+  });
+  syncBuiltinESMExports(); t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
+  assert.throws(() => synchronize({ root, localIgnores: false, generateEntrypoints: false, output() {} }), /falha após publicação/);
+  assert.ok(humanIdentity); assert.notEqual(humanIdentity, originalIdentity);
+  assert.equal(fs.statSync(first, { bigint: true }).ino, humanIdentity);
+});
+
+for (const exceedLimit of [false, true]) test(`sync fecha descritores ${exceedLimit ? 'após exceder o limite e reverter' : 'após sucesso'}`, { timeout: 120000 }, t => {
+  const root = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-sync-guards-'))); t.after(() => rmSync(root, { recursive: true, force: true }));
+  git(root, 'init', '-q', '-b', 'main'); put(root, '.pbai4devs/espelhos.conf', 'agente|.claude|plano\n');
+  for (const name of ['agents.ignore', 'shared.ignore', 'local.ignore', 'clients.json']) put(root, `.pbai4devs/templates/gitignore/${name}`, readFileSync(join(repo, '.pbai4devs/templates/gitignore', name)));
+  for (let i = 0; i < (exceedLimit ? 18 : 1); i++) {
+    const name = `demo-${String(i).padStart(3, '0')}`;
+    put(root, `.pbai4devs/skills/${name}/SKILL.md`, `---\nname: ${name}\ndescription: Fixture.\n---\n\n# Demo\n`);
+  }
+  const open = fs.openSync, close = fs.closeSync, link = fs.linkSync, pending = new Set();
+  let opened = 0, links = 0, unguarded;
+  t.mock.method(fs, 'openSync', (path, ...args) => { const fd = open(path, ...args); if (args[0] === 'r' && String(path).includes('.sync.')) { pending.add(fd); opened++; } return fd; });
+  t.mock.method(fs, 'closeSync', fd => { pending.delete(fd); return close(fd); });
+  if (exceedLimit) t.mock.method(fs, 'linkSync', (from, to) => { link(from, to); links++; if (links === 17) unguarded = to; if (links === 18) throw new Error('falha após limite sync'); });
+  syncBuiltinESMExports(); t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
+  const run = () => synchronize({ root, localIgnores: false, generateEntrypoints: false, output() {} });
+  if (exceedLimit) assert.throws(run, error => {
+    assert.match(error.message, /falha após limite sync/);
+    assert.ok(error.rollbackPreservedPaths.some(path => unguarded === join(root, path) || unguarded.startsWith(join(root, path) + sep))); return true;
+  }); else run();
+  if (exceedLimit) assert.equal(opened, 16); else assert.ok(opened > 0);
+  assert.equal(pending.size, 0);
+  if (exceedLimit) assert.ok(existsSync(unguarded));
+});
+
+test('pressão de descritores invalida guardas anteriores do sync', t => {
+  const root = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-sync-pressure-'))); t.after(() => rmSync(root, { recursive: true, force: true }));
+  git(root, 'init', '-q', '-b', 'main'); put(root, '.pbai4devs/espelhos.conf', 'agente|.claude|plano\n');
+  for (const name of ['agents.ignore', 'shared.ignore', 'local.ignore', 'clients.json']) put(root, `.pbai4devs/templates/gitignore/${name}`, readFileSync(join(repo, '.pbai4devs/templates/gitignore', name)));
+  for (const name of ['demo-a', 'demo-b', 'demo-c']) put(root, `.pbai4devs/skills/${name}/SKILL.md`, `---\nname: ${name}\ndescription: Fixture.\n---\n\n# Demo\n`);
+  const open = fs.openSync, link = fs.linkSync; let attempts = 0, links = 0, first;
+  t.mock.method(fs, 'openSync', (path, ...args) => {
+    if (args[0] === 'r' && String(path).includes('.sync.') && ++attempts === 2) throw Object.assign(new Error('descritores esgotados'), { code: 'EMFILE' });
+    return open(path, ...args);
+  });
+  t.mock.method(fs, 'linkSync', (from, to) => { link(from, to); if (++links === 1) first = to; if (links === 3) throw new Error('falha após pressão sync'); });
+  syncBuiltinESMExports(); t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
+  assert.throws(() => synchronize({ root, localIgnores: false, generateEntrypoints: false, output() {} }), error => {
+    assert.match(error.message, /falha após pressão sync/);
+    assert.ok(error.rollbackPreservedPaths.some(path => first === join(root, path) || first.startsWith(join(root, path) + sep))); return true;
+  });
+  assert.ok(existsSync(first));
+});
+
+for (const kind of ['falha após link', 'EEXIST', 'EEXIST mesmo inode']) test(`rollback do sync preserva substituto humano idêntico: ${kind}`, t => {
   const root = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-identical-sync-'))); t.after(() => rmSync(root, { recursive: true, force: true }));
   git(root, 'init', '-q', '-b', 'main'); put(root, '.pbai4devs/espelhos.conf', 'agente|.claude|plano\n');
   for (const name of ['agents.ignore', 'shared.ignore', 'local.ignore', 'clients.json']) put(root, `.pbai4devs/templates/gitignore/${name}`, readFileSync(join(repo, '.pbai4devs/templates/gitignore', name)));
@@ -554,6 +748,7 @@ for (const kind of ['falha após link', 'EEXIST']) test(`rollback do sync preser
   const destination = join(root, '.claude/skills/demo/SKILL.md'), link = fs.linkSync; let humanIdentity;
   t.mock.method(fs, 'linkSync', (from, to) => {
     if (to !== destination) return link(from, to);
+    if (kind === 'EEXIST mesmo inode') { link(from, to); humanIdentity = fs.statSync(to, { bigint: true }).ino; throw Object.assign(new Error(kind), { code: 'EEXIST' }); }
     if (kind === 'falha após link') { link(from, to); fs.unlinkSync(to); }
     const bytes = readFileSync(from), mode = fs.statSync(from).mode & 0o777;
     writeFileSync(to, bytes, { mode, flag: 'wx' }); humanIdentity = fs.statSync(to, { bigint: true }).ino;
