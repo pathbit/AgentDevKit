@@ -15,7 +15,10 @@ node .pbai4devs/scripts/preparar-ferramentas/BOOTSTRAP.mjs --runtime-only
 ```
 
 O modo `--runtime-only` imprime `node=<caminho absoluto>` sem instalar
-ferramentas. Sem a opção, continua com `setup`; aceita grupo ou nome.
+ferramentas. Sem opções, continua com `setup`; aceita grupo ou nome.
+Para preparar o runtime, diagnosticar e executar um script em sequência, veja
+[`--executar`](../executar-script/README.md). O plano e `--no-install` não
+baixam o runtime; não restringem efeitos dos processos que forem executados.
 
 O fluxo reutiliza um runtime saudável ou o cache local. Se necessário, baixa
 Node 24 de `nodejs.org`, verifica SHA-256 e extrai usando `tar` nativo.

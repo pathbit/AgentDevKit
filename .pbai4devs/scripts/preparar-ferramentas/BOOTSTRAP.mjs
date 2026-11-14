@@ -109,13 +109,19 @@ export function validateExtracted(root) {
   visit(base);
 }
 
-export async function ensureRuntime({ root = projectRoot, minimum = 24, node = process.execPath, platform = process.platform, arch = process.arch, libc, run = spawnSync, download = downloadOfficial, environment = process.env } = {}) {
+export async function ensureRuntime({ root = projectRoot, minimum = 24, node = process.execPath, platform = process.platform, arch = process.arch, libc, run = spawnSync, download = downloadOfficial, environment = process.env, allowDownload = true, searchPath = false } = {}) {
   if (Number(process.versions.node.split('.')[0]) < 18) failure('O inicializador requer Node.js 18+; instale Node.js 24+ pelo gerenciador do SO.');
   root = realpathSync(root);
   const current = probe(node, minimum, run, environment);
   if (current) {
     const npm = npmFor(current.node, run, environment, platform);
     if (npm) return { node: current.node, npm, version: current.version, source: 'current' };
+  }
+  if (searchPath) {
+    const executable = findExecutable('node', environment, platform);
+    const found = executable && probe(executable, minimum, run, environment);
+    const npm = found && npmFor(found.node, run, environment, platform);
+    if (found && npm) return { node: found.node, npm, version: found.version, source: 'path' };
   }
   const targetPlatform = platformName(platform, arch, run, environment, libc);
   const cache = safePath(root, ['.pbai4devs', 'tools', '.cache', 'runtime', 'node', targetPlatform]);
@@ -126,6 +132,7 @@ export async function ensureRuntime({ root = projectRoot, minimum = 24, node = p
     const found = probe(executable, minimum, run, environment);
     if (found) { const npm = npmFor(executable, run, environment, platform, true); if (npm) return { node: executable, npm, version: found.version, source: 'cache' }; }
   }
+  if (!allowDownload) failure('Node.js 24+ e npm nao encontrados; prepare o runtime antes de continuar.');
   const tar = findExecutable('tar', environment, platform);
   if (!tar) failure('Instale tar pelo gerenciador do SO para extrair o Node local.');
   mkdirSync(cache, { recursive: true });
@@ -170,11 +177,42 @@ export async function ensureRuntime({ root = projectRoot, minimum = 24, node = p
 
 export async function main(args = process.argv.slice(2), options = {}) {
   const runtimeOnly = args[0] === '--runtime-only';
+  const execute = args[0] === '--executar';
+  const selected = execute ? args.slice(1) : [];
+  let plan = false, noInstall = false;
+  while (execute && ['--plan', '--no-install'].includes(selected[0])) {
+    if (selected[0] === '--plan') { if (plan) failure('--plan duplicado.'); plan = true; }
+    else { if (noInstall) failure('--no-install duplicado.'); noInstall = true; }
+    selected.shift();
+  }
   if (runtimeOnly && args.length !== 1) failure('--runtime-only nao aceita selecao ou outros argumentos.');
-  if (!runtimeOnly && args.some(arg => arg.startsWith('-'))) failure('Use --runtime-only ou uma selecao de ferramentas.');
-  const runtime = await ensureRuntime(options);
+  if (execute && !selected[0]) failure('Use --executar [--no-install] [--plan] <nome-ou-caminho> [argumentos].');
+  if (!runtimeOnly && !execute && args.some(arg => arg.startsWith('-'))) failure('Use --runtime-only ou uma selecao de ferramentas.');
+  if (execute && ['--help', '-h'].includes(selected[0])) {
+    process.stdout.write('Uso: --executar [--no-install] [--plan] <nome-ou-caminho> [argumentos]\n');
+    return 0;
+  }
+  if (execute) {
+    const { resolveScript } = await import('../executar-script/SCRIPT.mjs');
+    resolveScript(selected[0], { root: options.root || projectRoot });
+  }
+  const runtime = await ensureRuntime({ ...options, allowDownload: !plan && !noInstall, searchPath: execute });
   process.stdout.write(`node=${runtime.node}\n`);
   if (runtimeOnly) return 0;
+  if (execute) {
+    const run = options.run || spawnSync;
+    const root = options.root || projectRoot;
+    const env = environmentWithNode(options.environment || process.env, runtime.node);
+    const processOptions = { stdio: 'inherit', env, cwd: root, windowsHide: true };
+    if (!plan) {
+      const diagnostic = run(runtime.node, [join(root, '.pbai4devs/scripts/diagnosticar-ambiente/SCRIPT.mjs')], processOptions);
+      if (diagnostic.error) throw diagnostic.error;
+      if (diagnostic.status !== 0) return diagnostic.status ?? 1;
+    }
+    const result = run(runtime.node, [join(root, '.pbai4devs/scripts/executar-script/SCRIPT.mjs'), ...(plan ? ['--plan'] : []), ...selected], processOptions);
+    if (result.error) throw result.error;
+    return result.status ?? 1;
+  }
   const result = (options.run || spawnSync)(runtime.node, [join(options.root || projectRoot, '.pbai4devs/scripts/preparar-ferramentas/SCRIPT.mjs'), 'setup', ...args], { stdio: 'inherit', env: environmentWithNode(options.environment || process.env, runtime.node) });
   if (result.error) throw result.error;
   return result.status ?? 1;
@@ -185,5 +223,8 @@ function isEntrypoint() {
   catch { return false; }
 }
 if (isEntrypoint()) {
-  try { process.exitCode = await main(); } catch (error) { console.error(`bootstrap: ${error.message}`); process.exitCode = 1; }
+  try { process.exitCode = await main(); } catch (error) {
+    console.error(`bootstrap: ${error.message}`);
+    process.exitCode = Number.isInteger(error.exitCode) && error.exitCode >= 1 && error.exitCode <= 255 ? error.exitCode : 1;
+  }
 }

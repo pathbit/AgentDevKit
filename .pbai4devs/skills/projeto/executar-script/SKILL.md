@@ -5,20 +5,30 @@ description: Identifica ferramentas instaladas e executa scripts pelo interpreta
 
 # Executar script
 
-No início, confira Node.js 24+ e npm. Com Node 18+, execute o
-[bootstrap JavaScript](../../../scripts/preparar-ferramentas/BOOTSTRAP.md)
-com `--runtime-only` para preparar o núcleo. Sem Node, instale-o primeiro
-pelo mecanismo nativo do SO. Preserve a operação originalmente solicitada.
-Faça o preparo pelo usuário e reutilize o caminho absoluto informado, sem
-depender de PATH global. Execute
-`diagnosticar-ambiente` pelo seletor de [scripts](../../../scripts/README.md).
-Reutilize a verificação enquanto o ambiente não mudar.
+Com Node 18+ e npm, use o bootstrap para preparar Node 24+, diagnosticar e
+executar o script solicitado, nessa ordem:
 
-Prefira scripts existentes a reconstruir automações na conversa. Use
-`--plan <nome-ou-caminho>` para consultar a execução e confira pré-requisitos,
-efeitos e autorização da tarefa. Depois execute com os argumentos originais.
-Após o preparo, automações usam `.mjs`, iguais em todos os sistemas. O seletor usa
-o Node atual, preserva argumentos e códigos de saída e não instala dependências.
+```sh
+node .pbai4devs/scripts/preparar-ferramentas/BOOTSTRAP.mjs --executar <script> [argumentos...]
+```
+
+Se o diagnóstico falhar, inspecione a causa; o script não é executado. Seu
+sucesso indica inventário concluído, não dependências necessariamente prontas.
+`--executar --no-install`
+evita apenas o download e instalação do runtime; usa o atual, o primeiro Node
+do PATH ou o cache, se compatível. Não restringe o diagnóstico ou script filho.
+Quando rede ou
+instalações forem proibidas, só execute etapas comprovadamente compatíveis com
+essas restrições ou use isolamento adequado. Sem Node/npm, instale-os pelo
+mecanismo do SO quando autorizado. Preserve a operação e os argumentos pedidos.
+
+Prefira scripts existentes. Use `--executar --plan <script>` para consultar a
+execução sem instalar nem diagnosticar; o plano usa as mesmas opções de runtime.
+Confira pré-requisitos, efeitos e autorização, e execute sem `--plan`.
+O seletor direto continua disponível e não faz preparo nem diagnóstico.
+O bootstrap reúne na saída informações do runtime, diagnóstico e execução;
+identifique cada trecho antes de relatar o resultado do script.
+Consulte a [referência](../../../scripts/executar-script/README.md).
 
 Se indicar `playwright-mcp`, use o conector conforme a
 [referência](../../../scripts/testar-navegador/REFERENCE.md). Não execute esse

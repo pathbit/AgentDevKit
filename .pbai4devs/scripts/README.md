@@ -10,8 +10,9 @@ comando em macOS, Linux e Windows. Bun não faz parte do contrato validado.
 Versione scripts e testes; salve somente resultados em `.agent-tests/`.
 Prepare ferramentas locais com `preparar-ferramentas`, sem instalações globais.
 O runtime da aplicação será decidido no design doc; este requisito é dos agentes.
-Com Node 18+, use o [bootstrap JavaScript](preparar-ferramentas/BOOTSTRAP.md)
-com `--runtime-only` para preparar Node 24+ e continuar a operação.
+Com Node 18+, o [bootstrap JavaScript](preparar-ferramentas/BOOTSTRAP.md)
+prepara Node 24+ com `--runtime-only` ou encadeia preparo, diagnóstico e seleção
+com [`--executar`](executar-script/README.md).
 Sem Node/npm, o agente instala primeiro pelo mecanismo do sistema operacional.
 Não há inicializadores `.sh` ou `.ps1` no kit.
 

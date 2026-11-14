@@ -8,6 +8,29 @@ Use Node 24+ com o nome de uma pasta em `.pbai4devs/scripts/`, uma pasta do
 repositório ou o caminho de um arquivo `.mjs`. O comando funciona nos três SOs:
 
 ```console
+cd .pbai4devs/scripts/preparar-ferramentas
+node BOOTSTRAP.mjs --executar --plan preparar-ferramentas
+node BOOTSTRAP.mjs --executar preparar-ferramentas list
+cd ../../..
+```
+
+`--executar` prepara Node/npm, diagnostica e só então chama o seletor. Falha
+no diagnóstico interrompe a operação, inclusive se houver configuração de
+ferramenta inválida sem relação com o alvo; inspecione a falha. Diagnóstico com
+sucesso indica inventário concluído, não que todas as dependências do alvo estão
+prontas. Com `--no-install`, o bootstrap usa o runtime atual, o primeiro Node
+do PATH ou o cache, desde que compatível, sem baixar ou instalar o runtime.
+Essa opção não restringe rede nem
+instalações pelo diagnóstico ou script filho. O plano também não baixa, instala
+nem diagnostica, e usa as mesmas opções de runtime.
+O alvo, seus argumentos e o código de saída são preservados.
+Na saída padrão, `--executar` reúne o caminho do runtime, o diagnóstico, o
+cabeçalho do seletor e a saída do alvo; ela não é um JSON único nem uma saída
+bruta do alvo. O seletor direto também inclui seu próprio cabeçalho.
+
+Com Node 24+ já disponível, o seletor pode ser chamado diretamente:
+
+```console
 node .pbai4devs/scripts/executar-script/SCRIPT.mjs --plan preparar-ferramentas
 node .pbai4devs/scripts/executar-script/SCRIPT.mjs preparar-ferramentas list
 ```

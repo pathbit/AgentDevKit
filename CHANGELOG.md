@@ -4,6 +4,13 @@ description: Alterações verificáveis por versão do AgentDevKit.
 
 # Changelog
 
+## 0.0.28 — 2026-11-14
+
+- Encadeia preparo do runtime, diagnóstico e execução por `--executar`, com
+  plano somente de leitura e opção de não instalar o runtime.
+- Rejeita alvos inválidos antes de preparar o ambiente e reconhece o primeiro
+  Node compatível no PATH; documenta os limites de saída e isolamento.
+
 ## 0.0.27 — 2026-11-14
 
 - Esclarece que desativar locks opcionais não garante a preservação dos bytes
