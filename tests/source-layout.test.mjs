@@ -1,6 +1,8 @@
 import '../.pbai4devs/scripts/lib/test-git-environment.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -258,10 +260,38 @@ test('falha de escrita restaura arquivos e preserva entradas staged concorrentes
       throw new Error('injected write failure');
     },
   });
-  assert.throws(() => applyPlan(plan), /injected write failure/);
+  // Record identity and rename results without changing their behavior, so a
+  // platform-specific rollback failure can be distinguished from preservation.
+  const target = join(plan.target, 'AGENTS.md'), descriptors = new Set(), trace = [];
+  const relevant = path => typeof path === 'string' && (path === target || path.startsWith(`${target}.agentdevkit-`));
+  const describe = stat => stat ? ({ dev: String(stat.dev), ino: String(stat.ino), mode: String(stat.mode), file: stat.isFile(), symlink: stat.isSymbolicLink() }) : ({ missing: true });
+  const methods = Object.fromEntries(['openSync', 'closeSync', 'fstatSync', 'lstatSync', 'renameSync'].map(name => [name, fs[name]]));
+  t.mock.method(fs, 'openSync', (path, ...args) => {
+    try { const fd = methods.openSync(path, ...args); if (relevant(path)) { descriptors.add(fd); trace.push({ operation: 'open', path, fd, flags: args[0] }); } return fd; }
+    catch (error) { if (relevant(path)) trace.push({ operation: 'open', path, code: error.code, message: error.message }); throw error; }
+  });
+  t.mock.method(fs, 'closeSync', fd => { const result = methods.closeSync(fd); if (descriptors.delete(fd)) trace.push({ operation: 'close', fd }); return result; });
+  t.mock.method(fs, 'fstatSync', (fd, ...args) => {
+    try { const stat = methods.fstatSync(fd, ...args); if (descriptors.has(fd)) trace.push({ operation: 'fstat', fd, ...describe(stat) }); return stat; }
+    catch (error) { if (descriptors.has(fd)) trace.push({ operation: 'fstat', fd, code: error.code, message: error.message }); throw error; }
+  });
+  t.mock.method(fs, 'lstatSync', (path, ...args) => {
+    try { const stat = methods.lstatSync(path, ...args); if (relevant(path)) trace.push({ operation: 'lstat', path, ...describe(stat) }); return stat; }
+    catch (error) { if (relevant(path)) trace.push({ operation: 'lstat', path, code: error.code, message: error.message }); throw error; }
+  });
+  t.mock.method(fs, 'renameSync', (from, to) => {
+    try { const result = methods.renameSync(from, to); if (relevant(to)) trace.push({ operation: 'rename', from, to }); return result; }
+    catch (error) { if (relevant(to)) trace.push({ operation: 'rename', from, to, code: error.code, message: error.message }); throw error; }
+  });
+  syncBuiltinESMExports();
+  let failure;
+  try { applyPlan(plan); } catch (error) { failure = error; }
+  finally { t.mock.restoreAll(); syncBuiltinESMExports(); }
+  assert.ok(failure); assert.match(failure.message, /injected write failure/);
+  const diagnostics = JSON.stringify({ code: failure.code, message: failure.message, errors: failure.errors?.map(error => ({ code: error.code, message: error.message })), preserved: failure.rollbackPreservedPaths, cleanup: failure.cleanupFailures, trace });
   for (const [path, content] of snapshots) {
-    if (content === null) assert.equal(existsSync(join(root, path)), false, path);
-    else assert.equal(read(root, path), content, path);
+    if (content === null) assert.equal(existsSync(join(root, path)), false, `${path}: ${diagnostics}`);
+    else assert.equal(read(root, path), content, `${path}: ${diagnostics}`);
   }
   assert.equal(git(root, 'ls-files', '--stage', derived), record);
   assert.equal(git(root, 'show', ':human.txt'), 'human staged before operation\n');

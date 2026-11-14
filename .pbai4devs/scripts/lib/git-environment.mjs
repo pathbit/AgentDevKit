@@ -52,20 +52,24 @@ export function gitPathsOverlap(left, right, { root, platform = process.platform
         else if (root) {
           const resolveIdentity = parts => {
             let current = root, value;
-            for (const part of parts) {
+            for (const [index, part] of parts.entries()) {
               current = join(current, part);
               try { value = lstatSync(current, { bigint: true }); }
               catch (error) { if (error.code === 'ENOENT') return { missing: true }; throw error; }
-              if (value.isSymbolicLink()) return null;
+              if (value.isSymbolicLink() && index < parts.length - 1) return null;
             }
             return value;
           };
           const leftStat = resolveIdentity(a.slice(0, i + 1)), rightStat = resolveIdentity(b.slice(0, i + 1));
-          if (leftStat && rightStat && leftStat.ino && rightStat.ino)
+          if (leftStat?.ino && rightStat?.ino && !leftStat.isSymbolicLink() && !rightStat.isSymbolicLink())
             distinct = leftStat.dev !== rightStat.dev || leftStat.ino !== rightStat.ino;
           // An absent child of the same existing parent cannot be another
           // spelling of the existing child, including when it is a directory.
-          if (!distinct && allowMissingTarget && leftStat?.ino && rightStat?.missing) {
+          // This applies in either direction and can use a final symbolic link
+          // as evidence of an existing directory entry without following it.
+          const leftExists = leftStat?.ino && (!leftStat.isSymbolicLink() || i === a.length - 1);
+          const rightExists = rightStat?.ino && (!rightStat.isSymbolicLink() || i === b.length - 1);
+          if (!distinct && allowMissingTarget && (leftExists && rightStat?.missing || leftStat?.missing && rightExists)) {
             const leftParent = i ? resolveIdentity(a.slice(0, i)) : lstatSync(root, { bigint: true });
             const rightParent = i ? resolveIdentity(b.slice(0, i)) : leftParent;
             if (leftParent?.ino && rightParent?.ino && !leftParent.isSymbolicLink() && !rightParent.isSymbolicLink())

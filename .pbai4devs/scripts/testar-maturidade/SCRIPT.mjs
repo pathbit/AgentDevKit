@@ -152,9 +152,9 @@ export function mayAliasPath(left, right, { root, platform = process.platform } 
     // filesystem aliases, and unusual characters are conservatively ambiguous.
     const ordinary = part => /^[a-z0-9_.-]+$/i.test(part) && !part.endsWith('.');
     // On Windows even an ordinary ASCII name may be an arbitrary 8.3 alias.
-    // A missing output ancestor is distinct only when the indexed entry exists
-    // and the shared parent is verified. Check each destination prefix so the
-    // existing helper can establish that fact for an intermediate component.
+    // A missing entry is distinct from an existing one only when their shared
+    // parent is verified. Check each destination prefix so the helper can
+    // establish that fact for an intermediate component.
     if (ordinary(a[i]) && ordinary(b[i])) {
       if (platform !== 'win32') return false;
       for (let length = 1; length <= b.length; length++) {

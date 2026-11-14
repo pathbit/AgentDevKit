@@ -143,13 +143,15 @@ test('auditoria aceita raiz Git com espaco final inclusive para historico', { sk
 test('comparação da auditoria considera nomes curtos Windows sem til e distingue entradas reais', t => {
   const root = fs.mkdtempSync(join(fs.realpathSync(tmpdir()), 'audit-short-name-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  fs.mkdirSync(join(root, '.agent-tests', 'security', 'long-directory'), { recursive: true });
   const staged = '.agent-tests/security/ALT/human', output = '.agent-tests/security/long-directory/report.json';
+  fs.mkdirSync(join(root, '.agent-tests', 'security'), { recursive: true });
   assert.equal(mayAliasIndexPath(staged, output, { root, platform: 'win32' }), true);
   assert.equal(mayAliasIndexPath(staged, output, { root, platform: 'linux' }), false);
+  fs.mkdirSync(join(root, '.agent-tests', 'security', 'long-directory'));
+  assert.equal(mayAliasIndexPath(staged, output, { root, platform: 'win32' }), false);
   fs.mkdirSync(join(root, '.agent-tests', 'security', 'ALT'));
   assert.equal(mayAliasIndexPath(staged, output, { root, platform: 'win32' }), false);
-  assert.equal(mayAliasIndexPath('.agent-tests/security/LONGDI~1/human', output, { root, platform: 'win32' }), true);
+  assert.equal(mayAliasIndexPath('.agent-tests/security/LONGDI~1/human', output, { root, platform: 'win32' }), fs.existsSync(join(root, '.agent-tests', 'security', 'LONGDI~1')));
 });
 
 test('auditoria simulada em Windows aceita ancestral de saída ausente e src staged existente', async t => {

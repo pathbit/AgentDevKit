@@ -562,16 +562,25 @@ test('negações globais e aninhadas são informadas e preservadas', t => {
   }
 });
 
-test('negações genéricas de extensão preservam configuração e não criam conflito hipotético', t => {
-  for (const [file, rule] of [['.gitignore', '!*.md'], ['.gitignore', '!docs/*.md'], ['.gitignore', '!**/*.mdx'], ['docs/.gitignore', '!*.txt'], ['.gitignore', '!*.json'], ['.gitignore', '!*.yaml'], ['.gitignore', '!docs/*.json']]) {
+test('negações genéricas preservam configuração e informam aliases Windows não comprovados', t => {
+  for (const platform of new Set([process.platform, 'win32'])) for (const [file, rule] of [['.gitignore', '!*.md'], ['.gitignore', '!docs/*.md'], ['.gitignore', '!**/*.mdx'], ['docs/.gitignore', '!*.txt'], ['.gitignore', '!*.json'], ['.gitignore', '!*.yaml'], ['.gitignore', '!docs/*.json']]) {
     const root = fixture(t); git(root, ['init', '-q']); put(root, file, `${rule}\n`);
-    const plan = planLocalIgnore(root, { outputs: ['AGENTS.md'] });
-    const checked = checkLocalIgnore(plan);
-    assert.equal(checked.pending.some(item => item.code === 'ignore-ambiguous'), false, rule);
-    assert.equal(checked.ok, true, rule);
-    assert.ok(checked.pending.some(item => item.code === 'output-visible'), rule);
-    applyLocalIgnore(plan);
+    put(root, 'humano.txt', 'conteúdo staged\n'); git(root, ['add', 'humano.txt']);
+    const protectedPaths = ['.git/index', '.git/config', '.git/info/exclude'];
+    const before = protectedPaths.map(path => readFileSync(join(root, path)));
+    const descriptor = Object.getOwnPropertyDescriptor(process, 'platform');
+    try {
+      Object.defineProperty(process, 'platform', { value: platform });
+      const plan = planLocalIgnore(root, { outputs: ['AGENTS.md'] });
+      const checked = checkLocalIgnore(plan);
+      const ambiguous = platform === 'win32' && (file === 'docs/.gitignore' || rule.startsWith('!docs/'));
+      assert.deepEqual(checked.pending.filter(item => item.code === 'ignore-ambiguous').map(item => item.path), ambiguous ? [`${file}: ${rule}`] : [], `${platform}: ${file}: ${rule}`);
+      assert.equal(checked.ok, !ambiguous, `${platform}: ${file}: ${rule}`);
+      assert.ok(checked.pending.some(item => item.code === 'output-visible'), rule);
+      applyLocalIgnore(plan);
+    } finally { Object.defineProperty(process, 'platform', descriptor); }
     assert.equal(readFileSync(join(root, file), 'utf8'), `${rule}\n`);
+    protectedPaths.forEach((path, index) => assert.deepEqual(readFileSync(join(root, path)), before[index], path));
   }
 });
 

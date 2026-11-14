@@ -58,6 +58,61 @@ test('rollback restaura bytes e modo de arquivos substituídos e removidos', { s
   assert.deepEqual(readFileSync(obsolete), originalRule); assert.equal(mode(obsolete), 0o700);
 });
 
+for (const scenario of ['restauração', 'hardlink indisponível', 'falha após hardlink', 'EEXIST concorrente', 'substituição humana', 'substituição do pin', 'edição do pin', 'limpeza indisponível']) test(`rollback Windows transfere guarda com segurança: ${scenario}`, t => {
+  const root = fixture(t), agents = join(root, 'AGENTS.md'), original = readFileSync(agents);
+  const plan = planInstallation({ target: root, mode: 'lang', language: 'en' });
+  const translated = Buffer.from(plan.changes.find(change => change.path === 'AGENTS.md').content);
+  const replacement = Buffer.from('Alteração humana concorrente.\n');
+  const platform = Object.getOwnPropertyDescriptor(process, 'platform');
+  const link = fs.linkSync, open = fs.openSync, close = fs.closeSync, rename = fs.renameSync, remove = fs.rmSync;
+  let guardFd, guardOpen = false, pin, checkedRename = false;
+  t.mock.method(fs, 'openSync', (path, ...args) => {
+    const fd = open(path, ...args);
+    if (String(path).startsWith(`${agents}.agentdevkit-`) && args[0] === 'r') { guardFd = fd; guardOpen = true; }
+    return fd;
+  });
+  t.mock.method(fs, 'closeSync', fd => { const result = close(fd); if (fd === guardFd) guardOpen = false; return result; });
+  t.mock.method(fs, 'linkSync', (from, to) => {
+    if (!String(to).startsWith(`${agents}.agentdevkit-rollback-`)) return link(from, to);
+    assert.equal(guardOpen, true); pin = to;
+    if (scenario === 'hardlink indisponível') throw Object.assign(new Error('hardlink indisponível'), { code: 'ENOTSUP' });
+    if (scenario === 'EEXIST concorrente') { writeFileSync(to, replacement, { flag: 'wx' }); throw Object.assign(new Error('destino ocupado'), { code: 'EEXIST' }); }
+    if (scenario === 'substituição humana') { fs.unlinkSync(agents); writeFileSync(agents, replacement); }
+    const result = link(from, to);
+    if (scenario === 'falha após hardlink') throw Object.assign(new Error('publicação incerta'), { code: 'EIO' });
+    if (scenario === 'substituição do pin') { fs.unlinkSync(to); writeFileSync(to, replacement); }
+    return result;
+  });
+  t.mock.method(fs, 'renameSync', (from, to) => {
+    if (to === agents && pin) { assert.equal(guardOpen, false); assert.ok(existsSync(pin)); checkedRename = true; }
+    const result = rename(from, to);
+    if (to === agents && pin && scenario === 'edição do pin') writeFileSync(pin, replacement);
+    return result;
+  });
+  t.mock.method(fs, 'rmSync', (path, ...args) => { if (path === pin && scenario === 'limpeza indisponível') throw Object.assign(new Error('limpeza indisponível'), { code: 'EACCES' }); return remove(path, ...args); });
+  syncBuiltinESMExports();
+  const failure = new Error('falha injetada');
+  plan.changes.push({ path: 'injected-failure.txt', action: 'create', beforeHash: null,
+    get content() { Object.defineProperty(process, 'platform', { ...platform, value: 'win32' }); throw failure; } });
+  let actual;
+  try { applyPlan(plan); } catch (error) { actual = error; }
+  finally { Object.defineProperty(process, 'platform', platform); t.mock.restoreAll(); syncBuiltinESMExports(); }
+  assert.ok(actual); assert.match(actual.message, /falha injetada/);
+  if (scenario === 'restauração' || scenario === 'edição do pin' || scenario === 'limpeza indisponível') { assert.equal(checkedRename, true); assert.deepEqual(readFileSync(agents), original); }
+  else {
+    assert.equal(checkedRename, false);
+    assert.ok(actual.rollbackPreservedPaths.includes('AGENTS.md'));
+    if (scenario === 'substituição humana') assert.deepEqual(readFileSync(agents), replacement);
+    else assert.notDeepEqual(readFileSync(agents), original);
+  }
+  assert.ok(pin);
+  if (scenario === 'substituição humana' || scenario === 'substituição do pin' || scenario === 'falha após hardlink' || scenario === 'EEXIST concorrente' || scenario === 'edição do pin' || scenario === 'limpeza indisponível') {
+    assert.ok(existsSync(pin));
+    assert.deepEqual(readFileSync(pin), scenario === 'falha após hardlink' ? readFileSync(agents) : scenario === 'limpeza indisponível' ? translated : replacement);
+    assert.ok(actual.cleanupFailures.some(item => item.path === pin));
+  } else assert.equal(existsSync(pin), false);
+});
+
 for (const remove of [false, true]) test(`rollback de 0444 após ${remove ? 'remoção' : 'substituição'} preserva o erro original`, { skip: posixOnly }, t => {
   const root = fixture(t), agents = join(root, 'AGENTS.md');
   const bytes = readFileSync(agents);

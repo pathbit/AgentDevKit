@@ -47,13 +47,15 @@ test('destino OSS respeita ignore efetivo e recusa Git redirecionado sem alterar
 test('comparação OSS considera nomes curtos Windows sem til e distingue entradas reais', t => {
   const root = mkdtempSync(join(realpathSync(tmpdir()), 'oss-short-name-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  mkdirSync(join(root, 'tmp', 'long-directory'), { recursive: true });
   const staged = 'tmp/ALT/human', target = 'tmp/long-directory/run';
+  mkdirSync(join(root, 'tmp'));
   assert.equal(mayAliasPath(staged, target, { root, platform: 'win32' }), true);
   assert.equal(mayAliasPath(staged, target, { root, platform: 'linux' }), false);
+  mkdirSync(join(root, 'tmp', 'long-directory'));
+  assert.equal(mayAliasPath(staged, target, { root, platform: 'win32' }), false);
   mkdirSync(join(root, 'tmp', 'ALT'));
   assert.equal(mayAliasPath(staged, target, { root, platform: 'win32' }), false);
-  assert.equal(mayAliasPath('tmp/LONGDI~1/human', target, { root, platform: 'win32' }), true);
+  assert.equal(mayAliasPath('tmp/LONGDI~1/human', target, { root, platform: 'win32' }), existsSync(join(root, 'tmp', 'LONGDI~1')));
 });
 
 test('fluxo OSS simulado em Windows aceita ancestral de saída ausente e src staged existente', t => {

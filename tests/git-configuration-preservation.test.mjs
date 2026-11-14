@@ -341,6 +341,33 @@ test('identidade física simulada no Windows exige arquivos existentes e distint
   assert.equal(gitPathsOverlap('absent.md', 'Z~1.TXT', { root, platform: 'win32', allowMissingTarget: true }), true);
   linkSync(join(root, 'README.md'), join(root, 'Z~1.TXT'));
   assert.equal(gitPathsOverlap('README.md', 'Z~1.TXT', { root, platform: 'win32' }), true);
+  assert.equal(gitPathsOverlap('README.md', 'Z~1.TXT', { root, platform: 'win32', allowMissingTarget: true }), true);
+  put(root, '.pbai4devs/state/agentdevkit.json', '{}');
+  const old = '.pbai4devs/estado/outros/minhas-notas.txt', current = '.pbai4devs/state/agentdevkit.json';
+  assert.equal(gitPathsOverlap(old, current, { root, platform: 'win32' }), true);
+  assert.equal(gitPathsOverlap(old, current, { root, platform: 'win32', allowMissingTarget: true }), false);
+  rmSync(join(root, '.pbai4devs/state'), { recursive: true });
+  assert.equal(gitPathsOverlap(old, current, { root, platform: 'win32', allowMissingTarget: true }), true);
+});
+
+test('origem staged ausente permanece ambígua sem identidade física confiável', t => {
+  const root = mkdtempSync(join(tmpdir(), 'adk-uncertain-identity-')); t.after(() => rmSync(root, { recursive: true, force: true }));
+  put(root, '.pbai4devs/state/agentdevkit.json', '{}');
+  const old = '.pbai4devs/estado/outros/notas.txt', current = '.pbai4devs/state/agentdevkit.json';
+  const original = fs.lstatSync;
+  for (const mode of ['zero-inode', 'symlink', 'denied']) {
+    t.mock.method(fs, 'lstatSync', (path, options) => {
+      if (path === join(root, mode === 'symlink' ? '.pbai4devs' : '.pbai4devs/state')) {
+        if (mode === 'denied') throw Object.assign(new Error('sem acesso'), { code: 'EACCES' });
+        const info = original(path, options);
+        return { dev: info.dev, ino: mode === 'zero-inode' ? 0n : info.ino, isSymbolicLink: () => mode === 'symlink' };
+      }
+      return original(path, options);
+    });
+    syncBuiltinESMExports();
+    try { assert.equal(gitPathsOverlap(old, current, { root, platform: 'win32', allowMissingTarget: true }), true, mode); }
+    finally { t.mock.restoreAll(); syncBuiltinESMExports(); }
+  }
 });
 
 test('Windows não confunde diretórios staged existentes com ancestrais ausentes de outros destinos', { timeout: 120000 }, t => {
@@ -359,7 +386,7 @@ test('Windows não confunde diretórios staged existentes com ancestrais ausente
   assert.equal(gitPathsOverlap(humans[1], '.cursor/agents/revisor.md', { root, platform: 'win32', allowMissingTarget: true }), false);
   assert.equal(gitPathsOverlap(humans[2], '.gemini/skills/git-diff/SKILL.md', { root, platform: 'win32', allowMissingTarget: true }), false);
   assert.equal(gitPathsOverlap(human, '.claude/skills/planejar-qa/SKILL.md', { root, platform: 'win32', allowMissingTarget: true }), true);
-  assert.equal(gitPathsOverlap('.claude/agents/revisor.md', human, { root, platform: 'win32', allowMissingTarget: true }), true);
+  assert.equal(gitPathsOverlap('.claude/agents/revisor.md', human, { root, platform: 'win32', allowMissingTarget: true }), false);
   const platform = Object.getOwnPropertyDescriptor(process, 'platform');
   try {
     Object.defineProperty(process, 'platform', { value: 'win32' });

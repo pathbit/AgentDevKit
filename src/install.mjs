@@ -1164,9 +1164,49 @@ export function applyPlan(plan) {
       if (!unchanged) { preserved.push(path); continue; }
       const content = before.get(path);
       try {
-        if (content) atomicWrite(target, path, content, beforeModes.get(path), undefined, () => {
-          if (!stillApplied()) fail('E_CHANGED', `File changed during rollback: ${path}`);
-        });
+        if (content) {
+          let pin, pinIdentity, pinCreated = false;
+          try {
+            if (process.platform === 'win32') {
+              // Windows may refuse to replace a destination with an open
+              // handle. Keep its inode alive through a verified hardlink
+              // before closing the descriptor, so it cannot be reused.
+              const index = identityGuards.findIndex(guard => guard.signature === appliedFile);
+              if (index === -1) fail('E_CHANGED', `File identity is unavailable during rollback: ${path}`);
+              const source = safePath(target, path);
+              pin = safePath(target, `${path}.agentdevkit-rollback-${randomUUID()}`);
+              try { linkSync(source, pin); pinCreated = true; }
+              catch (failure) {
+                // A filesystem can report failure after publication. An
+                // existing or unverifiable name is not proof of ownership.
+                let ambiguous = false;
+                try { lstatSync(pin); ambiguous = true; }
+                catch (probe) { if (probe.code !== 'ENOENT') ambiguous = true; }
+                if (ambiguous) try { error.cleanupFailures = [...(error.cleanupFailures || []), { path: pin, message: 'Rollback guard publication could not be verified; path preserved.' }]; } catch { /* Preserve the original error. */ }
+                throw failure;
+              }
+              const item = lstatSync(pin, { bigint: true });
+              if (!item.isFile() || item.isSymbolicLink() || !item.ino || item.dev !== appliedFile.identity.dev || item.ino !== appliedFile.identity.ino) fail('E_CHANGED', `File identity changed during rollback: ${path}`);
+              pinIdentity = { dev: item.dev, ino: item.ino };
+              const [guard] = identityGuards.splice(index, 1);
+              try { closeSync(guard.fd); } catch (failure) { appliedFile.identity = null; throw failure; }
+            }
+            atomicWrite(target, path, content, beforeModes.get(path), undefined, () => {
+              if (!stillApplied()) fail('E_CHANGED', `File changed during rollback: ${path}`);
+            });
+          } finally {
+            if (pinCreated) {
+              try {
+                const current = lstatSync(pin, { bigint: true });
+                if (!pinIdentity || !current.isFile() || current.isSymbolicLink() || current.dev !== pinIdentity.dev || current.ino !== pinIdentity.ino
+                  || (current.mode & 0o777n) !== BigInt(appliedFile.mode) || hash(readFileSync(pin)) !== appliedFile.hash) fail('E_CHANGED', `Rollback guard changed: ${pin}`);
+                rmSync(pin);
+              } catch (failure) {
+                try { error.cleanupFailures = [...(error.cleanupFailures || []), { path: pin, message: failure.message }]; } catch { /* Preserve the original error. */ }
+              }
+            }
+          }
+        }
         else rmSync(safePath(target, path), { force: true });
       } catch (failure) {
         if (failure.code === 'E_CHANGED') preserved.push(path);

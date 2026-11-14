@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { main } from '../src/cli.mjs';
 import { applyPlan, inspect, planInstallation } from '../src/install.mjs';
 import { synchronize } from '../.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs';
+import { gitPathsOverlap } from '../.pbai4devs/scripts/lib/git-environment.mjs';
 import { extractManagedBlock, managedBlockDigest } from '../.pbai4devs/scripts/lib/managed-content.mjs';
 
 const repository = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -54,6 +55,27 @@ async function cli(root, args, expected = 0) {
   assert.equal(value.ok, expected === 0, stdout);
   return value;
 }
+
+test('link staged na raiz não impede criação de diretório distinto no Windows', { timeout: 120000 }, t => {
+  const { root, git } = fixture(t);
+  put(root, 'AGENTS.md', '# regras humanas\n');
+  if (!link(t, 'AGENTS.md', join(root, 'CLAUDE.md'))) return;
+  git('add', '--all');
+  const index = readFileSync(join(root, '.git/index'));
+  assert.equal(gitPathsOverlap('CLAUDE.md', '.agents/agents/revisor.md', { root, platform: 'win32', allowMissingTarget: true }), false);
+  assert.equal(gitPathsOverlap('CLAUDE.md', 'AGENTS.md', { root, platform: 'win32', allowMissingTarget: true }), true);
+  assert.equal(gitPathsOverlap('CLAUDE.md/nested', '.agents/agents/revisor.md', { root, platform: 'win32', allowMissingTarget: true }), true);
+  const platform = Object.getOwnPropertyDescriptor(process, 'platform');
+  try {
+    Object.defineProperty(process, 'platform', { value: 'win32' });
+    const plan = planInstallation({ target: root, mode: 'init', clients: ['codex', 'claude', 'copilot'] });
+    assert.ok(plan.changes.some(change => change.path === '.agents/agents/revisor.md' && change.action === 'create'));
+    assert.ok(plan.preserved.some(item => item.path === 'CLAUDE.md' && item.reason === 'symbolic-link'));
+    applyPlan(plan);
+  } finally { Object.defineProperty(process, 'platform', platform); }
+  assert.equal(readlinkSync(join(root, 'CLAUDE.md')), 'AGENTS.md');
+  assert.deepEqual(readFileSync(join(root, '.git/index')), index);
+});
 
 test('instala e atualiza sobre agentes configurados preservando arquivos, links e índice', async t => {
   const { root, directory, git } = fixture(t);

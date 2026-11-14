@@ -96,6 +96,25 @@ test('migra estado legado preservando dados humanos, seleção, índice e ignore
   assert.deepEqual(read(root, '.gitignore'), f.ignore);
 });
 
+test('atualização Windows após migração aceita estado legado staged ausente sem alterar o índice', { timeout: 120000 }, t => {
+  const f = fixture(t), { root } = f;
+  const index = readFileSync(join(root, '.git/index'));
+  const config = readFileSync(join(root, '.git/config'));
+  const platform = Object.getOwnPropertyDescriptor(process, 'platform');
+  try {
+    Object.defineProperty(process, 'platform', { value: 'win32' });
+    const migration = planInstallation({ target: root, mode: 'update' });
+    applyPlan(migration);
+    assert.equal(existsSync(join(root, oldRoot)), false);
+    const next = planInstallation({ target: root, mode: 'update' });
+    assert.equal(next.changes.length, 0);
+  } finally { Object.defineProperty(process, 'platform', platform); }
+  assert.deepEqual(read(root, `${newRoot}/configuracao/ESTADO.md`), f.config);
+  assert.deepEqual(read(root, `${newRoot}/outros/minhas-notas.txt`), f.custom);
+  assert.deepEqual(readFileSync(join(root, '.git/index')), index);
+  assert.deepEqual(readFileSync(join(root, '.git/config')), config);
+});
+
 test('conflito entre pastas legada e atual não substitui dados nem altera o índice, mesmo com force', t => {
   const f = fixture(t), { root } = f;
   const existing = Buffer.from('Conteúdo de state do projeto.\n');
