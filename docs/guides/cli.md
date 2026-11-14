@@ -90,10 +90,9 @@ O sincronizador independente também pode ser executado pelo
 comando agêntico [sincronizar](../../.pbai4devs/commands/sincronizar/COMMAND.md)
 orienta executar o script com `--force`; ele não é o mesmo que `sync` da CLI.
 
-No Git, o kit preserva o `.gitignore` da raiz e pode atualizar
-`.git/info/exclude` para ocultar por padrão as pastas dos clientes. O projeto
-pode reabri-las no `.gitignore` da raiz, como em `!/.claude/`; consulte as
-[exceções e seus efeitos](installation.md#git-e-migração). Os comandos não
+No Git, o kit preserva os ignores existentes e a configuração, incluindo
+`.git/info/exclude`. Saídas podem ficar visíveis; consulte
+[Git e migração](installation.md#git-e-migração). Os comandos não
 retiram arquivos já rastreados do índice, e `untrackedPaths` permanece vazio
 por compatibilidade. Backups locais ficam em `.agent-tests/` e não substituem
 o histórico Git.

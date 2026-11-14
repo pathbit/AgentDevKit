@@ -1,10 +1,148 @@
+import '../.pbai4devs/scripts/lib/test-git-environment.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { checkHumanExcludeBytes, checkNativeOwnership, checkOriginals, checkPreservedLinks, checkPreservedManagedEdit, fileSnapshot, gitSnapshot, hash, linkedDirectoryPaths, parseCliResult, stateJson } from './oss-compatibility.mjs';
+import { checkHumanExcludeBytes, checkNativeOwnership, checkOriginals, checkPreservedLinks, checkPreservedManagedEdit, fileSnapshot, gitSnapshot, hash, linkedDirectoryPaths, mayAliasPath, outputDirectory, parseCliResult, prepareOutput, stateJson } from './oss-compatibility.mjs';
+
+function outputFixture(t) {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'agentdevkit-oss-output-')));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const environment = { ...process.env, GIT_OPTIONAL_LOCKS: '0' };
+  const git = (args, env = environment) => {
+    const result = spawnSync('git', ['-c', 'core.fsmonitor=false', '-C', root, ...args], { env, encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr); return result;
+  };
+  git(['init', '--quiet', '--template=']);
+  writeFileSync(join(root, '.gitignore'), 'tmp/\n');
+  git(['add', '.gitignore']);
+  return { root, environment, git, target: 'tmp/oss/run', index: join(root, '.git/index'), config: join(root, '.git/config') };
+}
+
+test('destino OSS respeita ignore efetivo e recusa Git redirecionado sem alterar índice', t => {
+  const f = outputFixture(t), originalIndex = readFileSync(f.index), originalConfig = readFileSync(f.config);
+  for (const name of ['GIT_DIR', 'git_work_tree', 'GIT_INDEX_FILE', 'git_common_dir']) {
+    const value = name.toUpperCase() === 'GIT_INDEX_FILE' ? f.index : name.toUpperCase() === 'GIT_WORK_TREE' ? f.root : join(f.root, '.git');
+    assert.throws(() => outputDirectory(f.target, { root: f.root, environment: { ...f.environment, [name]: value } }), /redirecionado/);
+    assert.equal(existsSync(join(f.root, f.target)), false);
+  }
+  assert.equal(outputDirectory(f.target, { root: f.root, environment: f.environment }), join(f.root, f.target));
+  assert.equal(existsSync(join(f.root, f.target)), false);
+  assert.deepEqual(readFileSync(f.index), originalIndex);
+  assert.deepEqual(readFileSync(f.config), originalConfig);
+
+  writeFileSync(join(f.root, '.gitignore'), '# sem ignore local\n');
+  const excludes = join(f.root, 'global-ignore'), config = join(f.root, 'global-gitconfig');
+  writeFileSync(excludes, 'tmp/\n');
+  writeFileSync(config, `[core]\n\texcludesFile = ${JSON.stringify(excludes)}\n`);
+  assert.equal(outputDirectory(f.target, { root: f.root, environment: { ...f.environment, GIT_CONFIG_GLOBAL: config } }), join(f.root, f.target));
+  writeFileSync(excludes, '');
+  assert.throws(() => outputDirectory(f.target, { root: f.root, environment: { ...f.environment, GIT_CONFIG_GLOBAL: config } }), /ignorada/);
+  assert.deepEqual(readFileSync(f.index), originalIndex);
+  assert.deepEqual(readFileSync(f.config), originalConfig);
+});
+
+test('comparação OSS considera nomes curtos Windows sem til e distingue entradas reais', t => {
+  const root = mkdtempSync(join(realpathSync(tmpdir()), 'oss-short-name-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  mkdirSync(join(root, 'tmp', 'long-directory'), { recursive: true });
+  const staged = 'tmp/ALT/human', target = 'tmp/long-directory/run';
+  assert.equal(mayAliasPath(staged, target, { root, platform: 'win32' }), true);
+  assert.equal(mayAliasPath(staged, target, { root, platform: 'linux' }), false);
+  mkdirSync(join(root, 'tmp', 'ALT'));
+  assert.equal(mayAliasPath(staged, target, { root, platform: 'win32' }), false);
+  assert.equal(mayAliasPath('tmp/LONGDI~1/human', target, { root, platform: 'win32' }), true);
+});
+
+test('fluxo OSS simulado em Windows aceita ancestral de saída ausente e src staged existente', t => {
+  const f = outputFixture(t);
+  mkdirSync(join(f.root, 'src')); writeFileSync(join(f.root, 'src/file.js'), 'humano\n');
+  f.git(['add', '--', 'src/file.js']);
+  const index = readFileSync(f.index), descriptor = Object.getOwnPropertyDescriptor(process, 'platform');
+  try {
+    Object.defineProperty(process, 'platform', { value: 'win32' });
+    assert.equal(mayAliasPath('src/file.js', f.target, { root: f.root }), false);
+    assert.equal(mayAliasPath('ALT/file.js', f.target, { root: f.root }), true);
+    const output = outputDirectory(f.target, { root: f.root, environment: f.environment });
+    prepareOutput(output, f.root).verifyOutput();
+  } finally { Object.defineProperty(process, 'platform', descriptor); }
+  assert.equal(readFileSync(join(f.root, 'src/file.js'), 'utf8'), 'humano\n');
+  assert.deepEqual(readFileSync(f.index), index);
+});
+
+test('Windows nativo ou simulado recusa nome curto staged ausente no destino OSS', t => {
+  const f = outputFixture(t), target = 'tmp/long-directory/run';
+  mkdirSync(join(f.root, 'tmp'));
+  const object = spawnSync('git', ['-c', 'core.fsmonitor=false', '-C', f.root, 'hash-object', '-w', '--stdin'], { env: f.environment, input: 'humano', encoding: 'utf8' });
+  assert.equal(object.status, 0, object.stderr);
+  const add = spawnSync('git', ['-c', 'core.fsmonitor=false', '-C', f.root, 'update-index', '--index-info'], { env: f.environment, input: `100644 ${object.stdout.trim()}\ttmp/ALT/human\n`, encoding: 'utf8' });
+  assert.equal(add.status, 0, add.stderr);
+  const before = readFileSync(f.index);
+  const descriptor = Object.getOwnPropertyDescriptor(process, 'platform');
+  try { Object.defineProperty(process, 'platform', { value: 'win32' }); assert.throws(() => outputDirectory(target, { root: f.root, environment: f.environment }), /staged|ambíguo/); }
+  finally { Object.defineProperty(process, 'platform', descriptor); }
+  assert.equal(existsSync(join(f.root, target)), false); assert.deepEqual(readFileSync(f.index), before);
+});
+
+test('destino OSS recusa ancestrais staged e aliases Unicode sem criar a pasta', async t => {
+  for (const [staged, target] of [['tmp/oss', 'tmp/oss/run'], ['tmp/oss/Run/human', 'tmp/oss/run'], ['tmp/oss/SS/human', 'tmp/oss/ß']]) await t.test(staged, t => {
+    const f = outputFixture(t), file = join(f.root, staged);
+    mkdirSync(join(file, '..'), { recursive: true }); writeFileSync(file, 'conteúdo humano');
+    f.git(['add', '-f', '--', staged]);
+    rmSync(join(f.root, 'tmp'), { recursive: true });
+    const before = readFileSync(f.index);
+    assert.throws(() => outputDirectory(target, { root: f.root, environment: f.environment }), /staged|ambíguo/);
+    assert.equal(existsSync(join(f.root, target)), false);
+    assert.deepEqual(readFileSync(f.index), before);
+  });
+});
+
+test('preparo OSS cria saída exclusiva com proteção local e preserva o índice', t => {
+  const f = outputFixture(t), index = readFileSync(f.index), config = readFileSync(f.config);
+  const output = outputDirectory(f.target, { root: f.root, environment: f.environment });
+  const prepared = prepareOutput(output, f.root);
+  assert.equal(prepared.outputRoot, output);
+  assert.equal(readFileSync(join(output, '.gitignore'), 'utf8'), '# Exemplos gerados permanecem locais.\n*\n');
+  assert.doesNotThrow(() => prepared.verifyOutput());
+  assert.deepEqual(readFileSync(f.index), index); assert.deepEqual(readFileSync(f.config), config);
+  writeFileSync(join(output, '.gitignore'), '# proteção alterada\n');
+  assert.throws(() => prepared.verifyOutput(), /Proteção da saída alterada/);
+});
+
+test('preparo OSS recusa ancestral trocado por link depois da validação', t => {
+  const f = outputFixture(t), outside = mkdtempSync(join(tmpdir(), 'agentdevkit-oss-outside-'));
+  t.after(() => rmSync(outside, { recursive: true, force: true }));
+  writeFileSync(join(outside, 'human'), 'preservado');
+  mkdirSync(join(f.root, 'tmp'));
+  const output = outputDirectory(f.target, { root: f.root, environment: f.environment });
+  renameSync(join(f.root, 'tmp'), join(f.root, 'previous-tmp'));
+  try { symlinkSync(outside, join(f.root, 'tmp'), process.platform === 'win32' ? 'junction' : 'dir'); }
+  catch (error) {
+    if (process.platform === 'win32' && ['EPERM', 'EACCES', 'ENOSYS'].includes(error.code)) { t.skip(`Link indisponível no Windows: ${error.code}`); return; }
+    throw error;
+  }
+  const index = readFileSync(f.index);
+  assert.throws(() => prepareOutput(output, f.root), /link/i);
+  assert.equal(readFileSync(join(outside, 'human'), 'utf8'), 'preservado');
+  assert.equal(existsSync(join(outside, 'oss')), false);
+  assert.deepEqual(readFileSync(f.index), index);
+});
+
+test('consulta OSS não executa fsmonitor configurado nem modifica o Git', t => {
+  const f = outputFixture(t), marker = join(f.root, 'fsmonitor-marker'), hook = join(f.root, 'fsmonitor.sh');
+  writeFileSync(hook, '#!/bin/sh\nprintf called >> "$OSS_FSMONITOR_MARKER"\nprintf "\\0"\n'); chmodSync(hook, 0o700);
+  f.git(['config', 'core.fsmonitor', hook]);
+  const environment = { ...f.environment, OSS_FSMONITOR_MARKER: marker };
+  const control = spawnSync('git', ['-C', f.root, 'ls-files'], { env: environment, encoding: 'utf8' });
+  assert.equal(control.status, 0, control.stderr);
+  assert.equal(existsSync(marker), true, 'O controle precisa comprovar que o hook executaria.'); unlinkSync(marker);
+  const before = [readFileSync(f.index), readFileSync(f.config)];
+  assert.equal(outputDirectory(f.target, { root: f.root, environment }), join(f.root, f.target));
+  assert.equal(existsSync(marker), false);
+  assert.deepEqual([readFileSync(f.index), readFileSync(f.config)], before);
+});
 
 test('sentinelas nativas humanas não são adotadas integralmente mesmo com bytes idênticos', async t => {
   const paths = ['.claude/skills/human/SKILL.md', '.claude/skills/human/REFERENCE.md', '.claude/agents/revisor.md', '.claude/settings.local.json'];

@@ -52,7 +52,8 @@ Os caminhos são relativos à pasta do cliente, exceto onde indicado.
 - Cursor: `skills/grupo/nome/SKILL.md`, `rules/grupo/nome.mdc`,
   `agents/nome.md` e `commands/nome.md`.
 - Copilot: `skills/nome/SKILL.md`, `agents/nome.agent.md`,
-  `instructions/grupo/nome.instructions.md` e
+  `instructions/grupo/nome.instructions.md` para regras globais ou por glob,
+  `rules/grupo/nome/RULE.md` para referências explícitas e
   `prompts/grupo/nome.prompt.md` para Local.
 - OpenCode: `skills/grupo/nome/SKILL.md`, `commands/grupo/nome.md`,
   `agents/grupo/nome.md`; regras como referências.
@@ -104,6 +105,21 @@ mantidas para seus respectivos clientes; o suporte a instruções varia entre
 Em teste local com Copilot CLI `1.0.109`, referências `.claude/rules` manuais
 e com glob também entraram no contexto inicial. Não presuma que os metadados
 da rota Copilot restrinjam as referências vindas de outros clientes.
+
+No Copilot, `always_on` usa `applyTo: '**'` e `glob` conserva o padrão da
+regra. Por padrão, `manual` e `model_decision` ficam em `.github/rules` para
+consulta explícita; não há decisão automática equivalente comprovada. No teste
+local, instruções sem `applyTo` também entraram no contexto inicial.
+
+YAML nativo explícito prevalece. Para complementar um arquivo humano, o
+frontmatter precisa ser idêntico ao YAML nativo, com `applyTo` literal entre
+aspas e, opcionalmente, `description` literal entre aspas. Escopo diferente ou
+ambíguo bloqueia a sincronização e preserva os arquivos.
+
+Apontamentos antigos só são removidos com propriedade e integridade
+comprovadas; se estiverem no índice Git, a operação bloqueia sem alterá-lo.
+Instruções antigas editadas ou sem propriedade comprovada permanecem e podem
+continuar ativas; revise-as manualmente.
 
 O instalador gera a seleção e a política em `espelhos.conf`; `sincronizar`
 reconstrói os apontamentos somente com Node e os arquivos do hub instalado.

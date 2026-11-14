@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, posix, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
@@ -34,7 +34,11 @@ test('cada recurso instalado aponta à origem em cada cliente selecionado', asyn
   const base = join(sourceRoot, '.agent-tests'); mkdirSync(base, { recursive: true });
   const root = realpathSync(mkdtempSync(join(base, 'resource-coverage-')));
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  const env = { ...process.env, GIT_OPTIONAL_LOCKS: '0', GIT_CONFIG_NOSYSTEM: '1' };
+  const gitConfig = join(root, '.test-gitconfig'), gitExclude = join(root, '.test-gitignore');
+  writeFileSync(gitExclude, '');
+  writeFileSync(gitConfig, `[core]\n\texcludesFile = ${JSON.stringify(gitExclude)}\n\tfsmonitor = false\n`);
+  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^GIT_/i.test(key)));
+  Object.assign(env, { GIT_OPTIONAL_LOCKS: '0', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: gitConfig });
   const git = spawnSync('git', ['-c', 'init.defaultBranch=main', 'init', '--quiet', '--template=', root], { encoding: 'utf8', env });
   assert.equal(git.status, 0, git.stderr);
   const init = spawnSync(process.execPath, [join(sourceRoot, 'bin/agentdevkit.mjs'), 'init', '--target', root, '--agents', 'all', '--yes', '--json'], { encoding: 'utf8', env, timeout: 180000, maxBuffer: 16 * 1024 * 1024 });
@@ -43,6 +47,7 @@ test('cada recurso instalado aponta à origem em cada cliente selecionado', asyn
   const rows = readFileSync(join(root, '.pbai4devs/espelhos.conf'), 'utf8').split(/\r?\n/).filter(line => line && !line.startsWith('#')).map(line => line.split('|'));
   const clients = rows.filter(row => row[0] === 'agente');
   const policy = JSON.parse(readFileSync(join(root, '.pbai4devs/templates/clients/ADAPTERS.json'), 'utf8'));
+  const catalog = JSON.parse(readFileSync(join(root, '.pbai4devs/catalog.json'), 'utf8'));
   assert.equal(clients.length, policy.adapters.length);
   const sources = Object.fromEntries(Object.entries(kinds).map(([kind, principal]) => [kind, files(root, `.pbai4devs/${kind}`, principal)]));
   assert.ok(sources.skills.length >= 41 && sources.agents.length >= 11 && sources.commands.length >= 18 && sources.rules.length >= 8);
@@ -52,6 +57,14 @@ test('cada recurso instalado aponta à origem em cada cliente selecionado', asyn
       const format = rows.find(row => row[0] === 'formato' && row[1] === client && row[2] === kind)?.[3] || baseFormat;
       if (format === 'nenhum') continue;
       let destination = `${client}/${clientPath(source, kind, format)}`;
+      if (client === '.github' && kind === 'rules' && format === 'instrucoes') {
+        const trigger = catalog.rules.find(rule => rule.path === source)?.trigger;
+        assert.ok(trigger, `${source} sem trigger`);
+        const native = rows.some(row => row[0] === 'nativo' && row[1] === destination && row[2] === source && row[3]);
+        if (['manual', 'model_decision'].includes(trigger) && !native) {
+          destination = `${client}/${source.slice('.pbai4devs/'.length)}`;
+        }
+      }
       if (client === '.gemini' && kind === 'commands') destination = destination.replace(/\.md$/, '.toml');
       const full = join(root, destination);
       assert.ok(statSync(full).isFile(), `${destination} não é arquivo`);

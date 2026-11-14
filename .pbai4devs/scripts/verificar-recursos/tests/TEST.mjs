@@ -1,3 +1,4 @@
+import '../../lib/test-git-environment.mjs';
 import assert from 'node:assert/strict';
 import { lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, readdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -9,7 +10,7 @@ import { checkFrontmatter, checkLint, checkSynchronization, checkCatalog, checkR
 import { buildCatalog } from '../../lib/catalog.mjs';
 import { platformKey, toolWrapper } from '../../preparar-ferramentas/SCRIPT.mjs';
 import './ambiente-local.mjs';
-import { mergeGitignore, planLocalIgnore, applyLocalIgnore } from '../../lib/gitignore.mjs';
+import { mergeGitignore, planLocalIgnore, applyLocalIgnore, checkLocalIgnore, isGeneratedOutput } from '../../lib/gitignore.mjs';
 
 requireNode();
 const markdown = '# Exemplo\n';
@@ -276,6 +277,10 @@ test('external-skills mantém seu guia validado e só oculta o payload .local', 
   rmSync(join(root, '.pbai4devs/external-skills/notes'), { recursive: true });
   file('.pbai4devs/skills/.local/guia.md', '# Este .local continua sendo verificado\n');
   assert.throws(() => verify(root), /Frontmatter\/H1 invalido: .pbai4devs\/skills\/.local\/guia.md/);
+  assert.equal(isGeneratedOutput('.pbai4devs/skills/.LoCaL/guia.md'), false);
+  for (const path of ['.cursor/.LoCaL/private.json', '.pbai4devs/tools/demo/.local/versions/a.md', '.pbai4devs/external-skills/.local/upstream/SKILL.md']) {
+    assert.equal(isGeneratedOutput(path), true, path);
+  }
 });
 
 test('external-skills é auxiliar proibido nas pastas dos agentes', t => {
@@ -397,7 +402,7 @@ function ignoreFixture(t) {
   return context;
 }
 
-test('fontes permanecem elegíveis e pastas de clientes aceitam opt-in explícito', t => {
+test('fontes e clientes permanecem visíveis, preservando Git e alertando sobre arquivos privados', t => {
   const { root, file } = ignoreFixture(t);
   const outputs = ['.github/skills/generated/SKILL.md', '.vscode/.gitignore', '.github/.gitignore'];
   const sources = ['src/new.mjs', 'bin/new.mjs', 'tests/new.test.mjs', 'scripts/release/new.mjs'];
@@ -406,26 +411,40 @@ test('fontes permanecem elegíveis e pastas de clientes aceitam opt-in explícit
   for (const path of [...sources, ...clients, ...generated.filter(path => !path.endsWith('/.gitignore'))]) file(path, 'fixture\n');
   file('.github/auth.json', 'credencial local\n');
   file('.vscode/logs/session.log', 'artefato local\n');
+  file('.cursor/.LoCaL/private.json', 'credencial visível\n');
+  file('.gitignore', '# regras humanas\r\n/arquivo-humano\r\n');
   assert.equal(git(root, ['add', '--', clients[0], sources[0]]).status, 0);
-  const index = git(root, ['ls-files', '--stage', '-z']).stdout;
-  applyLocalIgnore(planLocalIgnore(root, { outputs }));
+  const preserved = ['.gitignore', '.pbai4devs/.gitignore', '.github/.gitignore', '.vscode/.gitignore', '.git/config', '.git/info/exclude', '.git/index'];
+  const snapshot = () => new Map(preserved.map(path => [path, readFileSync(join(root, path))]));
+  const before = snapshot();
+  const plan = planLocalIgnore(root, { outputs });
+  const result = applyLocalIgnore(plan);
+  assert.equal(result.changed, 0);
+  assert.deepEqual(snapshot(), before);
   assert.deepEqual(ignoredPaths(root, sources), []);
-  assert.deepEqual(new Set(ignoredPaths(root, clients)), new Set(clients));
-  assert.deepEqual(new Set(ignoredPaths(root, generated)), new Set(generated));
-  assert.equal(git(root, ['ls-files', '--stage', '-z']).stdout, index);
+  assert.deepEqual(ignoredPaths(root, clients), []);
+  assert.deepEqual(new Set(ignoredPaths(root, generated)), new Set(generated.filter(path => !outputs.includes(path))));
+  for (const path of outputs) assert.ok(result.pending.some(item => item.code === 'output-visible' && item.path === path), path);
+  assert.ok(result.pending.some(item => item.code === 'private-file-visible' && item.path === '.cursor/.LoCaL/private.json'));
+  assert.equal(checkLocalIgnore(plan).ok, false);
   for (const path of clients) assert.equal(readFileSync(join(root, path), 'utf8'), 'fixture\n', path);
 
-  const exceptions = '!/.github/\n!/.vscode/\n';
+  const exceptions = '# exceções humanas\r\n!/.github/\r\n!/.vscode/\r\n';
   file('.gitignore', exceptions);
-  applyLocalIgnore(planLocalIgnore(root, { outputs }));
-  assert.equal(readFileSync(join(root, '.gitignore'), 'utf8'), exceptions);
-  assert.equal(git(root, ['ls-files', '--stage', '-z']).stdout, index);
+  const withExceptions = snapshot();
+  const optedPlan = planLocalIgnore(root, { outputs });
+  assert.ok(optedPlan.optedRoots.includes('.github'));
+  assert.ok(optedPlan.optedRoots.includes('.vscode'));
+  const opted = applyLocalIgnore(optedPlan);
+  assert.equal(opted.changed, 0);
+  assert.deepEqual(snapshot(), withExceptions);
   assert.deepEqual(ignoredPaths(root, clients), []);
   const privateFiles = ['.github/auth.json', '.vscode/logs/session.log'];
   assert.deepEqual(new Set(ignoredPaths(root, privateFiles)), new Set(privateFiles));
+  assert.ok(opted.pending.some(item => item.code === 'private-file-visible' && item.path === '.cursor/.LoCaL/private.json'));
   assert.equal(git(root, ['add', '--all']).status, 0);
   const tracked = git(root, ['ls-files', '-z']).stdout.split('\0');
-  for (const path of [...sources, ...clients, ...outputs]) assert.ok(tracked.includes(path), path);
+  for (const path of [...sources, ...clients, ...outputs, '.cursor/.LoCaL/private.json']) assert.ok(tracked.includes(path), path);
   for (const path of [...generated.filter(path => !outputs.includes(path)), ...privateFiles]) assert.equal(tracked.includes(path), false, path);
 });
 

@@ -5,9 +5,9 @@ description: Testes do pacote, instalação e distribuição do AgentDevKit.
 # Testes do pacote
 
 Execute `npm test` na raiz. Código de testes e fixtures são versionados;
-projetos gerados, clones e resultados ficam em `tmp/`, `.agent-tests/`,
-`examples/generated/` ou em diretório temporário fora do repositório, sem subir
-ao Git.
+os geradores de exemplos usam, por padrão, diretórios temporários fora de Git.
+Uma saída local explícita exige ignore comprovado. Outros clones e resultados
+ficam em `tmp/`, `.agent-tests/` ou diretório temporário, sem subir ao Git.
 `npm run test:distribution` testa o
 pacote real, incluindo instalação, atualização e preservação de arquivos.
 Estes testes não são copiados para os projetos atendidos.
@@ -66,6 +66,10 @@ Inclui uma skill própria, uma referência Markdown curta, configuração local
 e um agente humano com nome igual ao do kit. Confere também a sincronização
 independente e `--force` sem remover esses recursos.
 Clones e evidências ficam em `tmp/oss-compatibility/`, ignorado pelo Git.
+O runner verifica o ignore e o índice antes de criar uma pasta exclusiva;
+recusa redirecionamentos Git e caminhos que possam colidir com conteúdo staged.
+As verificações entre cenários não são atômicas durante todas as escritas;
+evite alterar a pasta da execução enquanto ela estiver em uso.
 Exige rede; não roda no `npm test` padrão nem executa as aplicações clonadas.
 Use `--project express` para um caso e `--help` para todas as opções.
 Para testar um candidato local, acrescente `--tarball caminho/pacote.tgz`

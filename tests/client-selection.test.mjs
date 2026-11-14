@@ -1,3 +1,4 @@
+import '../.pbai4devs/scripts/lib/test-git-environment.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -321,7 +322,7 @@ test('desmarcar preserva arquivos com texto humano e remove somente derivados in
   put(root, path, changed);
   put(root, '.claude/skills/unknown/SKILL.md', original);
   put(root, '.claude/skills/custom/SKILL.md', '# User owned\n');
-  put(root, '.claude/.gitignore', `# User ignore\n${read(root, '.claude/.gitignore')}`);
+  put(root, '.claude/.gitignore', '# User ignore\n');
   put(root, 'CLAUDE.md', `# User instructions\n${read(root, 'CLAUDE.md').replace('AGENTS.md', 'CHANGED.md')}`);
   mkdirSync(join(root, '.claude/skills/user-empty'), { recursive: true });
   const before = read(root, statePath);
@@ -334,7 +335,7 @@ test('desmarcar preserva arquivos com texto humano e remove somente derivados in
   assert.equal(read(root, '.claude/skills/unknown/SKILL.md'), original);
   assert.equal(read(root, '.claude/skills/custom/SKILL.md'), '# User owned\n');
   assert.ok(existsSync(join(root, '.claude/skills/user-empty')));
-  assert.equal(read(root, '.claude/.gitignore'), '# User ignore\n\n');
+  assert.equal(read(root, '.claude/.gitignore'), '# User ignore\n');
   assert.match(read(root, 'CLAUDE.md'), /^# User instructions/); assert.doesNotMatch(read(root, 'CLAUDE.md'), /BEGIN AGENTDEVKIT/);
   cli(root, ['sync']); assert.equal(read(root, '.claude/skills/unknown/SKILL.md'), original);
   assert.equal(read(root, path), changed);

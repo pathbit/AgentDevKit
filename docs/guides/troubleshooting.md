@@ -169,10 +169,23 @@ não devem ser versionados. Verifique com `git status` e `git check-ignore -v
 <caminho>`. Se um arquivo já estava rastreado, acrescentar um ignore não o
 retira automaticamente do Git; revise a remoção do índice sem apagar dados.
 
-O `.gitignore` do hub não controla pastas irmãs. Confira a proteção local
-gerada pelo kit em `info/exclude`. Para versionar configurações humanas novas
-em `.github` ou `.vscode`, reabra a pasta com `!/.github/` ou `!/.vscode/`
-no `.gitignore` da raiz. Confira as regras com `git check-ignore -v`.
+O `.gitignore` do hub não controla pastas irmãs. O kit preserva as regras Git
+existentes; confira a visibilidade com `git check-ignore -v` e ajuste as regras
+do projeto quando necessário. Um bloco antigo em `info/exclude` pode afetar
+outras worktrees e não é removido automaticamente.
+
+Se aparecer `E_GIT_ENV`, há uma variável de ambiente que redireciona o
+repositório ou o índice Git. Revise `GIT_DIR`, `GIT_WORK_TREE`, `GIT_COMMON_DIR`
+e `GIT_INDEX_FILE` na sessão e execute novamente sem os redirecionamentos. O kit
+interrompe a operação para proteger os arquivos e o índice selecionados.
+
+No Windows, nomes curtos NTFS podem apontar para nomes diferentes. Quando a
+identidade de caminhos preparados não pode ser verificada, o kit pode indicar
+`E_STAGED` mesmo para arquivos aparentemente independentes. Revise o índice antes
+de tentar novamente. A criação exclusiva usa hardlinks no mesmo volume; se o
+volume não os suportar, a operação falha e os arquivos existentes são
+preservados. Sistemas de arquivos remotos podem ter aliases próprios que essa
+verificação não consegue identificar em todos os casos.
 
 Para pedir ajuda, inclua SO/arquitetura, versões de Node/npm/AgentDevKit,
 comando executado, código de saída e trecho relevante do JSON, sem segredos.

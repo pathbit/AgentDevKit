@@ -7,7 +7,7 @@ export function normalizeLanguage(value) {
 
 const messages = {
   pt: {
-    gitPending: 'Git não foi inicializado; após git init, execute sync para proteger os arquivos locais.',
+    gitPending: 'Git indisponível ou não inicializado; após instalar e inicializar Git, execute sync --check para verificar arquivos visíveis.',
     trackedLocal: 'Artefatos locais já estão versionados; revise o índice sem excluir conteúdo automaticamente.',
     preserved: 'Caminhos existentes preservados', preservedDetails: 'Use --json para consultar os caminhos e motivos.',
     help: 'AgentDevKit: init [diretório], update, doctor, sync [--check], lang [pt|en|es], agents [lista], next, tools <ação>.\nOpções: --target <diretório>, --lang <idioma>, --agents <lista>, --yes, --dry-run, --force, --json.\nAliases: --clients e clients.',
@@ -18,7 +18,7 @@ const messages = {
     agentLanguage: 'Responda em português, salvo quando o usuário solicitar outro idioma.', inspect: 'Verifique a instalação', workflow: 'Consulte a próxima etapa', install: 'Inicialize este projeto', repair: 'Confira a sincronização', review: 'Revise os arquivos em conflito', tools: 'Resultado da ferramenta',
   },
   en: {
-    gitPending: 'Git is not initialized; after git init, run sync to protect local files.',
+    gitPending: 'Git is unavailable or not initialized; after installing and initializing Git, run sync --check to inspect visible files.',
     trackedLocal: 'Local artifacts are already tracked; review the index without automatically deleting content.',
     preserved: 'Existing paths preserved', preservedDetails: 'Use --json to inspect paths and reasons.',
     help: 'AgentDevKit: init [directory], update, doctor, sync [--check], lang [pt|en|es], agents [list], next, tools <action>.\nOptions: --target <directory>, --lang <language>, --agents <list>, --yes, --dry-run, --force, --json.\nAliases: --clients and clients.',
@@ -29,7 +29,7 @@ const messages = {
     agentLanguage: 'Respond in English unless the user requests another language.', inspect: 'Check the installation', workflow: 'Review the next stage', install: 'Initialize this project', repair: 'Check synchronization', review: 'Review conflicting files', tools: 'Tool result',
   },
   es: {
-    gitPending: 'Git no está inicializado; tras git init, ejecute sync para proteger los archivos locales.',
+    gitPending: 'Git no está disponible o no está inicializado; tras instalar e inicializar Git, ejecute sync --check para verificar archivos visibles.',
     trackedLocal: 'Hay artefactos locales versionados; revise el índice sin eliminar contenido automáticamente.',
     preserved: 'Rutas existentes preservadas', preservedDetails: 'Use --json para consultar las rutas y los motivos.',
     help: 'AgentDevKit: init [directorio], update, doctor, sync [--check], lang [pt|en|es], agents [lista], next, tools <acción>.\nOpciones: --target <directorio>, --lang <idioma>, --agents <lista>, --yes, --dry-run, --force, --json.\nAlias: --clients y clients.',
@@ -41,7 +41,12 @@ const messages = {
   },
 };
 export const text = (language, key) => messages[language || 'pt'][key] || key;
-export function explainError(language, code) {
+export function explainError(language, code, error) {
+  if (error?.hardlinkUnsupported) return {
+    pt: 'O sistema de arquivos não oferece suporte a hardlinks necessários para a criação segura.',
+    en: 'The filesystem does not support hardlinks required for safe creation.',
+    es: 'El sistema de archivos no admite los enlaces físicos necesarios para una creación segura.',
+  }[language || 'pt'];
   if (code === 'E_STAGED') return {
     pt: 'Há alterações preparadas diferentes dos arquivos locais; revise-as antes de atualizar.',
     en: 'Staged changes differ from the working files; review them before updating.',

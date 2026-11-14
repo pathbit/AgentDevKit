@@ -1,3 +1,4 @@
+import '../../lib/test-git-environment.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -277,10 +278,11 @@ test('arquivo humano criado durante planejamento não é substituído por saída
     });
     syncBuiltinESMExports();
     try {
-      assert.throws(() => run(root, { force: true }), /Arquivo mudou apos planejar/);
+      if (path === '.claude/.gitignore') run(root, { force: true });
+      else assert.throws(() => run(root, { force: true }), /Arquivo mudou apos planejar/);
       assert.equal(injected, true, path);
       assert.equal(read(root, path), human, path);
-      assert.ok(!fs.existsSync(join(root, '.pbai4devs/catalog.json')), path);
+      if (path !== '.claude/.gitignore') assert.ok(!fs.existsSync(join(root, '.pbai4devs/catalog.json')), path);
     } finally {
       t.mock.restoreAll(); syncBuiltinESMExports();
     }

@@ -1,3 +1,4 @@
+import '../.pbai4devs/scripts/lib/test-git-environment.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -144,16 +145,23 @@ for (const recreated of [false, true]) test(`rollback de ancestrais removidos ${
   const plan = planInstallation({ target: root, mode: 'lang', language: 'en' });
   plan.changes.push({ path: relative, action: 'remove', beforeHash: digest(bytes), content: null });
   const failure = new Error('failure after pruning directories');
-  plan.localIgnore.edits = [{ path: ignore, before: readFileSync(ignore, 'utf8'),
-    get after() {
-      assert.equal(existsSync(parent), false, 'Os diretórios devem ter sido removidos antes da falha.');
+  const exclude = join(root, '.git/info/exclude'), originalStat = fs.lstatSync;
+  let injected = false;
+  fs.lstatSync = (path, ...args) => {
+    if (!injected && String(path) === exclude && !existsSync(parent)) {
+      injected = true;
       if (recreated) {
         mkdirSync(nested, { recursive: true });
         chmodSync(parent, 0o711); chmodSync(nested, 0o770);
       }
       throw failure;
-    } }];
-  assert.throws(() => applyPlan(plan), error => error === failure);
+    }
+    return originalStat(path, ...args);
+  };
+  syncBuiltinESMExports();
+  try { assert.throws(() => applyPlan(plan), error => error === failure); }
+  finally { fs.lstatSync = originalStat; syncBuiltinESMExports(); }
+  assert.equal(injected, true);
   assert.deepEqual(readFileSync(file), bytes);
   assert.equal(mode(file), 0o640);
   assert.equal(mode(parent), recreated ? 0o711 : 0o700);

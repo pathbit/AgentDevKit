@@ -48,7 +48,7 @@ são guardados como artifacts, sem binários ou fontes das fixtures.
 
 `npm run verify` executa o perfil completo. `ci:portable` e `ci:smoke`
 executam os demais perfis localmente. `npm run test:examples` verifica os
-cenários em `examples/generated/` quando a mudança afeta a geração.
+cenários em uma pasta temporária fora de Git quando a mudança afeta a geração.
 A [contribuição](../../CONTRIBUTING.md) explica os checks durante o
 desenvolvimento.
 

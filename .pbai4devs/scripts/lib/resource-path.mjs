@@ -18,3 +18,13 @@ export function resourcePath(source, kind, mode = 'agrupado') {
   const scopes = { instrucoes: 'instructions', prompt: 'prompts' };
   return `${scopes[mode] || kind}${folder.slice(kind.length)}${extensions[mode]}`;
 }
+
+// Copilot CLI carrega instructions sem applyTo globalmente; escopos sem
+// equivalente comprovado ficam disponíveis apenas como referência explícita.
+export function clientResourcePath(source, kind, mode, agent, rule, explicitMetadata = false) {
+  if (agent === '.github' && kind === 'rules' && mode === 'instrucoes' &&
+      ['manual', 'model_decision'].includes(rule?.trigger) && !explicitMetadata) {
+    return resourcePath(source, kind, 'agrupado');
+  }
+  return resourcePath(source, kind, mode);
+}

@@ -2,29 +2,41 @@
 // Reproducible sample products. Generated projects and execution reports are ignored.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { findNpmCli } from '../.pbai4devs/scripts/lib/npm.mjs';
 import { environment } from './oss-compatibility.mjs';
+import { createExampleOutput } from '../.pbai4devs/scripts/testar-maturidade/SCRIPT.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const version = process.argv[2] || JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
+const args = process.argv.slice(2);
+const value = flag => { const index = args.indexOf(flag); if (index < 0) return undefined; assert.ok(args[index + 1] && !args[index + 1].startsWith('--'), `${flag} exige valor.`); return args[index + 1]; };
+const version = (args[0] && !args[0].startsWith('--') ? args[0] : undefined) || JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
 assert.match(version, /^\d+\.\d+\.\d+$/);
-const generated = join(root, 'examples/generated');
-mkdirSync(generated, { recursive: true });
-const output = mkdtempSync(join(generated, 'workflows-'));
+const tarball = value('--tarball');
+const outputArgument = value('--output');
+const options = args.filter((item, index) => index > 0 || item.startsWith('--'));
+for (let index = 0; index < options.length; index += 2) assert.ok(['--tarball', '--output'].includes(options[index]) && options[index + 1] && !options[index + 1].startsWith('--'), 'Use [versão] [--tarball arquivo] [--output pasta-nova].');
+assert.equal(new Set(options.filter((_, index) => index % 2 === 0)).size, options.length / 2, 'Opção duplicada.');
+const { outputRoot: output, verifyOutput } = createExampleOutput({ sourceRoot: root, outputRoot: outputArgument, prefix: 'agentdevkit-workflows-' });
+verifyOutput();
 const env = environment(output);
+verifyOutput(join(output, 'npm-work'));
+if (tarball) env.npm_config_offline = 'true';
+const packageSpec = tarball ? `--package=file:${resolve(tarball)}` : `--package=@pathbit/agentdevkit@${version}`;
 const npmWork = join(output, 'npm-work');
 const npm = findNpmCli();
 assert.ok(npm, 'Node.js 24+ e npm são necessários.');
 assert.ok(Number(process.versions.node.split('.')[0]) >= 24);
-const write = (directory, path, value) => { const file = join(directory, path); mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, value); };
+const write = (directory, path, value) => { const file = join(directory, path); verifyOutput(file); mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, value); verifyOutput(file); };
 const md = (title, text) => `---\ndescription: Exemplo didático gerado localmente.\n---\n\n# ${title}\n\n${text}\n`;
 const report = { version, status: 'running', output, examples: [] };
 const save = () => write(output, 'REPORT.json', JSON.stringify(report, null, 2) + '\n');
 function run(directory, command, args) {
+  verifyOutput(directory);
   const result = spawnSync(command, args, { cwd: directory, env, encoding: 'utf8', timeout: 180000, maxBuffer: 8 * 1024 * 1024 });
+  verifyOutput(directory);
   if (result.status !== 0) throw new Error(`${command} ${args.join(' ')}: ${result.error?.message || result.stderr || result.stdout}`);
   return result.stdout;
 }
@@ -54,13 +66,15 @@ const cli = [
 ];
 
 try {
+  const actualVersion = JSON.parse(run(npmWork, process.execPath, [npm, 'exec', '--yes', '--ignore-scripts', packageSpec, '--', 'agentdevkit', '--version', '--json']));
+  assert.equal(actualVersion.version, version, 'A versão do pacote precisa corresponder à versão informada.');
   for (const sample of [
     { id: 'api-tarefas', purpose: 'Criar e listar tarefas em memória por HTTP.', stages: api, source: 'src/app.mjs' },
     { id: 'cli-calculadora', purpose: 'Somar e calcular a média de números na linha de comando.', stages: cli, source: 'src/calc.mjs' },
   ]) {
-    const directory = join(output, sample.id); mkdirSync(directory);
+    const directory = join(output, sample.id); verifyOutput(directory); mkdirSync(directory); verifyOutput(directory);
     run(directory, 'git', ['init', '--quiet', '--template=']);
-    run(npmWork, process.execPath, [npm, 'exec', '--yes', '--ignore-scripts', `--package=@pathbit/agentdevkit@${version}`, '--', 'agentdevkit', 'init', '--target', directory, '--agents', 'codex,claude,copilot', '--lang', 'pt', '--yes']);
+    run(npmWork, process.execPath, [npm, 'exec', '--yes', '--ignore-scripts', packageSpec, '--', 'agentdevkit', 'init', '--target', directory, '--agents', 'codex,claude,copilot', '--lang', 'pt', '--yes']);
     write(directory, 'docs/PRD.md', md('PRD — exemplo', `Problema e objetivo: ${sample.purpose}\n\nUsuário: pessoa desenvolvedora. Escopo didático: somente os três incrementos do roadmap. Aprovação: simulada para este exemplo.`));
     write(directory, 'docs/UX.md', md('UX — exemplo', 'Não há interface visual; a experiência usa HTTP ou terminal. Decisão simulada para o exercício.'));
     write(directory, 'docs/DESIGN.md', md('Design — exemplo', 'Node.js, módulos ECMAScript e testes nativos. Sem banco, autenticação ou dependências externas. Decisão simulada.'));
@@ -77,7 +91,7 @@ try {
       current.stages.push({ spec: `docs/specs/${number}/SPEC.md`, criterion: stage.criterion, status: 'passed', evidence: `.agent-tests/spec-${number}.log` }); save();
       console.log(`${sample.id}: spec ${number} aprovada nos testes`);
     }
-    run(npmWork, process.execPath, [npm, 'exec', '--yes', '--ignore-scripts', `--package=@pathbit/agentdevkit@${version}`, '--', 'agentdevkit', 'doctor', '--target', directory]);
+    run(npmWork, process.execPath, [npm, 'exec', '--yes', '--ignore-scripts', packageSpec, '--', 'agentdevkit', 'doctor', '--target', directory]);
   }
   report.status = 'passed'; save(); console.log(JSON.stringify({ status: report.status, report: join(output, 'REPORT.json') }));
 } catch (error) { report.status = 'failed'; report.error = error.message; save(); console.error(error.message); process.exitCode = 1; }

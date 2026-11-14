@@ -87,11 +87,11 @@ O próximo passo é [preparar as ferramentas](prerequisites.md#depois-de-instala
 | Conteúdo | Tratamento |
 | --- | --- |
 | `.pbai4devs` com recursos e templates | Fonte compartilhada versionável. |
-| Recursos nos clientes | Apontamentos locais; pastas ignoradas por padrão. |
+| Recursos nos clientes | Apontamentos locais; podem aparecer no Git. |
 | Entradas da raiz criadas pelo kit | Arquivos locais gerados. |
-| Índices, manifesto e seleção pessoal | Derivados locais ignorados. |
+| Índices, manifesto e seleção | Derivados locais; confira o ignore do kit. |
 | Código, documentos e configurações humanas | Preservados. |
-| Downloads e resultados de testes | Locais e ignorados. |
+| Downloads e resultados de testes | Locais; confira as regras do projeto. |
 | `.pbai4devs/LICENSE` | Licença MIT do kit, copiada do pacote. |
 
 O gerador completo permanece no pacote npm. Ele não copia `bin/`, `src/`,
@@ -102,49 +102,20 @@ identifica a licença dos recursos do AgentDevKit, sem redefinir a do projeto.
 
 ## Git e migração
 
-Um `.gitignore` dentro de `.pbai4devs` só controla essa árvore: `../` não
-alcança pastas irmãs. O kit gera regras em `.git/info/exclude` para ignorar
-por padrão as pastas dos clientes, sem alterar o `.gitignore` da raiz.
-Essas regras são locais, não acompanham o clone; execute `init` ou `sync`
-em cada clone com Git inicializado, antes de usar `git add`. Sem Git, a
-exclusão fica pendente até `git init` e sincronização.
-Worktrees do mesmo repositório podem compartilhar esse arquivo de exclusões.
-Nesse caso, uma regra criada ao instalar em uma delas também pode ocultar
-arquivos humanos não rastreados em outra. Confira a visibilidade dos arquivos
-em cada worktree antes de preparar alterações para o Git.
+O ignore de `.pbai4devs` controla somente sua própria árvore. O kit preserva
+os arquivos ignore existentes, a configuração Git, o índice e o arquivo
+`.git/info/exclude`, compartilhado entre worktrees. Ele não cria ignores nas
+pastas dos clientes.
 
-Para versionar uma pasta de cliente, o projeto pode acrescentar uma exceção
-literal ao seu próprio `.gitignore` da raiz, por exemplo:
+Apontamentos, resultados e arquivos privados podem aparecer no Git. Antes de
+adicioná-los, confira o status e ajuste voluntariamente as regras do projeto.
+`doctor` e `sync --check` avisam sobre saídas visíveis; credenciais visíveis,
+artefatos já rastreados e blocos antigos no exclude são problemas informados.
+Regras antigas no exclude continuam afetando outras worktrees; o kit não as
+remove automaticamente.
 
-```gitignore
-!/.claude/
-!/.github/
-```
-
-A exceção da raiz tem precedência sobre `.git/info/exclude`; regras de um
-`.gitignore` mais profundo continuam valendo. Não use `!/.claude/**`: um
-curinga amplo pode reabrir credenciais e artefatos que devem ficar locais.
-O diagnóstico informa exceções que exponham esses arquivos.
-
-O padrão também oculta arquivos humanos ainda não rastreados nas pastas dos
-clientes. Em especial, `.github` pode conter workflows, formulários de issues
-e outras configurações do projeto; use `!/.github/` se precisar versioná-los.
-O mesmo cuidado vale para `.vscode` e configurações próprias de outros agentes.
-
-O bloco local também protege `.agent-tests`, `tmp`, `temp`, `.playwright*`
-e relatórios de testes, inclusive com letras maiúsculas e em subpastas.
-O conteúdo do `.gitignore` existente na raiz é preservado.
-Uma exceção que reabra arquivo privado ou artefato é informada como conflito;
-o projeto decide como ajustar suas próprias regras.
-Negativas com curingas também podem ser recusadas preventivamente, mesmo antes
-de existir um arquivo correspondente. Examine a regra indicada no diagnóstico.
-Nomes próprios de artefatos e arquivos existentes também são conferidos;
-a validação fica restrita ao projeto e aos ignores de seus ancestrais.
-
-Ignorar uma pasta não retira arquivos já rastreados do índice. O kit preserva
-o índice, inclusive alterações preparadas; para mudar o rastreamento, o projeto
-decide a ação Git. `--dry-run` e `sync --check` também não alteram o índice.
-Revise o plano e os conflitos antes de aplicar em um projeto existente.
+Ignorar não remove arquivos já rastreados. A equipe decide como ajustar o
+rastreamento. `--dry-run` e `sync --check` não alteram o índice.
 
 ## Atualizar e escolher agentes
 

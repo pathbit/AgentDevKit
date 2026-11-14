@@ -65,7 +65,7 @@ A [matriz de maturidade][matrix] usa oito projetos sintéticos. Ela comprova
 contratos do kit; não aprova um produto real nem certifica todos os aplicativos.
 Os pareceres simulados dessa matriz não substituem revisão independente.
 Use `npm run examples` para preparar as cópias e `npm run test:examples`
-para executá-las em `examples/generated/`. O [guia dos exemplos][examples]
+para executá-las em uma pasta temporária fora de Git. O [guia dos exemplos][examples]
 explica cada cenário; o [guia de desenvolvimento](../maintainers/development.md)
 reúne as verificações do repositório.
 

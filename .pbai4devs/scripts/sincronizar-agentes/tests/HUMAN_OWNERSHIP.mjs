@@ -1,3 +1,4 @@
+import '../../lib/test-git-environment.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -72,14 +73,14 @@ test('hash registrado comprova referência legada sem marcador e diretório vazi
   assert.equal(run(root, { check: true }).exitCode, 0);
 });
 
-test('conflito de ignore é recusado antes de criar recursos ou catálogos', t => {
+test('negação de ignore humana é preservada e visibilidade é avisada', t => {
   const root = fixture(t); write(root, '.gitignore', '!/.agent-tests/\n!/.agent-tests/**\n');
-  const before = snapshot(root), exclude = fs.readFileSync(join(root, '.git/info/exclude'));
-  assert.throws(() => run(root, { localIgnores: true, force: true }), /Regras humanas/);
-  assert.deepEqual(snapshot(root), before);
+  const before = fs.readFileSync(join(root, '.gitignore')), exclude = fs.readFileSync(join(root, '.git/info/exclude')), messages = [];
+  assert.equal(run(root, { localIgnores: true, force: true, output: message => messages.push(message) }).exitCode, 0);
+  assert.deepEqual(fs.readFileSync(join(root, '.gitignore')), before);
   assert.deepEqual(fs.readFileSync(join(root, '.git/info/exclude')), exclude);
-  assert.equal(fs.existsSync(join(root, generated)), false);
-  assert.equal(fs.existsSync(join(root, '.pbai4devs/catalog.json')), false);
+  assert.ok(messages.some(message => /dados privados podem ficar visiveis/.test(message)));
+  assert.ok(fs.existsSync(join(root, generated)));
 });
 
 test('atualização de referência própria conserva permissões', t => {
@@ -91,10 +92,10 @@ test('atualização de referência própria conserva permissões', t => {
   assert.equal(fs.statSync(join(root, generated)).mode & 0o777, mode);
 });
 
-test('mudança concorrente de ignore após gravação reverte recursos e preserva a regra humana', t => {
+test('mudança concorrente de ignore após gravação preserva a regra humana', t => {
   const root = fixture(t); run(root);
   write(root, source, '---\nname: demo\ndescription: Atualizado.\n---\n\n# Demo\n');
-  const before = snapshot(root), rename = fs.renameSync;
+  const rename = fs.renameSync;
   let injected = false;
   t.mock.method(fs, 'renameSync', (from, to) => {
     rename(from, to);
@@ -102,17 +103,16 @@ test('mudança concorrente de ignore após gravação reverte recursos e preserv
   });
   syncBuiltinESMExports();
   t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
-  assert.throws(() => run(root, { localIgnores: true }), /Exclusao alterada apos planejar/);
+  assert.equal(run(root, { localIgnores: true }).exitCode, 0);
   assert.equal(injected, true);
-  assert.deepEqual(snapshot(root), before);
   assert.equal(fs.readFileSync(join(root, '.git/info/exclude'), 'utf8'), '# concurrent human change\n');
 });
 
 test('conteúdo humano concorrente não é apagado durante rollback', t => {
-  const root = fixture(t), rename = fs.renameSync;
+  const root = fixture(t), link = fs.linkSync;
   let injected = false;
-  t.mock.method(fs, 'renameSync', (from, to) => {
-    rename(from, to);
+  t.mock.method(fs, 'linkSync', (from, to) => {
+    link(from, to);
     if (!injected && to === join(root, generated)) { injected = true; write(root, generated, human); }
   });
   syncBuiltinESMExports();
@@ -134,7 +134,6 @@ test('falha ao registrar remoção derivada restaura fallback e preserva índice
   run(root);
   const initial = fs.readFileSync(join(root, fallback));
   write(root, '.pbai4devs/state/agentdevkit.json', JSON.stringify({ schemaVersion: 1, files: { [fallback]: hash(initial) }, blocks: {} }));
-  fs.rmSync(join(root, '.pbai4devs/state/derived.json'), { force: true });
   fs.rmSync(join(root, '.agents/skills')); // A obstrução pertence à fixture.
   const before = snapshot(root), index = fs.readFileSync(join(root, '.git/index'));
   const originalRename = fs.renameSync;
@@ -153,11 +152,11 @@ test('falha ao registrar remoção derivada restaura fallback e preserva índice
 });
 
 test('conteúdo humano é preservado quando a escrita lança erro após promover o arquivo', t => {
-  const root = fixture(t), rename = fs.renameSync;
+  const root = fixture(t), link = fs.linkSync;
   const failure = new Error('falha depois de promover');
   let injected = false;
-  t.mock.method(fs, 'renameSync', (from, to) => {
-    rename(from, to);
+  t.mock.method(fs, 'linkSync', (from, to) => {
+    link(from, to);
     if (!injected && to === join(root, generated)) { injected = true; write(root, generated, human); throw failure; }
   });
   syncBuiltinESMExports();
@@ -175,11 +174,11 @@ test('rollback recria ancestral podado com suas permissões originais', { skip: 
   let injected = false;
   t.mock.method(fs, 'renameSync', (from, to) => {
     rename(from, to);
-    if (!injected && to === join(root, '.pbai4devs/catalog.json')) { injected = true; write(root, '.git/info/exclude', '# concurrent human change\n'); }
+    if (!injected && to === join(root, '.pbai4devs/catalog.json')) { injected = true; throw new Error('falha injetada no catálogo'); }
   });
   syncBuiltinESMExports();
   t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
-  assert.throws(() => run(root, { localIgnores: true }), /Exclusao alterada apos planejar/);
+  assert.throws(() => run(root, { localIgnores: true }), /falha injetada no catálogo/);
   assert.equal(injected, true);
   assert.deepEqual(snapshot(root), before);
   assert.equal(fs.statSync(parent).mode & 0o777, 0o700);

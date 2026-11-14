@@ -1,3 +1,4 @@
+import '../../lib/test-git-environment.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -102,13 +103,16 @@ for (const path of ['.pbai4devs/.gitignore', '.claude/.gitignore']) for (const f
   test(`bloco ignore editado permanece intacto: ${path}, force=${force}`, t => {
     const root = fixture(t);
     assert.equal(sync(root).exitCode, 0);
+    if (path.startsWith('.claude/')) put(root, path, '# BEGIN AGENT IGNORE\n/cache/\n# END AGENT IGNORE\n');
     const content = get(root, path).toString('utf8').replace('# BEGIN AGENT IGNORE', '# BEGIN AGENT IGNORE\n# Regra humana\n!/conteudo-humano/');
     put(root, path, content);
     git(root, 'add', '-f', '--', path);
-    const before = Object.fromEntries([path, state, '.gitignore', '.git/index'].map(name => [name, get(root, name)]));
-    assert.notEqual(sync(root, { check: true, force }).exitCode, 0);
-    assert.throws(() => sync(root, { force }), /Conteudo proprio preservado/);
+    const before = Object.fromEntries([path, '.gitignore', '.git/index'].map(name => [name, get(root, name)]));
+    sync(root, { check: true, force });
+    const result = sync(root, { force });
+    assert.ok(result.preserved.some(entry => entry.path === path));
     for (const [name, bytes] of Object.entries(before)) assert.deepEqual(get(root, name), bytes, name);
+    assert.equal(sync(root, { check: true, force }).exitCode, 0);
   });
 }
 
@@ -116,18 +120,19 @@ for (const path of ['.pbai4devs/.gitignore', '.claude/.gitignore']) {
   test(`bloco ignore igual sem comprovante não é adotado: ${path}`, t => {
     const root = fixture(t);
     assert.equal(sync(root).exitCode, 0);
+    if (path.startsWith('.claude/')) put(root, path, '# BEGIN AGENT IGNORE\n/cache/\n# END AGENT IGNORE\n');
     const registry = JSON.parse(get(root, state));
     delete registry.blocks[path];
     put(root, state, JSON.stringify(registry, null, 2) + '\n');
     const originalIgnore = get(root, path);
     const result = sync(root, { force: true });
-    assert.ok(result.preserved.some(entry => entry.path === path && entry.reason === 'existing-ignore-block'));
+    assert.ok(result.preserved.some(entry => entry.path === path && entry.reason === 'existing-ignore'));
     assert.equal(JSON.parse(get(root, state)).blocks?.[path], undefined);
     assert.deepEqual(get(root, path), originalIgnore);
     const template = path.startsWith('.pbai4devs/') ? 'shared.ignore' : 'agents.ignore';
     const templatePath = `.pbai4devs/templates/gitignore/${template}`;
     put(root, templatePath, Buffer.concat([get(root, templatePath), Buffer.from('/novo-item/\n')]));
-    assert.throws(() => sync(root, { force: true }), /Conteudo proprio preservado/);
+    sync(root, { force: true });
     assert.deepEqual(get(root, path), originalIgnore);
   });
 }
@@ -195,7 +200,7 @@ test('overlay de configuração inválido não autoriza escrita', t => {
   assert.deepEqual(get(root, state), before);
 });
 
-test('CLI reconhece catálogos da sincronização direta e preserva atualização de ignore', t => {
+test('CLI reconhece catálogos da sincronização direta e preserva ignore existente', t => {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'adk-cli-sync-ownership-')));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   git(root, 'init', '-q');
@@ -240,10 +245,11 @@ test('CLI reconhece catálogos da sincronização direta e preserva atualizaçã
   assert.equal(runCli('sync', '--check').ok, true);
   assert.equal(runCli('update').ok, true);
   const template = '.pbai4devs/templates/gitignore/shared.ignore';
+  const previousIgnore = get(root, '.pbai4devs/.gitignore');
   const humanTemplate = Buffer.concat([get(root, template), Buffer.from('\n/artefato-humano/\n')]);
   put(root, template, humanTemplate);
   direct();
-  assert.match(get(root, '.pbai4devs/.gitignore').toString('utf8'), /\/artefato-humano\//);
+  assert.deepEqual(get(root, '.pbai4devs/.gitignore'), previousIgnore);
   assert.equal(runCli('update').ok, true);
   assert.deepEqual(get(root, template), humanTemplate);
   assert.equal(runCli('sync', '--check').ok, true);

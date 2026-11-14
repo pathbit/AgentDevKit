@@ -41,7 +41,8 @@ configuração local de agentes do próprio checkout, quando adotada de forma
 explícita. O projeto não precisa de todas as pastas de clientes na raiz.
 
 Edite fontes e templates, não os arquivos gerados. Testes e fixtures entram
-no Git; relatórios, caches e `examples/generated/` ficam locais. Antes de
+no Git; relatórios e caches ficam locais. Os exemplos gerados vão para uma pasta
+temporária fora de Git. Antes de
 enviar uma alteração, siga [contribuição](../../CONTRIBUTING.md) e a
 [revisão de entrega][review]. A [publicação](maintenance.md) reaproveita o
 artefato aprovado pelo CI.

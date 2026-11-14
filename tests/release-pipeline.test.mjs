@@ -1,3 +1,4 @@
+import '../.pbai4devs/scripts/lib/test-git-environment.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -76,7 +77,7 @@ test('check Git distingue fontes de saídas e não gera arquivos no checkout', t
   runPipeline('check', { root: directory, run(_root, args) { calls.push(args); } });
   assert.deepEqual(calls, [['.pbai4devs/scripts/verificar-recursos/SCRIPT.mjs', '--source-only']]);
   assert.equal(existsSync(join(directory, '.pbai4devs/catalog.json')), false);
-  const forbidden = ['.CoDeX/skills/probe/SKILL.md', 'CLAUDE.md', '.github/agents/probe.agent.md', '.github/prompts/probe.prompt.md', '.github/instructions/probe.md', '.github/skills/probe/SKILL.md', '.pbai4devs/catalog.json', '.pbai4devs/espelhos.conf', '.pbai4devs/state/agentdevkit.json', '.pbai4devs/state/derived.json', '.pbai4devs/estado/agentdevkit.json', '.pbai4devs/estado/derived.json', 'scripts/legacy.PS1'];
+  const forbidden = ['.CoDeX/skills/probe/SKILL.md', 'CLAUDE.md', '.github/agents/probe.agent.md', '.github/prompts/probe.prompt.md', '.github/instructions/probe.md', '.github/skills/probe/SKILL.md', '.github/rules/probe/RULE.md', '.github/RuLeS/probe/RULE.md', '.pbai4devs/catalog.json', '.pbai4devs/espelhos.conf', '.pbai4devs/state/agentdevkit.json', '.pbai4devs/state/derived.json', '.pbai4devs/estado/agentdevkit.json', '.pbai4devs/estado/derived.json', 'scripts/legacy.PS1'];
   for (const file of forbidden) {
     put(file); git('add', '--', file);
     assert.throws(() => guardSourceOnlyGit(directory), error => error.message.includes(JSON.stringify(file)), file);
@@ -89,9 +90,9 @@ test('perfis portáteis cobrem cada suíte uma vez e o comando local executa tod
   assert.deepEqual(portableProfiles['portable-selection'], ['client-selection.test.mjs']);
   assert.deepEqual(portableProfiles['portable-selection-codex'], ['client-selection-obstructions-codex.test.mjs']);
   assert.deepEqual(portableProfiles['portable-selection-all'], ['client-selection-obstructions-all.test.mjs']);
-  assert.deepEqual(portableProfiles['portable-projects'], ['client-ignore.test.mjs', 'native-coexistence.test.mjs', 'oss-preservation.test.mjs', 'project-matrix.test.mjs']);
+  assert.deepEqual(portableProfiles['portable-projects'], ['client-ignore.test.mjs', 'git-configuration-preservation.test.mjs', 'native-coexistence.test.mjs', 'oss-preservation.test.mjs', 'project-matrix.test.mjs']);
   assert.deepEqual(portableProfiles['portable-migration'], ['state-migration.test.mjs', 'preservation-lifecycle.test.mjs']);
-  const expected = ['adapters.test.mjs', 'cli.test.mjs', 'client-selection.test.mjs', 'client-selection-obstructions-codex.test.mjs', 'client-selection-obstructions-all.test.mjs', 'client-ignore.test.mjs', 'development-ecosystem.test.mjs', 'documentation-compatibility.test.mjs', 'github-packages.test.mjs', 'native-coexistence.test.mjs', 'next.test.mjs', 'managed-content.test.mjs', 'managed-content-helper.test.mjs', 'managed-toml.test.mjs', 'managed-preservation.test.mjs', 'security-ecosystem.test.mjs', 'source-layout.test.mjs', 'state-migration.test.mjs', 'preservation-lifecycle.test.mjs', 'file-modes.test.mjs', 'oss-preservation.test.mjs', 'project-matrix.test.mjs', 'release-pipeline.test.mjs', 'release-resilience.test.mjs', 'resource-coverage.test.mjs'].sort();
+  const expected = ['adapters.test.mjs', 'cli.test.mjs', 'client-selection.test.mjs', 'client-selection-obstructions-codex.test.mjs', 'client-selection-obstructions-all.test.mjs', 'client-ignore.test.mjs', 'git-configuration-preservation.test.mjs', 'development-ecosystem.test.mjs', 'documentation-compatibility.test.mjs', 'github-packages.test.mjs', 'native-coexistence.test.mjs', 'next.test.mjs', 'managed-content.test.mjs', 'managed-content-helper.test.mjs', 'managed-toml.test.mjs', 'managed-preservation.test.mjs', 'security-ecosystem.test.mjs', 'source-layout.test.mjs', 'state-migration.test.mjs', 'preservation-lifecycle.test.mjs', 'file-modes.test.mjs', 'oss-preservation.test.mjs', 'project-matrix.test.mjs', 'release-pipeline.test.mjs', 'release-resilience.test.mjs', 'resource-coverage.test.mjs'].sort();
   const combined = Object.values(portableProfiles).flat();
   assert.equal(new Set(combined).size, combined.length);
   assert.deepEqual(combined.toSorted(), expected);

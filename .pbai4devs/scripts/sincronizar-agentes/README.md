@@ -24,6 +24,8 @@ Comandos Gemini recebem o complemento dentro do `prompt` TOML.
 Metadados vêm da fonte ou do YAML nativo declarado no manifesto. Regras exigem
 `trigger` válido; `glob` exige `globs`. Origens nativas precisam pertencer ao
 catálogo; resultados, caches e pastas temporárias não entram nos índices.
+O tratamento dos gatilhos do Copilot e a migração conservadora de instruções
+antigas estão descritos em [Compatibilidade](../../COMPATIBILIDADE.md).
 
 `espelhos.conf` define `agente|pasta|layout`, pode ajustar cada tipo com
 `formato|pasta|tipo|formato` e registrar `descoberta|.agents|antigravity`.
@@ -40,11 +42,10 @@ Após a instalação, depende somente de Node e do hub local, sem o pacote npm.
 Ele respeita os clientes escolhidos, sem recriar os desmarcados. Para trocar
 a seleção, use `agentdevkit agents <lista>`; não edite o manifesto gerado.
 
-O bloco local em `.git/info/exclude` ignora as pastas de clientes por padrão;
-sem Git, a proteção fica pendente até `git init` e sincronização. Para incluir
-uma pasta, use uma exceção literal no `.gitignore` da raiz, como `!/.claude/`.
-Isso também vale para `.github` e `.vscode`, que podem conter arquivos humanos.
-Arquivos já rastreados e o índice não são alterados automaticamente.
+O kit preserva os ignores existentes, `.git/info/exclude` e o índice Git.
+Apontamentos e artefatos podem ficar visíveis; confira o status antes de
+adicionar arquivos. O diagnóstico informa arquivos privados expostos e blocos
+antigos no exclude que ainda possam afetar outras worktrees.
 Entradas novas usam os templates; hashes em `state/derived.json` permitem
 atualizar arquivos gerados e blocos separadamente, preservando alterações humanas.
 `--check` somente verifica; não altera o índice.

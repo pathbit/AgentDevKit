@@ -1,6 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { safeGitEnvironment, assertUnredirectedGitEnvironment, gitOutputLines, gitPathsOverlap } from '../.pbai4devs/scripts/lib/git-environment.mjs';
+import { attachErrorDiagnostics, collectErrorDiagnostics, explainUnsupportedHardlink } from '../.pbai4devs/scripts/lib/error-reporting.mjs';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, closeSync, existsSync, fstatSync, lstatSync, openSync, readFileSync, readSync, writeFileSync, readdirSync, mkdirSync, mkdtempSync, realpathSync, renameSync, rmSync, rmdirSync } from 'node:fs';
+import { chmodSync, closeSync, existsSync, fstatSync, linkSync, lstatSync, openSync, readFileSync, readSync, writeFileSync, readdirSync, mkdirSync, mkdtempSync, realpathSync, renameSync, rmSync, rmdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { synchronize, isReference } from '../.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs';
@@ -26,15 +28,14 @@ function stagedDivergences(root) {
     if (parent === anchor) break;
     anchor = parent;
   }
-  const prefix = portable(relative(anchor, root));
   let hasGitMarker = false;
   for (let current = anchor; ; current = dirname(current)) {
     if (stat(join(current, '.git'))) { hasGitMarker = true; break; }
     if (dirname(current) === current) break;
   }
-  const env = { ...process.env, GIT_OPTIONAL_LOCKS: '0' };
-  for (const key of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_COMMON_DIR', 'GIT_INDEX_FILE', 'GIT_EXTERNAL_DIFF']) delete env[key];
-  const run = args => spawnSync('git', ['-C', anchor, '-c', 'core.fsmonitor=false', ...args], {
+  const env = safeGitEnvironment();
+  let gitCwd = anchor;
+  const run = args => spawnSync('git', ['-C', gitCwd, '-c', 'core.fsmonitor=false', ...args], {
     env, timeout: 30000, windowsHide: true, maxBuffer: 16 * 1024 * 1024,
   });
   const repository = run(['rev-parse', '--is-inside-work-tree']);
@@ -43,9 +44,16 @@ function stagedDivergences(root) {
     if (repository.error?.code === 'ENOENT' || !repository.error && repository.status !== 0) return new Set();
   }
   if (repository.error || repository.status !== 0 || repository.stdout.toString('utf8').trim() !== 'true') fail('E_GIT', 'Unable to inspect Git worktree.');
+  const top = run(['rev-parse', '--show-toplevel']);
+  if (top.error || top.status !== 0) fail('E_GIT', 'Unable to inspect Git worktree root.');
+  const topLines = gitOutputLines(top.stdout.toString('utf8'));
+  if (topLines.length !== 1 || !topLines[0]) fail('E_GIT', 'Unable to inspect Git worktree root.');
+  gitCwd = topLines[0];
+  const prefix = portable(relative(gitCwd, root));
+  const prefixParts = prefix ? prefix.split('/') : [];
   // `git diff` against the worktree respects assume-unchanged and
   // skip-worktree, so compare the actual bytes to the index blobs instead.
-  const stagedResult = run(['diff', '--cached', '--no-renames', '--no-ext-diff', '--no-textconv', '--name-only', '--relative', '-z']);
+  const stagedResult = run(['diff', '--cached', '--no-renames', '--no-ext-diff', '--no-textconv', '--name-only', '-z']);
   const indexResult = run(['ls-files', '--stage', '-z']);
   if (stagedResult.error || stagedResult.status !== 0 || indexResult.error || indexResult.status !== 0) fail('E_GIT', 'Unable to inspect staged changes safely.');
   const decode = buffer => {
@@ -76,9 +84,12 @@ function stagedDivergences(root) {
   }
   const divergent = new Set();
   divergent.deleted = new Set();
+  divergent.stagedNames = new Set();
   for (const name of paths) {
-    if (prefix && !name.startsWith(`${prefix}/`)) continue;
-    const path = prefix ? name.slice(prefix.length + 1) : name;
+    const parts = name.split('/');
+    if (parts.length <= prefixParts.length || prefixParts.some((_part, index) => !gitPathsOverlap(prefixParts.slice(0, index + 1).join('/'), parts.slice(0, index + 1).join('/'), { root: gitCwd }))) continue;
+    const path = parts.slice(prefixParts.length).join('/');
+    divergent.stagedNames.add(path);
     const entry = entries.get(name);
     // Distinguish a staged deletion from unresolved index stages.
     if (!entries.has(name)) { divergent.add(path); divergent.deleted.add(path); continue; }
@@ -114,6 +125,7 @@ function stagedDivergences(root) {
 // Probe an existing directory only; do not create files during a dry run.
 function stagedContains(root, paths, path) {
   if (paths.has(path)) return true;
+  if ([...(paths.stagedNames || paths)].some(candidate => candidate !== path && gitPathsOverlap(candidate, path, { root, allowMissingTarget: true }))) return true;
   let current = root;
   while (!stat(current) && dirname(current) !== current) current = dirname(current);
   while (dirname(current) !== current) {
@@ -235,19 +247,45 @@ function write(root, path, content, mode) {
   if (mode !== undefined) chmodSync(target, mode);
 }
 
-function atomicWrite(root, path, content, mode, onPublished, beforePublish) {
+function atomicWrite(root, path, content, mode, onPublished, beforePublish, exclusive = false) {
   const file = safePath(root, path);
   mkdirSync(dirname(file), { recursive: true });
   const temporary = `${file}.agentdevkit-${randomUUID()}`;
+  let primaryError;
   try {
     writeFileSync(temporary, content, { flag: 'wx', ...(mode === undefined ? {} : { mode }) });
     if (mode !== undefined) chmodSync(temporary, mode);
     const writtenMode = stat(temporary).mode & 0o777;
+    const publishedStat = lstatSync(temporary, { bigint: true });
+    const publishedIdentity = publishedStat.ino ? { dev: publishedStat.dev, ino: publishedStat.ino } : null;
     beforePublish?.();
-    renameSync(temporary, file);
-    onPublished?.(writtenMode);
+    {
+      try { if (exclusive) linkSync(temporary, file); else renameSync(temporary, file); }
+      catch (error) {
+        if (exclusive) explainUnsupportedHardlink(error);
+        // A remote filesystem may report a failure after publishing. Record the
+        // action only when both names still identify our temporary inode.
+        let published = false;
+        try {
+          const source = exclusive ? lstatSync(temporary, { bigint: true }) : publishedStat, target = lstatSync(file, { bigint: true });
+          published = Boolean(!source.isSymbolicLink() && !target.isSymbolicLink() && source.ino && source.dev === target.dev && source.ino === target.ino);
+        } catch { /* Unverifiable outcomes are left untouched. */ }
+        if (published) onPublished?.(writtenMode, publishedIdentity);
+        else try { error.uncertainPaths = [...new Set([...(error.uncertainPaths || []), path])]; } catch { /* Keep the original error. */ }
+        throw error;
+      }
+    }
+    onPublished?.(writtenMode, publishedIdentity);
     return writtenMode;
-  } finally { rmSync(temporary, { force: true }); }
+  } catch (error) { primaryError = error; throw error; }
+  finally {
+    try { rmSync(temporary, { force: true }); }
+    catch (failure) {
+      const error = primaryError || failure;
+      try { error.cleanupFailures = [...(error.cleanupFailures || []), { path: temporary, message: failure.message }]; } catch { /* Keep the original error. */ }
+      if (!primaryError) throw failure;
+    }
+  }
 }
 
 function read(root, path) {
@@ -258,6 +296,7 @@ function read(root, path) {
 }
 
 function allowedManaged(path) {
+  if (isGeneratedOutput(path)) return false;
   if (['.pbai4devs/estado/README.md', '.pbai4devs/adapters/README.md'].includes(path)) return true;
   if (canonicalEntrypoint(path) || path === '.gitignore') return true;
   if (nativeMarkdown(path) || nativeToml(path)) return true;
@@ -516,6 +555,7 @@ function readDerivedState(target) {
 }
 
 export function planInstallation({ target, language = 'pt', mode = 'init', force = false, clients }) {
+  assertUnredirectedGitEnvironment();
   let previous = loadState(target);
   const installedState = previous;
   const migration = legacyStateMigration(target);
@@ -579,6 +619,7 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
     return recordPreserved(path, item.isFile() ? 'existing-file' : 'existing-directory');
   };
   const stage = realpathSync(mkdtempSync(join(tmpdir(), 'agentdevkit-')));
+  let stageSyncError, stageFailure;
   try {
     const existing = copyResources(join(target, '.pbai4devs'), join(stage, '.pbai4devs'));
     const bundled = mode === 'init' || mode === 'update' ? copyResources(join(packageRoot, '.pbai4devs'), join(stage, '.pbai4devs')) : [];
@@ -630,7 +671,8 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
     }
     let synchronized;
     try { synchronized = synchronize({ root: stage, force: true, localIgnores: false, generateEntrypoints: false, recordDerivedState: false, outputBlocked, output() {} }); }
-    finally { rmSync(join(stage, stagingState), { force: true }); rmSync(join(stage, stagingDerived), { force: true }); }
+    catch (error) { stageSyncError = error; throw error; }
+    rmSync(join(stage, stagingState), { force: true }); rmSync(join(stage, stagingDerived), { force: true });
     for (const canonical of active.entrypoints) {
       const name = entryPaths.get(canonical);
       if (preserveNative(name)) continue;
@@ -651,7 +693,13 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
     if (!existsSync(join(stage, '.pbai4devs/state/README.md'))) write(stage, '.pbai4devs/state/README.md', `---\ndescription: AgentDevKit state.\n---\n\n# AgentDevKit\n\n${text(language, 'state')}\n`);
     const unknown = new Set(existing.filter(path => !supplied.has(path) && !previous?.files[`.pbai4devs/${path}`] && !internal.has(path)));
     const paths = walk(stage, '', path => !path.split('/').includes('.agent-tests')).filter(path => !path.startsWith('.pbai4devs/') || !unknown.has(path.slice(11)));
-    const desired = new Map(paths.filter(path => !preserveNative(path)).map(path => [path, readFileSync(join(stage, path))]));
+    const desired = new Map(paths.filter(path => {
+      if (preserveNative(path)) return false;
+      if (path.endsWith('/.gitignore') && read(target, path) && !previous?.files[path] && !previous?.blocks[path] && !derivedBlocks[path]) {
+        recordPreserved(path, 'existing-ignore'); return false;
+      }
+      return true;
+    }).map(path => [path, readFileSync(join(stage, path))]));
     const migratedHuman = new Set();
     for (const item of migration?.files || []) {
       if (item.path === legacyStatePath) continue;
@@ -799,6 +847,7 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
     }
     const wholeRecords = [previous?.files || {}, derivedEntries, derivedFiles];
     for (const path of new Set(wholeRecords.flatMap(record => Object.keys(record)))) if (!desired.has(path)) {
+      if (path === '.gitignore' || path.endsWith('/.gitignore')) { if (read(target, path)) recordPreserved(path, 'existing-ignore'); continue; }
       if (migration && path.startsWith('.pbai4devs/estado/')) continue;
       if (path === '.gitignore') { recordPreserved(path, 'project-owned'); continue; }
       if (aliasedEntrypoint(path)) continue;
@@ -813,7 +862,7 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
       const path = canonicalEntrypoint(recordedPath) ? entryPaths.get(canonicalEntrypoint(recordedPath)) : recordedPath;
       if (desired.has(path)) continue;
       if (changes.some(change => change.path === path)) continue;
-      if (path === '.gitignore') continue;
+      if (path === '.gitignore' || path.endsWith('/.gitignore')) { if (read(target, path)) recordPreserved(path, 'existing-ignore'); continue; }
       const current = read(target, path); if (!current) continue;
       const source = current.toString('utf8');
       const block = path.endsWith('/.gitignore') ? extractBlock(source, '# BEGIN AGENT IGNORE', '# END AGENT IGNORE') : nativeToml(path) ? extractTomlManagedBlock(current) : extractManagedBlock(current);
@@ -911,10 +960,35 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
     // A conflict means ownership or the managed bytes could not be proven.
     // Backups do not authorize replacing user content, even with --force.
     return { target, language, mode, changes, conflicts: [...new Set(conflicts)].sort(), canApply: !conflicts.length && !untrack?.conflicts?.length && !localIgnoreCheck.missing.length, manifest, retiredRoots, ownedOutputs, untrack, localIgnore, localIgnoreCheck, migration, fallbackChecks: [...fallbackChecks], fallbackOwnedPaths: ownedPaths, preserved: [...preserved.values()].sort((a, b) => a.path.localeCompare(b.path)) };
-  } finally { rmSync(stage, { recursive: true, force: true }); }
+  } catch (error) { stageFailure = error; throw error; }
+  finally {
+    let cleanupFailure;
+    try { rmSync(stage, { recursive: true, force: true }); } catch (error) { cleanupFailure = error; }
+    if (stageFailure && stageFailure === stageSyncError) {
+      // Synchronizer diagnostics refer to the private stage, not the project.
+      // Once the stage is gone, report only the original operation failure.
+      let primary = stageFailure;
+      while (primary instanceof AggregateError && primary.errors?.length) primary = primary.errors[0];
+      const reported = new Error(cleanupFailure ? stageFailure.message : primary.message);
+      reported.code = stageFailure.code || primary.code;
+      reported.hardlinkUnsupported = stageFailure.hardlinkUnsupported || primary.hardlinkUnsupported;
+      if (cleanupFailure) {
+        const diagnostics = collectErrorDiagnostics(stageFailure);
+        reported.rollbackPreservedPaths = diagnostics.preservedPaths.map(path => resolve(stage, path));
+        reported.cleanupFailures = [...diagnostics.cleanupFailures.map(item => ({ ...item, path: resolve(stage, item.path) })), { path: stage, message: cleanupFailure.message }];
+        if (diagnostics.truncated) reported.diagnosticsTruncated = true;
+      }
+      throw reported;
+    }
+    if (cleanupFailure) {
+      if (stageFailure) stageFailure.cleanupFailures = [...(stageFailure.cleanupFailures || []), { path: stage, message: cleanupFailure.message }];
+      else { cleanupFailure.cleanupFailures = [{ path: stage, message: cleanupFailure.message }]; throw cleanupFailure; }
+    }
+  }
 }
 
 export function applyPlan(plan) {
+  assertUnredirectedGitEnvironment();
   if (!plan.canApply) fail('E_CONFLICT', text(plan.language, 'conflict'));
   assertLocalIgnoreUnchanged(plan.localIgnore);
   const { target } = plan;
@@ -990,9 +1064,9 @@ export function applyPlan(plan) {
         }
         rmSync(file, { force: true }); applied.push(signature);
       }
-      else atomicWrite(target, change.path, content, beforeModes.get(change.path) ?? change.mode, mode => {
-        signature.mode = mode; applied.push(signature);
-      }, () => assertOriginal(change.path));
+      else atomicWrite(target, change.path, content, beforeModes.get(change.path) ?? change.mode, (mode, identity) => {
+        signature.mode = mode; signature.identity = identity; applied.push(signature);
+      }, () => assertOriginal(change.path), before.get(change.path) === null);
     }
     if (plan.migration) {
       for (const directory of plan.migration.directories) {
@@ -1013,16 +1087,16 @@ export function applyPlan(plan) {
     const changesFallback = plan.changes.some(change => change.path === '.gitignore');
     // Metadata is committed last; its writer rolls back partial writes itself.
     const ignored = applyLocalIgnore(changesFallback ? planLocalIgnore(target, { outputs: plan.ownedOutputs }) : plan.localIgnore);
-    return { changed: Boolean(plan.changes.length || ignored.changed), backup: [...before.values()].some(Boolean) ? backup : null };
+    return { changed: Boolean(plan.changes.length || ignored.changed), backup: [...before.values()].some(Boolean) ? backup : null, localIgnorePending: ignored.pending };
   } catch (error) {
-    const rollbackErrors = [], preserved = [];
+    const rollbackErrors = [], preserved = [...(Array.isArray(error.uncertainPaths) ? error.uncertainPaths : [])];
     for (const removed of [...removedDirectories].sort((a, b) => a.path.length - b.path.length)) {
       let directory, current;
       try { directory = safePath(target, removed.path); current = stat(directory); }
       catch { preserved.push(removed.path); continue; }
       if (current) continue;
       try { mkdirSync(directory, { mode: removed.mode }); chmodSync(directory, removed.mode); }
-      catch (failure) { rollbackErrors.push(failure); }
+      catch (failure) { rollbackErrors.push(failure); preserved.push(removed.path); }
     }
     for (const appliedFile of applied.reverse()) {
       const { path } = appliedFile;
@@ -1030,6 +1104,7 @@ export function applyPlan(plan) {
         try {
           const file = safePath(target, path), info = stat(file);
           return appliedFile.hash === null ? !info : Boolean(info?.isFile()
+            && appliedFile.identity && (() => { const item = lstatSync(file, { bigint: true }); return !item.isSymbolicLink() && item.dev === appliedFile.identity.dev && item.ino === appliedFile.identity.ino; })()
             && (info.mode & 0o777) === appliedFile.mode && hash(readFileSync(file)) === appliedFile.hash);
         } catch { return false; }
       };
@@ -1043,18 +1118,18 @@ export function applyPlan(plan) {
         else rmSync(safePath(target, path), { force: true });
       } catch (failure) {
         if (failure.code === 'E_CHANGED') preserved.push(path);
-        else rollbackErrors.push(failure);
+        else { rollbackErrors.push(failure); preserved.push(path); }
       }
     }
     if (plan.migration) for (const directory of [...plan.migration.directories].sort((a, b) => b.path.length - a.path.length)) {
       const destination = directory.path.replace(/^\.pbai4devs\/estado/, '.pbai4devs/state');
       try { const file = safePath(target, destination); if (stat(file)?.isDirectory() && !readdirSync(file).length) rmdirSync(file); }
-      catch (failure) { if (!['ENOENT', 'ENOTEMPTY', 'EEXIST'].includes(failure.code)) rollbackErrors.push(failure); }
+      catch (failure) { if (!['ENOENT', 'ENOTEMPTY', 'EEXIST'].includes(failure.code)) { rollbackErrors.push(failure); preserved.push(destination); } }
     }
     if (preserved.length) {
       try { error.rollbackPreservedPaths = preserved; } catch { /* Preserve a exceção original. */ }
     }
-    if (rollbackErrors.length) throw Object.assign(new AggregateError([error, ...rollbackErrors], `${error.message}; rollback incompleto: ${rollbackErrors.map(failure => failure.message).join('; ')}`, { cause: error }), { code: error.code || 'E_OPERATION' });
+    if (rollbackErrors.length) throw attachErrorDiagnostics(Object.assign(new AggregateError([error, ...rollbackErrors], `${error.message}; rollback incompleto: ${rollbackErrors.map(failure => failure.message).join('; ')}`, { cause: error }), { code: error.code || 'E_OPERATION', hardlinkUnsupported: error.hardlinkUnsupported }));
     throw error;
   }
 }

@@ -1,9 +1,10 @@
+import '../../lib/test-git-environment.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { checkCommit, checkMerge, checkReview, prepareReview, sealReview, specCriteria } from '../SCRIPT.mjs';
 import { projectRoot } from '../../lib/runtime.mjs';
 
@@ -459,6 +460,48 @@ test('check-commit rejeita modo executavel staged apos o selo', t => {
   const index = readFileSync(join(f.root, '.git/index'));
   assert.throws(() => checkCommit([f.file], { root: f.root }), /modo preparado nao comprovado: src\/main\.mjs/);
   assert.deepEqual(readFileSync(join(f.root, '.git/index')), index);
+});
+
+test('fixtures isolam Git externo herdado antes de criar commits', t => {
+  const external = fixture(t);
+  external.git('add', '.');
+  external.git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid',
+    '-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=/dev/null', 'commit', '-q', '-m', 'test: base');
+  external.put('src/main.mjs', 'conteudo humano staged\n');
+  external.git('add', 'src/main.mjs');
+  const marker = join(external.root, 'fsmonitor-ran');
+  const injected = {};
+  if (process.platform !== 'win32') {
+    const quote = value => `'${value.replaceAll("'", "'\\''")}'`;
+    const hook = join(external.root, 'fsmonitor.sh');
+    writeFileSync(hook, `#!/bin/sh\nprintf triggered > ${quote(marker)}\n`);
+    Object.assign(injected, { GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'core.fsmonitor', GIT_CONFIG_VALUE_0: `sh ${quote(hook)}` });
+    const probe = spawnSync('git', ['ls-files'], { cwd: external.root, env: { ...process.env, ...injected }, encoding: 'utf8' });
+    assert.equal(probe.status, 0, probe.stderr);
+    assert.ok(existsSync(marker), 'O fsmonitor sintético precisa executar no controle.');
+    rmSync(marker);
+  }
+  const index = join(external.root, '.git/index');
+  const before = {
+    head: external.git('rev-parse', 'HEAD'),
+    index: readFileSync(index),
+    config: readFileSync(join(external.root, '.git/config')),
+    staged: external.git('diff', '--cached', '--binary'),
+  };
+  const env = { ...process.env, ...injected, GIT_DIR: join(external.root, '.git'), GIT_WORK_TREE: external.root, GIT_INDEX_FILE: index };
+  for (const key of Object.keys(env)) if (/^NODE_TEST_CONTEXT$/i.test(key)) delete env[key];
+  const run = spawnSync(process.execPath, ['--test', '--test-reporter=tap', '--test-name-pattern=^check-commit rejeita modo executavel staged apos o selo$', fileURLToPath(import.meta.url)], {
+    env, encoding: 'utf8', timeout: 90000, windowsHide: true,
+  });
+  assert.equal(run.status, 0, `${run.stdout || ''}${run.stderr || ''}${run.error || ''}`);
+  assert.match(run.stdout, /^ok 1 - check-commit rejeita modo executavel staged apos o selo\r?$/m);
+  assert.match(run.stdout, /^# tests 1\r?$/m);
+  assert.match(run.stdout, /^# pass 1\r?$/m);
+  assert.equal(external.git('rev-parse', 'HEAD'), before.head);
+  assert.deepEqual(readFileSync(index), before.index);
+  assert.deepEqual(readFileSync(join(external.root, '.git/config')), before.config);
+  assert.equal(external.git('diff', '--cached', '--binary'), before.staged);
+  assert.equal(existsSync(marker), false, 'O fsmonitor externo não deve executar durante a fixture.');
 });
 
 test('gate rejeita blob transformado por clean filter sem executar filtro na verificacao', t => {

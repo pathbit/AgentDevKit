@@ -7,11 +7,22 @@ import { text, normalizeLanguage, explainError } from './i18n.mjs';
 import { resolveTarget, loadState, planInstallation, applyPlan, inspect } from './install.mjs';
 import { getNextSteps } from './next.mjs';
 import { availableClients, normalizeClients } from './adapters/index.mjs';
+import { isBlockingLocalIgnore } from '../.pbai4devs/scripts/lib/gitignore.mjs';
+import { assertUnredirectedGitEnvironment } from '../.pbai4devs/scripts/lib/git-environment.mjs';
+import { collectErrorDiagnostics } from '../.pbai4devs/scripts/lib/error-reporting.mjs';
 
 function usage(message) { throw Object.assign(new Error(message), { code: 'E_ARGS', exitCode: 2 }); }
 function selectedClients(value) {
   try { return normalizeClients(value); }
   catch (error) { usage(error.message); }
+}
+
+function worktreeWarning(language) {
+  return {
+    pt: 'Configuracao Git e ignores existentes foram preservados; apontamentos, artefatos e dados privados podem ficar visiveis no Git. Confira o status antes de adicionar arquivos. Regras antigas podem afetar outras worktrees.',
+    en: 'Git configuration and existing ignore files were preserved; references, artifacts and private data may remain visible to Git. Check status before adding files. Older rules may affect other worktrees.',
+    es: 'Se conservaron la configuracion Git y los archivos ignore existentes; referencias, artefactos y datos privados pueden quedar visibles en Git. Revise el estado antes de agregar archivos. Reglas anteriores pueden afectar otras worktrees.',
+  }[language];
 }
 
 export function parseArgs(argv) {
@@ -59,11 +70,22 @@ export function parseArgs(argv) {
 function print(result, options, output) {
   if (options.json) { output.write(`${JSON.stringify(result)}\n`); return; }
   output.write(`${result.message}\n`);
+  const reviewPaths = [...new Set([...(result.error?.preservedPaths || []), ...(result.error?.cleanupFailures || []).map(item => item.path)])];
+  if (reviewPaths.length) {
+    const labels = { pt: 'Revise os caminhos preservados', en: 'Review preserved paths', es: 'Revise las rutas preservadas' };
+    output.write(`${labels[result.language]}: ${reviewPaths.slice(0, 5).join(', ')}${reviewPaths.length > 5 ? ` (+${reviewPaths.length - 5}; --json)` : ''}.\n`);
+  }
+  if (result.error?.diagnosticsTruncated) output.write(`${{ pt: 'Diagnósticos adicionais foram limitados.', en: 'Additional diagnostics were limited.', es: 'Se limitaron los diagnósticos adicionales.' }[result.language]}\n`);
   if (result.warnings?.length) for (const warning of result.warnings) output.write(`${warning}\n`);
   if (result.clients) output.write(`${text(result.language, 'clientsCurrent')}: ${result.clients.join(', ')}\n`);
   if (result.availableClients) output.write(`${text(result.language, 'clientsAvailable')}: ${result.availableClients.map(client => client.id).join(', ')}\n`);
   if (result.toolOutput) output.write(`${result.toolOutput.trimEnd()}\n`);
   if (result.preserved?.length) output.write(`${text(result.language, 'preserved')}: ${result.preserved.length}. ${text(result.language, 'preservedDetails')}\n`);
+  const pending = result.localIgnore?.pending || [];
+  const displayedPending = [...pending.filter(isBlockingLocalIgnore), ...pending.filter(item => !isBlockingLocalIgnore(item))];
+  for (const item of displayedPending.slice(0, 5)) output.write(`  ${item.code}: ${item.path}${item.pattern ? ` (${item.pattern})` : ''}\n`);
+  const morePending = { pt: 'use --json para detalhes', en: 'use --json for details', es: 'use --json para los detalles' }[result.language];
+  if (pending.length > 5) output.write(`  +${pending.length - 5}; ${morePending}.\n`);
   if (result.plan?.length) {
     const names = { pt: { create: 'criar', update: 'atualizar', remove: 'remover' }, en: { create: 'create', update: 'update', remove: 'remove' }, es: { create: 'crear', update: 'actualizar', remove: 'eliminar' } };
     const labels = {
@@ -96,6 +118,7 @@ export async function main(argv = process.argv.slice(2), context = {}) {
   try {
     options = parseArgs(argv);
     const informational = ['help', 'version'].includes(options.command);
+    if (['init', 'update', 'sync', 'doctor', 'agents', 'lang'].includes(options.command)) assertUnredirectedGitEnvironment();
     target = informational ? resolve(context.cwd || process.cwd(), options.target || '.')
       : resolveTarget(options.target || (options.command === 'init' ? options.positionals[0] : '.'), context.cwd || process.cwd());
     const previous = informational ? null : loadState(target);
@@ -126,9 +149,13 @@ export async function main(argv = process.argv.slice(2), context = {}) {
       if (found.installed && !found.issues.length) {
         const plan = planInstallation({ target, language, mode: 'sync' });
         result.preserved = plan.preserved;
+        if (plan.localIgnore.worktreeScope) (result.warnings ||= []).push(worktreeWarning(language));
         if (plan.localIgnore.status === 'no-git') { found.issues.push({ code: 'git-pending', path: '.git/info/exclude' }); result.warnings = [text(language, 'gitPending')]; }
         found.issues.push(...plan.changes.map(change => ({ code: 'outdated', path: change.path })));
         found.issues.push(...plan.localIgnoreCheck.missing.map(path => ({ code: 'unignored', path })));
+        const pending = plan.localIgnoreCheck.pending || [];
+        result.localIgnore = { pending };
+        found.issues.push(...pending.filter(isBlockingLocalIgnore));
         found.issues.push(...plan.localIgnoreCheck.trackedOutputs.map(path => ({ code: 'tracked-local-output', path })));
         if (plan.localIgnore.edits.length || plan.untrack?.paths.length) found.issues.push({ code: 'local-ignore', path: 'Git info/exclude' });
       }
@@ -153,23 +180,35 @@ export async function main(argv = process.argv.slice(2), context = {}) {
       result.plan = plan.changes.map(({ path, action }) => ({ path, action, conflict: plan.conflicts.includes(path) }));
       result.untrackedPaths = [...(plan.untrack?.paths || [])];
       result.localIgnore = { status: plan.localIgnore.status, edits: plan.localIgnore.edits.map(({ path, before }) => ({ path, action: before === null ? 'create' : 'update' })), missing: plan.localIgnoreCheck.missing, trackedOutputs: plan.localIgnoreCheck.trackedOutputs };
+      if (plan.localIgnore.worktreeScope) {
+        result.localIgnore.scope = 'worktree';
+        result.localIgnore.uncoveredOutputs = plan.localIgnore.unprotectedOutputs;
+        result.localIgnore.pending = plan.localIgnoreCheck.pending;
+        (result.warnings ||= []).push(worktreeWarning(language));
+      }
       if (plan.localIgnore.status === 'no-git') result.warnings = [text(language, 'gitPending')];
       if (plan.localIgnoreCheck.trackedOutputs.length) (result.warnings ||= []).push(`${text(language, 'trackedLocal')} ${plan.localIgnoreCheck.trackedOutputs.join(', ')}`);
-      if (plan.localIgnore.edits.length) result.plan.push({ path: 'Git info/exclude', action: 'update', conflict: false });
+      if (plan.localIgnore.edits.length) {
+        if (plan.localIgnore.worktreeScope) result.plan.push(...plan.localIgnore.edits.map(edit => ({ path: edit.path, action: 'create', conflict: false })));
+        else result.plan.push({ path: 'Git info/exclude', action: 'update', conflict: false });
+      }
       if (plan.untrack?.paths.length) result.plan.push({ path: 'Git index (generated files)', action: 'update', conflict: false });
       result.conflicts = plan.conflicts;
       const preview = options.dryRun || (options.command === 'sync' && options.check);
       if (!plan.canApply || preview) {
-        result.ok = plan.canApply && (!options.check || result.plan.length === 0 && plan.localIgnore.status !== 'no-git' && !plan.localIgnoreCheck.trackedOutputs.length);
-        result.message = text(language, plan.canApply ? 'plan' : 'conflict'); exitCode = result.ok ? 0 : 1;
+        result.ok = plan.canApply && (!options.check || result.plan.length === 0 && plan.localIgnore.status !== 'no-git' && !plan.localIgnoreCheck.trackedOutputs.length && !(plan.localIgnoreCheck.pending || []).some(isBlockingLocalIgnore));
+        result.message = text(language, !plan.canApply ? 'conflict' : options.check && !result.ok ? 'unhealthy' : 'plan'); exitCode = result.ok ? 0 : 1;
       } else {
         Object.assign(result, applyPlan(plan)); result.message = text(language, result.changed ? options.command : 'unchanged');
+        if (plan.localIgnore.worktreeScope) result.localIgnore.pending = result.localIgnorePending;
+        delete result.localIgnorePending;
         result.next = getNextSteps({ command: options.command, language, target, installed: true });
       }
     }
     print(result, options, output); return exitCode;
   } catch (error) {
-    const result = { ok: false, command: options.command || 'help', version: packageInfo.version, language, clients, target, message: explainError(language, error.code), error: { code: error.code || 'E_OPERATION', detail: error.message }, next: getNextSteps({ command: 'error', language, target, installed: existsSync(join(target, statePath)) || existsSync(join(target, legacyStatePath)) }) };
+    const diagnostics = collectErrorDiagnostics(error);
+    const result = { ok: false, command: options.command || 'help', version: packageInfo.version, language, clients, target, message: explainError(language, error.code, error), error: { code: error.code || 'E_OPERATION', detail: error.message, ...(diagnostics.preservedPaths.length ? { preservedPaths: diagnostics.preservedPaths } : {}), ...(diagnostics.cleanupFailures.length ? { cleanupFailures: diagnostics.cleanupFailures } : {}), ...(diagnostics.truncated ? { diagnosticsTruncated: true } : {}) }, next: getNextSteps({ command: 'error', language, target, installed: existsSync(join(target, statePath)) || existsSync(join(target, legacyStatePath)) }) };
     if (!options.json) result.message += ` (${error.code || 'E_OPERATION'})`;
     print(result, options, output); return error.exitCode || 1;
   }

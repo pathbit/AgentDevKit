@@ -89,12 +89,9 @@ Só clientes selecionados recebem derivações; uma pasta compartilhada permanec
 quando outro cliente precisa dela. Atualizar ou sincronizar respeita a seleção.
 Somente recursos agênticos têm apontamentos; templates, scripts, tools e estado
 permanecem exclusivamente em `.pbai4devs`.
-O sincronizador mantém a proteção Git das saídas locais e de `.pbai4devs`.
-Use os [modelos de ignore](templates/gitignore/TEMPLATE.md) para alterar a lista
-de fontes e derivados; em Git, os apontamentos usam exclusões locais.
-O `.gitignore` da raiz pertence ao projeto e não é alterado pelo kit.
-Sem Git, a proteção local fica pendente; após `git init`, sincronize antes
-de adicionar arquivos ao índice.
+O kit preserva os ignores existentes, a configuração Git e o índice. Saídas e
+apontamentos podem ficar visíveis; confira o status e use os [modelos de
+ignore](templates/gitignore/TEMPLATE.md) ao decidir regras para o projeto.
 Documentos de produto também ficam fora dos espelhos. O comando `sincronizar`
 reconstrói apontamentos com `--force`; `--check` verifica sem alterações.
 

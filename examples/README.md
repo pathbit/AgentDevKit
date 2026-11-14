@@ -21,9 +21,19 @@ node tests/example-workflows.mjs
 O comando instala a versão pública do `@pathbit/agentdevkit` indicada no
 `package.json` deste repositório, com os
 clientes Codex, Claude e Copilot em dois projetos Git novos. Cria uma pasta
-exclusiva em `examples/generated/workflows-*` e informa o caminho do relatório.
+exclusiva no diretório temporário do sistema, fora de Git, e informa o caminho
+do relatório.
 Nenhuma pasta anterior é apagada. Para testar outra versão publicada, passe o
 número da versão como argumento.
+
+Para validar um tarball local sem consultar o registry npm, use
+`node tests/example-workflows.mjs 0.0.30 --tarball /caminho/pacote.tgz`.
+Informe a versão exata do tarball; sem versão, usa a de `package.json`.
+O modo offline do npm não bloqueia rede de outros processos. `--output` aceita
+uma pasta nova com pai existente, fora de Git ou em `tmp/`, `temp/`,
+`.agent-tests/` e `examples/generated/` da origem, desde que ignorada e sem
+arquivos staged. `git add -f` ou mudanças concorrentes nas regras de ignore
+podem versionar os exemplos.
 
 1. Abra `REPORT.json` na pasta informada e escolha `api-tarefas` ou
    `cli-calculadora`.
@@ -36,16 +46,20 @@ número da versão como argumento.
 
 A API é exercitada em uma porta local temporária pelos testes; ela não persiste
 dados e não é um serviço pronto para produção. O código do gerador é versionado;
-projetos, caches e relatórios gerados são ignorados pelo Git do AgentDevKit.
+por padrão, projetos, caches e relatórios ficam fora do checkout do AgentDevKit.
 
 ### Reproduzir manualmente com um agente
 
-Na raiz do AgentDevKit, crie uma pasta ainda inexistente e instale o kit nela:
+Crie uma pasta temporária fora de qualquer repositório Git e entre nela. O comando
+abaixo imprime um caminho novo; use `cd` com o caminho retornado:
 
 ```sh
-mkdir -p examples/generated
-mkdir examples/generated/minha-api
-cd examples/generated/minha-api
+node -e "const fs=require('node:fs'),os=require('node:os'),p=require('node:path');console.log(fs.mkdtempSync(p.join(os.tmpdir(),'agentdevkit-manual-')))"
+```
+
+Confirme que a pasta escolhida não pertence a um repositório Git e execute:
+
+```sh
 git init
 npm init -y
 npx --yes @pathbit/agentdevkit init --agents codex,claude,copilot --lang pt --yes
@@ -91,7 +105,7 @@ npm run test:examples
 ```
 
 O primeiro comando prepara oito projetos; o segundo prepara e testa outros
-oito em uma pasta nova. Cada comando informa o caminho da execução.
+oito em uma pasta temporária nova fora de Git. Cada comando informa o caminho.
 Para executar apenas um cenário:
 
 ```sh
@@ -101,21 +115,17 @@ npm run test:examples -- --case somente-agentes
 As cópias mostram os clientes selecionados na origem e seus apontamentos:
 
 ```text
-examples/
-├── README.md                    guia versionado
-├── .gitignore                   ignora generated/
-└── generated/                   saídas locais
-    └── maturity-<id>/           uma execução independente
-        ├── README.md            índice dos cenários
-        ├── REPORT.json          prepared, passed ou failed
-        └── somente-agentes/
-            ├── .pbai4devs/      recursos compartilhados
-            ├── .claude/         apontamentos do Claude
-            ├── .codex/          apontamentos do Codex
-            ├── .cursor/         apontamentos do Cursor
-            ├── .github/         apontamentos do Copilot
-            ├── .vscode/         configuração do editor
-            └── .opencode/       apontamentos do OpenCode
+<pasta temporária>/agentdevkit-maturity-<id>/
+├── README.md                    índice dos cenários
+├── REPORT.json                  prepared, passed ou failed
+└── somente-agentes/
+    ├── .pbai4devs/              recursos compartilhados
+    ├── .claude/                 apontamentos do Claude
+    ├── .codex/                  apontamentos do Codex
+    ├── .cursor/                 apontamentos do Cursor
+    ├── .github/                 apontamentos do Copilot
+    ├── .vscode/                 configuração do editor
+    └── .opencode/               apontamentos do OpenCode
 ```
 
 Com todos os clientes selecionados, também aparecem `.agents`, `.agent`,

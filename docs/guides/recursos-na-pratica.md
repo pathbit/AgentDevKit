@@ -67,9 +67,9 @@ ser consultada ou alterada pela [CLI][cli].
 
 O código dos testes e as fixtures necessárias são versionáveis. Relatórios,
 capturas, downloads e resultados locais ficam fora do versionamento. O
-`.gitignore` da raiz pertence ao projeto; com Git inicializado, o kit mantém
-suas exclusões locais em `.git/info/exclude` e informa conflitos. Sem Git,
-execute a sincronização após `git init`, antes de adicionar arquivos ao índice.
+`.gitignore` da raiz pertence ao projeto; o kit preserva as regras Git
+existentes e informa arquivos que podem estar visíveis. Confira o status e as
+regras de ignore antes de adicionar arquivos ao índice.
 Veja [instalação][install] e [ferramentas e testes][tests].
 
 Para criar ou mudar um recurso, use o [guia de recursos][resources] e depois

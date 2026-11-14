@@ -1,3 +1,4 @@
+import '../../lib/test-git-environment.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -153,8 +154,14 @@ test('tipo alterado em caminho nativo registrado continua recusado antes de grav
     if (path === '.codex') put(root, path, 'Human root\n'); else put(root, `${path}/keep.txt`, 'Human directory\n');
     put(root, '.pbai4devs/state/agentdevkit.json', JSON.stringify({ schemaVersion: 1, files: { [owned]: 'a'.repeat(64) }, blocks: {} }));
     const before = snapshot(root);
-    assert.throws(() => run(root, { force: true }), /caminho gerenciado/);
-    assert.deepEqual(snapshot(root), before);
+    if (path === '.claude/.gitignore') {
+      const result = run(root, { force: true });
+      assert.ok(result.preserved.some(item => item.path === path));
+      assert.deepEqual(snapshot(root)[`${path}/keep.txt`], before[`${path}/keep.txt`]);
+    } else {
+      assert.throws(() => run(root, { force: true }), /caminho gerenciado/);
+      assert.deepEqual(snapshot(root), before);
+    }
   }
 });
 

@@ -42,7 +42,14 @@ base ou erro de parsing gera estado incompleto, nunca aprovação.
 Resultados redigidos ficam em `.agent-tests/security/<execução>/report.json`.
 Não incluem código, matches ou valores de segredos. JSON bruto e snapshots
 temporários são removidos. Um destino `--output` precisa ser novo, ignorado
-pelo Git e estar sob `.agent-tests/`.
+pelo Git e estar sob `.agent-tests/`. A pasta de trabalho
+`.agent-tests/security/` também precisa estar ignorada. A auditoria recusa
+redirecionamentos Git e caminhos que possam conflitar com o índice; ela não
+altera a configuração Git; desativa `fsmonitor` nas consultas e no ambiente
+fornecido aos scanners.
+Ao detectar troca da pasta de trabalho, a auditoria interrompe a limpeza e
+preserva o conteúdo encontrado. A verificação e a remoção não são atômicas;
+evite alterar essa pasta durante a execução.
 
 O snapshot aceita até 20 mil arquivos, 10 MiB por arquivo e 256 MiB no total.
 Uma base OSV pode ter até 512 MiB; ultrapassar os limites torna a execução

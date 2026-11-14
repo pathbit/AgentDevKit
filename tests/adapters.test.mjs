@@ -1,3 +1,4 @@
+import '../.pbai4devs/scripts/lib/test-git-environment.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
@@ -148,7 +149,10 @@ test('cada selecao filtra todos os tipos de linha e sincroniza somente suas raiz
       assert.ok(roots.includes(target.split('/')[0]), `${client}: ${row}`);
     }
     assert.equal(synchronize({ localIgnores: false, generateEntrypoints: false, root, output() {} }).exitCode, 0);
-    assert.deepEqual(readdirSync(root).filter(name => adapterRoots.includes(name)).sort(), [...roots].sort());
+    // A raiz auxiliar .vscode só tinha um ignore gerado; não há recurso a
+    // instalar nela nesta fixture, portanto não criamos a pasta vazia.
+    const generatedRoots = roots.filter(name => name !== '.vscode');
+    assert.deepEqual(readdirSync(root).filter(name => adapterRoots.includes(name)).sort(), [...generatedRoots].sort());
     assert.equal(synchronize({ localIgnores: false, generateEntrypoints: false, root, check: true, output() {} }).exitCode, 0);
     assert.deepEqual(writeAdapterManifest(root, { clients: client }).changed, []);
     assert.equal(manifest.includes('gitignore|.vscode'), client === 'copilot');

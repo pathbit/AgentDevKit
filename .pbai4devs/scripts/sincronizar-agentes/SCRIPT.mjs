@@ -1,17 +1,19 @@
 #!/usr/bin/env node
 // Planeja em memória; somente os caminhos gerenciados pelo manifesto são alterados.
-import { chmodSync, cpSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, rmdirSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, linkSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, rmdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, posix, resolve } from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
+import { safeGitEnvironment, assertUnredirectedGitEnvironment } from '../lib/git-environment.mjs';
+import { attachErrorDiagnostics, collectErrorDiagnostics, explainUnsupportedHardlink } from '../lib/error-reporting.mjs';
 import { requireNode, projectRoot, isMain } from '../lib/runtime.mjs';
 import { buildCatalog } from '../lib/catalog.mjs';
-import { resourcePath } from '../lib/resource-path.mjs';
+import { clientResourcePath, resourcePath } from '../lib/resource-path.mjs';
 import { adapterManifest, resolveAdapters } from '../lib/adapters.mjs';
 import { nativePathBoundary } from '../lib/native-paths.mjs';
 import { canonicalEntrypoint, resolveEntrypoint, entrypointReference, renderEntrypointImports, extractManagedBlock, mergeManagedContent, stripManagedContent } from '../lib/managed-content.mjs';
 import { extractTomlManagedBlock, mergeTomlContent, stripTomlContent } from '../lib/managed-toml.mjs';
-import { mergeGitignore, validateIgnoreClients, renderClientIgnore, isGeneratedOutput, planLocalIgnore, applyLocalIgnore, checkLocalIgnore, assertLocalIgnoreUnchanged, planUntrack, ignoreBegin, ignoreEnd } from '../lib/gitignore.mjs';
+import { mergeGitignore, validateIgnoreClients, renderClientIgnore, isGeneratedOutput, planLocalIgnore, applyLocalIgnore, checkLocalIgnore, assertLocalIgnoreUnchanged, planUntrack, isBlockingLocalIgnore, ignoreBegin, ignoreEnd } from '../lib/gitignore.mjs';
 import { stateDirectory } from '../lib/state-path.mjs';
 
 const marker = '<!-- gerado: sincronizar-agentes -->';
@@ -109,6 +111,26 @@ export function header(text) {
   return lines.slice(0, end + 1).join('\n') + '\n';
 }
 
+// Accept only unambiguous quoted scalars for applyTo and optional description.
+function copilotApplyTo(text) {
+  let front;
+  try { front = header(text); } catch { return null; }
+  const lines = front.trimEnd().split('\n').slice(1, -1);
+  const fields = {};
+  for (const line of lines) {
+    const match = line.match(/^(applyTo|description):\s*(.*?)\s*$/);
+    if (!match || Object.hasOwn(fields, match[1])) return null;
+    const value = match[2]; let parsed;
+    if (/^"(?:[^"\\]|\\.)*"$/.test(value)) {
+      try { parsed = JSON.parse(value); } catch { return null; }
+    } else if (/^'(?:[^']|'')*'$/.test(value)) parsed = value.slice(1, -1).replace(/''/g, "'");
+    else return null;
+    if (typeof parsed !== 'string' || !parsed.trim()) return null;
+    fields[match[1]] = parsed;
+  }
+  return fields.applyTo || null;
+}
+
 export function isReference(text) {
   let body = normalize(text);
   if (body.startsWith(tomlMarker + '\n')) {
@@ -149,6 +171,7 @@ export { resourcePath } from '../lib/resource-path.mjs';
 
 export function synchronize({ root = projectRoot, check = false, force = false, localIgnores = true, generateEntrypoints = true, recordDerivedState = true, outputBlocked, output = console.log } = {}) {
   requireNode();
+  assertUnredirectedGitEnvironment();
   root = realpathSync(resolve(root));
   const absolute = value => join(root, ...value.split('/'));
   function assertGitReadableForChanges() {
@@ -163,9 +186,8 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
       folder = parent;
     }
     if (!found) return false;
-    const env = { ...process.env };
-    for (const key of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_COMMON_DIR', 'GIT_INDEX_FILE']) delete env[key];
-    const probe = spawnSync('git', ['-C', root, 'rev-parse', '--is-inside-work-tree'], {
+    const env = safeGitEnvironment();
+    const probe = spawnSync('git', ['-C', root, '-c', 'core.fsmonitor=false', 'rev-parse', '--is-inside-work-tree'], {
       encoding: 'utf8', env, windowsHide: true, timeout: 20000,
     });
     if (probe.error || probe.status !== 0 || probe.stdout.trim() !== 'true') {
@@ -383,6 +405,7 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
   const managed = value => [...agents.keys()].some(agent => value.startsWith(agent + '/'));
   const built = buildCatalog(root);
   const sources = new Map(Object.keys(principals).flatMap(kind => built.catalog[kind].map(entry => [entry.path, kind])));
+  const rules = new Map(built.catalog.rules.map(rule => [rule.path, rule]));
   const entries = new Map();
   const folded = new Map();
   function add(target, source, metadata = '') {
@@ -409,7 +432,9 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
         add(target, source);
         continue;
       }
-      let path = resourcePath(source, kind, format);
+      const nativeTarget = `${agent}/${resourcePath(source, kind, format)}`;
+      const explicitMetadata = natives.some(native => native.target === nativeTarget && native.source === source && native.metadata);
+      let path = clientResourcePath(source, kind, format, agent, rules.get(source), explicitMetadata);
       if (agent === '.gemini' && kind === 'commands') path = path.replace(/\.md$/, '.toml');
       add(`${agent}/${path}`, source);
     }
@@ -425,6 +450,12 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
     if (target.startsWith('.gemini/commands/') && !geminiCommand) fail(`Comando Gemini exige TOML e origem COMMAND.md: ${target}`);
     if ([...auxiliary, 'workflows'].includes(scope) || ['readme.md', 'instructions.md'].includes(posix.basename(target).toLowerCase()) || (!/\.(md|mdc)$/i.test(target) && !geminiCommand)) fail(`Destino nativo nao permitido: ${target}`);
     if (geminiCommand && metadata) fail(`Comando Gemini usa metadados da origem, sem YAML separado: ${target}`);
+    if (target.startsWith('.github/instructions/') && target.endsWith('.instructions.md') && rules.has(source) && ['manual', 'model_decision'].includes(rules.get(source).trigger) && !metadata) {
+      const existing = stat(safe(target));
+      // A human's existing frontmatter remains authoritative. Creating or
+      // refreshing a native instruction without metadata would broaden it.
+      if (!existing?.isFile() || referenceFile(target)) fail(`Regra ${rules.get(source).trigger} exige YAML nativo explicito para ${target}.`);
+    }
     if (stat(absolute(source))?.isFile()) add(target, source, metadata);
     else missing.push(native);
   }
@@ -451,6 +482,7 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
   const changed = [];
   function planRemove(value, custom = false) {
     safe(value);
+    if (isGeneratedOutput(value)) { remember(value, 'local-output'); return; }
     if (!managed(value) || protectedPath(value)) fail(`Limpeza fora dos espelhos ou caminho protegido: ${value}`);
     // Directories, unowned files and edited references can contain project
     // data even when --force is used. Only a recorded, unchanged reference
@@ -467,7 +499,8 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
     if (preserveBoundary(value)) return;
     const info = stat(safe(value));
     if (!info) return;
-    const files = info.isDirectory() ? scan(value) : [value];
+    if (isGeneratedOutput(value, info.isDirectory())) { remember(value, 'local-output'); return; }
+    const files = info.isDirectory() ? scan(value, { prune: true }) : [value];
     if (info.isDirectory() && !files.length) { remember(value, 'existing-directory'); return; }
     let hasHumanContent = false;
     for (const file of files) {
@@ -532,8 +565,11 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
   const ignoreClients = validateIgnoreClients(JSON.parse(read(absolute(clientSettingsPath))));
   const ignoreTemplates = new Map([
     ['.pbai4devs/.gitignore', '.pbai4devs/templates/gitignore/shared.ignore'],
-    ...sorted(ignoreRoots).map(folder => [`${folder}/.gitignore`, '.pbai4devs/templates/gitignore/agents.ignore']),
   ]);
+  for (const folder of sorted(ignoreRoots)) {
+    const target = `${folder}/.gitignore`;
+    if (!preserveBoundary(target) && stat(safe(target))) remember(target, 'existing-ignore');
+  }
   for (const [target, template] of ignoreTemplates) {
     if (preserveBoundary(target)) continue;
     if (!stat(safe(template))?.isFile()) fail(`Template .gitignore ausente ou invalido: ${template}`);
@@ -543,6 +579,14 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
     let merged;
     const current = info ? readFileSync(absolute(target), 'utf8') : '';
     captureInput(target, info ? Buffer.from(current) : null);
+    if (info) {
+      const start = current.indexOf(ignoreBegin), finish = current.indexOf(ignoreEnd);
+      const blockHash = start >= 0 && finish > start ? createHash('sha256').update(current.slice(start, finish + ignoreEnd.length)).digest('hex') : null;
+      const fileHash = createHash('sha256').update(current).digest('hex');
+      if (blockHash && ([installed?.blocks?.[target], previousEntries.blocks?.[target]].includes(blockHash) || priorFiles[target] === fileHash)) managedBlocks[target] = blockHash;
+      else remember(target, 'existing-ignore');
+      continue;
+    }
     if (target !== '.pbai4devs/.gitignore' && info && !ownedPaths.has(target) && !current.split(/\r?\n/).some(line => [ignoreBegin, ignoreEnd].includes(line))) { remember(target); continue; }
     try {
       let patterns = readFileSync(absolute(template), 'utf8');
@@ -591,6 +635,29 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
       if (force) planRemove(target, true); else conflicts.add(target);
     }
     const sourceText = read(safe(source));
+    if (mixed && target.startsWith('.github/instructions/') && target.endsWith('.instructions.md') && rules.has(source)) {
+      const rule = rules.get(source);
+      let compatible = false;
+      if (metadata) {
+        try {
+          const native = read(safe(metadata));
+          compatible = copilotApplyTo(native) !== null && header(targetBytes.toString('utf8')) === header(native);
+        } catch { /* Preserve ambiguous human metadata. */ }
+      } else if (['always_on', 'glob'].includes(rule.trigger)) {
+        const actual = copilotApplyTo(targetBytes.toString('utf8'));
+        compatible = actual !== null && actual === (rule.trigger === 'glob' ? rule.globs : '**');
+      }
+      if (!compatible) {
+        // Existing owned blocks remain intact too: removing them would change
+        // human bytes. Report the collision for the user to review.
+        if (priorBlocks[target]) managedBlocks[target] = priorBlocks[target];
+        remember(target, 'copilot-scope-preserved');
+        conflicts.add(target);
+        protectedConflicts.add(target);
+        expected.set(target, targetBytes);
+        continue;
+      }
+    }
     if (target.startsWith('.gemini/commands/') && target.endsWith('.toml')) {
       if (/[{}]/.test(source)) fail(`Caminho incompativel com inclusao Gemini: ${source}`);
       const command = built.catalog.commands.find(entry => entry.path === source);
@@ -614,6 +681,10 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
       const rule = built.catalog.rules.find(entry => entry.path === source);
       if (!rule) fail(`Regra Cursor exige RULE.md: ${source}`);
       frontmatter = `---\ndescription: ${JSON.stringify(rule.trigger === 'manual' ? '' : rule.description)}\nalwaysApply: ${rule.trigger === 'always_on'}\n${rule.trigger === 'glob' ? `globs: ${JSON.stringify(rule.globs)}\n` : ''}---\n`;
+    } else if (target.startsWith('.github/instructions/') && target.endsWith('.instructions.md') && rules.has(source)) {
+      const rule = rules.get(source);
+      if (!['always_on', 'glob'].includes(rule.trigger) && !mixed) fail(`Regra ${rule.trigger} exige metadados nativos explicitos: ${target}`);
+      frontmatter = mixed ? '' : `---\napplyTo: ${JSON.stringify(rule.trigger === 'glob' ? rule.globs : '**')}\n---\n`;
     } else frontmatter = target.endsWith('.instructions.md') ? "---\napplyTo: '**'\n---\n" : header(sourceText);
     const title = sourceText.match(/^# .+$/m)?.[0];
     if (!title) fail(`Titulo ausente: ${source}`);
@@ -637,7 +708,7 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
       if (preserveBoundary(scope)) continue;
       const info = stat(safe(scope));
       if (!info) continue;
-      const files = scan(scope);
+      const files = scan(scope, { prune: true });
       if (!info.isDirectory()) { if (claimed(scope)) { if (force) planRemove(scope, true); else conflicts.add(scope); } else remember(scope); continue; }
       for (const file of files) if (!expected.has(file)) {
         if (priorBlocks[file]) continue;
@@ -650,6 +721,7 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
           const child = `${value}/${name}`;
           if (preserveBoundary(child)) continue;
           if (!stat(safe(child))?.isDirectory()) continue;
+          if (isGeneratedOutput(child, true)) continue;
           if (![...expected.keys()].some(target => target.startsWith(child + '/'))) cleanScope(child);
           directories(child);
         }
@@ -772,6 +844,12 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
   }));
   const hadGit = Object.keys(affectedHashes).length ? assertGitReadableForChanges() : false;
   const affectedIndex = planUntrack(root, affectedHashes);
+  for (const path of affectedIndex.paths) {
+    if (!removals.includes(path)) continue;
+    conflicts.add(path);
+    protectedConflicts.add(path);
+    remember(path, 'tracked-stale-file-preserved');
+  }
   for (const path of affectedIndex.conflicts) {
     conflicts.add(path);
     remember(path, 'staged-content-preserved');
@@ -801,15 +879,23 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
     let parent = posix.dirname(value);
     while (parent !== '.') { if (stat(safe(parent))?.isDirectory()) originalDirectories.add(parent); parent = posix.dirname(parent); }
   }
-  const touched = new Set(), createdDirectories = new Set();
-  const summary = { changed: changed.length + rootEntryChanges.length, stale: removals.length, conflicts: conflicts.size, missing: missing.length, legacy: legacy.length, registries: registries.size, gitignores: ignoreFiles.size, manifests: configExists ? 0 : 1, localIgnores: localStatus.changed + localStatus.missing.length + localStatus.trackedOutputs.length + (localStatus.status === 'no-git' ? 1 : 0) };
+  const touched = new Set(), createdDirectories = new Set(), uncertainWrites = new Set(), publishedIdentities = new Map();
+  const summary = { changed: changed.length + rootEntryChanges.length, stale: removals.length, conflicts: conflicts.size, missing: missing.length, legacy: legacy.length, registries: registries.size, gitignores: ignoreFiles.size, manifests: configExists ? 0 : 1, localIgnores: localStatus.changed + localStatus.missing.length + localStatus.trackedOutputs.length + (localStatus.pending?.filter(isBlockingLocalIgnore).length || 0) + (localStatus.status === 'no-git' ? 1 : 0) };
   const dirty = Object.values(summary).some(Boolean);
   output(`${summary.changed} desatualizadas; ${summary.stale} obsoletas; ${summary.conflicts} conflitos; ${summary.missing} origens nativas ausentes; ${summary.legacy} documentos antigos; ${summary.registries} indices derivados; ${summary.gitignores} gitignores; ${summary.localIgnores} exclusoes locais.`);
+  if (localPlan?.worktreeScope) output('Configuracao Git e ignores existentes preservados; apontamentos, artefatos e dados privados podem ficar visiveis. Confira o status antes de adicionar arquivos. Regras antigas podem afetar outras worktrees.');
+  const pending = localStatus.pending || [];
+  const displayedPending = [...pending.filter(isBlockingLocalIgnore), ...pending.filter(item => !isBlockingLocalIgnore(item))];
+  for (const item of displayedPending.slice(0, 12)) output(`${isBlockingLocalIgnore(item) ? 'Pendente' : 'Aviso'}: ${item.code}: ${item.path}`);
+  if (pending.length > 12) output(`+${pending.length - 12}; use agentdevkit sync --check --json para detalhes.`);
   assertFallbackChecks();
-  if (localStatus.status === 'no-git') output('Git ausente: apos git init, execute a sincronizacao para proteger os arquivos locais.');
+  if (localStatus.status === 'no-git') output('Git indisponivel ou nao inicializado: apos instalar e iniciar Git, execute sync --check para verificar arquivos visiveis.');
   const preservedPaths = sorted(preserved.keys()).map(path => preserved.get(path));
+  const copilotCollisions = preservedPaths.filter(item => item.reason === 'copilot-scope-preserved').map(item => item.path);
+  if (copilotCollisions.length) output(`Escopo Copilot humano diferente ou ambiguo; arquivos preservados para revisao: ${copilotCollisions.join(', ')}`);
   if (check) return { ...summary, ownedOutputs, managedBlocks, preserved: preservedPaths, exitCode: dirty ? 1 : 0 };
   if (affectedIndex.conflicts.length) fail(`Indice Git contem alteracoes proprias; arquivos preservados: ${sorted(affectedIndex.conflicts).join(', ')}`);
+  if (affectedIndex.paths.some(path => removals.includes(path))) fail(`Arquivo obsoleto rastreado no indice Git; remocao bloqueada: ${affectedIndex.paths.filter(path => removals.includes(path)).join(', ')}`);
   if (protectedConflicts.size) fail(`Conteudo proprio preservado; resolva a colisao antes de sincronizar: ${sorted(protectedConflicts).join(', ')}`);
   if (conflicts.size) fail(`Use --force para reconstruir somente os caminhos gerenciados: ${sorted(conflicts).join(', ')}`);
   if (localStatus.missing.length) fail(`Regras humanas reabrem derivados locais: ${localStatus.missing.join(', ')}`);
@@ -829,6 +915,11 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
     touched.add(boundary);
     let failure;
     try { action(); } catch (error) { failure = error; }
+    if (uncertainWrites.has(value)) {
+      currentHashes.set(boundary, 'conteudo-concorrente');
+      if (failure) throw failure;
+      fail(`Identidade da gravacao nao comprovada; conteudo preservado: ${value}`);
+    }
     let afterHash;
     try { afterHash = fingerprint(capture(boundary)); }
     catch (error) { currentHashes.set(boundary, 'conteudo-concorrente'); throw failure || error; }
@@ -845,10 +936,40 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
   function atomic(value, text) {
     const target = safe(value);
     const mode = stat(target)?.isFile() ? stat(target).mode & 0o777 : undefined;
+    const boundary = transactionRoots.find(item => value === item || value.startsWith(item + '/'));
+    let original = originals.get(boundary);
+    for (const segment of value.slice(boundary.length).split('/').filter(Boolean)) original = original?.children?.[segment];
+    const exclusive = !original;
     ensureDirectory(value);
     const temporary = `${target}.sync.${randomUUID()}`;
-    try { writeFileSync(temporary, text, { flag: 'wx' }); if (mode !== undefined) chmodSync(temporary, mode); renameSync(temporary, target); }
-    finally { rmSync(temporary, { force: true }); }
+    let primaryError;
+    try {
+      writeFileSync(temporary, text, { flag: 'wx' }); if (mode !== undefined) chmodSync(temporary, mode);
+      const created = lstatSync(temporary, { bigint: true });
+      const identity = created.ino ? { dev: created.dev, ino: created.ino } : null;
+      try {
+        if (exclusive) linkSync(temporary, target); else renameSync(temporary, target);
+      } catch (error) {
+        if (exclusive) explainUnsupportedHardlink(error);
+        let published = false;
+        try { const current = lstatSync(target, { bigint: true }); published = Boolean(identity && !current.isSymbolicLink() && current.dev === identity.dev && current.ino === identity.ino); } catch { /* Preserve when ambiguous. */ }
+        if (published) publishedIdentities.set(value, identity); else uncertainWrites.add(value);
+        throw error;
+      }
+      publishedIdentities.set(value, identity);
+      if (identity) {
+        let current; try { current = lstatSync(target, { bigint: true }); } catch { /* Preserve when ambiguous. */ }
+        if (!current || current.isSymbolicLink() || current.dev !== identity.dev || current.ino !== identity.ino) uncertainWrites.add(value);
+      }
+    } catch (error) { primaryError = error; throw error; }
+    finally {
+      try { rmSync(temporary, { force: true }); }
+      catch (failure) {
+        const error = primaryError || failure;
+        try { error.cleanupFailures = [...(error.cleanupFailures || []), { path: temporary, message: failure.message }]; } catch { /* Keep the original error. */ }
+        if (!primaryError) throw failure;
+      }
+    }
   }
   let backupRoot;
   if (backups.length) {
@@ -878,7 +999,7 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
     if (Object.keys(affectedHashes).length) {
       if (!assertGitReadableForChanges() && hadGit) fail('Git deixou de estar disponivel antes da sincronizacao; arquivos preservados.');
       const current = planUntrack(root, affectedHashes);
-      if (current.conflicts.length || current.index !== affectedIndex.index) fail('Indice Git mudou antes da sincronizacao; conteudo preservado.');
+      if (current.conflicts.length || current.index !== affectedIndex.index || current.paths.some(path => removals.some(value => path === value || path.startsWith(value + '/')))) fail('Indice Git mudou antes da sincronizacao; conteudo preservado.');
     }
     for (const value of removals) mutate(value, () => rmSync(safe(value), { recursive: true, force: true }), null);
     for (const value of changed) mutate(value, () => atomic(value, expected.get(value)), expected.get(value));
@@ -890,18 +1011,29 @@ export function synchronize({ root = projectRoot, check = false, force = false, 
     // Directory ownership is not recorded: keep even empty parent directories.
     if (localPlan) applyLocalIgnore(localPlan);
   } catch (error) {
-    const failures = [];
+    const failures = [], preservedPaths = [];
     for (const value of [...touched].reverse()) {
       try {
         if (fingerprint(capture(value)) !== currentHashes.get(value)) fail(`Mudanca concorrente preservada: ${value}`);
+        for (const [path, identity] of publishedIdentities) if (path === value || path.startsWith(value + '/')) {
+          const current = lstatSync(safe(path), { bigint: true });
+          if (!identity || current.isSymbolicLink() || current.dev !== identity.dev || current.ino !== identity.ino) fail(`Identidade concorrente preservada: ${path}`);
+        }
         restore(value, originals.get(value));
-      } catch (failure) { failures.push(failure); }
+      } catch (failure) { failures.push(failure); preservedPaths.push(value); }
     }
     for (const directory of sorted(createdDirectories).sort((a, b) => b.length - a.length)) {
       try { if (!originalDirectories.has(directory) && stat(safe(directory))?.isDirectory() && !readdirSync(absolute(directory)).length) rmdirSync(safe(directory)); }
-      catch (failure) { failures.push(failure); }
+      catch (failure) { failures.push(failure); preservedPaths.push(directory); }
     }
-    if (failures.length) throw new AggregateError([error, ...failures], `${error.message}; rollback incompleto: ${failures.map(failure => failure.message).join('; ')}`);
+    if (failures.length) {
+      const combined = new AggregateError([error, ...failures], `${error.message}; rollback incompleto: ${failures.map(failure => failure.message).join('; ')}`);
+      if (error.code) combined.code = error.code;
+      if (error.hardlinkUnsupported) combined.hardlinkUnsupported = true;
+      if (error.cleanupFailures?.length) combined.cleanupFailures = error.cleanupFailures;
+      if (preservedPaths.length) combined.rollbackPreservedPaths = preservedPaths;
+      throw attachErrorDiagnostics(combined);
+    }
     throw error;
   }
   return { ...summary, ownedOutputs, managedBlocks, preserved: preservedPaths, exitCode: 0, ...(backupRoot ? { backupRoot } : {}) };
@@ -925,5 +1057,13 @@ export function main(args = process.argv.slice(2)) {
 
 if (isMain(import.meta.url)) {
   try { process.exitCode = main(); }
-  catch (error) { console.error(error.message); process.exitCode = 2; }
+  catch (error) {
+    const message = String(error.message), limit = 1200;
+    console.error(message.length <= limit ? message : `${message.slice(0, limit)}… (${message.length - limit} caracteres adicionais)`);
+    const diagnostics = collectErrorDiagnostics(error);
+    const paths = [...new Set([...diagnostics.preservedPaths, ...diagnostics.cleanupFailures.map(item => item.path)])];
+    if (paths.length) console.error(`Revise os caminhos preservados: ${paths.slice(0, 5).join(', ')}${paths.length > 5 ? ` (+${paths.length - 5})` : ''}`);
+    if (diagnostics.truncated) console.error('Diagnosticos adicionais foram limitados.');
+    process.exitCode = 2;
+  }
 }

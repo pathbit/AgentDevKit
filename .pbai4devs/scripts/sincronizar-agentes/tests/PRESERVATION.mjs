@@ -1,12 +1,14 @@
+import '../../lib/test-git-environment.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { synchronize } from '../SCRIPT.mjs';
-import { indexContentMatches } from '../../lib/gitignore.mjs';
+import { indexContentMatches, planUntrack } from '../../lib/gitignore.mjs';
 
 const repository = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
 const original = '.pbai4devs/skills/projeto/criar-skill/SKILL.md';
@@ -196,7 +198,7 @@ test('sync atualiza apontamento staged equivalente em repositório com autocrlf'
   assert.equal(git(root, 'ls-files', '--stage', '-z'), index);
 });
 
-for (const target of ['.pbai4devs/state/derived.json', '.claude/.gitignore']) {
+for (const target of ['.pbai4devs/state/derived.json']) {
   test(`índice divergente impede atualização de ${target}`, t => {
     const root = fixture(t), generated = readFileSync(file(root, target));
     put(root, target, Buffer.concat([generated, Buffer.from('\nAlteração humana staged.\n')]));
@@ -214,6 +216,17 @@ for (const target of ['.pbai4devs/state/derived.json', '.claude/.gitignore']) {
     assert.equal(git(root, 'ls-files', '--stage', '-z'), index);
   });
 }
+
+test('ignore de cliente com índice divergente é preservado, mesmo com force', t => {
+  const root = fixture(t), target = '.claude/.gitignore';
+  put(root, target, '# conteúdo staged\n'); git(root, 'add', '-f', '--', target);
+  const index = git(root, 'ls-files', '--stage', '-z');
+  put(root, target, '# conteúdo de trabalho\n');
+  assert.equal(run(root, { check: true, force: true }).exitCode, 0);
+  run(root, { force: true });
+  assert.equal(readFileSync(file(root, target), 'utf8'), '# conteúdo de trabalho\n');
+  assert.equal(git(root, 'ls-files', '--stage', '-z'), index);
+});
 
 for (const options of [{ check: true }, { force: true }]) {
   test(`Git indisponível bloqueia limpeza em repositório (check=${Boolean(options.check)}, force=${Boolean(options.force)})`, t => {
@@ -281,6 +294,45 @@ test('índice divergente é protegido quando o projeto fica em subpasta do repos
   assert.throws(() => run(root, { force: true }), /indice/i);
   assert.deepEqual(readFileSync(file(root, pointer)), generated);
   assert.equal(git(outer, 'ls-files', '--stage', '-z'), index);
+});
+
+test('arquivo adicionado ao índice durante limpeza de projeto aninhado é preservado', t => {
+  const outer = mkdtempSync(join(tmpdir(), 'sync-parent-race-'));
+  t.after(() => rmSync(outer, { recursive: true, force: true }));
+  git(outer, 'init', '--quiet');
+  const root = join(outer, 'projeto'); mkdirSync(root);
+  populate(root);
+  const generated = readFileSync(file(root, pointer));
+  const state = readFileSync(file(root, '.pbai4devs/state/derived.json'));
+  rmSync(dirname(file(root, original)), { recursive: true });
+  let staged;
+  assert.throws(() => run(root, { force: true, output() {
+    if (staged !== undefined) return;
+    git(outer, 'add', '-f', '--', `projeto/${pointer}`);
+    staged = git(outer, 'ls-files', '--stage', '-z');
+  } }), /indice git mudou/i);
+  assert.notEqual(staged, undefined);
+  assert.deepEqual(readFileSync(file(root, pointer)), generated);
+  assert.deepEqual(readFileSync(file(root, '.pbai4devs/state/derived.json')), state);
+  assert.equal(git(outer, 'ls-files', '--stage', '-z'), staged);
+});
+
+test('plano de projeto aninhado registra somente a entrada selecionada do índice', t => {
+  const outer = mkdtempSync(join(tmpdir(), 'sync-parent-index-'));
+  t.after(() => rmSync(outer, { recursive: true, force: true }));
+  git(outer, 'init', '--quiet');
+  const root = join(outer, 'projeto'); mkdirSync(root);
+  populate(root);
+  put(outer, 'outro.txt', 'Outro arquivo\n');
+  git(outer, 'add', '-f', '--', `projeto/${pointer}`, 'outro.txt');
+  const generated = readFileSync(file(root, pointer));
+  const hash = createHash('sha256').update(generated).digest('hex');
+  const plan = planUntrack(root, { [pointer]: hash });
+  assert.deepEqual(plan.paths, [pointer]);
+  assert.deepEqual(plan.conflicts, []);
+  assert.match(plan.index, new RegExp(`\\tprojeto/${pointer}$`));
+  assert.equal(plan.index.includes('outro.txt'), false);
+  assert.equal(plan.index, git(outer, 'ls-files', '--stage', '--', `projeto/${pointer}`).trimEnd());
 });
 
 test('conteúdo humano na pasta e apontamento gerenciado editado sobrevivem à limpeza forçada', t => {

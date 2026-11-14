@@ -83,7 +83,8 @@ npm test
 npm run examples
 ```
 
-Os exemplos aparecem em `examples/generated/`. Para testar todos os cenários,
+Os exemplos ficam em uma pasta temporária fora de Git, informada pelo comando.
+Para testar todos os cenários,
 use `npm run test:examples`; para verificar o pacote, `npm run verify`.
 O [guia de desenvolvimento](docs/maintainers/development.md) explica a árvore
 e os comandos.

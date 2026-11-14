@@ -1,3 +1,4 @@
+import '../.pbai4devs/scripts/lib/test-git-environment.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
@@ -17,7 +18,7 @@ function fixture(t) {
   return { root, put, git };
 }
 
-test('ignore local cobre clientes; opt-in preserva instrucoes, indice e privacidade', t => {
+test('clientes visíveis preservam instruções e índice; credenciais são diagnosticadas', t => {
   const { root, put, git } = fixture(t);
   assert.equal(git('init', '--quiet').status, 0);
   put('.claude/skills/minha-skill/SKILL.md', '# Minha skill\n');
@@ -26,25 +27,29 @@ test('ignore local cobre clientes; opt-in preserva instrucoes, indice e privacid
   const outputs = ['.claude/skills/kit/SKILL.md', '.agents/agents/kit.md'];
   applyLocalIgnore(planLocalIgnore(root, { outputs }));
   assert.equal(checkLocalIgnore(planLocalIgnore(root, { outputs })).ok, true);
-  for (const path of [...outputs, '.agent-tests/result.json', '.PLAYWRIGHT-MCP/report.txt', '.claude/auth.json', '.claude/settings.local.json', '.claude/.LOCAL/cache', '.claude/nested/CREDENTIALS.JSON']) assert.equal(git('check-ignore', '--no-index', path).status, 0, path);
-  for (const path of ['.claude/skills/minha-skill/SKILL.md', '.claude/settings.json', '.agents/agents/meu-agente.md', '.claude/.env.example']) assert.equal(git('check-ignore', '--no-index', path).status, 0, path);
+  for (const path of [...outputs, '.agent-tests/result.json', '.PLAYWRIGHT-MCP/report.txt', '.claude/auth.json', '.claude/settings.local.json', '.claude/.LOCAL/cache', '.claude/nested/CREDENTIALS.JSON']) assert.equal(git('check-ignore', '--no-index', path).status, 1, path);
+  for (const path of ['.claude/skills/minha-skill/SKILL.md', '.claude/settings.json', '.agents/agents/meu-agente.md', '.claude/.env.example']) assert.equal(git('check-ignore', '--no-index', path).status, 1, path);
   assert.equal(git('check-ignore', '--no-index', 'src/auth.json').status, 1);
   put('.gitignore', '!/.claude/\n!/.agents/\n');
   applyLocalIgnore(planLocalIgnore(root, { outputs }));
   for (const path of ['.claude/skills/minha-skill/SKILL.md', '.claude/settings.json', '.agents/agents/meu-agente.md', '.claude/.env.example']) assert.equal(git('check-ignore', '--no-index', path).status, 1, path);
-  for (const path of ['.claude/auth.json', '.claude/settings.local.json', '.claude/.LOCAL/cache']) assert.equal(git('check-ignore', '--no-index', path).status, 0, path);
+  for (const path of ['.claude/auth.json', '.claude/settings.local.json', '.claude/.LOCAL/cache']) assert.equal(git('check-ignore', '--no-index', path).status, 1, path);
+  put('.claude/auth.json', '{"fixture":true}\n');
+  assert.ok(checkLocalIgnore(planLocalIgnore(root)).pending.some(item => item.code === 'private-file-visible' && item.path === '.claude/auth.json'));
   assert.equal(git('ls-files', '--stage', '-z').stdout, index);
 });
 
 test('migracao preserva regras humanas e permite opt-in de pasta inteira', t => {
   const { root, put, git } = fixture(t);
   assert.equal(git('init', '--quiet').status, 0);
-  const original = planLocalIgnore(root, { outputs: ['.claude/skills/kit/SKILL.md'] });
-  writeFileSync(join(root, '.git/info/exclude'), `# Regra humana\nminha-pasta/\n${original.first}\n/.claude/\n${original.last}\n`);
+  const original = '# Regra humana\nminha-pasta/\n# BEGIN AGENTDEVKIT LOCAL 0123456789abcdef\n/.claude/\n# END AGENTDEVKIT LOCAL 0123456789abcdef\n';
+  writeFileSync(join(root, '.git/info/exclude'), original);
   applyLocalIgnore(planLocalIgnore(root, { outputs: ['.claude/skills/kit/SKILL.md'] }));
   assert.equal(git('check-ignore', '.claude/settings.json').status, 0);
   assert.equal(git('check-ignore', '.claude/skills/kit/SKILL.md').status, 0);
   assert.ok(readFileSync(join(root, '.git/info/exclude'), 'utf8').startsWith('# Regra humana\nminha-pasta/\n'));
+  assert.deepEqual(readFileSync(join(root, '.git/info/exclude'), 'utf8'), original);
+  assert.ok(checkLocalIgnore(planLocalIgnore(root)).pending.some(item => item.code === 'shared-ignore-legacy'));
   put('.gitignore', '!/.claude/\n');
   applyLocalIgnore(planLocalIgnore(root, { outputs: ['.claude/skills/kit/SKILL.md'] }));
   assert.equal(git('check-ignore', '.claude/settings.json').status, 1);
@@ -52,13 +57,16 @@ test('migracao preserva regras humanas e permite opt-in de pasta inteira', t => 
   assert.ok(readFileSync(join(root, '.git/info/exclude'), 'utf8').startsWith('# Regra humana\nminha-pasta/\n'));
 });
 
-test('gitignore humano nao desativa protecao de credenciais locais do cliente', t => {
+test('gitignore humano é preservado e credenciais visíveis são informadas', t => {
   const { root, put, git } = fixture(t);
   assert.equal(git('init', '--quiet').status, 0);
   put('.claude/.gitignore', '# Regras humanas\nminha-pasta/\n');
   for (const path of ['.claude/auth.json', '.claude/private.local.json', '.claude/.LOCAL/cache/data']) put(path, 'private fixture\n');
   applyLocalIgnore(planLocalIgnore(root, { outputs: [] }));
-  for (const path of ['.claude/auth.json', '.claude/private.local.json', '.claude/.LOCAL/cache/data']) assert.equal(git('check-ignore', '--no-index', path).status, 0, path);
+  for (const path of ['.claude/auth.json', '.claude/private.local.json', '.claude/.LOCAL/cache/data']) {
+    assert.equal(git('check-ignore', '--no-index', path).status, 1, path);
+    assert.ok(checkLocalIgnore(planLocalIgnore(root)).pending.some(item => item.code === 'private-file-visible' && item.path === path));
+  }
   assert.equal(readFileSync(join(root, '.claude/.gitignore'), 'utf8'), '# Regras humanas\nminha-pasta/\n');
 });
 
@@ -71,7 +79,8 @@ test('projeto aninhado preserva exemplos publicos e isola regras privadas', t =>
   put('packages/example/.claude/.env', 'private fixture\n');
   applyLocalIgnore(planLocalIgnore(nested, { outputs: ['.claude/skills/kit/SKILL.md'] }));
   assert.equal(git('check-ignore', '--no-index', 'packages/example/.claude/.env.example').status, 1);
-  assert.equal(git('check-ignore', '--no-index', 'packages/example/.claude/.env').status, 0);
+  assert.equal(git('check-ignore', '--no-index', 'packages/example/.claude/.env').status, 1);
+  assert.ok(checkLocalIgnore(planLocalIgnore(nested)).pending.some(item => item.code === 'private-file-visible' && item.path === '.claude/.env'));
   assert.equal(git('check-ignore', '--no-index', 'packages/other/.claude/.env').status, 1);
 });
 
@@ -86,11 +95,11 @@ test('probes de privacidade nao atravessam raizes nativas simbolicas', t => {
   try { symlinkSync(external, join(root, '.claude'), process.platform === 'win32' ? 'junction' : 'dir'); }
   catch (error) { if (['EPERM', 'EACCES', 'ENOSYS'].includes(error.code)) { t.skip('Links indisponiveis.'); return; } throw error; }
   const plan = planLocalIgnore(root, { outputs: [] });
-  assert.equal(plan.artifactProbes.some(path => path.startsWith('.claude/')), false);
+  assert.equal(checkLocalIgnore(plan).pending.some(item => item.path.startsWith('.claude/')), false);
   assert.doesNotThrow(() => applyLocalIgnore(plan));
   const unsafe = planLocalIgnore(root, { outputs: ['.claude/skills/kit.md'] });
-  assert.ok(checkLocalIgnore(unsafe).missing.includes('.claude/skills/kit.md'));
-  assert.throws(() => applyLocalIgnore(unsafe), /Regras humanas/);
+  assert.ok(checkLocalIgnore(unsafe).pending.some(item => item.code === 'output-unavailable' && item.path === '.claude/skills/kit.md'));
+  assert.doesNotThrow(() => applyLocalIgnore(unsafe));
   assert.equal(readFileSync(join(external, 'auth.json'), 'utf8'), 'preserve outside\n');
   assert.equal(readFileSync(join(external, '.gitignore'), 'utf8'), '!.playwright-*/\n');
 });
@@ -119,7 +128,7 @@ test('excecao de diretorio nao atravessa juncao dentro do cliente', t => {
   try { symlinkSync(external, join(root, '.claude/logs'), process.platform === 'win32' ? 'junction' : 'dir'); }
   catch (error) { if (['EPERM', 'EACCES', 'ENOSYS'].includes(error.code)) { t.skip('Links indisponiveis.'); return; } throw error; }
   const plan = planLocalIgnore(root);
-  assert.equal(plan.artifactProbes.some(path => path.startsWith('.claude/logs/')), false);
+  assert.equal(checkLocalIgnore(plan).pending.some(item => item.path.startsWith('.claude/logs/')), false);
   assert.doesNotThrow(() => applyLocalIgnore(plan));
   assert.equal(readFileSync(join(external, 'auth.json'), 'utf8'), 'externo\n');
 });

@@ -18,6 +18,15 @@ function preflight(node, args, environment, expected = 0) {
   assert.equal(result.status, expected, `Preflight falhou (erro=${result.error?.code || 'nenhum'}, sinal=${result.signal || 'nenhum'}).`);
   return result;
 }
+function copyRuntime(executable) {
+  copyFileSync(process.execPath, executable);
+  if (process.platform === 'darwin') {
+    // Homebrew's Node executable resolves libnode relative to its own path.
+    const library = `libnode.${process.versions.modules}.dylib`;
+    const original = join(dirname(realpathSync(process.execPath)), '..', 'lib', library);
+    if (existsSync(original)) symlinkSync(realpathSync(original), join(dirname(executable), library));
+  }
+}
 function fixture(t) {
   assert.ok(tar, 'Native tar is required for archive integration tests.');
   mkdirSync(join(project, '.agent-tests'), { recursive: true });
@@ -116,7 +125,7 @@ test('preload síncrono verboso não impede localizar Node e npm nem altera sua 
   const executable = join(bin, process.platform === 'win32' ? 'node.exe' : 'node');
   const npm = join(bin, 'node_modules/npm/bin/npm-cli.js');
   mkdirSync(dirname(npm), { recursive: true });
-  copyFileSync(process.execPath, executable);
+  copyRuntime(executable);
   if (process.platform !== 'win32') chmodSync(executable, 0o755);
   writeFileSync(npm, "if (require.main!==module || process.argv.slice(2).join(' ')!=='--version' || process.execArgv.length!==0) process.exitCode=9; else console.log('11.0.0');\n");
   const preload = join(f.root, 'preload com espaços.cjs');
@@ -147,7 +156,7 @@ test('preloads assíncronos ou injeção no canal recusam verificação sem expo
   const executable = join(bin, process.platform === 'win32' ? 'node.exe' : 'node');
   const npm = join(bin, 'node_modules/npm/bin/npm-cli.js');
   mkdirSync(dirname(npm), { recursive: true });
-  copyFileSync(process.execPath, executable);
+  copyRuntime(executable);
   if (process.platform !== 'win32') chmodSync(executable, 0o755);
   const npmMarker = join(f.root, 'npm-preflight-negativo.txt');
   writeFileSync(npm, `require('node:fs').writeFileSync(${JSON.stringify(npmMarker)},'npm');console.log('11.0.0');\n`);
@@ -186,7 +195,7 @@ test('npm customizado que recusa contexto eval do probe falha fechado sem downlo
   const executable = join(bin, process.platform === 'win32' ? 'node.exe' : 'node');
   const npm = join(bin, 'node_modules/npm/bin/npm-cli.js');
   mkdirSync(dirname(npm), { recursive: true });
-  copyFileSync(process.execPath, executable);
+  copyRuntime(executable);
   if (process.platform !== 'win32') chmodSync(executable, 0o755);
   const npmMarker = join(f.root, 'npm-eval-preflight.txt'), marker = join(f.root, 'preload-eval-preflight.txt');
   writeFileSync(npm, `require('node:fs').writeFileSync(${JSON.stringify(npmMarker)},'npm');if(typeof process._eval==='string')process.exitCode=9;else console.log('11.0.0');\n`);
@@ -208,7 +217,7 @@ test('npm que escreve direto no fd 1 é reconhecido com e sem preload síncrono'
   const executable = join(bin, process.platform === 'win32' ? 'node.exe' : 'node');
   const npm = join(bin, 'node_modules/npm/bin/npm-cli.js');
   mkdirSync(dirname(npm), { recursive: true });
-  copyFileSync(process.execPath, executable);
+  copyRuntime(executable);
   if (process.platform !== 'win32') chmodSync(executable, 0o755);
   writeFileSync(npm, "if(require.main!==module || process.execArgv.length || process.argv.slice(2).join(' ')!=='--version')process.exitCode=9;else require('node:fs').writeSync(1,'11.0.0\\n');\n");
   const env = { ...process.env, PATH: bin, Path: bin, npm_execpath: '', NODE_OPTIONS: '' };
@@ -230,7 +239,7 @@ test('probe isolado preserva execArgv acrescentado por preload e remove apenas s
   const executable = join(bin, process.platform === 'win32' ? 'node.exe' : 'node');
   const npm = join(bin, 'node_modules/npm/bin/npm-cli.js');
   mkdirSync(dirname(npm), { recursive: true });
-  copyFileSync(process.execPath, executable);
+  copyRuntime(executable);
   if (process.platform !== 'win32') chmodSync(executable, 0o755);
   writeFileSync(npm, "if(require.main!==module || process.execArgv.join(' ')!=='--flag-do-preload')process.exitCode=9;else console.log('11.0.0');\n");
   const preload = join(f.root, 'preload.cjs');
@@ -247,7 +256,7 @@ test('npm customizado ESM é executado como entrada com argumentos originais', a
   const executable = join(bin, process.platform === 'win32' ? 'node.exe' : 'node');
   const npm = join(bin, 'node_modules/npm/bin/npm-cli.js');
   mkdirSync(dirname(npm), { recursive: true });
-  copyFileSync(process.execPath, executable);
+  copyRuntime(executable);
   if (process.platform !== 'win32') chmodSync(executable, 0o755);
   writeFileSync(join(bin, 'node_modules/npm/package.json'), '{"type":"module"}\n');
   writeFileSync(npm, "import {writeSync} from 'node:fs';if(process.argv.slice(2).join(' ')!=='--version' || process.execArgv.length)process.exitCode=9;else writeSync(1,'11.0.0\\n');\n");
@@ -357,7 +366,7 @@ test('preload que excede limite do stdout do npm falha sem rede nem cache', asyn
   const executable = join(bin, process.platform === 'win32' ? 'node.exe' : 'node');
   const fakeNpm = join(bin, 'node_modules/npm/bin/npm-cli.js');
   mkdirSync(dirname(fakeNpm), { recursive: true });
-  copyFileSync(process.execPath, executable);
+  copyRuntime(executable);
   if (process.platform !== 'win32') chmodSync(executable, 0o755);
   writeFileSync(preload, `const f=require('node:fs');f.writeFileSync(${JSON.stringify(marker)},'preload');if(process.argv[1] && process.argv[1].endsWith('npm-cli.js')){const b=Buffer.alloc(1024*1024,65);for(let n=0;n<b.length;)n+=f.writeSync(1,b,n,b.length-n)}\n`);
   writeFileSync(fakeNpm, `require('node:fs').writeFileSync(${JSON.stringify(npmMarker)},'npm');\n`);

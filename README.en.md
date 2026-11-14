@@ -13,7 +13,7 @@ Organize work with coding agents, from planning to verification. Keep skills,
 rules, commands and agent profiles in `.pbai4devs`; the kit generates the
 references each client can discover. Code lives in `src/`, product tests in
 `tests/`, and shared agent resources in `.pbai4devs/`. Generated client
-folders are ignored locally by default; projects can opt in to tracking them.
+folders may appear in Git; the kit preserves existing Git configuration.
 See the [supported clients][clients].
 
 ## Start in your project
@@ -65,8 +65,8 @@ The CLI supports `pt`, `en` and `es`; it saves your selection per project.
 ## Develop this repository
 
 Use Node.js 24+ with npm. Run `npm ci --ignore-scripts`, `npm run check`,
-`npm test` and `npm run examples`. Examples are generated locally in
-`examples/generated/`; `npm run test:examples` runs the scenarios.
+`npm test` and `npm run examples`. Examples are generated in a system temporary
+directory outside Git; `npm run test:examples` runs the scenarios.
 See the [development guide](docs/maintainers/development.md) for the project structure.
 
 Detailed guides are in Portuguese. Installing the kit prepares instructions;

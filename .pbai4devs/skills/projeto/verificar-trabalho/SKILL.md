@@ -18,7 +18,7 @@ as hipóteses e provas relevantes, no ambiente autorizado.
 2. **Comportamento:** execute testes relevantes, lint, tipos e build definidos
    no projeto; para automações dos agentes, execute `testar-infraestrutura`.
    Ao alterar catálogo, sincronizador, instalador ou cópia de projetos, execute
-   também `testar-maturidade run` e confira os cenários em `examples/generated/`.
+   também `testar-maturidade run` e confira os cenários na pasta temporária informada.
    Confira resultados e códigos de saída; não instale ferramentas
    ou invente metas de cobertura sem decisões do projeto.
 3. **Navegador:** obrigatório para alterações que afetem a web. Abra a URL real

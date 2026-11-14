@@ -47,7 +47,7 @@ e o comando `revisar-entrega` para fechar documentação, revisão e evidências
 
 Use o [comando sincronizar](commands/sincronizar/COMMAND.md) para reparar tudo;
 o script também aceita `--check` para só conferir.
-Os [exemplos de maturidade](scripts/testar-maturidade/README.md) são gerados em
-`examples/generated/`, com cópias portáveis da estrutura e relatórios ignorados.
+Os [exemplos de maturidade](scripts/testar-maturidade/README.md) ficam em uma
+pasta temporária fora de Git, com cópias da estrutura e relatórios locais.
 
 [externas]: external-skills/README.md

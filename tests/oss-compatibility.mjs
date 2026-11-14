@@ -3,10 +3,12 @@
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
+import { gitPathsOverlap } from '../.pbai4devs/scripts/lib/git-environment.mjs';
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, readlinkSync, realpathSync, writeFileSync } from 'node:fs';
 import { delimiter, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { findNpmCli } from '../.pbai4devs/scripts/lib/npm.mjs';
+import { createExampleOutput } from '../.pbai4devs/scripts/testar-maturidade/SCRIPT.mjs';
 
 const repositoryRoot = realpathSync.native(resolve(dirname(fileURLToPath(import.meta.url)), '..'));
 const hash = content => createHash('sha256').update(content).digest('hex');
@@ -50,23 +52,74 @@ function projects(options) {
   return selected;
 }
 
-function outputDirectory(requested) {
-  const path = resolve(repositoryRoot, requested || `tmp/oss-compatibility/${new Date().toISOString().replace(/[:.]/g, '-')}-${randomUUID().slice(0, 8)}`);
-  const rel = portable(relative(repositoryRoot, path));
+// Filesystems may fold Unicode or unusual names differently from JavaScript.
+// Treat ambiguous components as potential aliases instead of risking a staged
+// file that is absent from the worktree.
+export function mayAliasPath(left, right, { root, platform = process.platform } = {}) {
+  const a = left.split('/'), b = right.split('/');
+  for (let index = 0; index < Math.min(a.length, b.length); index++) {
+    if (a[index].normalize('NFD').toLowerCase() === b[index].normalize('NFD').toLowerCase()) continue;
+    const ordinary = part => /^[a-z0-9_.-]+$/i.test(part) && !part.endsWith('.');
+    // On Windows even an ordinary ASCII name may be an arbitrary 8.3 alias.
+    // A missing output ancestor is distinct only when the indexed entry exists
+    // and the shared parent is verified. Check each destination prefix so the
+    // existing helper can establish that fact for an intermediate component.
+    if (ordinary(a[index]) && ordinary(b[index])) {
+      if (platform !== 'win32') return false;
+      for (let length = 1; length <= b.length; length++) {
+        if (!gitPathsOverlap(left, b.slice(0, length).join('/'), { root, platform, allowMissingTarget: true })) return false;
+      }
+      return true;
+    }
+  }
+  return true;
+}
+
+function outputDirectory(requested, { root = repositoryRoot, environment = process.env } = {}) {
+  root = realpathSync.native(root);
+  const path = resolve(root, requested || `tmp/oss-compatibility/${new Date().toISOString().replace(/[:.]/g, '-')}-${randomUUID().slice(0, 8)}`);
+  const rel = portable(relative(root, path));
   assert.ok(rel.startsWith('tmp/') && rel !== 'tmp/' && !isAbsolute(rel), '--output deve ficar dentro de tmp/ do repositório.');
-  let current = repositoryRoot;
+  let current = root;
   for (const part of rel.split('/')) {
     current = join(current, part);
     const item = info(current);
     assert.ok(!item || item.isDirectory() && !item.isSymbolicLink(), 'Saída não pode atravessar arquivos ou links.');
   }
   assert.ok(!existsSync(path), 'A pasta de saída já existe; use uma execução nova.');
-  const top = spawnSync('git', ['-C', repositoryRoot, 'rev-parse', '--show-toplevel'], { encoding: 'utf8' });
+  assert.ok(!Object.entries(environment).some(([key, value]) => /^(?:GIT_DIR|GIT_WORK_TREE|GIT_COMMON_DIR|GIT_INDEX_FILE|GIT_CEILING_DIRECTORIES|GIT_DISCOVERY_ACROSS_FILESYSTEM|GIT_OBJECT_DIRECTORY|GIT_ALTERNATE_OBJECT_DIRECTORIES|GIT_NAMESPACE)$/i.test(key) && value), 'Saída local não permite repositório ou índice Git redirecionado.');
+  const env = { ...environment };
+  for (const key of Object.keys(env)) if (/^GIT_OPTIONAL_LOCKS$/i.test(key)) delete env[key];
+  env.GIT_OPTIONAL_LOCKS = '0';
+  const git = (args, options = {}) => {
+    const result = spawnSync('git', ['-c', 'core.fsmonitor=false', '-C', root, ...args], {
+      env, timeout: 30000, maxBuffer: 64 * 1024 * 1024, windowsHide: true, shell: false, ...options,
+    });
+    assert.ok(!result.error && !result.signal, 'Não foi possível verificar o Git da saída.');
+    return result;
+  };
+  const top = git(['rev-parse', '--show-toplevel'], { encoding: 'utf8' });
   assert.equal(top.status, 0, 'Execute a partir de um checkout Git do AgentDevKit.');
-  assert.equal(realpathSync.native(top.stdout.trim()), repositoryRoot, 'O Git encontrado não pertence ao AgentDevKit.');
-  const ignored = spawnSync('git', ['-c', 'core.excludesFile=', '-C', repositoryRoot, 'check-ignore', '--no-index', '-q', '--', rel + '/projects/probe'], { encoding: 'utf8' });
+  let topName = top.stdout.endsWith('\n') ? top.stdout.slice(0, -1) : top.stdout;
+  if (process.platform === 'win32' && topName.endsWith('\r')) topName = topName.slice(0, -1);
+  assert.equal(realpathSync.native(topName), root, 'O Git encontrado não pertence ao AgentDevKit.');
+  const target = `${rel}/`;
+  const ignored = git(['check-ignore', '--no-index', '--verbose', '-z', '--stdin'], { input: `${target}\0`, encoding: 'utf8' });
   assert.equal(ignored.status, 0, 'A saída deve estar ignorada pelo Git antes de clonar.');
+  const match = ignored.stdout.split('\0');
+  assert.ok(match.length === 5 && match[4] === '' && match[0] && /^[1-9]\d*$/.test(match[1]) && match[2] && !match[2].startsWith('!') && match[3] === target, 'Resposta Git inválida ao verificar ignore.');
+  const indexed = git(['ls-files', '--cached', '-z']);
+  assert.equal(indexed.status, 0, 'Não foi possível verificar o índice Git.');
+  let names;
+  try { names = new TextDecoder('utf-8', { fatal: true }).decode(indexed.stdout); }
+  catch { throw new Error('Índice Git contém caminhos que não podem ser verificados.'); }
+  assert.ok(!names || names.endsWith('\0'), 'Resposta Git inválida ao verificar índice.');
+  assert.ok(!names.split('\0').filter(Boolean).some(name => mayAliasPath(name, rel, { root })), 'A saída conflita com arquivo staged ou caminho ambíguo no índice Git.');
   return path;
+}
+
+function prepareOutput(path, root = repositoryRoot) {
+  return createExampleOutput({ sourceRoot: root, outputRoot: path });
 }
 
 function environment(output) {
@@ -559,9 +612,15 @@ export function main(args = process.argv.slice(2)) {
     assert.ok(options.tarball.endsWith('.tgz') && item?.isFile() && !item.isSymbolicLink(), '--tarball exige arquivo .tgz regular.');
     options.packageSource = { kind: 'local-tarball', path: options.tarball, sha256: hash(readFileSync(options.tarball)), expectedVersion: options.version };
   } else options.packageSource = { kind: 'public-registry', registry, package: `@pathbit/agentdevkit@${options.version}`, expectedVersion: options.version };
-  mkdirSync(output, { recursive: true });
+  const prepared = prepareOutput(output);
+  prepared.verifyOutput();
   const env = environment(output);
-  const results = selected.map(project => testProject(project, options, output, env, npm));
+  const results = selected.map(project => {
+    prepared.verifyOutput();
+    const result = testProject(project, options, output, env, npm);
+    prepared.verifyOutput();
+    return result;
+  });
   let archiveUnchanged = true;
   if (options.tarball) try { archiveUnchanged = hash(readFileSync(options.tarball)) === options.packageSource.sha256; }
   catch { archiveUnchanged = false; }
@@ -572,6 +631,7 @@ export function main(args = process.argv.slice(2)) {
       'Sem push, alteração de remotes após o clone, configuração global ou credenciais npm.',
       'Links para a raiz do projeto têm identidade, plano e ownership verificados, mas não toda a árvore de destino.',
       'Resultados limitados aos commits, clientes, sistema operacional e runtime registrados.'] };
+  prepared.verifyOutput();
   put(join(output, 'REPORT.json'), JSON.stringify(report, null, 2) + '\n');
   console.log(JSON.stringify({ status: report.status, projects: results.length, report: join(output, 'REPORT.json') }));
   return report.status === 'passed' ? 0 : 1;
@@ -579,7 +639,7 @@ export function main(args = process.argv.slice(2)) {
 
 // Shared by the opt-in documentation exercise; no helper runs on import.
 export {
-  parse as parseCompatibilityArgs, outputDirectory, environment, recorder,
+  parse as parseCompatibilityArgs, outputDirectory, prepareOutput, environment, recorder,
   fileSnapshot, stateJson, workspace, gitSnapshot, checkHumanExcludeBytes, linkedDirectoryPaths, checkOriginals, checkNativeOwnership, checkPreservedLinks, checkPreservedManagedEdit, parseCliResult, info, put, json, hash, portable,
   repositoryRoot, registry,
 };
