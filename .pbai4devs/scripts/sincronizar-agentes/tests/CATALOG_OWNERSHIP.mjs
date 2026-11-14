@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
-import { devNull, tmpdir } from 'node:os';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { synchronize } from '../SCRIPT.mjs';
@@ -16,13 +16,13 @@ const original = '.pbai4devs/skills/demo/SKILL.md';
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 const get = (root, path) => readFileSync(join(root, path));
 const put = (root, path, bytes) => { mkdirSync(dirname(join(root, path)), { recursive: true }); writeFileSync(join(root, path), bytes); };
-const gitEnvironment = () => ({ ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^GIT_/i.test(key))), GIT_CONFIG_GLOBAL: devNull, GIT_CONFIG_NOSYSTEM: '1', GIT_OPTIONAL_LOCKS: '0' });
+const gitEnvironment = root => ({ ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^GIT_/i.test(key))), GIT_CONFIG_GLOBAL: join(root, '.git-config-ausente'), GIT_CONFIG_NOSYSTEM: '1', GIT_OPTIONAL_LOCKS: '0' });
 const sync = (root, options = {}) => {
   // synchronize is synchronous and launches Git internally. Isolate only for
   // this call so an inherited GIT_INDEX_FILE/GIT_DIR cannot touch another repo.
   const saved = Object.fromEntries(Object.entries(process.env).filter(([key]) => /^GIT_/i.test(key)));
   for (const key of Object.keys(saved)) delete process.env[key];
-  Object.assign(process.env, { GIT_CONFIG_GLOBAL: devNull, GIT_CONFIG_NOSYSTEM: '1', GIT_OPTIONAL_LOCKS: '0' });
+  Object.assign(process.env, { GIT_CONFIG_GLOBAL: join(root, '.git-config-ausente'), GIT_CONFIG_NOSYSTEM: '1', GIT_OPTIONAL_LOCKS: '0' });
   try { return synchronize({ root, localIgnores: false, generateEntrypoints: false, output() {}, ...options }); }
   finally {
     for (const key of Object.keys(process.env)) if (/^GIT_/i.test(key)) delete process.env[key];
@@ -30,7 +30,7 @@ const sync = (root, options = {}) => {
   }
 };
 function git(root, ...args) {
-  const result = spawnSync('git', ['-C', root, ...args], { encoding: 'utf8', env: gitEnvironment() });
+  const result = spawnSync('git', ['-C', root, ...args], { encoding: 'utf8', env: gitEnvironment(root) });
   assert.equal(result.status, 0, result.stderr);
 }
 function fixture(t) {
@@ -207,7 +207,7 @@ test('CLI reconhece catálogos da sincronização direta e preserva atualizaçã
   const cliPath = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../bin/agentdevkit.mjs');
   function runCli(...args) {
     const result = spawnSync(process.execPath, [cliPath, ...args, '--target', root, '--json'], {
-      cwd: root, env: gitEnvironment(), encoding: 'utf8', timeout: 90000, maxBuffer: 16 * 1024 * 1024,
+      cwd: root, env: gitEnvironment(root), encoding: 'utf8', timeout: 90000, maxBuffer: 16 * 1024 * 1024,
     });
     let output; try { output = JSON.parse(result.stdout); } catch { assert.fail(`Resposta CLI inválida: ${result.stderr} ${result.stdout}`); }
     assert.equal(result.status, 0, `${args.join(' ')}: ${result.stderr} ${result.stdout}`);
@@ -215,7 +215,7 @@ test('CLI reconhece catálogos da sincronização direta e preserva atualizaçã
   }
   function direct() {
     const result = spawnSync(process.execPath, [join(root, '.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs')], {
-      cwd: root, env: gitEnvironment(), encoding: 'utf8', timeout: 90000,
+      cwd: root, env: gitEnvironment(root), encoding: 'utf8', timeout: 90000,
     });
     assert.equal(result.status, 0, result.stderr || result.stdout);
   }
