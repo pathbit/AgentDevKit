@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import childProcess, { spawnSync } from 'node:child_process';
 import { syncBuiltinESMExports } from 'node:module';
 import { createHash } from 'node:crypto';
 import test from 'node:test';
 import { projectRoot, requireNode } from '../../lib/runtime.mjs';
+import { adapterManifest } from '../../lib/adapters.mjs';
 import { copyAgentStructure, prepareExamples as prepare, registeredRoots, resourceTargets, SCENARIOS } from '../SCRIPT.mjs';
 
 // As fixtures pequenas isolam a cópia; o caso source-only usa o renderizador real.
@@ -31,6 +32,23 @@ function fixture(t) {
   put('.pbai4devs/scripts/lib/runtime.mjs', readFileSync(join(projectRoot, '.pbai4devs/scripts/lib/runtime.mjs')));
   put('.pbai4devs/scripts/lib/state-path.mjs', readFileSync(join(projectRoot, '.pbai4devs/scripts/lib/state-path.mjs')));
   return { root, put, outputRoot: join(root, 'examples/generated') };
+}
+
+function controlledSource(root) {
+  const source = join(root, 'controlled-source');
+  // Only four explicit resources; exclude local state and additional skills.
+  for (const path of ['.pbai4devs/skills/projeto/criar-skill/SKILL.md', '.pbai4devs/templates/gitignore/clients.json', '.pbai4devs/templates/gitignore/agents.ignore', '.pbai4devs/templates/gitignore/shared.ignore']) {
+    let current = projectRoot;
+    for (const part of path.split('/')) {
+      current = join(current, part);
+      assert.equal(lstatSync(current).isSymbolicLink(), false, `Fonte não pode ser link: ${path}`);
+    }
+    const destination = join(source, path);
+    mkdirSync(dirname(destination), { recursive: true });
+    copyFileSync(join(projectRoot, path), destination);
+  }
+  writeFileSync(join(source, '.gitignore'), 'node_modules/\n');
+  return source;
 }
 
 test('copia recursos e configurações, excluindo payloads, caches e segredos', t => {
@@ -115,19 +133,21 @@ test('troca de saída durante escrita é detectada, sem alegar atomicidade', t =
   const { root, outputRoot } = fixture(t);
   const target = join(outputRoot, 'race-output'), outside = mkdtempSync(join(root, 'race-outside-'));
   const sentinel = join(outside, 'sentinel'); writeFileSync(sentinel, 'Não alterar.\n');
+  const linkType = process.platform === 'win32' ? 'junction' : 'dir';
+  const probe = join(root, 'race-link-probe');
+  try { symlinkSync(outside, probe, linkType); }
+  catch (error) { if (['EPERM', 'EACCES', 'ENOTSUP'].includes(error.code)) { t.skip('Links simbólicos indisponíveis.'); return; } throw error; }
+  unlinkSync(probe);
   const original = fs.writeFileSync; let injected = false;
   try {
     fs.writeFileSync = (file, ...args) => {
       if (!injected && String(file) === join(target, '.maturity-suite.json')) {
-        renameSync(target, `${target}-moved`); symlinkSync(outside, target, 'dir'); injected = true;
+        renameSync(target, `${target}-moved`); symlinkSync(outside, target, linkType); injected = true;
       }
       return original.call(fs, file, ...args);
     };
     syncBuiltinESMExports();
     assert.throws(() => prepareExamples({ sourceRoot: root, outputRoot: target, scenarios: [SCENARIOS[0]], initializeGit: false }), /link|alterado/i);
-  } catch (error) {
-    if (!injected && ['EPERM', 'EACCES', 'ENOTSUP'].includes(error.code)) { t.skip('Links simbólicos indisponíveis.'); return; }
-    throw error;
   } finally { fs.writeFileSync = original; syncBuiltinESMExports(); }
   assert.equal(injected, true);
   assert.equal(readFileSync(sentinel, 'utf8'), 'Não alterar.\n');
@@ -342,7 +362,9 @@ test('checkout de fontes sem manifesto deriva clientes em memória', t => {
 test('prepare gera apontamentos reais mesmo sem pastas de clientes na origem', t => {
   const { root } = fixture(t);
   const sourceRoot = join(root, 'source-only');
-  copyAgentStructure(projectRoot, sourceRoot);
+  copyAgentStructure(controlledSource(root), sourceRoot);
+  // Model a clean source checkout regardless of ignored local developer data.
+  for (const path of ['.pbai4devs/espelhos.conf', '.pbai4devs/catalog.json', '.pbai4devs/skills.json', '.pbai4devs/agents.json', '.pbai4devs/rules.json', '.pbai4devs/state/agentdevkit.json', '.pbai4devs/state/derived.json', '.pbai4devs/estado/agentdevkit.json', '.pbai4devs/estado/derived.json']) rmSync(join(sourceRoot, path), { force: true });
   const roots = registeredRoots(sourceRoot);
   for (const client of roots) rmSync(join(sourceRoot, client), { recursive: true, force: true });
   const [example] = prepare({ sourceRoot, scenarios: [SCENARIOS[0]], initializeGit: false });
@@ -354,7 +376,10 @@ test('prepare gera apontamentos reais mesmo sem pastas de clientes na origem', t
 
 for (const withState of [false, true]) test(`prepare preserva catálogos humanos na cópia e na origem (estado=${withState})`, t => {
   const { root } = fixture(t), sourceRoot = join(root, `source-catalog-${withState}`);
-  copyAgentStructure(projectRoot, sourceRoot);
+  copyAgentStructure(controlledSource(root), sourceRoot);
+  // Source checkouts do not include generated manifests; provide this fixture
+  // explicitly instead of depending on ignored files in the developer's tree.
+  writeFileSync(join(sourceRoot, '.pbai4devs/espelhos.conf'), adapterManifest(sourceRoot, { clients: ['codex'] }));
   const state = join(sourceRoot, '.pbai4devs/state/agentdevkit.json');
   const derived = join(sourceRoot, '.pbai4devs/state/derived.json');
   rmSync(state, { force: true }); rmSync(derived, { force: true }); // Só cópias criadas nesta fixture.
