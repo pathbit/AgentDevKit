@@ -158,7 +158,10 @@ Não apague pastas inteiras para contornar um conflito.
 
 Recursos nativos humanos são preservados, inclusive com `--force` e nomes
 iguais aos do kit. Links humanos são tratados como caminhos opacos; o gerador
-não os atravessa. A CLI informa essas rotas em `preserved` no JSON.
+não os atravessa. No JSON, `preserved` lista caminhos humanos encontrados no
+planejamento ou em colisões; não inventaria rotas não examinadas, como um
+fallback não utilizado. A ausência de um caminho não prova que ele foi
+verificado ou preservado.
 
 Não edite ou versione `catalog.json`, `skills.json`, `rules.json` ou
 `agents.json`: são derivados locais. Configurações nativas e documentos

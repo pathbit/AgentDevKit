@@ -183,9 +183,11 @@ Arquivos mistos não passam a pertencer ao kit. Sua visibilidade para o Git
 também depende da regra aplicada à pasta do cliente.
 
 Links simbólicos preexistentes são preservados sem atravessá-los. O campo
-`preserved` informa rotas que continuam sob controle do projeto. Um formato
-não suportado ou um bloco alterado é informado; `--force` não permite apagar
-instruções humanas para reconstruir um apontamento.
+`preserved` lista caminhos próprios encontrados no planejamento ou em colisões,
+sem inventariar rotas não examinadas. A ausência de um caminho não prova que ele
+foi verificado ou preservado. Um formato não suportado ou um bloco alterado é
+informado; `--force` não permite apagar instruções humanas para reconstruir um
+apontamento.
 
 Essa preservação não autoriza trocar arquivos gerenciados por links. Links
 em caminhos já pertencentes ao kit, no hub, no estado ou em ferramentas

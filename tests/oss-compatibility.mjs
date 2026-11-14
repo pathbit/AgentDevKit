@@ -136,6 +136,12 @@ function fileSnapshot(root, path) {
   return { kind: 'file', mode, sha256: hash(readFileSync(join(root, path))) };
 }
 
+function stateJson(root, path, required = true) {
+  const snapshot = fileSnapshot(root, path);
+  assert.ok(snapshot.kind === 'file' || !required && snapshot.kind === 'missing', `Estado não é arquivo regular: ${path}`);
+  return snapshot.kind === 'missing' ? null : json(join(root, path));
+}
+
 function writeClone(root, path, content) {
   assert.ok(!isAbsolute(path) && !path.split('/').includes('..'), 'Escrita fora do clone.');
   let current = root;
@@ -159,7 +165,26 @@ function workspace(root) {
   visit(); return files;
 }
 
+// Check path components before reading or invoking Git. This detects existing
+// links but does not provide atomic protection against concurrent replacement.
+function validateGitSnapshotPaths(root) {
+  for (const [path, kind, required] of [['.git', 'directory', true], ['.git/info', 'directory', false],
+    ['.git/index', 'file', false], ['.git/config', 'file', true], ['.git/info/exclude', 'file', false]]) {
+    const item = info(join(root, path));
+    assert.ok(item ? !item.isSymbolicLink() && (kind === 'directory' ? item.isDirectory() : item.isFile()) : !required,
+      `Caminho Git inválido ou link simbólico: ${path}`);
+  }
+}
+
+function checkHumanExcludeBytes(root, original) {
+  validateGitSnapshotPaths(root);
+  const path = join(root, '.git/info/exclude'), item = info(path);
+  assert.ok(item?.isFile() && !item.isSymbolicLink(), 'Exclusões locais humanas foram removidas ou substituídas.');
+  assert.ok(readFileSync(path).subarray(0, original.length).equals(original), 'Exclusões locais humanas foram alteradas.');
+}
+
 function gitSnapshot(root, git) {
+  validateGitSnapshotPaths(root);
   const indexPath = join(root, '.git/index');
   const indexHash = () => {
     const item = info(indexPath);
@@ -180,6 +205,91 @@ function originalSnapshot(root, paths) {
   return Object.fromEntries(paths.map(path => [path, fileSnapshot(root, path)]));
 }
 
+function linkedDirectoryRoots(root, snapshot) {
+  const roots = new Set();
+  for (const [path, item] of Object.entries(snapshot)) if (item.kind === 'symlink') {
+    const destination = portable(relative(root, resolve(dirname(join(root, path)), item.target)));
+    // A link to the project root is preserved, but its entire target tree is
+    // not audited here: state/backups may be created outside the CLI plan.
+    if (!destination || destination === '..' || destination.startsWith('../') || isAbsolute(destination)
+        || snapshot[destination]?.kind !== 'directory') continue;
+    roots.add(destination);
+  }
+  return [...roots];
+}
+
+function linkedDirectoryPaths(root, snapshot) {
+  const paths = new Set();
+  for (const destination of linkedDirectoryRoots(root, snapshot)) for (const candidate of Object.keys(snapshot))
+    if (candidate === destination || candidate.startsWith(`${destination}/`)) paths.add(candidate);
+  return [...paths];
+}
+
+// Only destinations actually considered by the installer must be reported in
+// preserved. All pre-existing links must still remain untouched and unowned.
+function checkPreservedLinks({ root, before, treeBefore = before, after, state, derived = {}, outcome, requiredReports = [] }) {
+  assert.ok(Array.isArray(outcome?.plan) && Array.isArray(outcome?.preserved), 'Plano ou lista de preservados ausente.');
+  const pathWithin = (candidate, base) => {
+    const path = candidate.toLowerCase(), prefix = base.toLowerCase();
+    return path === prefix || path.startsWith(`${prefix}/`);
+  };
+  for (const [path, original] of Object.entries(before)) {
+    if (original.kind !== 'symlink') continue;
+    assert.deepEqual(after[path], original, `Link original alterado: ${path}`);
+    for (const [name, paths] of [['files', state.files], ['blocks', state.blocks], ...['entries', 'outputs', 'blocks', 'files', 'catalogs', 'removedFiles'].map(key => [`derived.${key}`, derived[key]])]) {
+      assert.ok(!Object.keys(paths || {}).some(owned => pathWithin(owned, path)), `Link humano foi adotado pelo kit em ${name}: ${path}`);
+    }
+    assert.ok(!(derived.removedBlocks || []).some(owned => pathWithin(owned, path)), `Link humano aparece no estado de remoção: ${path}`);
+    assert.ok(!outcome.plan.some(item => typeof item.path === 'string' && (pathWithin(item.path, path) || pathWithin(path, item.path))), `Plano altera link humano: ${path}`);
+    if (requiredReports.includes(path)) assert.ok(outcome.preserved.some(item => item.path === path && item.reason === 'symbolic-link'), `Link em colisão não foi informado: ${path}`);
+  }
+  if (!root) return;
+  const roots = linkedDirectoryRoots(root, before);
+  const plannedCreates = new Set(outcome.plan.filter(item => item.action === 'create' && typeof item.path === 'string').map(item => item.path));
+  const plannedUpdates = new Set(outcome.plan.filter(item => item.action === 'update' && typeof item.path === 'string').map(item => item.path));
+  const provesHumanBlock = (path, original, current) => {
+    const expected = state.blocks?.[path] || derived.blocks?.[path];
+    if (!expected || current.kind !== 'file' || current.mode !== original.mode || !root) return false;
+    if (JSON.stringify(fileSnapshot(root, path)) !== JSON.stringify(current)) return false;
+    const content = readFileSync(join(root, path)), first = Buffer.from('<!-- BEGIN AGENTDEVKIT -->'), last = Buffer.from('<!-- END AGENTDEVKIT -->');
+    const start = content.indexOf(first), end = content.indexOf(last, start + first.length);
+    if (start < 0 || end < 0 || content.indexOf(first, start + first.length) >= 0 || content.indexOf(last, end + last.length) >= 0
+        || !/^(?:\r\n|\n|\r)?$/.test(content.subarray(end + last.length).toString()) || hash(content.subarray(start, end + last.length)) !== expected) return false;
+    const prefix = content.subarray(0, start);
+    if (hash(prefix) === original.sha256) return true;
+    for (let removed = 1; removed <= Math.min(4, prefix.length); removed++)
+      if (/^[\r\n]+$/.test(prefix.subarray(prefix.length - removed).toString()) && hash(prefix.subarray(0, prefix.length - removed)) === original.sha256) return true;
+    return false;
+  };
+  for (const [path, item] of Object.entries(after)) {
+    if (!roots.some(destination => pathWithin(path, destination))) continue;
+    const previous = treeBefore[path];
+    if (previous) {
+      if (previous.kind === 'directory' || previous.kind === 'symlink') assert.deepEqual(item, previous, `Diretório ou link do alvo alterado: ${path}`);
+      else if (JSON.stringify(item) !== JSON.stringify(previous)) {
+        const ownedHashes = [state.files?.[path], derived.entries?.[path], derived.outputs?.[path], derived.files?.[path], derived.catalogs?.[path]];
+        const generatedUpdate = !before[path] && item.kind === 'file' && item.mode === previous.mode && ownedHashes.includes(item.sha256);
+        const humanUpdate = before[path]?.kind === 'file' && provesHumanBlock(path, before[path], item);
+        assert.ok(plannedUpdates.has(path) && (generatedUpdate || humanUpdate), `Arquivo do alvo alterado sem update comprovado: ${path}`);
+      }
+      continue;
+    }
+    const plannedFile = item.kind === 'file' && plannedCreates.has(path);
+    const plannedDirectory = item.kind === 'directory' && [...plannedCreates].some(file => file.startsWith(`${path}/`) && after[file]?.kind === 'file' && !treeBefore[file]);
+    assert.ok(plannedFile || plannedDirectory, `Entrada inesperada em alvo de link: ${path}`);
+  }
+  for (const [path, item] of Object.entries(treeBefore)) if (roots.some(destination => pathWithin(path, destination))) {
+    assert.ok(after[path], `Entrada removida de alvo de link: ${path}`);
+    if (item.kind !== 'file') assert.deepEqual(after[path], item, `Diretório ou link do alvo alterado: ${path}`);
+  }
+}
+
+function checkNativeOwnership(state, derived, paths) {
+  for (const path of paths) for (const [name, entries] of [['files', state.files], ...['entries', 'outputs', 'files', 'catalogs'].map(key => [`derived.${key}`, derived[key]])]) {
+    assert.ok(!Object.hasOwn(entries || {}, path), `Arquivo humano foi registrado como propriedade integral em ${name}: ${path}`);
+  }
+}
+
 // Only recognized instruction entrypoints or native resource paths may receive
 // managed Markdown blocks. A forged state entry must never allow editing code.
 function permitsManagedAppend(path) {
@@ -191,7 +301,7 @@ function permitsManagedAppend(path) {
 }
 
 function checkOriginals(root, baseline, git) {
-  const state = info(join(root, statePath)) ? json(join(root, statePath)) : null;
+  const state = stateJson(root, statePath, false);
   for (const [path, original] of Object.entries(baseline.files)) {
     const current = fileSnapshot(root, path);
     if (JSON.stringify(current) === JSON.stringify(original)) continue;
@@ -221,6 +331,9 @@ function checkOriginals(root, baseline, git) {
   }
   const now = gitSnapshot(root, git);
   for (const field of ['head', 'index', 'indexSha256', 'stagedDiff', 'remotes', 'configSha256']) assert.equal(now[field], baseline.git[field], `Git ${field} alterado.`);
+  if (baseline.excludeOriginal !== undefined) {
+    checkHumanExcludeBytes(root, Buffer.from(baseline.excludeOriginal, 'base64'));
+  }
 }
 
 // A human edit turns a previously managed file into user-owned content. The
@@ -278,6 +391,17 @@ function testProject(project, options, output, env, npm) {
     git('fetch', '--depth=1', '--no-tags', '--no-recurse-submodules', 'origin', project.commit);
     git('checkout', '--quiet', '--detach', project.commit);
     assert.equal(git('rev-parse', 'HEAD').trim().toLowerCase(), project.commit.toLowerCase());
+    validateGitSnapshotPaths(directory);
+    const excludePath = join(directory, '.git/info/exclude'), excludeInfo = info(excludePath);
+    assert.ok(!excludeInfo || excludeInfo.isFile() && !excludeInfo.isSymbolicLink(), 'Exclusões locais devem ser arquivo regular.');
+    const existingExclude = excludeInfo ? readFileSync(excludePath) : Buffer.alloc(0);
+    const excludeOriginal = Buffer.concat([existingExclude, existingExclude.length && existingExclude.at(-1) !== 10 ? Buffer.from('\n') : Buffer.alloc(0), Buffer.from('# AgentDevKit OSS human exclusion probe.\n/oss-human-private/\n')]);
+    put(excludePath, excludeOriginal);
+    const checkHumanExclude = () => {
+      validateGitSnapshotPaths(directory);
+      git('check-ignore', '--no-index', '--quiet', '--', 'oss-human-private/probe');
+    };
+    checkHumanExclude();
     const trackedPaths = git('ls-files', '-z').split('\0').filter(Boolean);
     const nativeRoot = project.clients.some(client => ['all', 'claude'].includes(client)) ? '.claude' : '.opencode';
     const nativeSkill = `${nativeRoot}/skills/oss-preexisting-${project.id}/SKILL.md`;
@@ -298,7 +422,7 @@ function testProject(project, options, output, env, npm) {
       git('add', '--', path);
     }
     paths = [...trackedPaths, nativeSkill, nativeReference, nativeAgent, nativeConfig];
-    baseline = { files: originalSnapshot(directory, paths), git: gitSnapshot(directory, git), trackedPaths, nativeSentinel: nativeSkill, nativeReference };
+    baseline = { files: originalSnapshot(directory, paths), git: gitSnapshot(directory, git), excludeOriginal: excludeOriginal.toString('base64'), trackedPaths, nativeSentinel: nativeSkill, nativeReference };
     put(join(evidence, 'baseline.json'), JSON.stringify(baseline, null, 2) + '\n');
     result.originalFiles = trackedPaths.length; result.nativeSentinel = nativeSkill; result.nativeReference = nativeReference; result.checkout = baseline.git.head; checked('checkout-pinned');
     const cli = (name, args, expected = 0) => {
@@ -309,6 +433,11 @@ function testProject(project, options, output, env, npm) {
     cli('package-version', ['--version']);
     const init = ['init', '--target', directory, '--agents', project.clients.join(','), '--lang', 'en', '--yes'];
     const dryBefore = { workspace: workspace(directory), git: gitSnapshot(directory, git) };
+    // Include existing files in internal link targets without ever traversing
+    // the link; originalSnapshot enforces ordinary, non-link ancestors.
+    paths = [...new Set([...paths, ...linkedDirectoryPaths(directory, dryBefore.workspace)])];
+    baseline.files = originalSnapshot(directory, paths);
+    put(join(evidence, 'baseline.json'), JSON.stringify(baseline, null, 2) + '\n');
     put(join(evidence, 'dry-run-before.json'), JSON.stringify(dryBefore, null, 2) + '\n');
     try { cli('init-dry-run', [...init, '--dry-run']); }
     finally {
@@ -319,13 +448,30 @@ function testProject(project, options, output, env, npm) {
     checked('dry-run-read-only');
     const installed = cli('init', init);
     result.preserved = installed.preserved;
-    const state = json(join(directory, statePath));
+    const state = stateJson(directory, statePath);
     assert.ok(!Object.hasOwn(state.files, nativeAgent), 'Agente humano foi registrado como propriedade integral do kit.');
     assert.ok(state.blocks?.[nativeAgent] || installed.preserved?.some(item => item.path === nativeAgent), 'Agente humano em colisão não foi integrado nem preservado.');
-    for (const path of ['CLAUDE.md', 'README.md', '.codex/skills']) if (fileSnapshot(directory, path).kind === 'symlink') {
-      assert.ok(installed.preserved.some(item => item.path === path), `Link preservado não foi informado: ${path}`);
-      assert.ok(!Object.keys(state.files).some(owned => owned === path || owned.startsWith(path + '/')), `Link humano foi adotado pelo kit: ${path}`);
-    }
+    const verifyLinks = (treeBefore, outcome, requiredReports = []) => {
+      const currentState = stateJson(directory, statePath), currentDerived = stateJson(directory, '.pbai4devs/state/derived.json', false) || {};
+      checkNativeOwnership(currentState, currentDerived, [nativeSkill, nativeReference, nativeAgent, nativeConfig]);
+      checkPreservedLinks({ root: directory, before: dryBefore.workspace, treeBefore, after: workspace(directory),
+        state: currentState, derived: currentDerived, outcome, requiredReports });
+      checkHumanExcludeBytes(directory, excludeOriginal);
+      checkHumanExclude();
+    };
+    const protectedCli = (name, args) => {
+      const before = workspace(directory), outcome = cli(name, args);
+      verifyLinks(before, outcome);
+      return outcome;
+    };
+    const protectedRun = (name, args) => {
+      const before = workspace(directory);
+      run(name, process.execPath, args, directory);
+      // O script standalone não retorna um plano estruturado; exija que as
+      // árvores dos alvos permaneçam estáveis nas chamadas desta prova.
+      verifyLinks(before, { plan: [], preserved: [] });
+    };
+    verifyLinks(dryBefore.workspace, installed, ['README.md', ...(project.clients.some(client => ['all', 'claude'].includes(client)) ? ['CLAUDE.md'] : [])]);
     if (project.clients.includes('all') || project.clients.includes('codex')) {
       assert.equal(fileSnapshot(directory, '.agents/skills/projeto/configurar-projeto/SKILL.md').kind, 'file', 'Rota nativa do Codex não recebeu a skill.');
     }
@@ -340,43 +486,43 @@ function testProject(project, options, output, env, npm) {
     }
     checked('artifact-ignore-checks', result.failures.length ? 'failed' : 'passed');
     cli('doctor', ['doctor', '--target', directory]);
-    cli('sync-check', ['sync', '--check', '--target', directory]); checked('doctor-and-sync');
-    run('standalone-sync-check', process.execPath, ['.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs', '--check'], directory);
+    protectedCli('sync-check', ['sync', '--check', '--target', directory]); checked('doctor-and-sync');
+    protectedRun('standalone-sync-check', ['.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs', '--check']);
     run('installed-resource-check', process.execPath, ['.pbai4devs/scripts/verificar-recursos/SCRIPT.mjs'], directory);
     checkOriginals(directory, baseline, git); checked('standalone-sync-preserves-agents');
     const stable = workspace(directory);
-    cli('init-repeat', init); cli('update-repeat', ['update', '--target', directory, '--yes']);
+    protectedCli('init-repeat', init); protectedCli('update-repeat', ['update', '--target', directory, '--yes']);
     assert.deepEqual(workspace(directory), stable, 'Repetição alterou a instalação.');
     checkOriginals(directory, baseline, git); checked('idempotent');
-    cli('update-force-preservation', ['update', '--target', directory, '--yes', '--force']);
-    run('standalone-force-preservation', process.execPath, ['.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs', '--force'], directory);
+    protectedCli('update-force-preservation', ['update', '--target', directory, '--yes', '--force']);
+    protectedRun('standalone-force-preservation', ['.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs', '--force']);
     assert.deepEqual(workspace(directory), stable, 'Sincronização forçada alterou configuração preservada ou instalação estável.');
     checkOriginals(directory, baseline, git); checked('force-preserves-existing-agents');
     const skillPath = `.pbai4devs/skills/projeto/oss-user-${project.id}/SKILL.md`;
     assert.ok(!existsSync(join(directory, skillPath)), 'Skill de teste já existe.');
     const skill = `---\nname: oss-user-${project.id}\ndescription: User-owned OSS compatibility fixture.\n---\n\n# OSS user skill\n\nPreserve this user-owned resource.\n`;
     writeClone(directory, skillPath, skill);
-    cli('update-user-skill', ['update', '--target', directory, '--yes']);
+    protectedCli('update-user-skill', ['update', '--target', directory, '--yes']);
     assert.equal(readFileSync(join(directory, skillPath), 'utf8'), skill);
     cli('doctor-user-skill', ['doctor', '--target', directory]);
-    cli('sync-user-skill', ['sync', '--check', '--target', directory]);
+    protectedCli('sync-user-skill', ['sync', '--check', '--target', directory]);
     checkOriginals(directory, baseline, git); checked('user-skill-preserved');
     const managed = '.pbai4devs/rules/qualidade/RULE.md', original = readFileSync(join(directory, managed));
-    const beforeState = json(join(directory, statePath));
+    const beforeState = stateJson(directory, statePath);
     assert.equal(beforeState.files[managed], hash(original), 'Probe exige arquivo comprovadamente gerenciado.');
     try {
       const edited = Buffer.concat([original, Buffer.from('\n<!-- Deliberate human edit. -->\n')]);
       writeClone(directory, managed, edited);
       const before = workspace(directory), beforeGit = gitSnapshot(directory, git);
-      const outcome = cli('update-human-edit', ['update', '--target', directory, '--yes']);
+      const outcome = protectedCli('update-human-edit', ['update', '--target', directory, '--yes']);
       const after = workspace(directory), afterGit = gitSnapshot(directory, git);
-      checkPreservedManagedEdit({ before, after, beforeGit, afterGit, managed, edited, outcome, beforeState, state: json(join(directory, statePath)) });
-      const repeat = cli('update-human-edit-repeat', ['update', '--target', directory, '--yes']);
+      checkPreservedManagedEdit({ before, after, beforeGit, afterGit, managed, edited, outcome, beforeState, state: stateJson(directory, statePath) });
+      const repeat = protectedCli('update-human-edit-repeat', ['update', '--target', directory, '--yes']);
       assert.equal(repeat.changed, false, 'Repetição alterou a instalação com edição humana.');
       assert.deepEqual(workspace(directory), after, 'Repetição alterou arquivos preservados ou estado.');
       assert.deepEqual(gitSnapshot(directory, git), afterGit, 'Repetição alterou o Git.');
       cli('doctor-human-edit', ['doctor', '--target', directory]);
-      cli('sync-human-edit', ['sync', '--check', '--target', directory]);
+      protectedCli('sync-human-edit', ['sync', '--check', '--target', directory]);
     } finally { writeClone(directory, managed, original); }
     assert.deepEqual(readFileSync(join(directory, managed)), original, 'Arquivo da fixture não foi restaurado.');
     checkOriginals(directory, baseline, git); checked('human-edit-preserved-and-restored');
@@ -424,6 +570,7 @@ export function main(args = process.argv.slice(2)) {
     node: process.version, platform: process.platform, arch: process.arch, output, results,
     limits: ['Somente compatibilidade de instalação do kit; aplicações, builds e serviços não foram executados.',
       'Sem push, alteração de remotes após o clone, configuração global ou credenciais npm.',
+      'Links para a raiz do projeto têm identidade, plano e ownership verificados, mas não toda a árvore de destino.',
       'Resultados limitados aos commits, clientes, sistema operacional e runtime registrados.'] };
   put(join(output, 'REPORT.json'), JSON.stringify(report, null, 2) + '\n');
   console.log(JSON.stringify({ status: report.status, projects: results.length, report: join(output, 'REPORT.json') }));
@@ -433,7 +580,7 @@ export function main(args = process.argv.slice(2)) {
 // Shared by the opt-in documentation exercise; no helper runs on import.
 export {
   parse as parseCompatibilityArgs, outputDirectory, environment, recorder,
-  fileSnapshot, workspace, gitSnapshot, checkOriginals, checkPreservedManagedEdit, parseCliResult, info, put, json, hash, portable,
+  fileSnapshot, stateJson, workspace, gitSnapshot, checkHumanExcludeBytes, linkedDirectoryPaths, checkOriginals, checkNativeOwnership, checkPreservedLinks, checkPreservedManagedEdit, parseCliResult, info, put, json, hash, portable,
   repositoryRoot, registry,
 };
 

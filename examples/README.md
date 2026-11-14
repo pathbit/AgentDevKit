@@ -22,8 +22,8 @@ O comando instala a versão pública do `@pathbit/agentdevkit` indicada no
 `package.json` deste repositório, com os
 clientes Codex, Claude e Copilot em dois projetos Git novos. Cria uma pasta
 exclusiva em `examples/generated/workflows-*` e informa o caminho do relatório.
-Nenhuma pasta anterior é apagada. Para testar outra versão publicada, passe-a
-como argumento, por exemplo `node tests/example-workflows.mjs 0.0.13`.
+Nenhuma pasta anterior é apagada. Para testar outra versão publicada, passe o
+número da versão como argumento.
 
 1. Abra `REPORT.json` na pasta informada e escolha `api-tarefas` ou
    `cli-calculadora`.
@@ -70,7 +70,7 @@ As decisões do projeto manual são suas; o gerador automático usa dados sinté
 Para verificar a instalação em clones públicos fixados, na raiz do repositório:
 
 ```sh
-npm run test:oss -- --version 0.0.13
+npm run test:oss
 ```
 
 A [matriz de projetos](../tests/fixtures/oss-projects.json) registra os commits
