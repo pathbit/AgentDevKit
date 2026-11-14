@@ -4,6 +4,12 @@ description: Exclusão local de clientes com escolha explícita do projeto.
 
 # Ignore de clientes
 
+> Esta spec registra o contrato histórico da release. A decisão posterior é não
+> editar `.git/info/exclude` nem criar ou alterar ignores na raiz ou nos clientes.
+> Os ignores existentes no hub também são preservados, ainda que alguns arquivos
+> fiquem visíveis. A revisão e a validação estão pendentes no
+> [roadmap](../../product/roadmap.md).
+
 O Git não aplica `../` no `.gitignore` do hub às pastas irmãs. O kit usa
 exclusões locais do Git e o projeto escolhe exceções no seu `.gitignore`.
 

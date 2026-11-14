@@ -35,6 +35,10 @@ description: Incrementos verificáveis do AgentDevKit.
   sincronização segura e validação em projetos reais.
 
 Cada incremento vincula requisitos, critérios, testes e evidências locais.
+O [roadmap](../product/roadmap.md) distingue releases publicadas de trabalho
+pendente. Algumas specs registram decisões históricas de exclusão Git. A decisão
+atual é manter a configuração Git intacta; a atualização dos critérios afetados
+e sua validação permanecem pendentes para a próxima entrega.
 
 Estes são os incrementos do próprio AgentDevKit. Para criar uma spec do seu
 projeto, siga o [fluxo](../guides/workflow.md) e use os

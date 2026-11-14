@@ -6,6 +6,11 @@ version: 0.0.12
 
 # Integração sem substituição
 
+> O contrato abaixo é histórico. A decisão posterior é não editar
+> `.git/info/exclude` nem criar ou alterar ignores na raiz ou nos clientes.
+> Os ignores existentes no hub também são preservados. A revisão dos critérios
+> e sua validação estão pendentes no [roadmap](../../product/roadmap.md).
+
 ## Objetivo
 
 Ao instalar, atualizar ou sincronizar, acrescentar referências do AgentDevKit

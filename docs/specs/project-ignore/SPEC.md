@@ -4,6 +4,11 @@ description: Preservar o ignore do projeto ao instalar o AgentDevKit.
 
 # Ignore do projeto
 
+> Esta spec registra o contrato histórico da release. A decisão posterior é não
+> editar `.git/info/exclude` nem criar ou alterar ignores na raiz ou nos clientes.
+> Os ignores existentes no hub também são preservados. A atualização dos
+> critérios e sua validação estão pendentes no [roadmap](../../product/roadmap.md).
+
 O arquivo `.gitignore` da raiz pertence ao projeto. Instalação, atualização e
 sincronização preservam seus bytes, permissões e estado no índice Git, inclusive
 quando um estado antigo do kit registra esse arquivo.
