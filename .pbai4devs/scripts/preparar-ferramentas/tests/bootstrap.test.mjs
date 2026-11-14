@@ -29,14 +29,24 @@ function fixture(t) {
   const checksum = createHash('sha256').update(readFileSync(archive)).digest('hex');
   let manifest = `${checksum}  ${top}.${extension}\n`, calls = 0;
   const run = (file, args, options) => {
+    if (args[0] === '-e' && args[3] === '--version') {
+      const marker = args[1].match(/ADK_NPM_[a-f0-9]{48}/)?.[0];
+      return { status: existsSync(args[2]) && readFileSync(args[2], 'utf8') === 'fixture-npm' ? 0 : 1,
+        stdout: `\0${marker}\0` + '11.0.0\n' };
+    }
+    if (args[1] === '--version') return { status: existsSync(args[0]) && readFileSync(args[0], 'utf8') === 'fixture-npm' ? 0 : 1, stdout: '11.0.0\n' };
     if (args[0] === '-p') {
       if (!file.startsWith(root + sep) || !existsSync(file) || readFileSync(file, 'utf8') !== 'fixture-node') return { status: 1, stdout: '' };
       return { status: 0, stdout: JSON.stringify({ version: '24.1.2', node: file, bun: false }) };
     }
-    if (args[1] === '--version') return { status: existsSync(args[0]) && readFileSync(args[0], 'utf8') === 'fixture-npm' ? 0 : 1, stdout: '11.0.0\n' };
+    if (args[0] === '-e') {
+      if (!file.startsWith(root + sep) || !existsSync(file) || readFileSync(file, 'utf8') !== 'fixture-node') return { status: 1, stdout: '' };
+      return { status: 0, output: [null, null, null, JSON.stringify({ version: '24.1.2', node: file, bun: false })] };
+    }
     return spawnSync(file, args, options);
   };
-  const options = { root, node: join(root, 'missing-node'), platform, arch, libc: 'glibc', run,
+  const environment = { ...process.env, PATH: dirname(tar), Path: dirname(tar), npm_execpath: '', NODE_OPTIONS: '' };
+  const options = { root, node: join(root, 'missing-node'), platform, arch, libc: 'glibc', run, environment,
     download: async (url, destination) => { calls++; if (url.endsWith('SHASUMS256.txt')) writeFileSync(destination, manifest); else copyFileSync(archive, destination); } };
   return { root, options, archive, key, cache: join(root, '.pbai4devs/tools/.cache/runtime/node', key), script: name => write(join(root, '.pbai4devs/scripts', name, 'SCRIPT.mjs'), ''), setManifest: value => { manifest = value; }, calls: () => calls };
 }
@@ -94,12 +104,232 @@ test('runtime atual saudável não altera PATH nem grava cache', async t => {
   assert.equal(result.source, 'current'); assert.equal(process.env.PATH, original); assert.equal(existsSync(f.cache), false);
 });
 
+test('preload síncrono verboso não impede localizar Node e npm nem altera sua entrada principal', async t => {
+  const f = fixture(t), bin = join(f.root, 'runtime com espaços');
+  const executable = join(bin, process.platform === 'win32' ? 'node.exe' : 'node');
+  const npm = join(bin, 'node_modules/npm/bin/npm-cli.js');
+  mkdirSync(dirname(npm), { recursive: true });
+  copyFileSync(process.execPath, executable);
+  if (process.platform !== 'win32') chmodSync(executable, 0o755);
+  writeFileSync(npm, "if (require.main!==module || process.argv.slice(2).join(' ')!=='--version' || process.execArgv.length!==0) process.exitCode=9; else console.log('11.0.0');\n");
+  const preload = join(f.root, 'preload com espaços.cjs');
+  writeFileSync(preload, "process.stdout.write('SAIDA_ANTERIOR\\n'); process.stderr.write('DIAGNOSTICO_ANTERIOR\\n');\n");
+  const options = [`--require=\"${preload}\"`];
+  if (Number(process.versions.node.split('.')[0]) >= 20) {
+    const esm = join(f.root, 'preload com espaços.mjs');
+    writeFileSync(esm, "process.stdout.write('SAIDA_ESM\\n');\n");
+    options.push(`--import=\"${esm}\"`);
+  }
+  for (const nodeOptions of options) {
+    const environment = { ...process.env, PATH: bin, Path: bin, npm_execpath: '', NODE_OPTIONS: nodeOptions };
+    const result = await ensureRuntime({ root: f.root, minimum: Number(process.versions.node.split('.')[0]), node: executable,
+      environment, allowDownload: false, download: async () => { throw new Error('rede indevida'); } });
+    assert.equal(result.source, 'current');
+    assert.equal(result.node, executable);
+    assert.equal(result.npm, npm);
+    assert.equal(environment.NODE_OPTIONS, nodeOptions);
+    assert.equal(existsSync(f.cache), false);
+  }
+});
+
+test('preloads assíncronos ou injeção no canal recusam verificação sem expor saída nem acessar rede', async t => {
+  const f = fixture(t), bin = join(f.root, 'runtime com espaços');
+  const executable = join(bin, process.platform === 'win32' ? 'node.exe' : 'node');
+  const npm = join(bin, 'node_modules/npm/bin/npm-cli.js');
+  mkdirSync(dirname(npm), { recursive: true });
+  copyFileSync(process.execPath, executable);
+  if (process.platform !== 'win32') chmodSync(executable, 0o755);
+  writeFileSync(npm, "console.log('11.0.0');\n");
+  let downloads = 0;
+  const cases = [
+    ['async', 'cjs', 'require', "process.nextTick(()=>process.stdout.write('DADO_PRIVADO\\n'));\n"],
+    ['fd3', 'cjs', 'require', "try{require('node:fs').writeSync(3,'DADO_PRIVADO\\n')}catch{}\n"],
+  ];
+  if (Number(process.versions.node.split('.')[0]) >= 20) cases.push(['esm-async', 'mjs', 'import', "process.nextTick(()=>process.stdout.write('DADO_PRIVADO\\n'));\n"]);
+  for (const [name, extension, option, source] of cases) {
+    const preload = join(f.root, `preload-${name}.${extension}`); writeFileSync(preload, source);
+    const environment = { ...process.env, PATH: bin, Path: bin, npm_execpath: '', NODE_OPTIONS: `--${option}=\"${preload}\"` };
+    for (const allowDownload of [false, true]) {
+      await assert.rejects(ensureRuntime({ root: f.root, minimum: Number(process.versions.node.split('.')[0]), node: executable,
+        environment, allowDownload, download: async () => { downloads++; throw new Error('rede indevida'); } }), error => {
+        assert.match(error.message, /resposta invalida ou contaminada/);
+        assert.doesNotMatch(error.message, /DADO_PRIVADO/);
+        return true;
+      });
+      assert.equal(existsSync(f.cache), false);
+    }
+  }
+  assert.equal(downloads, 0);
+});
+
+test('npm customizado que recusa contexto eval do probe falha fechado sem download', async t => {
+  const f = fixture(t), bin = join(f.root, 'node personalizado');
+  const executable = join(bin, process.platform === 'win32' ? 'node.exe' : 'node');
+  const npm = join(bin, 'node_modules/npm/bin/npm-cli.js');
+  mkdirSync(dirname(npm), { recursive: true });
+  copyFileSync(process.execPath, executable);
+  if (process.platform !== 'win32') chmodSync(executable, 0o755);
+  writeFileSync(npm, "if(typeof process._eval==='string')process.exitCode=9;else console.log('11.0.0');\n");
+  const preload = join(f.root, 'preload.cjs'); writeFileSync(preload, '// preload silencioso\n');
+  const environment = { ...process.env, PATH: bin, Path: bin, npm_execpath: '', NODE_OPTIONS: `--require=\"${preload}\"` };
+  let downloads = 0;
+  await assert.rejects(ensureRuntime({ root: f.root, minimum: Number(process.versions.node.split('.')[0]), node: executable,
+    environment, download: async () => { downloads++; } }), /verificacao falhou ou foi interrompida/);
+  assert.equal(downloads, 0);
+  assert.equal(existsSync(f.cache), false);
+});
+
+test('npm que escreve direto no fd 1 é reconhecido com e sem preload síncrono', async t => {
+  const f = fixture(t), bin = join(f.root, 'node custom');
+  const executable = join(bin, process.platform === 'win32' ? 'node.exe' : 'node');
+  const npm = join(bin, 'node_modules/npm/bin/npm-cli.js');
+  mkdirSync(dirname(npm), { recursive: true });
+  copyFileSync(process.execPath, executable);
+  if (process.platform !== 'win32') chmodSync(executable, 0o755);
+  writeFileSync(npm, "if(require.main!==module || process.execArgv.length || process.argv.slice(2).join(' ')!=='--version')process.exitCode=9;else require('node:fs').writeSync(1,'11.0.0\\n');\n");
+  const env = { ...process.env, PATH: bin, Path: bin, npm_execpath: '', NODE_OPTIONS: '' };
+  const common = { root: f.root, minimum: Number(process.versions.node.split('.')[0]), node: executable,
+    allowDownload: false, download: async () => { throw new Error('rede indevida'); } };
+  assert.equal((await ensureRuntime({ ...common, environment: env })).npm, npm);
+  // Sem NODE_OPTIONS, preserva o limite padrão do spawnSync e o trim anterior.
+  writeFileSync(npm, "process.stdout.write(' '.repeat(128*1024)+'11.0.0\\n');\n");
+  assert.equal((await ensureRuntime({ ...common, environment: env })).npm, npm);
+  writeFileSync(npm, "if(require.main!==module || process.execArgv.length || process.argv.slice(2).join(' ')!=='--version')process.exitCode=9;else require('node:fs').writeSync(1,'11.0.0\\n');\n");
+  const preload = join(f.root, 'preload.cjs'); writeFileSync(preload, "process.stdout.write('LOG\\n');\n");
+  const noisy = { ...env, NODE_OPTIONS: `--require=\"${preload}\"` };
+  assert.equal((await ensureRuntime({ ...common, environment: noisy })).npm, npm);
+  assert.equal(existsSync(f.cache), false);
+});
+
+test('probe isolado preserva execArgv acrescentado por preload e remove apenas seu eval', async t => {
+  const f = fixture(t), bin = join(f.root, 'node flags');
+  const executable = join(bin, process.platform === 'win32' ? 'node.exe' : 'node');
+  const npm = join(bin, 'node_modules/npm/bin/npm-cli.js');
+  mkdirSync(dirname(npm), { recursive: true });
+  copyFileSync(process.execPath, executable);
+  if (process.platform !== 'win32') chmodSync(executable, 0o755);
+  writeFileSync(npm, "if(require.main!==module || process.execArgv.join(' ')!=='--flag-do-preload')process.exitCode=9;else console.log('11.0.0');\n");
+  const preload = join(f.root, 'preload.cjs');
+  writeFileSync(preload, "process.execArgv.unshift('--flag-do-preload');process.stdout.write('LOG\\n');\n");
+  const environment = { ...process.env, PATH: bin, Path: bin, npm_execpath: '', NODE_OPTIONS: `--require=\"${preload}\"` };
+  const result = await ensureRuntime({ root: f.root, minimum: Number(process.versions.node.split('.')[0]), node: executable,
+    environment, allowDownload: false, download: async () => { throw new Error('rede indevida'); } });
+  assert.equal(result.npm, npm);
+  assert.equal(existsSync(f.cache), false);
+});
+
+test('npm customizado ESM é executado como entrada com argumentos originais', async t => {
+  const f = fixture(t), bin = join(f.root, 'node esm');
+  const executable = join(bin, process.platform === 'win32' ? 'node.exe' : 'node');
+  const npm = join(bin, 'node_modules/npm/bin/npm-cli.js');
+  mkdirSync(dirname(npm), { recursive: true });
+  copyFileSync(process.execPath, executable);
+  if (process.platform !== 'win32') chmodSync(executable, 0o755);
+  writeFileSync(join(bin, 'node_modules/npm/package.json'), '{"type":"module"}\n');
+  writeFileSync(npm, "import {writeSync} from 'node:fs';if(process.argv.slice(2).join(' ')!=='--version' || process.execArgv.length)process.exitCode=9;else writeSync(1,'11.0.0\\n');\n");
+  const preload = join(f.root, 'preload.cjs'); writeFileSync(preload, "process.stdout.write('LOG\\n');\n");
+  const environment = { ...process.env, PATH: bin, Path: bin, npm_execpath: '', NODE_OPTIONS: `--require=\"${preload}\"` };
+  const result = await ensureRuntime({ root: f.root, minimum: Number(process.versions.node.split('.')[0]), node: executable,
+    environment, allowDownload: false, download: async () => { throw new Error('rede indevida'); } });
+  assert.equal(result.npm, npm);
+  assert.equal(existsSync(f.cache), false);
+});
+
+test('marcador npm ausente ou duplicado não autoriza resultado nem download', async t => {
+  const f = fixture(t), bin = join(f.root, 'isolated', 'bin'), node = join(bin, 'node');
+  const npm = join(f.root, 'isolated', 'lib/node_modules/npm/bin/npm-cli.js');
+  mkdirSync(bin, { recursive: true }); mkdirSync(dirname(npm), { recursive: true });
+  writeFileSync(node, 'fixture-node'); writeFileSync(npm, 'fixture-npm');
+  for (const mode of ['absent', 'duplicate', 'trailing']) {
+    let downloads = 0;
+    const run = (file, argv, settings) => {
+      if (argv[0] === '-e' && argv[3] === '--version') {
+        const found = argv[1].match(/ADK_NPM_[a-f0-9]{48}/)?.[0];
+        assert.ok(found);
+        const marker = `\0${found}\0`;
+        const stdout = mode === 'absent' ? '11.0.0\n' : mode === 'duplicate' ? `${marker}11.0.0\n${marker}` : `${marker}11.0.0\nextra`;
+        return { status: 0, stdout };
+      }
+      return f.options.run(file, argv, settings);
+    };
+    const environment = { ...f.options.environment, NODE_OPTIONS: '--require=exemplo' };
+    await assert.rejects(ensureRuntime({ ...f.options, node, environment, run,
+      download: async () => { downloads++; } }), /resposta invalida ou contaminada/);
+    assert.equal(downloads, 0);
+    assert.equal(existsSync(f.cache), false);
+  }
+});
+
+test('Node_Options respeita caixa insensível somente no Windows', async t => {
+  const f = fixture(t), bin = join(f.root, 'node-mock'), executable = join(bin, 'node.exe');
+  mkdirSync(join(bin, 'node_modules/npm/bin'), { recursive: true });
+  writeFileSync(executable, 'fixture-node');
+  writeFileSync(join(bin, 'node_modules/npm/bin/npm-cli.js'), 'fixture-npm');
+  for (const [platform, expected] of [['win32', '-e'], ['linux', '-p']]) {
+    const calls = [], environment = { PATH: bin, Path: bin, Node_Options: '--require=exemplo' };
+    const run = (file, argv, options) => { calls.push(argv); return f.options.run(file, argv, options); };
+    const result = await ensureRuntime({ ...f.options, platform, node: executable, environment, run, allowDownload: false });
+    assert.equal(result.source, 'current');
+    assert.equal(calls[0][0], expected);
+    assert.equal(calls[1][0] === '-e', expected === '-e');
+  }
+  // Chaves duplicadas no Windows são ordenadas e a primeira é mantida por spawn.
+  const calls = [], environment = { PATH: bin, Node_Options: '--require=exemplo', NODE_OPTIONS: '' };
+  const run = (file, argv, options) => { calls.push(argv); return f.options.run(file, argv, options); };
+  await ensureRuntime({ ...f.options, platform: 'win32', node: executable, environment, run, allowDownload: false });
+  assert.equal(calls[0][0], '-p');
+  assert.equal(existsSync(f.cache), false);
+});
+
+test('probe interrompido, timeout ou limite de saída não acionam download nem cache', async t => {
+  const f = fixture(t);
+  for (const result of [{ error: { code: 'ETIMEDOUT' }, status: null }, { error: { code: 'ENOBUFS' }, status: null }, { signal: 'SIGTERM', status: null }]) {
+    let downloads = 0;
+    await assert.rejects(ensureRuntime({ ...f.options, run: () => result, download: async () => { downloads++; } }), /verificacao falhou ou foi interrompida/);
+    assert.equal(downloads, 0);
+    assert.equal(existsSync(f.cache), false);
+  }
+});
+
+test('runtime por symlink cujo probe falha não é tratado como ausente', async t => {
+  const f = fixture(t), target = join(f.root, 'node-real'), executable = join(f.root, 'node-link');
+  writeFileSync(target, 'fixture-node');
+  try { symlinkSync(target, executable, 'file'); }
+  catch (error) { if (['EPERM', 'EACCES'].includes(error.code)) { t.skip('No symlink privilege'); return; } throw error; }
+  let downloads = 0;
+  await assert.rejects(ensureRuntime({ ...f.options, node: executable, run: () => ({ status: 1 }), download: async () => { downloads++; } }), /verificacao falhou ou foi interrompida/);
+  assert.equal(downloads, 0);
+  assert.equal(existsSync(f.cache), false);
+});
+
+test('preload real que excede limite do canal falha sem download nem cache', async t => {
+  const f = fixture(t), preload = join(f.root, 'enorme.cjs');
+  writeFileSync(preload, "try{require('node:fs').writeSync(3,Buffer.alloc(1024*1024,65))}catch{}\n");
+  const environment = { ...process.env, NODE_OPTIONS: `--require=\"${preload}\"` };
+  let downloads = 0;
+  await assert.rejects(ensureRuntime({ root: f.root, minimum: Number(process.versions.node.split('.')[0]), node: process.execPath,
+    environment, download: async () => { downloads++; } }), /verificacao falhou ou foi interrompida/);
+  assert.equal(downloads, 0);
+  assert.equal(existsSync(f.cache), false);
+});
+
+test('preload que excede limite do stdout do npm falha sem rede nem cache', async t => {
+  const f = fixture(t), preload = join(f.root, 'excesso.cjs');
+  writeFileSync(preload, "if(process.argv[1] && process.argv[1].endsWith('npm-cli.js')) require('node:fs').writeSync(1,Buffer.alloc(1024*1024,65));\n");
+  const environment = { ...process.env, NODE_OPTIONS: `--require=\"${preload}\"` };
+  let downloads = 0;
+  await assert.rejects(ensureRuntime({ root: f.root, minimum: Number(process.versions.node.split('.')[0]), node: process.execPath,
+    environment, download: async () => { downloads++; } }), /verificacao falhou ou foi interrompida/);
+  assert.equal(downloads, 0);
+  assert.equal(existsSync(f.cache), false);
+});
+
 test('entrada única prepara runtime, diagnostica e encaminha argumentos e status sem shell', async t => {
   const f = fixture(t), calls = [];
   f.script('script com espaços');
   const args = ['script com espaços', '--flag', 'valor com espaços', '$(não executar)', '', '--', 'final'];
   const options = { ...f.options, run: (file, argv, settings) => {
-    if (argv[0] === '-p' || argv[1] === '--version' || file === tar) return f.options.run(file, argv, settings);
+    if (argv[0] === '-e' || argv[0] === '-p' || argv[1] === '--version' || file === tar) return f.options.run(file, argv, settings);
     calls.push({ file, argv, settings });
     return { status: calls.length === 1 ? 0 : 69 };
   } };
@@ -119,7 +349,7 @@ test('falha de diagnóstico impede execução e propaga status', async t => {
   const f = fixture(t), calls = [];
   f.script('qualquer');
   const options = { ...f.options, run: (file, argv, settings) => {
-    if (argv[0] === '-p' || argv[1] === '--version' || file === tar) return f.options.run(file, argv, settings);
+    if (argv[0] === '-e' || argv[0] === '-p' || argv[1] === '--version' || file === tar) return f.options.run(file, argv, settings);
     calls.push(argv); return { status: 23 };
   } };
   assert.equal(await main(['--executar', 'qualquer'], options), 23);
@@ -136,7 +366,7 @@ test('plano não instala nem diagnostica; usa apenas runtime disponível', async
   await ensureRuntime(f.options);
   const callsBefore = f.calls();
   const options = { ...f.options, download: async () => { throw new Error('rede indevida'); }, run: (file, argv, settings) => {
-    if (argv[0] === '-p' || argv[1] === '--version' || file === tar) return f.options.run(file, argv, settings);
+    if (argv[0] === '-e' || argv[0] === '-p' || argv[1] === '--version' || file === tar) return f.options.run(file, argv, settings);
     calls.push(argv); return { status: 0 };
   } };
   assert.equal(await main(['--executar', '--plan', 'qualquer', 'argumento'], options), 0);
@@ -152,7 +382,7 @@ test('--no-install falha sem runtime e usa cache sem rede; preserva flag do alvo
   assert.equal(existsSync(f.cache), false);
   await ensureRuntime(f.options);
   const options = { ...f.options, download: async () => { throw new Error('rede indevida'); }, run: (file, argv, settings) => {
-    if (argv[0] === '-p' || argv[1] === '--version' || file === tar) return f.options.run(file, argv, settings);
+    if (argv[0] === '-e' || argv[0] === '-p' || argv[1] === '--version' || file === tar) return f.options.run(file, argv, settings);
     calls.push(argv); return { status: 0 };
   } };
   assert.equal(await main(['--executar', '--no-install', 'alvo', '--no-install'], options), 0);
@@ -172,7 +402,7 @@ test('modo novo encontra Node 24 no PATH com espaços sem baixar runtime', async
   if (process.platform !== 'win32') chmodSync(executable, 0o755);
   writeFileSync(join(bin, 'node_modules/npm/bin/npm-cli.js'), 'fixture-npm');
   const options = { ...f.options, environment: { PATH: bin }, download: async () => { throw new Error('rede indevida'); }, run: (file, argv, settings) => {
-    if (argv[0] === '-p' || argv[1] === '--version') return f.options.run(file, argv, settings);
+    if (argv[0] === '-e' || argv[0] === '-p' || argv[1] === '--version') return f.options.run(file, argv, settings);
     calls.push({ file, argv }); return { status: 0 };
   } };
   const runtime = await ensureRuntime({ ...options, searchPath: true, allowDownload: false });

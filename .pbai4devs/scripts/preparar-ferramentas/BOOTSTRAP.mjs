@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { get } from 'node:https';
 import { createReadStream, createWriteStream, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, realpathSync, renameSync, rmSync } from 'node:fs';
 import { delimiter, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
@@ -12,6 +12,28 @@ import { npmCandidates } from '../lib/npm.mjs';
 const versionPattern = /^\d+\.\d+\.\d+$/;
 const stat = path => { try { return lstatSync(path); } catch (error) { if (error.code === 'ENOENT') return null; throw error; } };
 const failure = message => { throw new Error(message); };
+const contaminated = () => failure('Nao foi possivel validar Node/npm: resposta invalida ou contaminada. Revise os preloads do ambiente.');
+const failedVerification = () => failure('Nao foi possivel validar Node/npm: verificacao falhou ou foi interrompida. Revise as configuracoes do ambiente.');
+function checkProbeFailure(diagnostics) {
+  if (diagnostics.invalidProbe) contaminated();
+  if (diagnostics.failedProbe) failedVerification();
+}
+const runtimeProbe = "require('node:fs').writeSync(3, JSON.stringify({version:process.versions.node,node:process.execPath,bun:Boolean(process.versions.bun)}))";
+const directRuntimeProbe = 'JSON.stringify({version:process.versions.node,node:process.execPath,bun:Boolean(process.versions.bun)})';
+// O marcador separa mensagens anteriores à execução do npm, sem alterar seu stdout.
+function npmProbe(marker) {
+  return `const f=require('node:fs');f.writeSync(1,${JSON.stringify(marker)});const i=process.execArgv.findIndex((v,j)=>v==='-e'&&process.execArgv[j+1]===process._eval);if(i>=0)process.execArgv.splice(i,2);require('node:module').runMain()`;
+}
+const probeOptions = { encoding: 'utf8', timeout: 20000, maxBuffer: 65536, stdio: ['ignore', 'ignore', 'ignore', 'pipe'] };
+const directProbeOptions = { encoding: 'utf8', timeout: 20000 };
+const instrumentedNpmProbeOptions = { ...directProbeOptions, maxBuffer: 65536 };
+function usesNodeOptions(environment, platform) {
+  // No Windows, spawn ordena e deduplica chaves sem diferenciar maiúsculas.
+  const key = platform === 'win32'
+    ? Object.keys(environment).sort().find(name => name.toUpperCase() === 'NODE_OPTIONS')
+    : 'NODE_OPTIONS';
+  return Boolean(key && String(environment[key] ?? '').trim());
+}
 
 function safePath(root, parts) {
   let path = root;
@@ -44,16 +66,24 @@ export async function downloadOfficial(url, destination) {
   await pipeline(response, createWriteStream(destination, { flags: 'wx' }));
 }
 
-function probe(node, minimum, run, environment) {
-  const result = run(node, ['-p', 'JSON.stringify({version:process.versions.node,node:process.execPath,bun:Boolean(process.versions.bun)})'], { encoding: 'utf8', timeout: 20000, env: environment });
-  if (result.error || result.status !== 0) return null;
+function probe(node, minimum, run, environment, diagnostics, platform) {
+  const instrumented = usesNodeOptions(environment, platform);
+  const result = run(node, instrumented ? ['-e', runtimeProbe] : ['-p', directRuntimeProbe],
+    { ...(instrumented ? probeOptions : directProbeOptions), env: environment });
+  if (result.error || result.status !== 0) {
+    if (result.error?.code !== 'ENOENT' && (result.error || result.signal || stat(node))) diagnostics.failedProbe = true;
+    return null;
+  }
   try {
-    const info = JSON.parse(result.stdout);
+    const info = JSON.parse(instrumented ? result.output?.[3] : result.stdout);
+    if (!info || typeof info !== 'object' || typeof info.node !== 'string' ||
+        typeof info.bun !== 'boolean' || !versionPattern.test(info.version) ||
+        realpathSync(info.node) !== realpathSync(node)) throw new Error('invalid probe');
     return !info.bun && versionPattern.test(info.version) && Number(info.version.split('.')[0]) >= minimum ? info : null;
-  } catch { return null; }
+  } catch { diagnostics.invalidProbe = true; return null; }
 }
 
-function npmFor(node, run, environment, platform, localOnly = false) {
+function npmFor(node, run, environment, platform, diagnostics, localOnly = false) {
   const candidates = localOnly ? [join(dirname(node), 'node_modules/npm/bin/npm-cli.js'), join(dirname(node), '../lib/node_modules/npm/bin/npm-cli.js')] : npmCandidates({ node, environment });
   for (const candidate of candidates) {
     if (!candidate || !candidate.endsWith('npm-cli.js') || !stat(candidate)?.isFile()) continue;
@@ -64,8 +94,20 @@ function npmFor(node, run, environment, platform, localOnly = false) {
       safePath(base, path.split(sep));
     }
     const file = realpathSync(candidate);
-    const result = run(node, [file, '--version'], { encoding: 'utf8', timeout: 20000, env: environmentWithNode(environment, node) });
-    if (!result.error && result.status === 0 && /^\d+\.\d+\.\d+(?:-[\w.-]+)?$/.test(result.stdout?.trim() || '')) return file;
+    const instrumented = usesNodeOptions(environment, platform);
+    const marker = instrumented ? `\0ADK_NPM_${randomBytes(24).toString('hex')}\0` : null;
+    const result = run(node, instrumented ? ['-e', npmProbe(marker), file, '--version'] : [file, '--version'],
+      { ...(instrumented ? instrumentedNpmProbeOptions : directProbeOptions), env: environmentWithNode(environment, node) });
+    if (!result.error && result.status === 0) {
+      let output = result.stdout;
+      if (instrumented) {
+        const start = output?.indexOf(marker) ?? -1;
+        if (start < 0 || start !== output.lastIndexOf(marker)) { diagnostics.invalidProbe = true; continue; }
+        output = output.slice(start + marker.length);
+      }
+      if (/^\d+\.\d+\.\d+(?:-[\w.-]+)?$/.test(output?.trim() || '')) return file;
+      diagnostics.invalidProbe = true;
+    } else if (result.error?.code !== 'ENOENT') diagnostics.failedProbe = true;
   }
   return null;
 }
@@ -112,26 +154,30 @@ export function validateExtracted(root) {
 export async function ensureRuntime({ root = projectRoot, minimum = 24, node = process.execPath, platform = process.platform, arch = process.arch, libc, run = spawnSync, download = downloadOfficial, environment = process.env, allowDownload = true, searchPath = false } = {}) {
   if (Number(process.versions.node.split('.')[0]) < 18) failure('O inicializador requer Node.js 18+; instale Node.js 24+ pelo gerenciador do SO.');
   root = realpathSync(root);
-  const current = probe(node, minimum, run, environment);
+  const diagnostics = { invalidProbe: false, failedProbe: false };
+  const current = probe(node, minimum, run, environment, diagnostics, platform);
   if (current) {
-    const npm = npmFor(current.node, run, environment, platform);
+    const npm = npmFor(current.node, run, environment, platform, diagnostics);
     if (npm) return { node: current.node, npm, version: current.version, source: 'current' };
   }
   if (searchPath) {
     const executable = findExecutable('node', environment, platform);
-    const found = executable && probe(executable, minimum, run, environment);
-    const npm = found && npmFor(found.node, run, environment, platform);
+    const found = executable && probe(executable, minimum, run, environment, diagnostics, platform);
+    const npm = found && npmFor(found.node, run, environment, platform, diagnostics);
     if (found && npm) return { node: found.node, npm, version: found.version, source: 'path' };
   }
-  const targetPlatform = platformName(platform, arch, run, environment, libc);
+  let targetPlatform;
+  try { targetPlatform = platformName(platform, arch, run, environment, libc); }
+  catch (error) { checkProbeFailure(diagnostics); throw error; }
   const cache = safePath(root, ['.pbai4devs', 'tools', '.cache', 'runtime', 'node', targetPlatform]);
   if (stat(cache) && !stat(cache).isDirectory()) failure('Cache de runtime nao e diretorio.');
   if (existsSync(cache)) for (const version of readdirSync(cache).filter(name => /^v24\.\d+\.\d+$/.test(name)).sort((left, right) => right.localeCompare(left, undefined, { numeric: true }))) {
     const base = safePath(cache, [version]);
     const executable = safePath(base, platform === 'win32' ? ['node.exe'] : ['bin', 'node']);
-    const found = probe(executable, minimum, run, environment);
-    if (found) { const npm = npmFor(executable, run, environment, platform, true); if (npm) return { node: executable, npm, version: found.version, source: 'cache' }; }
+    const found = probe(executable, minimum, run, environment, diagnostics, platform);
+    if (found) { const npm = npmFor(executable, run, environment, platform, diagnostics, true); if (npm) return { node: executable, npm, version: found.version, source: 'cache' }; }
   }
+  checkProbeFailure(diagnostics);
   if (!allowDownload) failure('Node.js 24+ e npm nao encontrados; prepare o runtime antes de continuar.');
   const tar = findExecutable('tar', environment, platform);
   if (!tar) failure('Instale tar pelo gerenciador do SO para extrair o Node local.');
@@ -165,8 +211,8 @@ export async function ensureRuntime({ root = projectRoot, minimum = 24, node = p
     validateExtracted(unpack);
     const installation = safePath(unpack, [top]);
     const executable = safePath(installation, platform === 'win32' ? ['node.exe'] : ['bin', 'node']);
-    const found = probe(executable, minimum, run, environment);
-    const npm = found && npmFor(executable, run, environment, platform, true);
+    const found = probe(executable, minimum, run, environment, diagnostics, platform);
+    const npm = found && npmFor(executable, run, environment, platform, diagnostics, true);
     if (!found || !npm) failure('Node/npm extraidos falharam na verificacao.');
     const version = filename.match(/^node-(v24\.\d+\.\d+)-/)[1]; target = safePath(cache, [version]);
     if (existsSync(target)) { backup = join(stage, 'previous'); renameSync(target, backup); }

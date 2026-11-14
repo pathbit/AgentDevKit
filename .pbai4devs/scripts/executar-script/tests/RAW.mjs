@@ -107,10 +107,13 @@ test('raw nao silencia preloads: ambiente pode emitir stdout antes do kit', t =>
     const result = f.run(entry, args, env); status(result, 0);
     assert.equal(result.stdout.toString(), 'PRELOAD|');
   }
-  // Um preload que escreve em stdout também contamina o probe capturado do
-  // runtime; com --no-install o bootstrap falha sem tentar baixar outro Node.
+  // O probe ignora stdout do preload síncrono, mas os processos principais
+  // ainda o emitem antes de o kit processar --raw.
   const plan = f.run(f.bootstrap, ['--executar', '--no-install', '--raw', '--plan', f.target], env);
-  status(plan, 1); assert.equal(plan.stdout.toString(), 'PRELOAD|');
-  assert.match(plan.stderr.toString(), /Node\.js 24\+/);
+  status(plan, 0); assert.equal(plan.stdout.toString(), 'PRELOAD|PRELOAD|');
+  assert.match(plan.stderr.toString(), /runtime=node/);
+  const execute = f.run(f.bootstrap, ['--executar', '--no-install', '--raw', f.target], env);
+  status(execute, 0); assert.equal(execute.stdout.toString(), 'PRELOAD|PRELOAD|PRELOAD|TARGET');
+  assert.match(execute.stderr.toString(), /runtime=node/);
   assert.equal(existsSync(join(f.root, '.pbai4devs/tools/.cache/runtime')), false);
 });

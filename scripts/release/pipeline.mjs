@@ -49,7 +49,7 @@ export const portableProfiles = Object.freeze({
   'portable-selection': Object.freeze(['client-selection.test.mjs']),
   'portable-selection-codex': Object.freeze(['client-selection-obstructions-codex.test.mjs']),
   'portable-selection-all': Object.freeze(['client-selection-obstructions-all.test.mjs']),
-  'portable-projects': Object.freeze(['client-ignore.test.mjs', 'native-coexistence.test.mjs', 'oss-preservation.test.mjs']),
+  'portable-projects': Object.freeze(['client-ignore.test.mjs', 'native-coexistence.test.mjs', 'oss-preservation.test.mjs', 'project-matrix.test.mjs']),
   'portable-migration': Object.freeze(['state-migration.test.mjs', 'preservation-lifecycle.test.mjs']),
   'portable-resources': Object.freeze(['documentation-compatibility.test.mjs', 'github-packages.test.mjs', 'next.test.mjs', 'managed-content.test.mjs', 'managed-content-helper.test.mjs', 'managed-toml.test.mjs', 'managed-preservation.test.mjs', 'release-pipeline.test.mjs', 'release-resilience.test.mjs', 'resource-coverage.test.mjs']),
   'portable-layout': Object.freeze(['source-layout.test.mjs']),

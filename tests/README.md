@@ -16,6 +16,43 @@ Estes testes não são copiados para os projetos atendidos.
 as combinações de seleção. A cobertura estrutural não prova que cada recurso
 foi executado em todos os clientes; valide também descoberta e uso real.
 
+Para exercitar 40 projetos sintéticos com um pacote já instalado, use Node 24+:
+
+```console
+node tests/project-matrix.mjs --package /caminho/ao/pacote --version 0.0.21
+```
+
+O runner confere o nome e a versão do pacote e executa `init`, `update`,
+`update --force`, `doctor` e `sync --check` para 20 seleções, em projetos novos
+ou existentes. Não testa colisão de catálogos personalizados.
+Projetos existentes começam com commit sintético de identidade fictícia e
+arquivos humanos rastreados, além de alterações staged e unstaged separadas.
+Incluem skill adicional e skill homônima no hub compartilhado, além da colisão
+de skill nativa do Claude.
+Compara bytes do índice, HEAD, `.git/refs`, `packed-refs`, Git config,
+`.gitignore` e arquivos existentes. Outros formatos de refs e metadados Git
+não são cobertos.
+Em `.git/info/exclude`, preserva a regra humana e permite apenas acréscimos.
+Em `AGENTS.md`,
+`CLAUDE.md` e na skill nativa colidente, aceita apenas acréscimo após o conteúdo
+humano completo. Conserva snapshots, logs e `RESULT.json` em pasta exclusiva.
+Também compara permissões; no Windows, apenas o bit de escrita reportado pelo
+Node, sem validar ACLs. Ancestrais monitorados são inspecionados com `lstat`;
+links simbólicos e mudanças de tipo ou modo das pastas interrompem o caso.
+Após cada etapa, interrompe se identificar alteração indevida. Os snapshots
+não detectam alteração e reversão dentro de um mesmo processo.
+`--jobs 1..4` limita concorrência. `--output` aceita um diretório temporário
+existente fora de repositórios Git; o runner cria uma subpasta nova.
+No macOS, o alias de sistema `/tmp` também é aceito; links humanos são recusados.
+Não executa skills, agentes, clientes nativos ou testes das aplicações e não
+bloqueia a rede no sistema operacional. Remove `NODE_OPTIONS`, `GIT_*` e
+`npm_config_*` e isola o Git global: não testa credenciais ou configurações reais.
+`--package` executa o código informado com permissões normais do usuário; use
+somente pacote confiável ou sandbox externo. O modo offline do npm não restringe
+acesso ao sistema de arquivos ou à rede do processo.
+Timeout ou excesso de saída deixam preservação não verificada. Em Windows, só
+o processo filho é encerrado, e descendentes podem continuar. Falhas retornam `1`.
+
 Para verificar o pacote publicado em projetos reais, execute:
 
 ```console

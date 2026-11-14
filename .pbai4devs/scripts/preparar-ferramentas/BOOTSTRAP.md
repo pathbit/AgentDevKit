@@ -25,6 +25,12 @@ Node 24 de `nodejs.org`, verifica SHA-256 e extrai usando `tar` nativo.
 Windows usa ZIP; macOS/Linux usam tar.gz. Não há scripts Bash ou PowerShell,
 mudança permanente de PATH ou instalação global neste fluxo.
 
+Os probes preservam `NODE_OPTIONS`. Quando essa variável está preenchida,
+isolam sua resposta do stdout comum. Preloads assíncronos e npm personalizado
+que dependa de detalhes internos do Node ainda podem impedir a verificação.
+Respostas ambíguas são recusadas sem baixar um runtime;
+`--raw` não isola a saída de preloads.
+
 O cache fica em `.pbai4devs/tools/.cache/runtime/`. Falhas de download,
 integridade ou validação preservam o runtime anterior. Arquivos e links fora
 da distribuição são recusados. `tar` deve estar disponível no sistema.

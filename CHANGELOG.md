@@ -4,6 +4,13 @@ description: Alterações verificáveis por versão do AgentDevKit.
 
 # Changelog
 
+## 0.0.30 — 2026-11-14
+
+- Melhora a detecção de Node e npm com preloads que escrevem na saída, sem
+  alterar `NODE_OPTIONS`; respostas ambíguas bloqueiam o download.
+- Acrescenta uma matriz reproduzível de projetos novos e existentes, com
+  snapshots por etapa e resultados mantidos em diretórios temporários.
+
 ## 0.0.29 — 2026-11-14
 
 - Oferece `--raw` para separar a saída do script dos metadados do kit, com
