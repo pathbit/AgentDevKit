@@ -39,6 +39,7 @@ substituem as decisões mais recentes do projeto.
 A [spec inicial][v1] organiza a primeira entrega; as demais estão no
 [índice de specs][specs]. Uma spec aprovada registra escopo, não comprova por
 si só que seus critérios continuam atendidos em todas as versões ou clientes.
+O [controle das specs](spec-audit.md) reúne o estado da auditoria de cada uma.
 
 ## Prioridades e pendências
 
@@ -81,6 +82,10 @@ nos respectivos testes.
   agentes próprios, staged, colisões, seleção de clientes e operações repetidas.
   Gerar projetos e resultados fora do Git ou em destino comprovadamente ignorado;
   manter o código dos testes versionado.
+- [ ] Repetir as provas em projetos públicos reais, com revisões fixas e o
+  pacote candidato, quando houver autorização para obtê-los. O comando
+  `test:oss` é separado de `npm test`; registrar projetos, versões, resultados
+  e bloqueios sem incluir clones ou relatórios no Git.
 - [ ] Conferir o inventário dos catálogos contra as fontes reais antes de medir
   cobertura; reconstruir índices em cópias de teste, preservando o checkout.
 - [ ] Manter uma matriz por projeto, cliente e skill ou perfil aplicável, com
@@ -89,7 +94,8 @@ nos respectivos testes.
   Combinações de seleção não substituem provas de execução em cada cliente.
 - [ ] Manter as evidências da instalação `0.0.21` em projeto consumidor
   separadas das alterações futuras do kit; antes de nova aplicação, conferir
-  novamente arquivos existentes, índice e `.gitignore` do projeto.
+  novamente arquivos existentes, índice e `.gitignore` do projeto. Localizar e
+  tornar consultável o relatório dessa instalação sem expor dados privados.
 
 ### 3. Evolução contínua
 
