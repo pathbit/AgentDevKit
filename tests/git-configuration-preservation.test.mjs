@@ -370,6 +370,30 @@ test('origem staged ausente permanece ambígua sem identidade física confiável
   }
 });
 
+test('links staged continuam ambíguos para identidade igual, inode zero ou erro de leitura', t => {
+  const root = mkdtempSync(join(tmpdir(), 'adk-symlink-identity-')); t.after(() => rmSync(root, { recursive: true, force: true }));
+  put(root, 'AGENTS.md', 'humano\n'); mkdirSync(join(root, '.agents'));
+  try { fs.symlinkSync('AGENTS.md', join(root, 'HUMAN.md')); }
+  catch (error) { if (['EPERM', 'EACCES', 'ENOSYS'].includes(error.code)) return t.skip('Links simbólicos indisponíveis.'); throw error; }
+  const source = fs.lstatSync(join(root, 'HUMAN.md'), { bigint: true });
+  const candidate = '.agents/agents/revisor.md', options = { root, platform: 'win32', allowMissingTarget: true };
+  assert.equal(gitPathsOverlap('HUMAN.md', candidate, options), false, `dev=${source.dev} ino=${source.ino}`);
+  const original = fs.lstatSync;
+  for (const mode of ['same-inode', 'zero-inode', 'denied']) {
+    t.mock.method(fs, 'lstatSync', (path, statOptions) => {
+      if (path === join(root, '.agents')) {
+        if (mode === 'denied') throw Object.assign(new Error('sem acesso'), { code: 'EACCES' });
+        const info = original(path, statOptions);
+        return { dev: mode === 'same-inode' ? source.dev : info.dev, ino: mode === 'same-inode' ? source.ino : 0n, isSymbolicLink: () => false };
+      }
+      return original(path, statOptions);
+    });
+    syncBuiltinESMExports();
+    try { assert.equal(gitPathsOverlap('HUMAN.md', candidate, options), true, mode); }
+    finally { t.mock.restoreAll(); syncBuiltinESMExports(); }
+  }
+});
+
 test('Windows não confunde diretórios staged existentes com ancestrais ausentes de outros destinos', { timeout: 120000 }, t => {
   const outer = mkdtempSync(join(tmpdir(), 'adk-win-nested-')); t.after(() => rmSync(outer, { recursive: true, force: true }));
   git(outer, 'init', '-q');

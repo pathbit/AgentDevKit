@@ -63,6 +63,17 @@ export function gitPathsOverlap(left, right, { root, platform = process.platform
           const leftStat = resolveIdentity(a.slice(0, i + 1)), rightStat = resolveIdentity(b.slice(0, i + 1));
           if (leftStat?.ino && rightStat?.ino && !leftStat.isSymbolicLink() && !rightStat.isSymbolicLink())
             distinct = leftStat.dev !== rightStat.dev || leftStat.ino !== rightStat.ino;
+          const sameParent = () => {
+            const leftParent = i ? resolveIdentity(a.slice(0, i)) : lstatSync(root, { bigint: true });
+            const rightParent = i ? resolveIdentity(b.slice(0, i)) : leftParent;
+            return Boolean(leftParent?.ino && rightParent?.ino && !leftParent.isSymbolicLink() && !rightParent.isSymbolicLink()
+              && leftParent.dev === rightParent.dev && leftParent.ino === rightParent.ino);
+          };
+          // Compare directory entries without following a terminal symlink.
+          // An actual alias of that entry has the same physical identity.
+          if (!distinct && allowMissingTarget && leftStat?.ino && rightStat?.ino && (leftStat.isSymbolicLink() || rightStat.isSymbolicLink())
+              && (!leftStat.isSymbolicLink() || i === a.length - 1) && (!rightStat.isSymbolicLink() || i === b.length - 1)
+              && (leftStat.dev !== rightStat.dev || leftStat.ino !== rightStat.ino) && sameParent()) distinct = true;
           // An absent child of the same existing parent cannot be another
           // spelling of the existing child, including when it is a directory.
           // This applies in either direction and can use a final symbolic link
@@ -70,10 +81,7 @@ export function gitPathsOverlap(left, right, { root, platform = process.platform
           const leftExists = leftStat?.ino && (!leftStat.isSymbolicLink() || i === a.length - 1);
           const rightExists = rightStat?.ino && (!rightStat.isSymbolicLink() || i === b.length - 1);
           if (!distinct && allowMissingTarget && (leftExists && rightStat?.missing || leftStat?.missing && rightExists)) {
-            const leftParent = i ? resolveIdentity(a.slice(0, i)) : lstatSync(root, { bigint: true });
-            const rightParent = i ? resolveIdentity(b.slice(0, i)) : leftParent;
-            if (leftParent?.ino && rightParent?.ino && !leftParent.isSymbolicLink() && !rightParent.isSymbolicLink())
-              distinct = leftParent.dev === rightParent.dev && leftParent.ino === rightParent.ino;
+            distinct = sameParent();
           }
         }
       } catch { /* Missing, inaccessible, or unsupported identities stay ambiguous. */ }

@@ -425,6 +425,34 @@ test('falha durante aplicação reverte arquivos migrados e mantém índice e ig
   assert.equal(git(root, 'ls-files', '--stage', '-z'), f.index);
 });
 
+for (const concurrent of [false, true]) test(`rollback Windows restaura remoção legada com criação exclusiva${concurrent ? ' e preserva arquivo concorrente' : ''}`, t => {
+  const f = fixture(t), { root } = f, oldManifest = `${oldRoot}/agentdevkit.json`;
+  const original = read(root, oldManifest), human = Buffer.from('Estado humano concorrente.\n');
+  const plan = planInstallation({ target: root, mode: 'update' });
+  const destination = join(plan.target, oldManifest), link = fs.linkSync;
+  const platform = Object.getOwnPropertyDescriptor(process, 'platform');
+  const failure = new Error('falha após remoção legada'); let injected = false, actual;
+  if (concurrent) t.mock.method(fs, 'linkSync', (from, to) => {
+    if (to === destination) { injected = true; writeFileSync(to, human, { flag: 'wx' }); }
+    return link(from, to);
+  });
+  syncBuiltinESMExports();
+  plan.changes.push({ path: 'injected-failure.txt', action: 'create', beforeHash: null,
+    get content() { Object.defineProperty(process, 'platform', { ...platform, value: 'win32' }); throw failure; } });
+  try { applyPlan(plan); } catch (error) { actual = error; }
+  finally { Object.defineProperty(process, 'platform', platform); t.mock.restoreAll(); syncBuiltinESMExports(); }
+  assert.ok(actual); assert.match(actual.message, /falha após remoção legada/);
+  if (concurrent) {
+    assert.ok(injected); assert.deepEqual(read(root, oldManifest), human);
+    assert.ok(actual.errors?.includes(failure)); assert.ok(actual.rollbackPreservedPaths.includes(oldManifest));
+  } else { assert.equal(actual, failure); assert.deepEqual(read(root, oldManifest), original); }
+  assert.deepEqual(read(root, `${oldRoot}/configuracao/ESTADO.md`), f.config);
+  assert.deepEqual(read(root, `${oldRoot}/outros/minhas-notas.txt`), f.custom);
+  assert.deepEqual(read(root, `${oldRoot}/derived.json`), f.derived);
+  assert.deepEqual(read(root, '.gitignore'), f.ignore);
+  assert.equal(git(root, 'ls-files', '--stage', '-z'), f.index);
+});
+
 
 test('alteração concorrente na cópia migrada impede remoção da origem', t => {
   const f = fixture(t), { root } = f;

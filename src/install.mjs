@@ -1167,7 +1167,7 @@ export function applyPlan(plan) {
         if (content) {
           let pin, pinIdentity, pinCreated = false;
           try {
-            if (process.platform === 'win32') {
+            if (process.platform === 'win32' && appliedFile.hash !== null) {
               // Windows may refuse to replace a destination with an open
               // handle. Keep its inode alive through a verified hardlink
               // before closing the descriptor, so it cannot be reused.
@@ -1193,7 +1193,7 @@ export function applyPlan(plan) {
             }
             atomicWrite(target, path, content, beforeModes.get(path), undefined, () => {
               if (!stillApplied()) fail('E_CHANGED', `File changed during rollback: ${path}`);
-            });
+            }, appliedFile.hash === null);
           } finally {
             if (pinCreated) {
               try {

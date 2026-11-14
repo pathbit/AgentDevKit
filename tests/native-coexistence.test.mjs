@@ -63,7 +63,8 @@ test('link staged na raiz não impede criação de diretório distinto no Window
   git('add', '--all');
   const index = readFileSync(join(root, '.git/index'));
   assert.equal(gitPathsOverlap('CLAUDE.md', '.agents/agents/revisor.md', { root, platform: 'win32', allowMissingTarget: true }), false);
-  assert.equal(gitPathsOverlap('CLAUDE.md', 'AGENTS.md', { root, platform: 'win32', allowMissingTarget: true }), true);
+  assert.equal(gitPathsOverlap('CLAUDE.md', 'AGENTS.md', { root, platform: 'win32' }), true);
+  assert.equal(gitPathsOverlap('CLAUDE.md', 'AGENTS.md', { root, platform: 'win32', allowMissingTarget: true }), false);
   assert.equal(gitPathsOverlap('CLAUDE.md/nested', '.agents/agents/revisor.md', { root, platform: 'win32', allowMissingTarget: true }), true);
   const platform = Object.getOwnPropertyDescriptor(process, 'platform');
   try {
@@ -75,6 +76,39 @@ test('link staged na raiz não impede criação de diretório distinto no Window
   } finally { Object.defineProperty(process, 'platform', platform); }
   assert.equal(readlinkSync(join(root, 'CLAUDE.md')), 'AGENTS.md');
   assert.deepEqual(readFileSync(join(root, '.git/index')), index);
+});
+
+test('Windows preserva todos os links staged da fixture com clientes coexistentes', { timeout: 120000 }, t => {
+  const { root, directory, git } = fixture(t);
+  for (const [path, content] of Object.entries({ 'AGENTS.md': '# regras\n', 'packages/core/README.md': '# pacote\n', '.claude/skills/triage/SKILL.md': '# triage\n', '.claude/skills/triage/REFERENCE.md': '# referência\n', '.claude/agents/revisor.md': '# revisor\n', '.claude/.gitignore': 'privado.json\n', '.github/agents/revisor.agent.md': '# revisor\n' })) put(root, path, content);
+  put(directory, 'outside/config.json', '{"humano":true}\n');
+  if (!link(t, 'AGENTS.md', join(root, 'CLAUDE.md')) || !link(t, 'packages/core/README.md', join(root, 'README.md'))
+    || !link(t, '../.claude/skills', join(root, '.codex/skills'), 'dir') || !link(t, '../../outside/config.json', join(root, '.claude/settings.local.json'))) return;
+  git('add', '--all');
+  const index = readFileSync(join(root, '.git/index')), config = readFileSync(join(root, '.git/config'));
+  const linkPaths = ['CLAUDE.md', 'README.md', '.codex/skills', '.claude/settings.local.json'];
+  const before = snapshot(root, linkPaths), outside = readFileSync(join(directory, 'outside/config.json'));
+  const output = '.claude/agents/analista-performance.md';
+  const identities = Object.fromEntries(['.', '.claude', '.claude/agents', ...linkPaths].map(path => {
+    const info = lstatSync(join(root, path), { bigint: true });
+    return [path, { dev: String(info.dev), ino: String(info.ino), link: info.isSymbolicLink() }];
+  }));
+  for (const path of ['CLAUDE.md', 'README.md', '.claude/settings.local.json'])
+    assert.equal(gitPathsOverlap(path, output, { root, platform: 'win32', allowMissingTarget: true }), false, `${path}: ${JSON.stringify(identities)}`);
+  const platform = Object.getOwnPropertyDescriptor(process, 'platform');
+  try {
+    Object.defineProperty(process, 'platform', { value: 'win32' });
+    let plan;
+    try { plan = planInstallation({ target: root, mode: 'init', clients: ['codex', 'claude', 'copilot'] }); }
+    catch (error) { error.message += `; lstat: ${JSON.stringify(identities)}`; throw error; }
+    assert.ok(plan.changes.some(change => change.path === output && change.action === 'create'));
+    applyPlan(plan);
+    assert.doesNotThrow(() => planInstallation({ target: root, mode: 'update' }));
+  } finally { Object.defineProperty(process, 'platform', platform); }
+  assert.deepEqual(snapshot(root, linkPaths), before);
+  assert.deepEqual(readFileSync(join(root, '.git/index')), index);
+  assert.deepEqual(readFileSync(join(root, '.git/config')), config);
+  assert.deepEqual(readFileSync(join(directory, 'outside/config.json')), outside);
 });
 
 test('instala e atualiza sobre agentes configurados preservando arquivos, links e índice', async t => {

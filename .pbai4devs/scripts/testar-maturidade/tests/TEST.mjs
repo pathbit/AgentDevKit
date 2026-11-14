@@ -29,7 +29,9 @@ const prepareExamples = options => prepare({ ...options, renderResources: () => 
 
 requireNode();
 function fixture(t) {
-  const home = realpathSync(tmpdir());
+  // Match the physical spelling used by createExampleOutput, including the
+  // long form of a Windows temporary directory with an 8.3 alias.
+  const home = realpathSync.native(tmpdir());
   const space = mkdtempSync(join(home, 'maturity-unit-'));
   const root = join(space, 'source'), outputs = join(space, 'outputs');
   mkdirSync(root); mkdirSync(outputs);
@@ -107,13 +109,15 @@ test('inicialização do exemplo não herda diretório, worktree ou índice Git 
 test('comparação de índice considera nomes curtos Windows sem til e distingue entradas reais', t => {
   const root = mkdtempSync(join(realpathSync(tmpdir()), 'maturity-short-name-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  mkdirSync(join(root, 'tmp', 'long-directory'), { recursive: true });
   const staged = 'tmp/ALT/human', target = 'tmp/long-directory/run';
+  mkdirSync(join(root, 'tmp'));
   assert.equal(mayAliasPath(staged, target, { root, platform: 'win32' }), true);
   assert.equal(mayAliasPath(staged, target, { root, platform: 'linux' }), false);
+  mkdirSync(join(root, 'tmp', 'long-directory'));
+  assert.equal(mayAliasPath(staged, target, { root, platform: 'win32' }), false);
   mkdirSync(join(root, 'tmp', 'ALT'));
   assert.equal(mayAliasPath(staged, target, { root, platform: 'win32' }), false);
-  assert.equal(mayAliasPath('tmp/LONGDI~1/human', target, { root, platform: 'win32' }), true);
+  assert.equal(mayAliasPath('tmp/LONGDI~1/human', target, { root, platform: 'win32' }), existsSync(join(root, 'tmp', 'LONGDI~1')));
 });
 
 test('fluxo de maturidade simulado em Windows aceita ancestral de saída ausente e src staged existente', t => {
@@ -180,7 +184,7 @@ test('ignore local respeita configuração global Git efetiva e injetada', t => 
   const configuredIgnore = join(space, 'configured-ignore'), emptyIgnore = join(space, 'empty-ignore');
   writeFileSync(configuredIgnore, 'tmp/\n'); writeFileSync(emptyIgnore, '');
   const defaultConfig = join(home, '.gitconfig'), globalConfig = join(space, 'global-config');
-  writeFileSync(defaultConfig, `[core]\n excludesfile = ${configuredIgnore}\n`);
+  writeFileSync(defaultConfig, `[core]\n excludesfile = ${JSON.stringify(configuredIgnore)}\n`);
   writeFileSync(globalConfig, '');
   const gitEnv = isolatedGitEnvironment();
   Object.assign(gitEnv, { HOME: home, GIT_CONFIG_GLOBAL: globalConfig, GIT_CONFIG_NOSYSTEM: '1' });
@@ -194,7 +198,7 @@ test('ignore local respeita configuração global Git efetiva e injetada', t => 
     const target = join(root, 'tmp', 'explicit-global-disabled');
     assert.throws(() => createExampleOutput({ sourceRoot: root, outputRoot: target }), /precisa estar ignorada/);
     assert.equal(existsSync(target), false);
-    writeFileSync(globalConfig, `[core]\n excludesfile = ${configuredIgnore}\n`);
+    writeFileSync(globalConfig, `[core]\n excludesfile = ${JSON.stringify(configuredIgnore)}\n`);
     Object.assign(process.env, { GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'core.excludesfile', GIT_CONFIG_VALUE_0: emptyIgnore });
     const injected = join(root, 'tmp', 'injected-override');
     assert.throws(() => createExampleOutput({ sourceRoot: root, outputRoot: injected }), /precisa estar ignorada/);
@@ -613,6 +617,10 @@ test('consulta índice grande integralmente e bloqueia aliases ou ambiguidades U
   try {
     assert.throws(() => prepareExamples({ sourceRoot: root, outputRoot: join(root, 'tmp', 'kelvin'), scenarios: [SCENARIOS[0]], initializeGit: false }), /índice Git/);
     assert.equal(existsSync(join(root, 'tmp')), false);
+    // On Windows a missing short directory name can alias another missing
+    // index entry. Create this unrelated parent so its identity proves that
+    // it is distinct from the staged Unicode path.
+    mkdirSync(join(root, 'tmp', 'other'), { recursive: true });
     const [example] = prepareExamples({ sourceRoot: root, outputRoot: join(root, 'tmp', 'other', 'run'), scenarios: [SCENARIOS[0]], initializeGit: false });
     assert.equal(example.root, join(root, 'tmp', 'other', 'run', SCENARIOS[0].id));
   } finally { childProcess.spawnSync = original; syncBuiltinESMExports(); }
