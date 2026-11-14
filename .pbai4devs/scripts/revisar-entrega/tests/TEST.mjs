@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { checkReview, prepareReview, sealReview, specCriteria } from '../SCRIPT.mjs';
+import { checkMerge, checkReview, prepareReview, sealReview, specCriteria } from '../SCRIPT.mjs';
 import { projectRoot } from '../../lib/runtime.mjs';
 
 function fixture(t) {
@@ -246,4 +246,114 @@ test('documentos rastreados permanecem obrigatórios mesmo com regra de ignore',
   assert.ok(f.report.documentation.some(item => item.path === 'AGENTS.md'));
   assert.ok(f.report.documentation.some(item => item.path === 'spec.md'));
   assert.equal(checkReview(f.file, { root: f.root }).status, 'passed');
+});
+
+function mergeFixture(t, { scope = ['src/main.mjs', 'src/old.txt', 'src/new.txt'], dirty = false, seal = true, ignoredSubmodule = false } = {}) {
+  const f = fixture(t);
+  const commit = message => f.git('-c', 'user.name=Test User', '-c', 'user.email=test@example.invalid', '-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=disabled-hooks', 'commit', '-q', '-m', message);
+  f.put('src/old.txt', 'original\n'); f.git('add', '.'); commit('test: base');
+  f.git('branch', '-M', 'main'); f.git('checkout', '-q', '-b', 'feature');
+  f.put('src/main.mjs', 'export const value=2;\n');
+  f.git('mv', 'src/old.txt', 'src/new.txt'); f.git('add', 'src/main.mjs'); commit('test: source');
+  if (ignoredSubmodule) {
+    const object = f.git('rev-parse', 'HEAD').trim();
+    f.git('update-index', '--add', '--cacheinfo', `160000,${object},vendor`);
+    commit('test: submodule');
+    f.git('config', 'diff.ignoreSubmodules', 'all');
+  }
+  if (dirty) f.put('src/main.mjs', 'export const value=3; // not committed\n');
+  const made = prepareReview({ root: f.root, id: 'merge', execution: 'review', scope });
+  for (const item of made.report.documentation) Object.assign(item, { decision: 'no-impact', reason: 'Documento examinado na fixture.' });
+  const proof = '.agent-tests/merge/review/proof.txt'; f.put(proof, 'Prova sintetica para testar validacao.\n');
+  for (const item of made.report.validation) Object.assign(item, { method: 'fixture', prerequisite: 'fixture local', assertion: 'snapshot comparado', evidence: [proof], status: 'passed' });
+  made.report.review = { status: 'approved', reviewer: 'simulacao de teste', findings: [] };
+  f.put(made.file, JSON.stringify(made.report));
+  if (seal) sealReview(made.file, { root: f.root });
+  return { ...f, ...made, commit };
+}
+
+test('check-merge prova fast-forward completo sem alterar indice ou arquivos humanos', t => {
+  const f = mergeFixture(t);
+  f.put('human.txt', 'staged humano\n'); f.git('add', 'human.txt'); f.put('human.txt', 'alteracao humana\n');
+  const index = readFileSync(join(f.root, '.git/index')), human = readFileSync(join(f.root, 'human.txt'));
+  const result = checkMerge([f.file], 'refs/heads/main', { root: f.root });
+  assert.equal(result.status, 'passed'); assert.equal(result.mode, 'fast-forward'); assert.equal(result.changes, 3);
+  assert.equal(result.source, f.git('rev-parse', 'HEAD').trim()); assert.equal(result.target, f.git('rev-parse', 'main').trim());
+  assert.deepEqual(readFileSync(join(f.root, '.git/index')), index); assert.deepEqual(readFileSync(join(f.root, 'human.txt')), human);
+});
+
+test('check-merge funciona na CLI e rejeita relatorio duplicado por alias', t => {
+  const f = mergeFixture(t);
+  const script = '.pbai4devs/scripts/revisar-entrega/SCRIPT.mjs', runtime = '.pbai4devs/scripts/lib/runtime.mjs';
+  for (const file of [script, runtime]) { mkdirSync(dirname(join(f.root, file)), { recursive: true }); cpSync(join(projectRoot, file), join(f.root, file)); }
+  const args = [join(f.root, script), 'check-merge', '--destino', 'refs/heads/main', f.file];
+  const run = spawnSync(process.execPath, args, { cwd: f.root, encoding: 'utf8' });
+  assert.equal(run.status, 0, run.stderr); assert.equal(JSON.parse(run.stdout).status, 'passed');
+  assert.throws(() => checkMerge([f.file, `./${f.file}`], 'refs/heads/main', { root: f.root }), /sem repeticao/);
+});
+
+test('check-merge bloqueia conteudo nao commitado e escopo parcial', async t => {
+  await t.test('working tree diferente do commit', t => {
+    const f = mergeFixture(t, { dirty: true });
+    assert.equal(checkReview(f.file, { root: f.root }).status, 'passed');
+    assert.throws(() => checkMerge([f.file], 'refs/heads/main', { root: f.root }), /difere do commit/);
+  });
+  await t.test('omissao de arquivo removido', t => {
+    const f = mergeFixture(t, { scope: ['src/main.mjs', 'src/new.txt'] });
+    assert.throws(() => checkMerge([f.file], 'refs/heads/main', { root: f.root }), /sem revisao selada: src\/old.txt/);
+  });
+  await t.test('relatorio sem selo', t => {
+    const f = mergeFixture(t, { seal: false });
+    assert.throws(() => checkMerge([f.file], 'refs/heads/main', { root: f.root }), /nao selada/);
+  });
+});
+
+test('check-merge aceita cobertura distribuida por relatorios selados', t => {
+  const f = mergeFixture(t, { scope: ['src/main.mjs', 'src/new.txt'] });
+  const made = prepareReview({ root: f.root, id: 'merge-extra', execution: 'review', scope: ['src/old.txt'] });
+  for (const item of made.report.documentation) Object.assign(item, { decision: 'no-impact', reason: 'Documento examinado na fixture.' });
+  const proof = '.agent-tests/merge-extra/review/proof.txt'; f.put(proof, 'Prova sintetica complementar.\n');
+  for (const item of made.report.validation) Object.assign(item, { method: 'fixture', prerequisite: 'fixture local', assertion: 'delecao revisada', evidence: [proof], status: 'passed' });
+  made.report.review = { status: 'approved', reviewer: 'simulacao de teste', findings: [] };
+  f.put(made.file, JSON.stringify(made.report)); sealReview(made.file, { root: f.root });
+  const result = checkMerge([f.file, made.file], 'refs/heads/main', { root: f.root });
+  assert.equal(result.status, 'passed'); assert.equal(result.reports, 2); assert.equal(result.changes, 3);
+});
+
+test('check-merge recusa origem e destino invalidos, divergencia e tipos nao comprovados', async t => {
+  await t.test('branch invalida ou identica', t => {
+    const f = mergeFixture(t);
+    for (const name of ['main', 'refs/heads/missing', 'refs/heads/feature', '--help']) assert.throws(() => checkMerge([f.file], name, { root: f.root }));
+  });
+  await t.test('historico divergente', t => {
+    const f = mergeFixture(t); f.git('checkout', '-q', 'main'); f.put('different.txt', 'destino\n'); f.git('add', 'different.txt'); f.commit('test: target'); f.git('checkout', '-q', 'feature');
+    assert.throws(() => checkMerge([f.file], 'refs/heads/main', { root: f.root }), /fast-forward/);
+  });
+  await t.test('HEAD destacado', t => {
+    const f = mergeFixture(t); f.git('checkout', '-q', '--detach');
+    assert.throws(() => checkMerge([f.file], 'refs/heads/main', { root: f.root }), /HEAD destacado/);
+  });
+  await t.test('origem fora das branches locais', t => {
+    const f = mergeFixture(t); f.git('symbolic-ref', 'HEAD', 'refs/remotes/origin/feature');
+    assert.throws(() => checkMerge([f.file], 'refs/heads/main', { root: f.root }), /origem deve ser uma branch local/);
+  });
+  await t.test('submodulo ignorado pela configuracao Git', t => {
+    const f = mergeFixture(t, { ignoredSubmodule: true });
+    assert.throws(() => checkMerge([f.file], 'refs/heads/main', { root: f.root }), /modo nao comprovado: vendor/);
+    const script = '.pbai4devs/scripts/revisar-entrega/SCRIPT.mjs', runtime = '.pbai4devs/scripts/lib/runtime.mjs';
+    for (const file of [script, runtime]) { mkdirSync(dirname(join(f.root, file)), { recursive: true }); cpSync(join(projectRoot, file), join(f.root, file)); }
+    const run = spawnSync(process.execPath, [join(f.root, script), 'check-merge', '--destino', 'refs/heads/main', f.file], { cwd: f.root, encoding: 'utf8' });
+    assert.equal(run.status, 1); assert.match(run.stderr, /modo nao comprovado: vendor/);
+  });
+  await t.test('link simbolico', t => {
+    const f = mergeFixture(t);
+    try { symlinkSync('main.mjs', join(f.root, 'src/link')); }
+    catch (error) { if (['EPERM', 'EACCES', 'ENOSYS'].includes(error.code)) return t.skip('Sem permissao de symlink.'); throw error; }
+    f.git('add', 'src/link'); f.commit('test: link');
+    assert.throws(() => checkMerge([f.file], 'refs/heads/main', { root: f.root }), /simbolico|modo nao comprovado/);
+  });
+  await t.test('arquivo executavel', t => {
+    const f = mergeFixture(t); f.git('update-index', '--chmod=+x', 'src/main.mjs'); f.commit('test: mode');
+    assert.throws(() => checkMerge([f.file], 'refs/heads/main', { root: f.root }), /modo nao comprovado/);
+  });
 });

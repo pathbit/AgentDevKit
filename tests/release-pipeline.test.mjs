@@ -101,7 +101,8 @@ test('perfis portáteis cobrem cada suíte uma vez e o comando local executa tod
     const group = [];
     runPipeline(profile, { root, run(_root, args) { group.push(args); } });
     assert.deepEqual(group[0], ['--test', '--test-concurrency=2', ...files.map(file => `tests/${file}`)]);
-    assert.equal(group.length, profile === 'portable-resources' ? 8 : 1);
+    assert.equal(group.length, profile === 'portable-resources' ? 9 : 1);
+    if (profile === 'portable-resources') assert.ok(group.some(args => args.includes('.pbai4devs/scripts/revisar-entrega/tests/TEST.mjs')));
     calls.push(...group);
   }
   const individual = calls.splice(0);

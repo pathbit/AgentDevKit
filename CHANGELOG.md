@@ -4,6 +4,14 @@ description: Alterações verificáveis por versão do AgentDevKit.
 
 # Changelog
 
+## 0.0.25 — 2026-11-14
+
+- Verifica a cobertura e o conteúdo revisado antes de um merge fast-forward;
+  bloqueia situações que o gate não consegue comprovar.
+- Esclarece a validação na origem e a interrupção do merge quando o gate falha.
+- Amplia as provas de preservação em projetos existentes e explica os limites
+  do campo `preserved`. Os projetos de exemplo gerados continuam locais.
+
 ## 0.0.24 — 2026-11-14
 
 - Preserva catálogos, configuração e blocos existentes sem comprovação de

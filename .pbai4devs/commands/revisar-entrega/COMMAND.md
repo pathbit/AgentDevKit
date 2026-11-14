@@ -24,6 +24,12 @@ urgente, defina critérios próprios AC-001 e registre o motivo.
    revisão e `revisar-entrega check <relatorio>` pelo mesmo seletor. Falha,
    critério sem prova ou revisão pendente bloqueiam o commit/merge.
 
+Antes de um merge fast-forward, na origem, execute `revisar-entrega check-merge
+--destino refs/heads/<destino> <relatorio> [outros-relatorios...]`. A verificação
+exige cobertura do diff e correspondência com o commit revisado. Ela bloqueia
+históricos divergentes, links, submódulos, arquivos executáveis e operações Git
+acima de 64 MiB. Confirme os hashes retornados antes de integrar.
+
 Saída: resultado por critério, pendências e caminho do único `revisao.json` em
 `.agent-tests/<referencia>/<execucao>/`. Esta etapa é obrigatória após qualquer
 implementação; a ausência de spec não elimina a revisão.

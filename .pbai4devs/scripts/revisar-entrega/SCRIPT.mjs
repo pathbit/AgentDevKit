@@ -26,7 +26,7 @@ function pathInRoot(root, input) {
 }
 
 function git(root, args, allowFailure = false) {
-  const result = spawnSync('git', args, { cwd: root, encoding: 'utf8', timeout: 15000, windowsHide: true });
+  const result = spawnSync('git', args, { cwd: root, encoding: 'utf8', timeout: 15000, windowsHide: true, env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', GIT_NO_REPLACE_OBJECTS: '1' } });
   if ((result.error || result.status !== 0) && !allowFailure) fail(`Git: ${result.error?.message || result.stderr?.trim() || 'operacao falhou'}`);
   return result;
 }
@@ -53,7 +53,7 @@ function tracked(root, file) {
 
 function ignoredPaths(root, files) {
   if (!files.length) return new Set();
-  const result = spawnSync('git', ['check-ignore', '--no-index', '--stdin', '-z'], { cwd: root, input: files.join('\0') + '\0', encoding: 'utf8', timeout: 15000, windowsHide: true });
+  const result = spawnSync('git', ['check-ignore', '--no-index', '--stdin', '-z'], { cwd: root, input: files.join('\0') + '\0', encoding: 'utf8', timeout: 15000, windowsHide: true, env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', GIT_NO_REPLACE_OBJECTS: '1' } });
   if (result.error || ![0, 1].includes(result.status)) fail(`Git: ${result.error?.message || result.stderr?.trim() || 'falha ao conferir ignores'}`);
   return new Set(result.stdout.split('\0').filter(Boolean));
 }
@@ -211,10 +211,78 @@ function validateReview(file, { root = projectRoot, requireSeal = true } = {}) {
     const recorded = JSON.parse(readFileSync(join(root, sealPath), 'utf8'));
     if (JSON.stringify(recorded) !== JSON.stringify(seal)) fail('Relatorio, baseline ou evidencia alterados apos selar a revisao.');
   }
-  return { root, prefix, seal, result: { status: 'passed', report: reportPath, criteria: ids.size, documents: docs.size } };
+  return { root, prefix, seal, snapshot: state, result: { status: 'passed', report: reportPath, criteria: ids.size, documents: docs.size } };
 }
 
 export function checkReview(file, { root = projectRoot } = {}) { return validateReview(file, { root, requireSeal: true }).result; }
+
+// This deliberately permits only a fast-forward and regular non-executable
+// files. Existing review snapshots do not record modes or merge results.
+export function checkMerge(reports, destination, { root = projectRoot } = {}) {
+  requireNode(); root = repository(root);
+  if (!Array.isArray(reports) || !reports.length) fail('Informe um ou mais relatorios selados, sem repeticao.');
+  reports = reports.map(file => pathInRoot(root, file));
+  if (new Set(reports).size !== reports.length) fail('Informe relatorios selados sem repeticao.');
+  if (typeof destination !== 'string' || !destination.startsWith('refs/heads/') || git(root, ['check-ref-format', destination], true).status !== 0) fail('Destino deve ser uma branch local completa: refs/heads/<nome>.');
+  const currentBranch = git(root, ['symbolic-ref', '--quiet', 'HEAD'], true);
+  if (currentBranch.status !== 0) fail('Confira a branch de origem; HEAD destacado nao e aceito.');
+  const sourceRef = currentBranch.stdout.trim();
+  if (!sourceRef.startsWith('refs/heads/') || git(root, ['check-ref-format', sourceRef], true).status !== 0) fail('A origem deve ser uma branch local valida.');
+  if (sourceRef === destination) fail('Origem e destino devem ser branches distintas.');
+  for (const ref of [sourceRef, destination]) if (git(root, ['symbolic-ref', '--quiet', ref], true).status === 0) fail(`Branch simbolica nao e aceita: ${ref}`);
+  const resolveCommit = ref => {
+    const out = git(root, ['rev-parse', '--verify', `${ref}^{commit}`], true);
+    const value = out.stdout?.trim();
+    if (out.status !== 0 || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(value || '')) fail(`Branch ou commit invalido: ${ref}`);
+    return value;
+  };
+  const source = resolveCommit(sourceRef), target = resolveCommit(destination);
+  if (head(root) !== source) fail('HEAD diverge da branch de origem.');
+  if (git(root, ['merge-base', '--is-ancestor', target, source], true).status !== 0) fail('Apenas fast-forward comprovado e suportado; revise o resultado integrado para historico divergente.');
+  const bytes = args => {
+    const result = spawnSync('git', args, { cwd: root, timeout: 15000, windowsHide: true, maxBuffer: 64 * 1024 * 1024, env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', GIT_NO_REPLACE_OBJECTS: '1' } });
+    if (result.error || result.status !== 0) fail(`Git: ${result.error?.message || result.stderr?.toString().trim() || 'operacao falhou'}`);
+    return result.stdout;
+  };
+  const decode = data => { try { return new TextDecoder('utf-8', { fatal: true }).decode(data); } catch { fail('Caminho Git nao e UTF-8 valido.'); } };
+  const raw = bytes(['diff', '--raw', '-z', '--no-abbrev', '--no-renames', '--no-ext-diff', '--no-textconv', '--ignore-submodules=none', target, source, '--']);
+  const parts = decode(raw).split('\0');
+  if (parts.pop() !== '' || parts.length % 2) fail('Diff Git incompleto ou ambiguo.');
+  const changes = new Map();
+  for (let i = 0; i < parts.length; i += 2) {
+    const match = /^:(\d{6}) (\d{6}) ([a-f0-9]+) ([a-f0-9]+) ([AMD])$/.exec(parts[i]);
+    if (!match) fail('Tipo de alteracao Git nao suportado.');
+    const [, beforeMode, afterMode, , , action] = match, path = pathInRoot(root, parts[i + 1]);
+    if (changes.has(path) || !['000000', '100644'].includes(beforeMode) || !['000000', '100644'].includes(afterMode)) fail(`Tipo ou modo nao comprovado: ${path}`);
+    changes.set(path, action);
+  }
+  if (!changes.size) fail('Nao ha alteracoes para integrar.');
+  const reviewed = new Set();
+  const verified = reports.map(file => validateReview(file, { root, requireSeal: true }));
+  for (const review of verified) {
+    if (review.snapshot.head !== source) fail('Relatorio nao corresponde ao commit de origem.');
+    for (const item of review.snapshot.files) {
+      const path = pathInRoot(root, item.path);
+      if (item.indexAction !== undefined) fail(`Acao de indice nao pode comprovar merge: ${path}`);
+      const tree = decode(bytes(['--literal-pathspecs', 'ls-tree', '-z', '--full-tree', source, '--', path]));
+      if (!tree) {
+        if (item.sha256 !== null) fail(`Conteudo revisado nao esta no commit de origem: ${path}`);
+      } else {
+        const m = /^(\d{6}) blob ([a-f0-9]+)\t([^\0]+)\0$/.exec(tree);
+        if (!m || m[1] !== '100644' || m[3] !== path) fail(`Arquivo, link ou modo nao comprovado no commit: ${path}`);
+        if (item.sha256 !== createHash('sha256').update(bytes(['cat-file', 'blob', m[2]])).digest('hex')) fail(`Conteudo revisado difere do commit de origem: ${path}`);
+      }
+      if (changes.has(path)) reviewed.add(path);
+    }
+  }
+  const missing = [...changes.keys()].filter(path => !reviewed.has(path));
+  if (missing.length) fail(`Alteracoes sem revisao selada: ${missing.join(', ')}`);
+  // Detect moved refs or changed worktree/reports during the validation.
+  if (git(root, ['symbolic-ref', '--quiet', 'HEAD']).stdout.trim() !== sourceRef || resolveCommit(sourceRef) !== source || resolveCommit(destination) !== target || head(root) !== source) fail('Origem ou destino mudou durante a verificacao.');
+  for (const file of reports) validateReview(file, { root, requireSeal: true });
+  if (git(root, ['symbolic-ref', '--quiet', 'HEAD']).stdout.trim() !== sourceRef || resolveCommit(sourceRef) !== source || resolveCommit(destination) !== target || head(root) !== source) fail('Origem ou destino mudou durante a verificacao.');
+  return { status: 'passed', sourceRef, source, destination, target, changes: changes.size, reports: reports.length, mode: 'fast-forward' };
+}
 
 export function sealReview(file, options) {
   const checked = validateReview(file, { ...options, requireSeal: false });
@@ -224,12 +292,13 @@ export function sealReview(file, options) {
   return checkReview(file, options);
 }
 
-const usage = 'Uso: revisar-entrega prepare --id <slug> [--execution <slug>] [--spec <arquivo>] [--scope <arquivo>] [--document <arquivo>] [--output <artefato>]; seal|check <revisao.json>';
+const usage = 'Uso: revisar-entrega prepare --id <slug> [--execution <slug>] [--spec <arquivo>] [--scope <arquivo>] [--document <arquivo>] [--output <artefato>]; seal|check <revisao.json>; check-merge --destino refs/heads/<branch> <revisao.json> [...]';
 export function main(args = process.argv.slice(2)) {
   requireNode(); const [mode, ...rest] = args;
   if (!mode || ['--help', '-h'].includes(mode)) { console.log(usage); return 0; }
   if (mode === 'check' && rest.length === 1) { console.log(JSON.stringify(checkReview(rest[0]))); return 0; }
   if (mode === 'seal' && rest.length === 1) { console.log(JSON.stringify(sealReview(rest[0]))); return 0; }
+  if (mode === 'check-merge' && rest.length >= 3 && rest[0] === '--destino') { console.log(JSON.stringify(checkMerge(rest.slice(2), rest[1]))); return 0; }
   if (mode !== 'prepare') fail(usage);
   const options = { scope: [], documents: [] };
   const fields = { '--id': 'id', '--execution': 'execution', '--spec': 'spec', '--output': 'output' };
