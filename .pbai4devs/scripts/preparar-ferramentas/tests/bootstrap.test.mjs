@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -22,7 +23,7 @@ function fixture(t) {
   assert.ok(tar, 'Native tar is required for archive integration tests.');
   mkdirSync(join(project, '.agent-tests'), { recursive: true });
   const root = mkdtempSync(join(project, '.agent-tests/bootstrap-node-'));
-  t.after(() => rmSync(root, { recursive: true, force: true }));
+  t.after(() => rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));
   const platform = process.platform, arch = process.arch;
   const key = platform === 'win32' ? `win-${arch}` : `${platform}-${arch}`;
   const top = `node-v24.1.2-${key}`, extension = platform === 'win32' ? 'zip' : 'tar.gz';
