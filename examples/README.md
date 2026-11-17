@@ -4,6 +4,87 @@ description: Exemplos locais dos agentes e dos estágios de um projeto.
 
 # Exemplos
 
+## Instalação em projetos sintéticos
+
+Estas receitas usam Git, Node.js 24+ e um tarball local criado da cópia atual do
+AgentDevKit. O pacote aceita Node.js 18+; com Node 18–23, o launcher pode precisar
+preparar Node 24 antes da execução. Para este exemplo offline, use Node 24+; veja
+os [pré-requisitos](../docs/guides/prerequisites.md).
+
+Use diretórios temporários fora de qualquer repositório Git. As receitas mostram
+a instalação e a consulta ao próximo passo, sem simular aprovação de produto; não
+as execute em um projeto real. Use um shell POSIX. As receitas foram verificadas
+no macOS; a execução no Windows com Git Bash ainda não foi validada.
+
+Na raiz do AgentDevKit, crie uma pasta temporária para o pacote e use o caminho
+impresso no comando seguinte:
+
+```sh
+node -e "const f=require('node:fs'),o=require('node:os'),p=require('node:path');console.log(f.mkdtempSync(p.join(o.tmpdir(),'adk-pacote-')))"
+npm pack --offline --ignore-scripts --pack-destination "<pasta-do-pacote>"
+```
+
+Substitua `<pacote-local.tgz>` abaixo pelo caminho absoluto do arquivo gerado.
+O tarball pode conter mudanças locais ainda não publicadas; estas receitas não
+comprovam o comportamento da versão publicada. O modo offline limita o npm,
+mas não impede acesso à rede por outros processos. Para a instalação pública,
+consulte o [guia de instalação](../docs/guides/installation.md).
+
+### Projeto novo
+
+Crie outra pasta temporária com o primeiro comando e entre no caminho impresso.
+Confirme que ela está fora de qualquer repositório Git antes de inicializá-la:
+
+```sh
+node -e "const f=require('node:fs'),o=require('node:os'),p=require('node:path');console.log(f.mkdtempSync(p.join(o.tmpdir(),'adk-novo-')))"
+cd "<pasta-do-projeto-novo>"
+git init
+npm exec --offline --yes --package "<pacote-local.tgz>" -- \
+  agentdevkit init --agents codex,claude --lang pt --yes
+npm exec --offline --yes --package "<pacote-local.tgz>" -- \
+  agentdevkit next --intent product --lang pt --json
+```
+
+Consulte a skill indicada no campo `next` e responda às perguntas para preparar
+o projeto e definir o produto. A instalação não cria PRD nem aprova decisões.
+
+### Projeto existente
+
+Crie outra pasta temporária, confirme que está fora de qualquer repositório Git,
+entre nela e gere apenas os arquivos fictícios:
+
+```sh
+node -e "const f=require('node:fs'),o=require('node:os'),p=require('node:path');console.log(f.mkdtempSync(p.join(o.tmpdir(),'adk-existente-')))"
+cd "<pasta-do-projeto-existente>"
+git init
+node -e "const f=require('node:fs');\
+f.mkdirSync('.claude');\
+f.writeFileSync('AGENTS.md',\
+'# Instruções existentes\n\nRegra sintética preservada.\n');\
+f.writeFileSync('.claude/settings.json',\
+JSON.stringify({env:{EXEMPLO:'local'}},null,2)+'\n');\
+f.writeFileSync('.gitignore','cache-do-projeto/\n');\
+f.writeFileSync('exemplo.txt','conteúdo preparado\n')"
+git add -- exemplo.txt
+git diff --cached -- exemplo.txt
+npm exec --offline --yes --package "<pacote-local.tgz>" -- \
+  agentdevkit init --agents codex,claude --lang pt --yes
+npm exec --offline --yes --package "<pacote-local.tgz>" -- \
+  agentdevkit next --intent run --lang pt --json
+git diff --cached -- exemplo.txt
+```
+
+Confira `AGENTS.md`, `.claude/settings.json` e `.gitignore` na pasta
+sintética e compare as duas saídas de `git diff --cached`. A orientação humana
+deve continuar presente, mesmo se o kit acrescentar um bloco ao `AGENTS.md`;
+as outras configurações e o conteúdo preparado devem ser preservados. Use a
+skill indicada em `next` para a etapa pendente e, ao preparar a execução de um
+projeto existente, siga `preparar-dev`.
+
+Os comandos geram pastas novas e não removem exemplos anteriores. O código de
+aplicações e os dados desses projetos são fictícios e não fazem parte do Git do
+AgentDevKit.
+
 ## Dois projetos do zero, com três specs
 
 Os exemplos criam uma API HTTP de tarefas em memória e uma calculadora de

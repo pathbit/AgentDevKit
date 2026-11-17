@@ -4,19 +4,18 @@ description: Atualiza ou confere os apontamentos compartilhados dos agentes.
 
 # Sincronizar
 
-Entrada: este comando agêntico usa o script local com `--force` para reparar;
-`--check` só confere. O `sync` da CLI usa as fontes locais e não implica
-`--force`; `update` usa as fontes da versão do pacote executado.
-Pré-requisitos: Node.js 24+ e manifesto `.pbai4devs/espelhos.conf` válido.
+Entrada: `sync` da CLI usa as fontes locais e não implica `--force`;
+`update` usa as fontes da versão do pacote executado. Pré-requisito: Node.js 24+.
 
-Siga [sincronizar-agentes](../../skills/projeto/sincronizar-agentes/SKILL.md)
-e execute o script correspondente pelo seletor. A reconstrução repara
+Siga [sincronizar-agentes](../../skills/projeto/sincronizar-agentes/SKILL.md):
+revise o plano da CLI, aplique e confira. A reconstrução repara
 apontamentos e remove saídas obsoletas cuja propriedade do kit foi comprovada.
 Recursos adicionais, configurações, pastas e links humanos são preservados,
 inclusive em colisões de nomes. O backup local não substitui o histórico Git.
 Após reparar, execute também `--check`.
 
-Respeite os clientes registrados no manifesto. Para mudar a seleção salva,
+O script direto usa o manifesto existente e não inclui automaticamente novos
+YAMLs nativos. Respeite os clientes selecionados. Para mudar a seleção salva,
 use `agentdevkit agents <lista>`; sincronizar não ativa todos os clientes.
 
 Saída: apontamentos atualizados ou divergências encontradas. Templates,

@@ -1,17 +1,28 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { devNull, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import test from 'node:test';
 import { getNextSteps } from '../src/next.mjs';
+import { parseArgs } from '../src/cli.mjs';
 import { packageInfo } from '../src/config.mjs';
 import { findNpmCli } from '../.pbai4devs/scripts/lib/npm.mjs';
 import { inspectDocumentation, inspectProject } from '../.pbai4devs/scripts/inspecionar-projeto/SCRIPT.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+
+test('falha possivelmente parcial orienta revisão de backups nos três idiomas', () => {
+  for (const [language, incomplete] of [['pt', /incompletos/i], ['en', /incomplete/i], ['es', /incompletos/i]]) {
+    const steps = getNextSteps({ command: 'error', target: tmpdir(), language, possiblePartial: true });
+    assert.equal(steps.length, 1); assert.equal(steps[0].stage, 'revisao');
+    assert.equal(steps[0].command, undefined); assert.match(steps[0].instruction, incomplete);
+  }
+});
+
 function fixture(t) {
   const target = realpathSync(mkdtempSync(join(tmpdir(), "agentdevkit próximos $() ' -")));
   t.after(() => rmSync(target, { recursive: true, force: true }));
@@ -41,6 +52,7 @@ test('novo projeto recebe preparação e projeto existente preserva descoberta',
   for (const language of ['pt', 'en', 'es']) {
     const [next] = getNextSteps({ command: 'next', target, language, installed: true });
     assert.equal(next.skill, 'preparar-dev'); assert.ok(next.instruction);
+    assert.doesNotMatch(next.instruction, /status registrado|recorded status|estado registrado/i);
     const escapedTarget = target.replaceAll("'", process.platform === 'win32' ? "''" : "'\\''");
     assert.ok(next.command.includes(escapedTarget));
     assert.doesNotMatch(next.command, /'next'/);
@@ -58,6 +70,34 @@ test('aprovações registradas determinam a etapa sem inventar aprovação', t =
   assert.equal(next().skill, 'criar-spec');
   state(write, { technical: 'concluido' }); assert.equal(next().skill, 'criar-spec');
   assert.doesNotMatch(next().command, /'next'/);
+});
+
+test('etapas de produto solicitam evidências também nos fluxos padrão e run', t => {
+  const { target, write } = fixture(t);
+  for (const [options, expected] of [
+    [{ prd: 'rascunho' }, 'criar-prd'],
+    [{ ux: 'pendente' }, 'criar-ux-ui'],
+    [{ design: 'rascunho' }, 'criar-design-doc'],
+    [{}, 'gerenciar-roadmap'],
+  ]) {
+    state(write, options);
+    for (const intent of [undefined, 'run', 'product']) {
+      const [step] = getNextSteps({ command: 'next', target, installed: true, intent });
+      assert.equal(step.skill, expected);
+      assert.match(step.instruction, /status registrado, por si só, não comprova aprovação/i);
+    }
+  }
+});
+
+test('frontmatter CRLF legítimo mantém aprovação e seleção da spec', t => {
+  const { target, write } = fixture(t);
+  state(write);
+  write('docs/planos/ROADMAP.md', '---\r\nstatus: aprovado\r\n---\r\n# Roadmap\r\n- [ ] [Spec](../incrementos/primeiro/SPEC.md)\r\n');
+  write('docs/incrementos/primeiro/SPEC.md', '---\r\nstatus: aprovado\r\n---\r\n# Spec\r\n');
+  for (const file of ['.pbai4devs/state/configuracao/ESTADO.md', 'docs/prd.md', 'docs/ux.md', 'docs/design.md']) {
+    write(file, readFileSync(join(target, file), 'utf8').replaceAll('\n', '\r\n'));
+  }
+  assert.equal(getNextSteps({ command: 'next', target, installed: true })[0].skill, 'implementar-spec');
 });
 
 test('respeita roadmap, spec declarada e configuração antes de sugerir implementação', t => {
@@ -83,6 +123,15 @@ test('respeita roadmap, spec declarada e configuração antes de sugerir impleme
   assert.match(inspectProject(target).maturity.limits[0], /nao substitui aprovacao/);
   assert.equal(next().skill, 'implementar-spec');
   assert.match(next().instruction, /confirme as decisões ainda pendentes/);
+  for (const [language, warning] of [
+    ['pt', /status registrado, por si só, não comprova aprovação/i],
+    ['en', /recorded status alone does not establish approval/i],
+    ['es', /estado registrado no demuestra por sí solo la aprobación/i],
+  ]) {
+    const [step] = getNextSteps({ command: 'next', target, language, installed: true });
+    assert.equal(step.skill, 'implementar-spec');
+    assert.match(step.instruction, warning);
+  }
   write('docs/planos/PLANO.md', '---\nstatus: aprovado\n---\n# Plano existente\n');
   assert.equal(next().skill, 'implementar-spec');
   state(write, { technical: 'concluido' });
@@ -157,6 +206,10 @@ test('status duplicado ou sintaxe YAML relevante desconhecida não cria aprovaç
       `'status': rascunho\nstatus: ${status}`,
       `!!str status: rascunho\nstatus: ${status}`,
       `!!str "status": rascunho\nstatus: ${status}`,
+      `status: ${status}\n  rascunho`,
+      `status: ${status}\n  rascunho\ntitulo: Documento`,
+      `status: "${status.slice(0, 4)}\r${status.slice(4)}"`,
+      `status: '${status.slice(0, 4)}\r${status.slice(4)}'`,
     ]) {
       state(write);
       write('docs/planos/ROADMAP.md', `---\nstatus: aprovado\n---\n# Roadmap\n${link}\n`);
@@ -411,4 +464,269 @@ test('repo usa npm público e sobrepõe mapeamento legado do usuário sem editar
   assert.equal(result.status, 0, result.stdout + result.stderr);
   assert.equal(result.stdout.trim().replace(/\/$/, ''), 'https://registry.npmjs.org');
   assert.equal(readFileSync(userConfig, 'utf8'), '@pathbit:registry=https://npm.pkg.github.com\n');
+});
+
+// The query must preserve both the user's files and Git's staged state.
+function intentTree(root) {
+  const rows = [];
+  const hash = bytes => createHash('sha256').update(bytes).digest('hex');
+  function visit(relative = '') {
+    const absolute = join(root, relative), info = fs.lstatSync(absolute);
+    if (info.isSymbolicLink()) { rows.push([relative, 'link', fs.readlinkSync(absolute)]); return; }
+    if (info.isDirectory()) {
+      rows.push([relative, 'directory', info.mode & 0o777]);
+      for (const name of fs.readdirSync(absolute).sort()) visit(join(relative, name));
+      return;
+    }
+    assert.ok(info.isFile(), `Tipo inesperado na fixture: ${relative}`);
+    rows.push([relative, 'file', info.mode & 0o777, hash(fs.readFileSync(absolute))]);
+  }
+  visit(); return rows;
+}
+
+test('next diferencia intenção de produto e execução sem alterar projeto ou Git', t => {
+  const { target, write } = fixture(t);
+  const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !/^GIT_|^NODE_OPTIONS$/i.test(name)));
+  Object.assign(env, { GIT_CONFIG_GLOBAL: devNull, GIT_CONFIG_NOSYSTEM: '1', GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0', LC_ALL: 'C' });
+  const git = (...args) => {
+    const result = spawnSync('git', args, { cwd: target, env, encoding: 'utf8', timeout: 30000 });
+    assert.equal(result.status, 0, result.stderr || result.error?.message); return result.stdout;
+  };
+  write('.gitignore', '# regras humanas\nprivate/\n');
+  write('README.md', '# Projeto existente\n');
+  write('docs/PRD.md', '# Documento humano existente\n');
+  write('docs/decisoes/DESIGN.md', '# Design existente\n');
+  write('src/app.mjs', 'export const app = true;\n');
+  write('human.txt', 'conteúdo staged\n');
+  write('.pbai4devs/state/agentdevkit.json', JSON.stringify({ schemaVersion: 1, version: packageInfo.version, language: 'pt', files: {}, blocks: {} }));
+  git('init', '--quiet'); git('add', '--', '.gitignore', 'README.md', 'docs', 'src', 'human.txt');
+  write('human.txt', 'conteúdo staged\nalteração não staged\n');
+  const staged = git('diff', '--cached', '--binary', '--no-ext-diff', '--no-textconv');
+  assert.match(staged, /conteúdo staged/);
+  const before = intentTree(target);
+  const cli = (...args) => {
+    const result = spawnSync(process.execPath, [join(root, 'bin/agentdevkit.mjs'), 'next', '--target', target, '--json', ...args], { cwd: target, env, encoding: 'utf8', timeout: 60000 });
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const value = JSON.parse(result.stdout); assert.equal(value.ok, true); return value.next[0];
+  };
+  const product = cli('--intent', 'product');
+  assert.equal(product.skill, 'configurar-projeto');
+  assert.equal(product.stage, 'preparacao');
+  assert.equal(product.maturity, 'implementacao');
+  assert.match(product.instruction, /inventari|mape/i);
+  assert.doesNotMatch(`${product.label} ${product.instruction}`, /(?:não|nao) (?:há|ha|existem?|existe) (?:documentos|docs|prd|design)/i);
+  for (const step of [cli('--intent', 'run'), cli()]) assert.equal(step.skill, 'preparar-dev');
+  assert.equal(git('diff', '--cached', '--binary', '--no-ext-diff', '--no-textconv'), staged);
+  assert.deepEqual(intentTree(target), before);
+});
+
+test('intenção de produto respeita projeto novo, estado mapeado e lacunas', t => {
+  const { target, write } = fixture(t);
+  const next = intent => getNextSteps({ command: 'next', target, installed: true, intent })[0];
+  const notInstalled = getNextSteps({ command: 'next', target, installed: false, intent: 'product' })[0];
+  assert.equal(notInstalled.stage, 'instalacao');
+  assert.equal(notInstalled.maturity, undefined);
+  assert.equal(next('product').skill, 'configurar-projeto');
+  write('src/app.mjs', 'export const app = true;\n');
+  state(write, { prd: 'rascunho' });
+  assert.equal(next('product').skill, 'criar-prd');
+  assert.equal(next('run').skill, 'preparar-dev');
+  const before = intentTree(target);
+  const stateFile = '.pbai4devs/state/configuracao/ESTADO.md';
+  write(stateFile, readFileSync(join(target, stateFile), 'utf8').replace('  prd: docs/prd.md', '  prd: null'));
+  const incomplete = next('product');
+  assert.notEqual(incomplete.skill, 'criar-prd', 'caminho não mapeado não comprova ausência do PRD');
+  assert.notEqual(incomplete.skill, 'implementar-spec');
+  assert.ok(incomplete.instruction);
+  assert.notDeepEqual(intentTree(target), before, 'a alteração foi feita pela fixture, não por next');
+  const afterFixtureEdit = intentTree(target);
+  next('product'); assert.deepEqual(intentTree(target), afterFixtureEdit);
+});
+
+test('intenção de produto identifica a primeira etapa pendente antes de fases não mapeadas', t => {
+  const { target, write } = fixture(t);
+  const stateFile = '.pbai4devs/state/configuracao/ESTADO.md';
+  const next = () => getNextSteps({ command: 'next', target, installed: true, intent: 'product' })[0];
+  const clearPaths = (...paths) => {
+    let value = readFileSync(join(target, stateFile), 'utf8');
+    for (const name of paths) value = value.replace(`  ${name}: docs/${name === 'ux_ui' ? 'ux' : name}.md`, `  ${name}: null`);
+    write(stateFile, value);
+  };
+  state(write, { prd: 'rascunho' }); clearPaths('ux_ui', 'design');
+  let before = intentTree(target);
+  assert.equal(next().skill, 'criar-prd');
+  assert.equal(next().stage, 'prd');
+  assert.deepEqual(intentTree(target), before);
+  state(write, { ux: 'rascunho' }); clearPaths('design');
+  before = intentTree(target);
+  assert.equal(next().skill, 'criar-ux-ui');
+  assert.equal(next().stage, 'ux');
+  assert.deepEqual(intentTree(target), before);
+  state(write); clearPaths('prd');
+  before = intentTree(target);
+  assert.equal(next().skill, null);
+  assert.equal(next().stage, 'inspecao');
+  assert.match(next().instruction, /caminhos.*evidências/i);
+  assert.deepEqual(intentTree(target), before);
+});
+
+test('intenção de produto mantém inspeção conservadora quando inventário é truncado', t => {
+  const { target, write } = fixture(t), large = join(target, 'huge');
+  mkdirSync(large); write('src/app.mjs', 'export const app = true;\n');
+  write('docs/PRD.md', '# Documento existente\n');
+  const original = fs.opendirSync;
+  const ignored = { name: 'node_modules', isDirectory: () => true, isFile: () => false, isSymbolicLink: () => false };
+  fs.opendirSync = (...args) => {
+    if (String(args[0]) !== large) return original(...args);
+    let reads = 0; return { readSync: () => (++reads <= 30000 ? ignored : null), closeSync: () => {} };
+  };
+  let step;
+  try { step = getNextSteps({ command: 'next', target, installed: true, intent: 'product' })[0]; }
+  finally { fs.opendirSync = original; }
+  assert.match(step.instruction, /inspecione manualmente/i);
+  assert.equal(step.skill, undefined); assert.equal(step.command, undefined);
+  assert.doesNotMatch(step.instruction, /(?:não|nao) (?:há|ha|existem?|existe) (?:documentos|docs|prd|design)/i);
+});
+
+test('intenção de produto não escolhe etapa com inventário documental truncado', t => {
+  const { target, write } = fixture(t);
+  write('src/app.mjs', 'export const app = true;\n');
+  state(write, { prd: 'rascunho' });
+  write('docs/PRD-grande.md', '# Documento humano\n' + 'a'.repeat(2 * 1024 * 1024 + 1));
+  const report = inspectProject(target);
+  assert.equal(report.scan.truncated, false);
+  assert.equal(report.documentation.scan.truncated, true);
+  const product = getNextSteps({ command: 'next', target, installed: true, intent: 'product' })[0];
+  assert.equal(product.skill, undefined);
+  assert.equal(product.stage, undefined);
+  assert.equal(product.maturity, undefined);
+  assert.match(product.instruction, /inspecione manualmente/i);
+  for (const intent of [undefined, 'run']) {
+    assert.equal(getNextSteps({ command: 'next', target, installed: true, intent })[0].skill, 'preparar-dev');
+  }
+});
+
+test('intenção de produto pede inspeção quando o inventário documental tem avisos', t => {
+  const { target, write } = fixture(t);
+  write('src/app.mjs', 'export const app = true;\n');
+  state(write, { prd: 'rascunho' });
+  const stateFile = '.pbai4devs/state/configuracao/ESTADO.md';
+  const originalState = readFileSync(join(target, stateFile), 'utf8');
+  const next = intent => getNextSteps({ command: 'next', target, installed: true, intent })[0];
+  write(stateFile, originalState.replace('  prd: docs/prd.md', '  changelog: ../fora.md\n  prd: docs/prd.md'));
+  let report = inspectProject(target);
+  assert.equal(report.documentation.scan.truncated, false);
+  assert.equal(report.documentation.scan.complete, false);
+  assert.ok(report.documentation.warnings.some(item => item.reason === 'invalid-configured-path'));
+  let before = intentTree(target);
+  assert.equal(next('product').skill, undefined);
+  assert.match(next('product').instruction, /inspecione manualmente/i);
+  assert.equal(next('run').skill, 'preparar-dev');
+  assert.deepEqual(intentTree(target), before);
+
+  write(stateFile, originalState);
+  write('docs/nao-lido.md', '# Documento humano\n');
+  const document = join(target, 'docs/nao-lido.md'), originalOpen = fs.openSync;
+  fs.openSync = (...args) => {
+    if (String(args[0]) === document) throw Object.assign(new Error('fixture unreadable'), { code: 'EACCES' });
+    return originalOpen(...args);
+  };
+  try {
+    report = inspectProject(target);
+    assert.equal(report.documentation.scan.truncated, false);
+    assert.equal(report.documentation.scan.complete, false);
+    assert.ok(report.documentation.warnings.some(item => item.reason === 'unreadable-document'));
+    assert.equal(next('product').skill, undefined);
+    assert.match(next('product').instruction, /inspecione manualmente/i);
+    assert.equal(next('run').skill, 'preparar-dev');
+  } finally { fs.openSync = originalOpen; }
+  before = intentTree(target);
+  assert.equal(next('product').skill, 'criar-prd');
+  assert.deepEqual(intentTree(target), before);
+});
+
+test('intenção de produto pede inspeção para link opaco', t => {
+  const { target, write } = fixture(t);
+  write('src/app.mjs', 'export const app = true;\n');
+  state(write, { prd: 'rascunho' });
+  mkdirSync(join(target, 'assets'), { recursive: true });
+  try { symlinkSync('destino-nao-inspecionado', join(target, 'assets/icon.png')); }
+  catch (error) {
+    if (['EPERM', 'EACCES', 'ENOSYS'].includes(error.code)) return t.skip('links simbólicos indisponíveis');
+    throw error;
+  }
+  const report = inspectProject(target), before = intentTree(target);
+  assert.equal(report.documentation.scan.complete, false);
+  assert.ok(report.documentation.warnings.some(item => item.reason === 'symbolic-link-not-inspected'));
+  const product = getNextSteps({ command: 'next', target, installed: true, intent: 'product' })[0];
+  assert.equal(product.skill, undefined);
+  assert.match(product.instruction, /inspecione manualmente/i);
+  assert.equal(getNextSteps({ command: 'next', target, installed: true, intent: 'run' })[0].skill, 'preparar-dev');
+  assert.deepEqual(intentTree(target), before);
+});
+
+test('intenção de produto informa falha global de inspeção sem escolher etapa', t => {
+  const { target } = fixture(t), originalRealpath = fs.realpathSync;
+  fs.realpathSync = (...args) => {
+    if (String(args[0]) === target) throw Object.assign(new Error('fixture unreadable'), { code: 'EACCES' });
+    return originalRealpath(...args);
+  };
+  try {
+    const product = getNextSteps({ command: 'next', target, installed: true, intent: 'product' })[0];
+    assert.equal(product.skill, undefined);
+    assert.equal(product.command, undefined);
+    assert.equal(product.stage, undefined);
+    assert.equal(product.maturity, undefined);
+    assert.match(product.instruction, /inspecione manualmente/i);
+    for (const intent of [undefined, 'run']) {
+      const legacy = getNextSteps({ command: 'next', target, installed: true, intent })[0];
+      assert.equal(legacy.stage, 'verificacao');
+      assert.match(legacy.command, /doctor/);
+    }
+  } finally { fs.realpathSync = originalRealpath; }
+});
+
+test('CLI recusa intenção ausente, inválida, repetida ou em outro comando', t => {
+  const { target } = fixture(t), before = intentTree(target);
+  for (const args of [
+    ['next', '--intent'], ['next', '--intent', 'unknown'],
+    ['next', '--intent', 'product', '--intent', 'run'],
+    ['next', '--intent', 'run', '--intent', 'run'],
+    ['doctor', '--intent', 'product'], ['init', '--intent', 'run'],
+  ]) {
+    const result = spawnSync(process.execPath, [join(root, 'bin/agentdevkit.mjs'), ...args, '--target', target, '--json'], { cwd: target, encoding: 'utf8', timeout: 60000 });
+    assert.notEqual(result.status, 0, args.join(' '));
+    assert.equal(JSON.parse(result.stdout).ok, false, args.join(' '));
+  }
+  const missing = spawnSync(process.execPath, [join(root, 'bin/agentdevkit.mjs'), '--json', '--target', target, 'next', '--intent'], { cwd: target, encoding: 'utf8', timeout: 60000 });
+  assert.notEqual(missing.status, 0); assert.equal(JSON.parse(missing.stdout).ok, false);
+  assert.deepEqual(intentTree(target), before);
+});
+
+test('tools preserva argumentos --intent opacos após separador', t => {
+  const opaque = ['--', '--intent', 'unknown', '--intent', 'product'];
+  const parsed = parseArgs(['tools', 'run', 'agent-browser', ...opaque]);
+  assert.equal(parsed.command, 'tools');
+  assert.deepEqual(parsed.toolArgs, ['run', 'agent-browser', ...opaque]);
+  assert.equal(parsed.intent, undefined);
+  const { target, write } = fixture(t);
+  write('.pbai4devs/state/agentdevkit.json', JSON.stringify({ schemaVersion: 1, version: packageInfo.version, language: 'pt', files: {}, blocks: {} }));
+  write('.pbai4devs/scripts/preparar-ferramentas/SCRIPT.mjs', 'process.stdout.write(JSON.stringify(process.argv.slice(2)));\n');
+  const result = spawnSync(process.execPath, [join(root, 'bin/agentdevkit.mjs'), '--json', '--target', target, 'tools', 'run', 'agent-browser', ...opaque], { cwd: target, encoding: 'utf8', timeout: 60000 });
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  const response = JSON.parse(result.stdout);
+  assert.deepEqual(JSON.parse(response.toolOutput), ['run', 'agent-browser', ...opaque]);
+});
+
+test('help e version permanecem globais com intenção válida', t => {
+  const { target } = fixture(t), before = intentTree(target);
+  for (const [flag, expected] of [['--help', 'help'], ['--version', 'version']]) {
+    const args = ['next', '--intent', 'product', flag, '--json', '--target', target];
+    const result = spawnSync(process.execPath, [join(root, 'bin/agentdevkit.mjs'), ...args], { cwd: target, encoding: 'utf8', timeout: 60000 });
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const response = JSON.parse(result.stdout);
+    assert.equal(response.ok, true);
+    assert.equal(response.command, expected);
+  }
+  assert.deepEqual(intentTree(target), before);
 });

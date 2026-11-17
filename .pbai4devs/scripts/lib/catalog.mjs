@@ -43,7 +43,10 @@ function scanner(root) {
     return result;
   }
   const read = path => readFileSync(safe(path, true), 'utf8').replace(/\r\n?/g, '\n');
-  const json = path => { try { return JSON.parse(read(path)); } catch (error) { fail(`JSON invalido: ${path}: ${error.message}`); } };
+  const json = path => {
+    const value = read(path);
+    try { return JSON.parse(value); } catch { fail(`JSON invalido: ${path}`); }
+  };
   return { absolute, safe, walk, read, json };
 }
 

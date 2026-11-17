@@ -33,3 +33,19 @@ publicação npm; sem ele, usa OIDC. GitHub Packages usa seu próprio token do
 workflow, sem compartilhar credenciais entre os hosts. Nenhum segredo ou
 resultado é versionado.
 Veja [manutenção](../../docs/maintainers/maintenance.md).
+
+O build prepara os arquivos em área temporária e preserva uma saída anterior
+divergente. Uma repetição aceita o mesmo conteúdo, inclusive o manifesto legado
+com marca de verificação no formato reconhecido, sem reescrevê-lo. A marca antiga
+não substitui as verificações da execução atual.
+
+Após verificar o tarball, o perfil completo cria uma cópia marcada em diretório
+exclusivo do runner, sem alterar o manifesto de origem. No CI, a opção explícita
+`--github-output` informa ao passo de upload o caminho dessa cópia; a opção
+exige `GITHUB_OUTPUT` em `RUNNER_TEMP` e fora do projeto. Falhas ou alterações
+no diretório de origem não são resolvidas substituindo arquivos existentes.
+
+Links simbólicos estáticos em `.agent-tests` ou na pasta `release` são
+recusados. Se a limpeza falhar, preserve os caminhos informados e revise os
+resíduos antes de tentar novamente. As verificações não são atômicas contra
+alterações concorrentes nem comprovam ACLs ou atributos estendidos.

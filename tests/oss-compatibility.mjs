@@ -129,12 +129,13 @@ function environment(output) {
   put(join(output, 'npmrc'), `@pathbit:registry=${registry}\n`);
   put(join(output, 'empty-config'), '');
   mkdirSync(join(output, 'empty-hooks'));
+  mkdirSync(join(output, 'xdg-config'));
   const pathKey = Object.keys(env).find(key => key.toLowerCase() === 'path') || 'PATH';
   env[pathKey] = `${dirname(process.execPath)}${delimiter}${env[pathKey] || ''}`;
   return { ...env, npm_config_registry: registry, npm_config_userconfig: join(output, 'npmrc'),
     npm_config_globalconfig: join(output, 'empty-config'), npm_config_cache: join(output, 'npm-cache'),
     npm_config_ignore_scripts: 'true', npm_config_offline: 'false', npm_config_audit: 'false', npm_config_fund: 'false',
-    GIT_CONFIG_GLOBAL: join(output, 'empty-config'), GIT_CONFIG_SYSTEM: join(output, 'empty-config'), GIT_CONFIG_NOSYSTEM: '1',
+    XDG_CONFIG_HOME: join(output, 'xdg-config'), GIT_CONFIG_GLOBAL: join(output, 'empty-config'), GIT_CONFIG_SYSTEM: join(output, 'empty-config'), GIT_CONFIG_NOSYSTEM: '1',
     GIT_TERMINAL_PROMPT: '0', GIT_ALLOW_PROTOCOL: 'https', GIT_OPTIONAL_LOCKS: '0' };
 }
 
@@ -233,7 +234,37 @@ function checkHumanExcludeBytes(root, original) {
   validateGitSnapshotPaths(root);
   const path = join(root, '.git/info/exclude'), item = info(path);
   assert.ok(item?.isFile() && !item.isSymbolicLink(), 'Exclusões locais humanas foram removidas ou substituídas.');
-  assert.ok(readFileSync(path).subarray(0, original.length).equals(original), 'Exclusões locais humanas foram alteradas.');
+  assert.ok(readFileSync(path).equals(original), 'Exclusões locais humanas foram alteradas.');
+}
+
+export function classifyIgnoreStatus(path, status) {
+  assert.ok(status === 0 || status === 1, `Falha ao consultar ignore de ${path}: git=${status}.`);
+  return { path, ignored: status === 0, status };
+}
+
+export function checkExcludeOrigin(text) {
+  assert.match(text, /^\.git\/info\/exclude:[1-9]\d*:\/oss-human-private\/\toss-human-private\/probe\r?\n$/, 'Regra humana de exclusão não foi a regra efetiva.');
+}
+
+export function checkDoctorIssues(value, privatePath, ignored) {
+  const expected = ignored ? [] : [{ code: 'private-file-visible', path: privatePath }];
+  assert.deepEqual(value.issues, expected, 'Diagnóstico apresentou problemas ausentes ou inesperados.');
+}
+
+export function checkSyncIssues(value, privatePath, ignored) {
+  assert.ok(Array.isArray(value.localIgnore?.pending), 'Diagnóstico sync ausente.');
+  const blocking = value.localIgnore.pending.filter(item => !['artifact-unprotected', 'artifact-coverage-unverified', 'output-visible'].includes(item.code));
+  const expected = ignored ? [] : [{ code: 'private-file-visible', path: privatePath }];
+  assert.deepEqual(blocking, expected, 'Sync apresentou problemas ausentes ou inesperados.');
+  assert.deepEqual(value.conflicts, [], 'Sync apresentou conflitos.');
+  assert.deepEqual(value.localIgnore.trackedOutputs, [], 'Sync detectou artefatos rastreados.');
+}
+
+export function checkStandaloneSync(text, privatePath, ignored) {
+  const summary = `0 desatualizadas; 0 obsoletas; 0 conflitos; 0 origens nativas ausentes; 0 documentos antigos; 0 indices derivados; 0 gitignores; ${ignored ? 0 : 1} exclusoes locais.`;
+  assert.equal(text.split(/\r?\n/)[0], summary, 'Resumo do sync independente indica alterações ou problemas inesperados.');
+  const pending = text.split(/\r?\n/).filter(line => line.startsWith('Pendente: '));
+  assert.deepEqual(pending, ignored ? [] : [`Pendente: private-file-visible: ${privatePath}`], 'Pendências inesperadas no sync independente.');
 }
 
 function gitSnapshot(root, git) {
@@ -249,7 +280,10 @@ function gitSnapshot(root, git) {
     stagedDiff: git('diff', '--cached', '--binary', '--no-ext-diff', '--no-color'),
     remotes: git('config', '--get-regexp', '^remote\\..*\\.(url|pushurl)$'),
     configSha256: hash(readFileSync(join(root, '.git/config'))),
-    exclude: info(join(root, '.git/info/exclude')) ? hash(readFileSync(join(root, '.git/info/exclude'))) : null };
+    exclude: info(join(root, '.git/info/exclude')) ? hash(readFileSync(join(root, '.git/info/exclude'))) : null,
+    indexMode: info(indexPath) ? info(indexPath).mode & 0o777 : null,
+    configMode: info(join(root, '.git/config')).mode & 0o777,
+    excludeMode: info(join(root, '.git/info/exclude')) ? info(join(root, '.git/info/exclude')).mode & 0o777 : null };
   assert.equal(indexHash(), indexSha256, 'Consulta Git alterou os bytes do índice.');
   return { ...snapshot, indexSha256 };
 }
@@ -387,6 +421,9 @@ function checkOriginals(root, baseline, git) {
   if (baseline.excludeOriginal !== undefined) {
     checkHumanExcludeBytes(root, Buffer.from(baseline.excludeOriginal, 'base64'));
   }
+  for (const field of ['exclude', 'indexMode', 'configMode', 'excludeMode']) {
+    if (Object.hasOwn(baseline.git, field)) assert.equal(now[field], baseline.git[field], `Git ${field} alterado.`);
+  }
 }
 
 // A human edit turns a previously managed file into user-owned content. The
@@ -452,7 +489,7 @@ function testProject(project, options, output, env, npm) {
     put(excludePath, excludeOriginal);
     const checkHumanExclude = () => {
       validateGitSnapshotPaths(directory);
-      git('check-ignore', '--no-index', '--quiet', '--', 'oss-human-private/probe');
+      checkExcludeOrigin(git('check-ignore', '--no-index', '--verbose', '--', 'oss-human-private/probe'));
     };
     checkHumanExclude();
     const trackedPaths = git('ls-files', '-z').split('\0').filter(Boolean);
@@ -512,17 +549,20 @@ function testProject(project, options, output, env, npm) {
       checkHumanExcludeBytes(directory, excludeOriginal);
       checkHumanExclude();
     };
-    const protectedCli = (name, args) => {
-      const before = workspace(directory), outcome = cli(name, args);
+    const protectedCli = (name, args, expected = 0) => {
+      const before = workspace(directory), outcome = cli(name, args, expected);
       verifyLinks(before, outcome);
+      checkOriginals(directory, baseline, git);
       return outcome;
     };
-    const protectedRun = (name, args) => {
+    const protectedRun = (name, args, expected = 0) => {
       const before = workspace(directory);
-      run(name, process.execPath, args, directory);
+      const text = run(name, process.execPath, args, directory, expected);
       // O script standalone não retorna um plano estruturado; exija que as
       // árvores dos alvos permaneçam estáveis nas chamadas desta prova.
       verifyLinks(before, { plan: [], preserved: [] });
+      checkOriginals(directory, baseline, git);
+      return text;
     };
     verifyLinks(dryBefore.workspace, installed, ['README.md', ...(project.clients.some(client => ['all', 'claude'].includes(client)) ? ['CLAUDE.md'] : [])]);
     if (project.clients.includes('all') || project.clients.includes('codex')) {
@@ -533,15 +573,43 @@ function testProject(project, options, output, env, npm) {
     for (const path of ['.agent-tests/probe', 'tmp/probe', '.PlAyWrIgHt-McP/probe', 'playwright-report/probe', 'test-results/probe']) {
       run('ignore-check', 'git', [...gitPrefix, 'check-ignore', '--no-index', '--quiet', '--', path], output, null);
       const status = commands.at(-1).status;
+      const observation = classifyIgnoreStatus(path, status);
       const match = status === 0 ? '' : run('ignore-diagnostic', 'git', [...gitPrefix, 'check-ignore', '--no-index', '--verbose', '--', path], output, null);
-      result.ignoreChecks.push({ path, ignored: status === 0, status, match: match.trim() });
-      if (status !== 0) result.failures.push(`Artefato local não ignorado: ${path} (git=${status}).`);
+      result.ignoreChecks.push({ ...observation, match: match.trim() });
     }
-    checked('artifact-ignore-checks', result.failures.length ? 'failed' : 'passed');
-    cli('doctor', ['doctor', '--target', directory]);
-    protectedCli('sync-check', ['sync', '--check', '--target', directory]); checked('doctor-and-sync');
-    protectedRun('standalone-sync-check', ['.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs', '--check']);
-    run('installed-resource-check', process.execPath, ['.pbai4devs/scripts/verificar-recursos/SCRIPT.mjs'], directory);
+    checked('artifact-ignore-observed');
+    const privateObservation = () => {
+      run('private-ignore-check', 'git', ['-c', `core.hooksPath=${join(output, 'empty-hooks')}`, '-C', directory, 'check-ignore', '--no-index', '--quiet', '--', nativeConfig], output, null);
+      return classifyIgnoreStatus(nativeConfig, commands.at(-1).status);
+    };
+    const doctor = name => {
+      const observation = privateObservation();
+      const outcome = cli(name, ['doctor', '--target', directory], observation.ignored ? 0 : 1);
+      checkDoctorIssues(outcome, nativeConfig, observation.ignored);
+      checkOriginals(directory, baseline, git);
+      return outcome;
+    };
+    const syncCheck = name => {
+      const observation = privateObservation();
+      const outcome = protectedCli(name, ['sync', '--check', '--target', directory], observation.ignored ? 0 : 1);
+      checkSyncIssues(outcome, nativeConfig, observation.ignored);
+      return outcome;
+    };
+    doctor('doctor');
+    syncCheck('sync-check'); checked('doctor-and-sync');
+    const observation = privateObservation();
+    const standaloneCheck = protectedRun('standalone-sync-check', ['.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs', '--check'], observation.ignored ? 0 : 1);
+    checkStandaloneSync(standaloneCheck, nativeConfig, observation.ignored);
+    run('installed-resource-check', process.execPath, ['.pbai4devs/scripts/verificar-recursos/SCRIPT.mjs'], directory, observation.ignored ? 0 : 1);
+    if (!observation.ignored) {
+      const stderr = readFileSync(join(evidence, commands.at(-1).stderr), 'utf8');
+      checkStandaloneSync(stderr, nativeConfig, false);
+      // The normal verifier stops at sync when private data is visible. Sync
+      // was checked above; separately execute the remaining resource checks.
+      const script = 'import { verifyResources } from "./.pbai4devs/scripts/verificar-recursos/SCRIPT.mjs"; const result = verifyResources({root: process.cwd(), synchronize() {}}); if (!Array.isArray(result.messages) || !result.messages.includes("recursos=passed")) throw Error("Verificação de recursos incompleta"); for (const message of result.messages) console.log(message);';
+      run('installed-resource-check-after-sync-diagnostic', process.execPath, ['--input-type=module', '-e', script], directory);
+      result.resourceCheck = 'sync-private-block-then-resource-check';
+    } else result.resourceCheck = 'normal';
     checkOriginals(directory, baseline, git); checked('standalone-sync-preserves-agents');
     const stable = workspace(directory);
     protectedCli('init-repeat', init); protectedCli('update-repeat', ['update', '--target', directory, '--yes']);
@@ -555,10 +623,12 @@ function testProject(project, options, output, env, npm) {
     assert.ok(!existsSync(join(directory, skillPath)), 'Skill de teste já existe.');
     const skill = `---\nname: oss-user-${project.id}\ndescription: User-owned OSS compatibility fixture.\n---\n\n# OSS user skill\n\nPreserve this user-owned resource.\n`;
     writeClone(directory, skillPath, skill);
+    baseline.files[skillPath] = fileSnapshot(directory, skillPath);
+    put(join(evidence, 'baseline.json'), JSON.stringify(baseline, null, 2) + '\n');
     protectedCli('update-user-skill', ['update', '--target', directory, '--yes']);
     assert.equal(readFileSync(join(directory, skillPath), 'utf8'), skill);
-    cli('doctor-user-skill', ['doctor', '--target', directory]);
-    protectedCli('sync-user-skill', ['sync', '--check', '--target', directory]);
+    doctor('doctor-user-skill');
+    syncCheck('sync-user-skill');
     checkOriginals(directory, baseline, git); checked('user-skill-preserved');
     const managed = '.pbai4devs/rules/qualidade/RULE.md', original = readFileSync(join(directory, managed));
     const beforeState = stateJson(directory, statePath);
@@ -574,8 +644,8 @@ function testProject(project, options, output, env, npm) {
       assert.equal(repeat.changed, false, 'Repetição alterou a instalação com edição humana.');
       assert.deepEqual(workspace(directory), after, 'Repetição alterou arquivos preservados ou estado.');
       assert.deepEqual(gitSnapshot(directory, git), afterGit, 'Repetição alterou o Git.');
-      cli('doctor-human-edit', ['doctor', '--target', directory]);
-      protectedCli('sync-human-edit', ['sync', '--check', '--target', directory]);
+      doctor('doctor-human-edit');
+      syncCheck('sync-human-edit');
     } finally { writeClone(directory, managed, original); }
     assert.deepEqual(readFileSync(join(directory, managed)), original, 'Arquivo da fixture não foi restaurado.');
     checkOriginals(directory, baseline, git); checked('human-edit-preserved-and-restored');

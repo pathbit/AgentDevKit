@@ -1,9 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { lstatSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join, posix, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
 import { adapters, resolveAdapters } from '../src/adapters/index.mjs';
 
 const sourceRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -30,6 +31,38 @@ function clientPath(source, kind, format) {
   return `${category}${folder}${ext}`;
 }
 
+// A referência explícita permanece no hub; não se contabiliza como espelho
+// nativo nem comprova que o cliente tenha lido a regra.
+function verifyClaudeOmission(root, source, destination, trigger, omissions) {
+  assert.ok(['manual', 'model_decision'].includes(trigger));
+  const original = readFileSync(join(root, source), 'utf8');
+  const header = original.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
+  assert.ok(header, `${source} sem frontmatter`);
+  const triggers = [...header[1].matchAll(/^trigger:\s*(.*?)\s*$/gm)];
+  assert.equal(triggers.length, 1, `${source} deve declarar um único trigger suportado`);
+  assert.ok([trigger, `"${trigger}"`, `'${trigger}'`].includes(triggers[0][1]), `${source} diverge do catálogo`);
+  assert.throws(() => lstatSync(join(root, destination)), error => error.code === 'ENOENT', `${destination} não deve existir`);
+  const matches = omissions.filter(item => item.source === source);
+  assert.deepEqual(matches, [{ source, target: destination, trigger, status: 'explicit-reference-planned' }]);
+  function visit(folder) {
+    let entries;
+    try { entries = readdirSync(folder, { withFileTypes: true }); }
+    catch (error) { if (error.code === 'ENOENT') return; throw error; }
+    for (const entry of entries) {
+      const full = join(folder, entry.name);
+      if (entry.isSymbolicLink()) assert.fail(`${full} é link simbólico de escopo não verificado`);
+      else if (entry.isDirectory()) visit(full);
+      else if (entry.isFile() && /\.md$/i.test(entry.name)) {
+        const text = readFileSync(full, 'utf8');
+        for (const link of text.matchAll(/\[origem\]\(([^)]+)\)/g)) {
+          assert.notEqual(relative(root, resolve(dirname(full), decodeURIComponent(link[1]))).split('\\').join('/'), source, `${full} ativa a fonte por destino alternativo`);
+        }
+      }
+    }
+  }
+  visit(join(root, '.claude/rules'));
+}
+
 test('cada recurso instalado aponta à origem em cada cliente selecionado', async t => {
   const base = join(sourceRoot, '.agent-tests'); mkdirSync(base, { recursive: true });
   const root = realpathSync(mkdtempSync(join(base, 'resource-coverage-')));
@@ -43,7 +76,8 @@ test('cada recurso instalado aponta à origem em cada cliente selecionado', asyn
   assert.equal(git.status, 0, git.stderr);
   const init = spawnSync(process.execPath, [join(sourceRoot, 'bin/agentdevkit.mjs'), 'init', '--target', root, '--agents', 'all', '--yes', '--json'], { encoding: 'utf8', env, timeout: 180000, maxBuffer: 16 * 1024 * 1024 });
   assert.equal(init.status, 0, init.stderr || init.stdout);
-  assert.equal(JSON.parse(init.stdout).ok, true);
+  const initialized = JSON.parse(init.stdout);
+  assert.equal(initialized.ok, true);
   const rows = readFileSync(join(root, '.pbai4devs/espelhos.conf'), 'utf8').split(/\r?\n/).filter(line => line && !line.startsWith('#')).map(line => line.split('|'));
   const clients = rows.filter(row => row[0] === 'agente');
   const policy = JSON.parse(readFileSync(join(root, '.pbai4devs/templates/clients/ADAPTERS.json'), 'utf8'));
@@ -51,12 +85,23 @@ test('cada recurso instalado aponta à origem em cada cliente selecionado', asyn
   assert.equal(clients.length, policy.adapters.length);
   const sources = Object.fromEntries(Object.entries(kinds).map(([kind, principal]) => [kind, files(root, `.pbai4devs/${kind}`, principal)]));
   assert.ok(sources.skills.length >= 41 && sources.agents.length >= 11 && sources.commands.length >= 18 && sources.rules.length >= 8);
-  let verified = 0;
+  const omissions = initialized.scopeOmissions || [];
+  assert.ok(Array.isArray(omissions));
+  let verified = 0, referenceOnly = 0;
   for (const [, client, baseFormat] of clients) await t.test(client, () => {
     for (const [kind, paths] of Object.entries(sources)) for (const source of paths) {
       const format = rows.find(row => row[0] === 'formato' && row[1] === client && row[2] === kind)?.[3] || baseFormat;
       if (format === 'nenhum') continue;
       let destination = `${client}/${clientPath(source, kind, format)}`;
+      if (client === '.claude' && kind === 'rules') {
+        const trigger = catalog.rules.find(rule => rule.path === source)?.trigger;
+        assert.ok(trigger, `${source} sem trigger`);
+        if (['manual', 'model_decision'].includes(trigger)) {
+          verifyClaudeOmission(root, source, destination, trigger, omissions);
+          referenceOnly++;
+          continue;
+        }
+      }
       if (client === '.github' && kind === 'rules' && format === 'instrucoes') {
         const trigger = catalog.rules.find(rule => rule.path === source)?.trigger;
         assert.ok(trigger, `${source} sem trigger`);
@@ -79,6 +124,36 @@ test('cada recurso instalado aponta à origem em cada cliente selecionado', asyn
     }
   });
   assert.ok(verified >= 1000, `Cobertura insuficiente: ${verified} referências`);
+  assert.equal(omissions.length, referenceOnly, 'Omissões extras ou duplicadas não contam como cobertura nativa');
+});
+
+test('verificação de omissão Claude rejeita arquivo, duplicidade, link alternativo e divergência de trigger', t => {
+  const root = mkdtempSync(join(tmpdir(), 'adk-coverage-omission-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const source = '.pbai4devs/rules/demo/RULE.md', target = '.claude/rules/demo/RULE.md';
+  const put = (p, value) => { mkdirSync(dirname(join(root, p)), { recursive: true }); writeFileSync(join(root, p), value); };
+  put(source, '---\ntrigger: manual\n---\n\n# Demo\n');
+  const expected = [{ source, target, trigger: 'manual', status: 'explicit-reference-planned' }];
+  verifyClaudeOmission(root, source, target, 'manual', expected);
+  assert.throws(() => verifyClaudeOmission(root, source, target, 'manual', []));
+  assert.throws(() => verifyClaudeOmission(root, source, target, 'manual', [...expected, ...expected]));
+  assert.throws(() => verifyClaudeOmission(root, source, target, 'model_decision', expected));
+  put(source, '---\ntrigger: always_on\ntrigger: manual\n---\n\n# Demo\n');
+  assert.throws(() => verifyClaudeOmission(root, source, target, 'manual', expected));
+  put(source, '---\ntrigger: manual\n---\n\n# Demo\n');
+  put('.claude/rules/alternate.md', '[origem](../../.pbai4devs/rules/demo/RULE.md)');
+  assert.throws(() => verifyClaudeOmission(root, source, target, 'manual', expected));
+  rmSync(join(root, '.claude/rules/alternate.md'));
+  put(target, '# Regra indevidamente carregável');
+  assert.throws(() => verifyClaudeOmission(root, source, target, 'manual', expected));
+  rmSync(join(root, target));
+  if (process.platform !== 'win32') {
+    symlinkSync('ausente', join(root, target));
+    assert.throws(() => verifyClaudeOmission(root, source, target, 'manual', expected));
+    rmSync(join(root, target));
+    symlinkSync('ausente', join(root, '.claude/rules/alternate.md'));
+    assert.throws(() => verifyClaudeOmission(root, source, target, 'manual', expected));
+  }
 });
 
 test('todas as combinações de clientes preservam dependências e seleção determinística', () => {

@@ -165,22 +165,44 @@ test('sincroniza somente principais, preserva metadados e usa referências UTF-8
   assert.deepEqual(snapshot(root), before, 'A segunda sincronização deve ser idempotente.');
 });
 
-test('metadados gerados seguem a origem e metadados editados pelo humano permanecem', t => {
-  const root = fixture(t); run(root);
+test('metadados humanos editados bloqueiam sync; fontes sem conflito atualizam', t => {
+  const root = fixture(t);
+  run(root);
+  const editedPath = '.codex/commands/check.md';
+  const human = read(root, editedPath).replace('description: Comando.', 'description: Obsoleto.\nlocal-only: true');
+  write(root, editedPath, human);
   write(root, '.pbai4devs/commands/check/COMMAND.md', '---\nname: check-novo\ndescription: Comando atualizado.\n---\n\n# Comando\n');
   write(root, '.pbai4devs/rules/example/RULE.md', '---\ntrigger: glob\nglobs: "**/*.ts"\ndescription: Regra atualizada.\n---\n\n# Regra\n');
   write(root, '.pbai4devs/agents/revisor/AGENT.md', '---\nname: revisor\ndescription: Perfil atualizado.\n---\n\n# Revisor\n');
-  write(root, '.codex/commands/check.md', read(root, '.codex/commands/check.md').replace('description: Comando.', 'description: Obsoleto.\nlocal-only: true'));
-  assertCheckReadonly(root);
-  run(root);
-  assert.match(read(root, '.codex/commands/check.md'), /description: Obsoleto\.\nlocal-only: true/);
-  assert.match(read(root, '.codex/commands/check.md'), /<!-- BEGIN AGENTDEVKIT -->/);
-  assert.match(read(root, '.codex/rules/example.md'), /trigger: glob\nglobs: "\*\*\/\*\.ts"/);
-  assert.match(read(root, '.codex/agents/revisor.md'), /Perfil atualizado\./);
-  assert.match(read(root, '.opencode/agents/revisor/AGENT.md'), /edit: deny/);
-  assert.match(read(root, '.kimi-code/agents/revisor.md'), /tools: \[Read, Grep, Glob\]/);
-  assert.match(read(root, '.github/instructions/demo.instructions.md'), /applyTo: '\*\*'/);
-  assertCheckReadonly(root, {}, 0);
+  for (const force of [false, true]) {
+    const before = snapshot(root), check = run(root, { check: true, force });
+    assert.notEqual(check.exitCode, 0);
+    assert.ok(check.conflictPaths.includes(editedPath));
+    assert.deepEqual(snapshot(root), before);
+    rejected(root, { force }, /Conteudo proprio preservado/);
+    assert.equal(read(root, editedPath), human);
+  }
+
+  const clean = fixture(t);
+  run(clean);
+  write(clean, '.pbai4devs/commands/check/COMMAND.md', '---\nname: check-novo\ndescription: Comando atualizado.\n---\n\n# Comando\n');
+  write(clean, '.pbai4devs/rules/example/RULE.md', '---\ntrigger: glob\nglobs: "**/*.ts"\ndescription: Regra atualizada.\n---\n\n# Regra\n');
+  write(clean, '.pbai4devs/agents/revisor/AGENT.md', '---\nname: revisor\ndescription: Perfil atualizado.\n---\n\n# Revisor\n');
+  // A fixture escolhe retirar a regra gerada depois da recusa conservadora.
+  const beforeCleanCheck = snapshot(clean), cleanCheck = run(clean, { check: true });
+  assert.notEqual(cleanCheck.exitCode, 0);
+  assert.deepEqual(cleanCheck.conflictPaths, ['.claude/rules/example/RULE.md']);
+  assert.deepEqual(snapshot(clean), beforeCleanCheck);
+  rejected(clean, {}, /Conteudo proprio preservado/);
+  rmSync(join(clean, '.claude/rules/example/RULE.md'));
+  run(clean);
+  assert.match(read(clean, '.codex/commands/check.md'), /Comando atualizado\./);
+  assert.match(read(clean, '.codex/rules/example.md'), /trigger: glob\nglobs: "\*\*\/\*\.ts"/);
+  assert.match(read(clean, '.codex/agents/revisor.md'), /Perfil atualizado\./);
+  assert.match(read(clean, '.opencode/agents/revisor/AGENT.md'), /edit: deny/);
+  assert.match(read(clean, '.kimi-code/agents/revisor.md'), /tools: \[Read, Grep, Glob\]/);
+  assert.match(read(clean, '.github/instructions/demo.instructions.md'), /applyTo: '\*\*'/);
+  assertCheckReadonly(clean, {}, 0);
 });
 
 test('hub unico permite tres novos clientes, regras por inclusao e metadados nativos', t => {
@@ -215,32 +237,42 @@ test('hub unico permite tres novos clientes, regras por inclusao e metadados nat
   assert.throws(() => validateIgnoreClients({ '.pbai4devs': {} }));
 });
 
-test('Gemini usa TOML com inclusao relativa ao workspace e argumentos, sem Markdown duplicado', t => {
-  const root = fixture(t);
-  write(root, '.pbai4devs/commands/check/COMMAND.md', '---\ndescription: "Verifica \\"aspas\\" e regras."\n---\n\n# Check\n');
-  write(root, '.gemini/commands/check.md', pointer('../../.pbai4devs/commands/check/COMMAND.md'));
-  recordOwned(root, ['.gemini/commands/check.md']);
-  run(root);
-  const target = '.gemini/commands/check.toml';
-  const text = read(root, target); const lines = text.trimEnd().split('\n');
-  assert.equal(lines[0], '# gerado: sincronizar-agentes');
-  assert.equal(JSON.parse(lines[1].slice('description = '.length)), 'Verifica "aspas" e regras.');
-  assert.equal(JSON.parse(lines[2].slice('prompt = '.length)), '@{.pbai4devs/commands/check/COMMAND.md}\n\n{{args}}');
-  assert.ok(isReference(text)); assert.equal(existsSync(join(root, '.gemini/commands/check.md')), false);
-  write(root, target, text + '# instrucao propria\n');
-  assertCheckReadonly(root);
-  const repaired = run(root, { force: true });
-  assert.ok(repaired.managedBlocks[target]);
-  assert.match(read(root, target), /# instrucao propria/);
-  assert.match(read(root, target), /BEGIN AGENTDEVKIT/);
-  rmSync(join(root, '.pbai4devs/commands/check'), { recursive: true });
-  run(root);
-  const stripped = read(root, target).split('\n');
-  assert.equal(stripped[0], '# gerado: sincronizar-agentes');
-  assert.equal(stripped[1], lines[1]);
-  assert.equal(JSON.parse(stripped[2].slice('prompt = '.length)).trimEnd(), '@{.pbai4devs/commands/check/COMMAND.md}\n\n{{args}}');
-  assert.equal(stripped[3], '# instrucao propria');
-  assert.match(read(root, '.github/workflows/ci.yml'), /workflow-preservado/);
+test('Gemini preserva TOML humano equivalente sem adicionar bloco nem adotar', t => {
+  for (const force of [false, true]) {
+    const root = fixture(t);
+    write(root, '.pbai4devs/commands/check/COMMAND.md', '---\ndescription: "Verifica \\"aspas\\" e regras."\n---\n\n# Check\n');
+    write(root, '.gemini/commands/check.md', pointer('../../.pbai4devs/commands/check/COMMAND.md'));
+    recordOwned(root, ['.gemini/commands/check.md']);
+    run(root);
+    const target = '.gemini/commands/check.toml', text = read(root, target);
+    const lines = text.trimEnd().split('\n');
+    assert.equal(lines[0], '# gerado: sincronizar-agentes');
+    assert.equal(JSON.parse(lines[1].slice('description = '.length)), 'Verifica "aspas" e regras.');
+    assert.equal(JSON.parse(lines[2].slice('prompt = '.length)), '@{.pbai4devs/commands/check/COMMAND.md}\n\n{{args}}');
+    assert.ok(isReference(text));
+    assert.equal(existsSync(join(root, '.gemini/commands/check.md')), false);
+
+    const human = text + '# instrucao propria\n';
+    write(root, target, human);
+    const stateBefore = JSON.parse(read(root, '.pbai4devs/state/derived.json'));
+    const beforeCheck = snapshot(root), check = run(root, { check: true, force });
+    assert.notEqual(check.exitCode, 0);
+    assert.ok(check.preserved.some(item => item.path === target && item.reason === 'existing-prompt-satisfied'));
+    assert.deepEqual(snapshot(root), beforeCheck);
+    const result = run(root, { force });
+    assert.deepEqual(readFileSync(join(root, target)), Buffer.from(human));
+    assert.equal(result.managedBlocks[target], undefined);
+    assert.ok(!result.ownedOutputs.includes(target));
+    const state = JSON.parse(read(root, '.pbai4devs/state/derived.json'));
+    assert.equal(state.blocks?.[target], stateBefore.blocks?.[target]);
+    assert.equal(stateBefore.files?.[target], createHash('sha256').update(text).digest('hex'));
+    assert.equal(state.files?.[target], undefined);
+
+    rmSync(join(root, '.pbai4devs/commands/check'), { recursive: true });
+    run(root);
+    assert.deepEqual(readFileSync(join(root, target)), Buffer.from(human));
+    assert.match(read(root, '.github/workflows/ci.yml'), /workflow-preservado/);
+  }
 });
 
 test('nativos TOML ficam restritos aos comandos Gemini e ponteiros falsos nao sao apagados como gerados', t => {
@@ -290,13 +322,41 @@ test('preserva bloco gitignore de cliente mesmo quando o template muda', t => {
   assertCheckReadonly(root, {}, 0);
 });
 
-test('adiciona bloco a gitignore proprio, detecta exclusao e mantem idempotencia', t => {
+test('preserva gitignore proprio, detecta exclusao do ignore compartilhado e mantem idempotencia', t => {
   const root = fixture(t, true);
   const custom = '# Local\n/custom/\n!custom/keep'; write(root, '.codex/.gitignore', custom);
-  run(root); assert.ok(read(root, '.codex/.gitignore').startsWith(custom));
+  run(root); assert.equal(read(root, '.codex/.gitignore'), custom);
   const before = snapshot(root); run(root); assert.deepEqual(snapshot(root), before);
   rmSync(join(root, '.pbai4devs/.gitignore')); assertCheckReadonly(root);
   assert.equal(run(root).gitignores, 1); assertCheckReadonly(root, {}, 0);
+});
+
+test('ignores existentes e indice staged sobrevivem a template compartilhado alterado', t => {
+  const root = fixture(t, true);
+  assert.equal(spawnSync('git', ['init', '-q', root]).status, 0);
+  write(root, '.gitignore', '# regra humana\n'); write(root, 'humano.txt', 'conteudo staged\n');
+  assert.equal(spawnSync('git', ['-C', root, 'add', '--', '.gitignore', 'humano.txt']).status, 0);
+  for (const name of ['local.ignore', 'agents.ignore']) {
+    write(root, `.pbai4devs/templates/gitignore/${name}`, readFileSync(join(project, '.pbai4devs/templates/gitignore', name), 'utf8'));
+  }
+  const index = readFileSync(join(root, '.git/index'));
+  const exclude = readFileSync(join(root, '.git/info/exclude'));
+  const projectIgnore = readFileSync(join(root, '.gitignore'));
+  const assertGitPreserved = () => {
+    assert.deepEqual(readFileSync(join(root, '.git/index')), index);
+    assert.deepEqual(readFileSync(join(root, '.git/info/exclude')), exclude);
+    assert.deepEqual(readFileSync(join(root, '.gitignore')), projectIgnore);
+  };
+  run(root, { localIgnores: true }); assertGitPreserved();
+  const shared = readFileSync(join(root, '.pbai4devs/.gitignore'));
+  write(root, '.pbai4devs/templates/gitignore/shared.ignore', '# Modelo alterado\n/novo-cache/\n');
+  const check = run(root, { check: true, localIgnores: true });
+  assert.equal(check.gitignores, 0, 'check nao compara ignore existente ao novo modelo');
+  assertGitPreserved(); assert.deepEqual(readFileSync(join(root, '.pbai4devs/.gitignore')), shared);
+  run(root, { force: true, localIgnores: true });
+  assert.deepEqual(readFileSync(join(root, '.pbai4devs/.gitignore')), shared);
+  assert.equal(existsSync(join(root, '.codex/.gitignore')), false);
+  assertGitPreserved();
 });
 
 test('gitignore recusa marcadores invalidos e fontes ausentes antes de qualquer mutacao', t => {
@@ -407,33 +467,33 @@ test('skills externas baixadas não entram nos índices; cópias humanas permane
   assertCheckReadonly(root, {}, 0);
 });
 
-test('--force complementa conteúdo editado e preserva recursos humanos', t => {
+test('sync e --force recusam apontamentos editados preservando recursos humanos', t => {
   const root = fixture(t);
   run(root);
-  recordOwned(root, ['.claude/skills/projeto/demo/SKILL.md', '.kimi-code/agents/revisor.md']);
+  const paths = ['.claude/skills/projeto/demo/SKILL.md', '.kimi-code/agents/revisor.md'];
+  recordOwned(root, paths);
   write(root, '.claude/scripts/local.sh', 'script humano\n');
   write(root, '.claude/tools/program.exe', Buffer.from([1, 2, 3]));
   write(root, '.claude/docs/plain.md', '# Documento auxiliar\n');
   write(root, '.claude/skills/local.bin', 'custom\n');
-  write(root, '.claude/skills/projeto/demo/SKILL.md', 'corrompido\n');
-  write(root, '.kimi-code/agents/revisor.md', 'corrompido\n');
+  for (const path of paths) write(root, path, 'corrompido\n');
   write(root, '.github/prompts/edited.prompt.md', pointer() + '\nRevisar [manual](bar).\n');
-  assertCheckReadonly(root);
-  assertCheckReadonly(root, { force: true });
-  const result = run(root, { force: true });
-  for (const path of ['.claude/skills/projeto/demo/SKILL.md', '.kimi-code/agents/revisor.md']) {
-    assert.ok(read(root, path).startsWith('corrompido\n'));
-    assert.ok(result.managedBlocks[path]);
-    assert.ok(!result.ownedOutputs.includes(path));
+  for (const force of [false, true]) {
+    const before = snapshot(root), check = run(root, { check: true, force });
+    assert.notEqual(check.exitCode, 0);
+    for (const path of paths) assert.ok(check.conflictPaths.includes(path));
+    assert.deepEqual(snapshot(root), before);
+    rejected(root, { force }, /Conteudo proprio preservado/);
+    for (const path of paths) assert.equal(read(root, path), 'corrompido\n');
   }
   assert.deepEqual(readFileSync(join(root, '.claude/tools/program.exe')), Buffer.from([1, 2, 3]));
   assert.equal(read(root, '.claude/scripts/local.sh'), 'script humano\n');
   assert.equal(read(root, '.claude/skills/local.bin'), 'custom\n');
   assert.match(read(root, '.github/prompts/edited.prompt.md'), /Revisar \[manual\]/);
+  assert.ok(existsSync(join(root, '.codex/skills/outro/SKILL.md')));
   assert.match(read(root, '.codex/skills/outro/SKILL.md'), /name: outro/);
   assert.match(read(root, '.github/workflows/ci.yml'), /workflow-preservado/);
   assert.match(read(root, '.codex/config.toml'), /config-native-preservada/);
-  assertCheckReadonly(root, {}, 0);
 });
 
 test('atualiza fontes, adiciona clientes, remove recursos e migra agrupado para plano', t => {
@@ -446,6 +506,10 @@ test('atualiza fontes, adiciona clientes, remove recursos e migra agrupado para 
   assert.match(read(root, '.extra/skills/demo/SKILL.md'), /Atualizado/);
   rmSync(join(root, '.pbai4devs/rules/example/RULE.md'));
   write(root, '.pbai4devs/espelhos.conf', read(root, '.pbai4devs/espelhos.conf').replace('agente|.claude\n', 'agente|.claude|plano\n'));
+  assertCheckReadonly(root);
+  rejected(root, { force: true }, /Conteudo proprio preservado/);
+  // A remoção é decisão manual simulada na fixture, não decorrência do hash.
+  rmSync(join(root, '.claude/rules/example/RULE.md'));
   run(root);
   assert.equal(existsSync(join(root, '.claude/skills/projeto/demo/SKILL.md')), false);
   assert.ok(existsSync(join(root, '.claude/skills/projeto')));
@@ -811,6 +875,50 @@ test('fontes JSON, referências e entradas de scripts inválidas falham antes de
   const root = completeCatalogFixture(t);
   rmSync(join(root, '.pbai4devs/tools/demo/SCRIPT.mjs'));
   rejected(root, { force: true }, /SCRIPT|script|ausente/);
+});
+
+test('erro de JSON externo não divulga conteúdo e não altera a fixture', t => {
+  const root = completeCatalogFixture(t);
+  const sentinel = 'SYNTHETIC_SECRET_ALPHA';
+  const path = '.pbai4devs/external-skills/CATALOG.json';
+  write(root, path, sentinel);
+  const before = snapshot(root);
+  for (const operation of [() => buildCatalog(root), () => run(root, { force: true })]) {
+    assert.throws(operation, error => {
+      assert.equal(error.message, `JSON invalido: ${path}`);
+      assert.ok(!error.message.includes('SYNTHETIC'));
+      assert.ok(!String(error.stack).includes('SYNTHETIC'));
+      return true;
+    });
+    assert.deepEqual(snapshot(root), before);
+  }
+  const child = spawnSync(process.execPath, [cli, '--check', '--root', root], { encoding: 'utf8', timeout: 30000 });
+  assert.equal(child.status, 2);
+  assert.equal(child.stderr.trim(), `JSON invalido: ${path}`);
+  assert.ok(!`${child.stdout}${child.stderr}`.includes('SYNTHETIC'));
+  assert.deepEqual(snapshot(root), before);
+});
+
+for (const [path, label] of [
+  ['.pbai4devs/state/agentdevkit.json', 'estado instalado'],
+  ['.pbai4devs/state/derived.json', 'estado derivado'],
+  ['.pbai4devs/templates/gitignore/clients.json', 'configuracao de clientes'],
+]) test(`JSON inválido de ${label} não divulga conteúdo`, t => {
+  const root = fixture(t);
+  write(root, path, 'SYNTHETIC_SECRET_ALPHA');
+  const before = snapshot(root);
+  assert.throws(() => run(root, { force: true }), error => {
+    assert.ok(error instanceof SyntaxError);
+    assert.equal(error.message, `JSON invalido: ${label}`);
+    assert.ok(!String(error.stack).includes('SYNTHETIC'));
+    return true;
+  });
+  assert.deepEqual(snapshot(root), before);
+  const child = spawnSync(process.execPath, [cli, '--check', '--root', root], { encoding: 'utf8', timeout: 30000 });
+  assert.equal(child.status, 2);
+  assert.equal(child.stderr.trim(), `JSON invalido: ${label}`);
+  assert.ok(!`${child.stdout}${child.stderr}`.includes('SYNTHETIC'));
+  assert.deepEqual(snapshot(root), before);
 });
 
 test('descobre principais aninhados sem transformar auxiliares em recursos', t => {

@@ -15,7 +15,125 @@ test('diagnostico funciona so com Node e informa dependencias opcionais ausentes
   assert.equal(report.runtime.name, 'node'); assert.equal(report.runtime.executable, process.execPath);
   assert.equal(report.npm, null); assert.equal(report.git, null);
   assert.equal(report.docker.executable, null); assert.equal(report.docker.compose, false);
+  assert.equal(report.docker.composeStatus, 'not-found'); assert.equal(report.docker.daemonStatus, 'not-found');
   assert.deepEqual(report.tools, []); assert.equal(existsSync(join(root, '.pbai4devs')), false);
+});
+
+test('falha de consulta ao Docker não comprova que daemon ou Compose estão parados', t => {
+  const output = join(projectRoot, '.agent-tests'); mkdirSync(output, { recursive: true });
+  const root = mkdtempSync(join(output, 'diagnose-docker-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const docker = join(root, process.platform === 'win32' ? 'docker.exe' : 'docker');
+  writeFileSync(docker, process.platform === 'win32' ? 'fixture' : '#!/bin/sh\nbase=${0%/*}\nprintf called > "$base/docker-invoked"\n'); chmodSync(docker, 0o755);
+  const environment = { PATH: root };
+  for (const outcome of [
+    { status: 1, stderr: 'detalhe privado' },
+    { status: null, error: Object.assign(new Error('detalhe privado'), { code: 'EACCES' }) },
+    { status: null, error: Object.assign(new Error('detalhe privado'), { code: 'ETIMEDOUT' }) },
+    { status: null, signal: 'SIGTERM' },
+  ]) {
+    const failed = diagnose({ root, environment, probe: (_file, _args, options) => { assert.equal(options.env, environment); return outcome; } });
+    assert.equal(failed.docker.daemon, false);
+    assert.equal(failed.docker.compose, false);
+    assert.equal(failed.docker.daemonStatus, 'unverified');
+    assert.equal(failed.docker.composeStatus, 'unverified');
+    assert.ok(!JSON.stringify(failed).includes('detalhe privado'));
+  }
+  const calls = [];
+  const success = diagnose({ root, environment, probe: (file, args, options) => { calls.push({ file, args, options }); return { status: 0 }; } });
+  assert.equal(success.docker.daemon, true);
+  assert.equal(success.docker.compose, true);
+  assert.equal(success.docker.daemonStatus, 'available');
+  assert.equal(success.docker.composeStatus, 'available');
+  assert.deepEqual(calls.map(call => call.args), [['compose', 'version'], ['info', '--format', '{{.ServerVersion}}']]);
+  assert.ok(calls.every(call => call.file === docker && call.options.env === environment && call.options.timeout === 5000 && call.options.windowsHide === true));
+  const mixed = diagnose({ root, environment, probe: (_file, args) => ({ status: args[0] === 'compose' ? 0 : 1 }) });
+  assert.equal(mixed.docker.composeStatus, 'available');
+  assert.equal(mixed.docker.daemonStatus, 'unverified');
+  const skipped = diagnose({ root, environment, probeDocker: false, probe: () => { throw new Error('Não deve chamar Docker.'); } });
+  assert.equal(skipped.docker.daemon, false);
+  assert.equal(skipped.docker.daemonStatus, 'not-requested');
+  assert.equal(skipped.docker.composeStatus, 'not-requested');
+  const absent = diagnose({ root, environment: { PATH: '' }, probeDocker: false, probe: () => { throw new Error('Não deve chamar Docker.'); } });
+  assert.equal(absent.docker.executable, null);
+  assert.equal(absent.docker.daemonStatus, 'not-found');
+  assert.equal(absent.docker.composeStatus, 'not-found');
+  const sentinel = join(root, 'docker-invoked');
+  if (process.platform !== 'win32') {
+    assert.equal(spawnSync(docker, [], { env: {} }).status, 0);
+    assert.equal(existsSync(sentinel), true, 'o controle deve registrar a execução');
+    rmSync(sentinel);
+  }
+  const cli = spawnSync(process.execPath, [join(projectRoot, '.pbai4devs/scripts/diagnosticar-ambiente/SCRIPT.mjs'), '--no-docker-probe'], {
+    encoding: 'utf8', timeout: 10000, env: { ...process.env, PATH: root, Path: root },
+  });
+  assert.equal(cli.status, 0, cli.stderr);
+  const cliDocker = JSON.parse(cli.stdout).docker;
+  assert.equal(cliDocker.daemonStatus, 'not-requested');
+  assert.equal(cliDocker.composeStatus, 'not-requested');
+  assert.equal(existsSync(sentinel), false);
+  const selector = spawnSync(process.execPath, [join(projectRoot, '.pbai4devs/scripts/executar-script/SCRIPT.mjs'), '--raw', 'diagnosticar-ambiente', '--no-docker-probe'], {
+    encoding: 'utf8', timeout: 10000, env: { ...process.env, PATH: root, Path: root },
+  });
+  assert.equal(selector.status, 0, selector.stderr);
+  assert.equal(JSON.parse(selector.stdout).docker.daemonStatus, 'not-requested');
+  assert.equal(existsSync(sentinel), false);
+  const typo = spawnSync(process.execPath, [join(projectRoot, '.pbai4devs/scripts/diagnosticar-ambiente/SCRIPT.mjs'), '--no-docker-probee'], {
+    encoding: 'utf8', timeout: 10000, env: { ...process.env, PATH: root, Path: root },
+  });
+  assert.notEqual(typo.status, 0);
+  assert.match(typo.stderr, /Uso:/);
+  assert.equal(existsSync(sentinel), false);
+  const selectorTypo = spawnSync(process.execPath, [join(projectRoot, '.pbai4devs/scripts/executar-script/SCRIPT.mjs'), '--raw', 'diagnosticar-ambiente', '--no-docker-probee'], {
+    encoding: 'utf8', timeout: 10000, env: { ...process.env, PATH: root, Path: root },
+  });
+  assert.notEqual(selectorTypo.status, 0);
+  assert.match(selectorTypo.stderr, /Uso:/);
+  assert.equal(existsSync(sentinel), false);
+});
+
+test('diagnóstico sem sondagem não usa APIs monitoradas de processo e rede', t => {
+  // Os controles provam spawnSync e https.request; as demais substituições
+  // são observações adicionais, não uma barreira completa contra rede.
+  const output = join(projectRoot, '.agent-tests'); mkdirSync(output, { recursive: true });
+  const root = mkdtempSync(join(output, 'diagnose-offline-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const docker = join(root, process.platform === 'win32' ? 'docker.exe' : 'docker');
+  writeFileSync(docker, 'fixture'); chmodSync(docker, 0o755);
+  const marker = join(root, 'unexpected-operation'), preload = join(root, 'guard.mjs');
+  writeFileSync(preload, `
+import cp from 'node:child_process';
+import http from 'node:http';
+import https from 'node:https';
+import net from 'node:net';
+import tls from 'node:tls';
+import dns from 'node:dns';
+import { writeFileSync } from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
+const blocked = () => { writeFileSync(process.env.ADK_TEST_MARKER, 'called'); throw new Error('unexpected operation'); };
+for (const name of ['spawn', 'spawnSync', 'exec', 'execSync', 'execFile', 'execFileSync', 'fork']) cp[name] = blocked;
+for (const [object, names] of [[http, ['request', 'get']], [https, ['request', 'get']], [net, ['connect', 'createConnection']], [tls, ['connect']], [dns, ['lookup', 'resolve']]]) {
+  for (const name of names) object[name] = blocked;
+}
+globalThis.fetch = blocked;
+syncBuiltinESMExports();
+`);
+  const guardEnv = { ...process.env, NODE_OPTIONS: '', PATH: root, Path: root, ADK_TEST_MARKER: marker, DOCKER_HOST: 'tcp://127.0.0.1:1' };
+  for (const source of [
+    "import { spawnSync } from 'node:child_process'; try { spawnSync('forbidden'); } catch {}",
+    "import { request } from 'node:https'; try { request('invalid:'); } catch {}",
+  ]) {
+    const control = spawnSync(process.execPath, ['--import', pathToFileURL(preload).href, '--input-type=module', '-e', source], { encoding: 'utf8', timeout: 10000, env: guardEnv });
+    assert.equal(control.status, 0, control.stderr);
+    assert.equal(existsSync(marker), true, 'o controle deve detectar a operação');
+    rmSync(marker);
+  }
+  const result = spawnSync(process.execPath, ['--import', pathToFileURL(preload).href, join(projectRoot, '.pbai4devs/scripts/diagnosticar-ambiente/SCRIPT.mjs'), '--no-docker-probe'], {
+    encoding: 'utf8', timeout: 10000, env: guardEnv,
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(JSON.parse(result.stdout).docker.daemonStatus, 'not-requested');
+  assert.equal(existsSync(marker), false, 'nenhuma API monitorada deve ser chamada');
 });
 
 test('requisito comum recusa Node antigo e procura executaveis sem shell', t => {

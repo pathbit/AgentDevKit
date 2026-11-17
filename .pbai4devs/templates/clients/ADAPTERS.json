@@ -59,6 +59,7 @@
         "commands": "arquivo"
       },
       "agentMetadata": "claude.yaml",
+      "ruleMetadata": "claude.yaml",
       "reason": "Skills e agentes usam o nível documentado; comandos e regras preservam grupos. Monorepos não equivalem a grupos dentro de skills/.",
       "sources": [
         "https://code.claude.com/docs/en/skills",

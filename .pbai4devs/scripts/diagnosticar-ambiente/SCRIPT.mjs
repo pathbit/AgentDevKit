@@ -4,11 +4,14 @@ import { join } from 'node:path';
 import { ToolManager } from '../preparar-ferramentas/SCRIPT.mjs';
 import { findExecutable, isMain, projectRoot, requireNode } from '../lib/runtime.mjs';
 
-export function diagnose({ root = projectRoot, environment = process.env, probe = spawnSync } = {}) {
+export function diagnose({ root = projectRoot, environment = process.env, probe = spawnSync, probeDocker = true } = {}) {
   requireNode();
   const manager = new ToolManager({ root });
   const docker = findExecutable('docker', environment);
-  const execute = args => docker ? probe(docker, args, { encoding: 'utf8', timeout: 5000, windowsHide: true }).status === 0 : false;
+  const execute = args => docker && probeDocker ? probe(docker, args, { env: environment, encoding: 'utf8', timeout: 5000, windowsHide: true }).status === 0 : false;
+  const compose = execute(['compose', 'version']);
+  const daemon = execute(['info', '--format', '{{.ServerVersion}}']);
+  const status = available => !docker ? 'not-found' : !probeDocker ? 'not-requested' : available ? 'available' : 'unverified';
   const browserCandidates = [
     environment.AGENT_BROWSER_EXECUTABLE_PATH,
     '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -25,7 +28,7 @@ export function diagnose({ root = projectRoot, environment = process.env, probe 
     runtime: { name: 'node', version: process.version, executable: process.execPath },
     npm: findExecutable('npm', environment),
     git: findExecutable('git', environment),
-    docker: { executable: docker, compose: execute(['compose', 'version']), daemon: execute(['info', '--format', '{{.ServerVersion}}']) },
+    docker: { executable: docker, compose, daemon, composeStatus: status(compose), daemonStatus: status(daemon) },
     browsers: [...new Set(browserCandidates.map(name => findExecutable(name, environment)).filter(Boolean))],
     tools: Object.keys(manager.catalog).map(name => {
       const info = manager.info(name);
@@ -36,6 +39,10 @@ export function diagnose({ root = projectRoot, environment = process.env, probe 
 }
 
 if (isMain(import.meta.url)) {
-  try { console.log(JSON.stringify(diagnose(), null, 2)); }
+  try {
+    const args = process.argv.slice(2);
+    if (args.length > 1 || args.some(arg => arg !== '--no-docker-probe')) throw new Error('Uso: diagnosticar-ambiente [--no-docker-probe]');
+    console.log(JSON.stringify(diagnose({ probeDocker: args.length === 0 }), null, 2));
+  }
   catch (error) { console.error(error.message); process.exitCode = 1; }
 }

@@ -53,6 +53,7 @@ function fixture(t) {
   put('.pbai4devs/scripts/inspecionar-projeto/SCRIPT.mjs', readFileSync(join(projectRoot, '.pbai4devs/scripts/inspecionar-projeto/SCRIPT.mjs')));
   put('.pbai4devs/scripts/lib/runtime.mjs', readFileSync(join(projectRoot, '.pbai4devs/scripts/lib/runtime.mjs')));
   put('.pbai4devs/scripts/lib/state-path.mjs', readFileSync(join(projectRoot, '.pbai4devs/scripts/lib/state-path.mjs')));
+  put('.pbai4devs/scripts/lib/project-metadata.mjs', readFileSync(join(projectRoot, '.pbai4devs/scripts/lib/project-metadata.mjs')));
   return { root, put, space, outputs, outputRoot: join(outputs, 'suite') };
 }
 

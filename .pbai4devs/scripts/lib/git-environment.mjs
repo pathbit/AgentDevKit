@@ -1,19 +1,55 @@
 import { lstatSync } from 'node:fs';
-import { join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 
 // Git location overrides and external diff hooks may redirect inspection away
 // from the requested project. Environment keys are case-insensitive on Windows.
 export function safeGitEnvironment(source = process.env) {
   const env = {};
-  const blocked = /^(?:GIT_DIR|GIT_WORK_TREE|GIT_COMMON_DIR|GIT_INDEX_FILE|GIT_EXTERNAL_DIFF|GIT_OPTIONAL_LOCKS)$/i;
+  const blocked = /^(?:GIT_DIR|GIT_WORK_TREE|GIT_COMMON_DIR|GIT_INDEX_FILE|GIT_EXTERNAL_DIFF|GIT_OPTIONAL_LOCKS|GIT_TRACE.*)$/i;
   for (const [key, value] of Object.entries(source)) if (!blocked.test(key)) env[key] = value;
   env.GIT_OPTIONAL_LOCKS = '0';
+  // Explicitly disable Trace2 targets configured globally or system-wide as
+  // well as those inherited through the environment; do not edit Git config.
+  env.GIT_TRACE2 = '0';
+  env.GIT_TRACE2_EVENT = '0';
+  env.GIT_TRACE2_PERF = '0';
   return env;
 }
 
 export function assertUnredirectedGitEnvironment(source = process.env) {
   const redirected = Object.keys(source).filter(key => /^(?:GIT_DIR|GIT_WORK_TREE|GIT_COMMON_DIR|GIT_INDEX_FILE)$/i.test(key) && source[key]);
   if (redirected.length) throw Object.assign(new Error(`Git redirecionado por ${redirected.join(', ')}; operação recusada para preservar o índice e os arquivos.`), { code: 'E_GIT_ENV' });
+}
+
+// Refuse planned mutations in a nested worktree using only the outer index.
+// This guard does not restrict reading sources. The target may be a Git root;
+// only descendants are boundaries.
+export function assertNoNestedGit(root, paths) {
+  const checked = new Set();
+  for (const path of paths) {
+    if (typeof path !== 'string' || !path || isAbsolute(path) || /[\\:\x00-\x1f\x7f]/.test(path)
+      || path.split('/').some(part => !part || part === '.' || part === '..')) {
+      throw Object.assign(new Error('Caminho de verificação Git inválido.'), { code: 'E_PATH' });
+    }
+    let current = root; const components = [];
+    for (const part of path.split('/')) {
+      components.push(part);
+      current = join(current, part);
+      if (checked.has(current)) continue;
+      let info;
+      try { info = lstatSync(current); }
+      catch (error) { if (['ENOENT', 'ENOTDIR'].includes(error.code)) break; throw error; }
+      if (info.isSymbolicLink()) throw Object.assign(new Error(`Link simbolico recusado: ${path}`), { code: 'E_SYMLINK' });
+      if (!info.isDirectory()) break;
+      try {
+        lstatSync(join(current, '.git'));
+        throw Object.assign(new Error(`Repositório Git aninhado em caminho afetado: ${path}`), { code: 'E_NESTED_GIT', nestedGitPath: components.join('/') });
+      } catch (error) {
+        if (!['ENOENT', 'ENOTDIR'].includes(error.code)) throw error;
+      }
+      checked.add(current);
+    }
+  }
 }
 
 // Do not trim: spaces (and on Unix even a trailing CR) can belong to a path.

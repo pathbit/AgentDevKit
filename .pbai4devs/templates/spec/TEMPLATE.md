@@ -17,6 +17,11 @@ A definir.
 
 A definir.
 
+Quando houver requisito de desempenho, combine antes da implementação a carga,
+o ambiente, a métrica e o limite de aceite. Registre tolerâncias de correção,
+erros e recursos; no plano de verificação, indique baseline, comando,
+repetições e como comparar resultados. Use percentis apenas quando pertinentes.
+
 ## Escopo e fora de escopo
 
 A definir.

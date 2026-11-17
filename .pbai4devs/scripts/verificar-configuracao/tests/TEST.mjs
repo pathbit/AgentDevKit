@@ -54,6 +54,30 @@ test('aceita o modelo real e mantém provas da aplicação como verificação se
   assert.equal(existsSync(join(root, 'src')), false);
 });
 
+test('consulta apenas preparação sem exigir configuração técnica antecipada', t => {
+  const { root, state, run, write } = fixture(t);
+  assert.equal(run('--preparacao').report.motivo, 'estado-ausente');
+  state(document('pendente', 'concluido'));
+  assert.equal(run('--preparacao').report.motivo, 'preparacao-pendente');
+  state(document('concluido', 'pendente'));
+  write('.gitignore', 'node_modules/\n'); write('AGENTS.md', '# Humano\n');
+  assert.equal(spawnSync('git', ['init', '--quiet', root]).status, 0);
+  assert.equal(spawnSync('git', ['-C', root, 'add', '.gitignore', 'AGENTS.md']).status, 0);
+  const paths = ['.git/index', '.gitignore', 'AGENTS.md', '.pbai4devs/state/configuracao/ESTADO.md'];
+  const before = paths.map(path => readFileSync(join(root, path)));
+  const result = run('--preparacao');
+  assert.equal(result.status, 0);
+  assert.equal(result.report.status, 'verificar-evidencias');
+  assert.match(result.report.limite, /não comprova evidências/);
+  assert.equal(run().report.motivo, 'configuracao-pendente');
+  assert.deepEqual(paths.map(path => readFileSync(join(root, path))), before);
+  state('---\npreparacao: concluido\n---\n\n# Estado\n');
+  assert.equal(run('--preparacao').report.status, 'verificar-evidencias');
+  assert.equal(run().report.motivo, 'estado-invalido');
+  state('---\npreparacao: concluido\npreparacao: pendente\n---\n\n# Estado\n');
+  assert.equal(run('--preparacao').report.motivo, 'estado-invalido');
+});
+
 test('indicadores concluídos exigem revisão adicional de evidências e não alteram Git', t => {
   const { root, state, write, run } = fixture(t);
   state(document('"concluido" # aprovado', "'concluido'"));
@@ -129,7 +153,7 @@ test('não segue link humano em arquivo ou pasta de estado', t => {
 test('exige Node e rejeita argumentos extras sem ler outro projeto', t => {
   const { root, run } = fixture(t);
   const result = run('--root', root); assert.equal(result.status, 2);
-  assert.match(result.stderr, /sem argumentos/);
+  assert.match(result.stderr, /\[--preparacao\]/);
   assert.equal(verifyConfiguration(root).status, 'bloqueado');
 });
 
@@ -140,6 +164,13 @@ test('seletor de scripts propaga bloqueio e exige revisão de evidências', t =>
   state(document('concluido', 'pendente'));
   const pending = execute(); assert.ifError(pending.error); assert.equal(pending.status, 1);
   assert.match(pending.stdout, /"motivo":"configuracao-pendente"/);
+  const preparation = spawnSync(process.execPath, [selector, 'verificar-configuracao', '--preparacao'], { cwd: root, encoding: 'utf8' });
+  assert.ifError(preparation.error); assert.equal(preparation.status, 0);
+  assert.match(preparation.stdout, /"status":"verificar-evidencias"/);
+  const raw = spawnSync(process.execPath, [selector, '--raw', 'verificar-configuracao', '--preparacao'], { cwd: root, encoding: 'utf8' });
+  assert.ifError(raw.error); assert.equal(raw.status, 0);
+  assert.equal(JSON.parse(raw.stdout).status, 'verificar-evidencias');
+  assert.match(raw.stderr, /runtime=node/);
   state(document('concluido', 'concluido'));
   const recorded = execute(); assert.ifError(recorded.error); assert.equal(recorded.status, 0);
   assert.match(recorded.stdout, /"status":"verificar-evidencias"/);

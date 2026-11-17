@@ -12,8 +12,9 @@ Ele inclui recursos, ferramentas, automações, modelos e referências externas.
 Os arquivos `skills.json`, `rules.json` e `agents.json` são índices auxiliares
 das fontes. Os clientes selecionados usam seus diretórios de apontamentos.
 O estado `state/agentdevkit.json` guarda `clients`: `["all"]` ou os IDs
-escolhidos. Catálogos, manifesto, estado e pastas nativas são derivados locais;
-não devem ser commitados. No repositório do kit, o código do produto fica em
+escolhidos. Catálogos, manifesto e estado são derivados locais. As pastas
+nativas também podem conter arquivos humanos; a equipe decide o que versionar.
+No repositório do kit, o código do produto fica em
 `src/`, `bin/`, `tests/` e `scripts/release/`, na raiz.
 Use `agents` na CLI para consultar ou alterar; `all` inclui os clientes legados.
 O hub fica completo; clientes podem compartilhar pastas necessárias.
@@ -35,18 +36,20 @@ layout registrado. Veja a [compatibilidade](COMPATIBILIDADE.md) dos clientes.
 Recursos auxiliares e guias ficam exclusivamente em `.pbai4devs`.
 A licença do kit fica em `LICENSE` dentro deste hub após `init` ou `update`.
 Ela vem do pacote e não substitui a licença do projeto consumidor.
-Os testes das automações ficam em `scripts/<nome>/tests/`; seus resultados são
-ignorados em `.agent-tests/`.
-O `.gitignore` desta pasta controla sua árvore. As saídas nos clientes são
-protegidas por regras locais geradas dos
-[modelos](templates/gitignore/TEMPLATE.md).
-Um `.gitignore` não consegue ignorar irmãos com `../`; o gerador usa o local
-correto do Git e preserva configurações humanas.
+Os testes das automações ficam em `scripts/<nome>/tests/`; guarde resultados em
+diretório ignorado pelo projeto ou temporário fora do repositório.
+O `.gitignore` desta pasta controla somente sua árvore; o kit preserva ignores,
+índice e `.git/info/exclude` existentes, sem criar ignores nos clientes.
+Apontamentos e artefatos podem ficar visíveis no Git. Confira com `git status`
+e `git check-ignore -v -- <caminho>`; `git ls-files -- <caminho>` identifica
+arquivos já rastreados, que não são removidos do índice por uma regra ignore.
+Use os [modelos](templates/gitignore/TEMPLATE.md) se o projeto precisar de
+regras adicionais.
 Os modelos acompanham cada fase. Após implementar, use `atualizar-documentacao`
 e o comando `revisar-entrega` para fechar documentação, revisão e evidências.
 
-Use o [comando sincronizar](commands/sincronizar/COMMAND.md) para reparar tudo;
-o script também aceita `--check` para só conferir.
+Use o [comando sincronizar](commands/sincronizar/COMMAND.md) para atualizar os
+apontamentos; o script também aceita `--check` para só conferir.
 Os [exemplos de maturidade](scripts/testar-maturidade/README.md) ficam em uma
 pasta temporária fora de Git, com cópias da estrutura e relatórios locais.
 

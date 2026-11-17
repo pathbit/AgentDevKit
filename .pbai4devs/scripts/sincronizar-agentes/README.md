@@ -10,11 +10,34 @@ node .pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs --force
 node --test .pbai4devs/scripts/sincronizar-agentes/tests/TEST.mjs
 ```
 
-`--check` só confere; a execução normal atualiza os recursos. `--force` salva
-conflitos em `.agent-tests/` antes de reparar os caminhos gerenciados.
-O [comando agêntico](../../commands/sincronizar/COMMAND.md) usa `--force` por
-padrão; executar este script diretamente não ativa essa opção. A CLI oferece
-`sync --dry-run --json` para consultar o plano antes de aplicá-lo.
+`--check` só confere e mostra até dez caminhos em conflito; a execução normal
+atualiza os recursos. `--force` pode salvar backup em `.agent-tests/` antes de
+reparar caminhos gerenciados; conflitos protegidos continuam bloqueados.
+O script recusa atualizar ou remover um arquivo quando identifica mais de um
+hardlink ou não consegue verificar uma contagem válida. Isso pode bloquear a
+operação em sistemas de arquivos que não fornecem a contagem. A conferência não
+impede alterações concorrentes após a leitura;
+interrompa outros processos antes de sincronizar.
+O `--check` informa hardlinks e contagens não verificadas nos caminhos que
+planeja alterar; a situação pode mudar antes da aplicação.
+Em atualizações no macOS e Linux, o estágio copia os metadados nativos
+suportados e verifica a cópia antes da publicação. No macOS, ACLs que negam
+escrita, flags de proteção ou consultas inconclusivas bloqueiam a operação;
+ACLs legíveis e xattrs são preservados quando a verificação nativa passa.
+Remoções com metadados que seriam perdidos continuam bloqueadas. ACLs de
+diretórios e alterações concorrentes após a verificação não são cobertas.
+Um caminho informado após falha pode conter dados parciais ou de outra origem;
+preserve-o e revise antes de qualquer recuperação.
+No macOS, um destino de backup com ACL herdada ou consulta inconclusiva é
+recusado antes da cópia. A pasta vazia é informada para revisão; a inspeção não
+garante privacidade contra alterações concorrentes nem cobre outros sistemas.
+As consultas Git desativam rastreamentos herdados somente nos subprocessos, sem
+alterar a configuração do usuário. Leituras ainda podem atualizar metadados
+de acesso do sistema de arquivos.
+O [comando agêntico](../../commands/sincronizar/COMMAND.md) usa a CLI: consulte
+`sync --dry-run --json`, aplique `sync` e confira `sync --check`. O script
+direto usa o manifesto existente; seu `--check` não detecta YAMLs nativos ainda
+ausentes desse manifesto. A CLI recompõe o manifesto no planejamento.
 Recursos nativos humanos recebem um bloco curto com a referência ao hub.
 Texto, frontmatter e nomes existentes são preservados. O estado guarda só o
 hash desse bloco; edições externas continuam permitidas. Um bloco alterado
@@ -48,7 +71,15 @@ adicionar arquivos. O diagnóstico informa arquivos privados expostos e blocos
 antigos no exclude que ainda possam afetar outras worktrees.
 Entradas novas usam os templates; hashes em `state/derived.json` permitem
 atualizar arquivos gerados e blocos separadamente, preservando alterações humanas.
-`--check` somente verifica; não altera o índice.
+Uma referência CRLF já equivalente à saída esperada pode ser mantida intacta,
+sem bloco duplicado ou adoção de propriedade. Se houver divergência com um
+registro derivado, o check direto informa o conflito e a API pode retornar
+`line-ending-diverged`. A normalização não autoriza sobrescrita.
+`--check` somente verifica; não altera o índice. Regras Claude remanescentes
+após desmarcar o cliente geram aviso e falha no check, pois ainda podem estar
+ativas. Confira-as antes de removê-las. Um link, erro ou limite de varredura
+também deixa o escopo não verificado. Possíveis links em exemplos Markdown
+podem gerar aviso conservador; o arquivo não é adotado por isso.
 Apontamentos obsoletos podem ser removidos quando a propriedade é comprovada;
 arquivos e pastas próprios, inclusive os adicionais dentro do mesmo recurso,
 devem permanecer.

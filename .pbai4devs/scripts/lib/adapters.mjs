@@ -4,7 +4,14 @@ import { randomUUID } from 'node:crypto';
 import { resourcePath } from './resource-path.mjs';
 import { isGeneratedOutput } from './gitignore.mjs';
 
-const policy = JSON.parse(readFileSync(new URL('../../templates/clients/ADAPTERS.json', import.meta.url), 'utf8'));
+const policyText = readFileSync(new URL('../../templates/clients/ADAPTERS.json', import.meta.url), 'utf8');
+let policy;
+try { policy = JSON.parse(policyText); }
+catch {
+  const error = Object.assign(new SyntaxError('JSON invalido: configuracao de adaptadores.'), { code: 'E_ADAPTER_POLICY_JSON' });
+  error.stack = `${error.name}: ${error.message}`;
+  throw error;
+}
 const kinds = new Set(['skills', 'agents', 'commands', 'rules']);
 const layouts = new Set(['agrupado', 'plano', 'arquivo', 'mdc', 'agente', 'prompt', 'instrucoes', 'nenhum']);
 const entryNames = new Set(['AGENTS.md', 'CLAUDE.md', 'GEMINI.md']);

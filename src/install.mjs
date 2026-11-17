@@ -1,15 +1,21 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { safeGitEnvironment, assertUnredirectedGitEnvironment, gitOutputLines, gitPathsOverlap } from '../.pbai4devs/scripts/lib/git-environment.mjs';
-import { attachErrorDiagnostics, collectErrorDiagnostics, explainUnsupportedHardlink } from '../.pbai4devs/scripts/lib/error-reporting.mjs';
+import { types as utilTypes } from 'node:util';
+import { safeGitEnvironment, assertUnredirectedGitEnvironment, assertNoNestedGit, gitOutputLines, gitPathsOverlap } from '../.pbai4devs/scripts/lib/git-environment.mjs';
+import { attachErrorDiagnostics, collectErrorDiagnostics, explainUnsupportedHardlink, markDiagnosticsBoundary, primaryDiagnosticError, withPotentialPartial, withUncertainPath } from '../.pbai4devs/scripts/lib/error-reporting.mjs';
 import { spawnSync } from 'node:child_process';
+import { inspectLinuxXattr, inspectMacAcl, inspectMacDirectoryAcl, inspectMacXattr } from '../.pbai4devs/scripts/lib/xattr-probe.mjs';
+import { fileOwnerIssue } from '../.pbai4devs/scripts/lib/file-owner.mjs';
 import { chmodSync, closeSync, existsSync, fstatSync, linkSync, lstatSync, openSync, readFileSync, readSync, writeFileSync, readdirSync, mkdirSync, mkdtempSync, realpathSync, renameSync, rmSync, rmdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { basename, dirname, isAbsolute, join, posix, relative, resolve, sep } from 'node:path';
 import { synchronize, isReference } from '../.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs';
-import { isGeneratedOutput, planLocalIgnore, checkLocalIgnore, assertLocalIgnoreUnchanged, applyLocalIgnore, indexContentMatches } from '../.pbai4devs/scripts/lib/gitignore.mjs';
+import { isLegacyExact } from '../.pbai4devs/scripts/lib/claude-legacy-exact.mjs';
+import { isGeneratedOutput, planLocalIgnore, checkLocalIgnore, assertLocalIgnoreUnchanged, applyLocalIgnore, indexContentMatches, noGitRepository } from '../.pbai4devs/scripts/lib/gitignore.mjs';
 import { nativePathBoundary } from '../.pbai4devs/scripts/lib/native-paths.mjs';
+import { copyFileWithNativeMetadata, inspectMacWriteProtection, nativeMetadataCopySupported, stageReplacementWithNativeMetadata } from '../.pbai4devs/scripts/lib/native-metadata.mjs';
+import { mayReferenceClaudeRule, resemblesClaudeReference, scanRetainedClaude } from '../.pbai4devs/scripts/lib/claude-retained.mjs';
 import { canonicalEntrypoint, resolveEntrypoint, entrypointReference, renderEntrypointImports, extractManagedBlock, managedBlockDigest, mergeManagedContent, stripManagedContent } from '../.pbai4devs/scripts/lib/managed-content.mjs';
-import { extractTomlManagedBlock, tomlManagedBlockDigest, mergeTomlContent, stripTomlContent } from '../.pbai4devs/scripts/lib/managed-toml.mjs';
+import { extractTomlManagedBlock, tomlManagedBlockDigest, mergeTomlContent, stripTomlContent, promptMatchesCompleteReference, geminiReferenceBody } from '../.pbai4devs/scripts/lib/managed-toml.mjs';
 import { writeAdapterManifest, adapterRoots, normalizeClients, resolveAdapters } from './adapters/index.mjs';
 import { packageRoot, packageInfo, statePath, legacyStatePath, entryNames, begin, end } from './config.mjs';
 import { normalizeLanguage, text } from './i18n.mjs';
@@ -17,7 +23,8 @@ import { normalizeLanguage, text } from './i18n.mjs';
 const hash = value => createHash('sha256').update(value).digest('hex');
 const portable = value => value.split(sep).join('/');
 const fail = (code, message) => { throw Object.assign(new Error(message), { code }); };
-const stat = path => { try { return lstatSync(path); } catch (error) { if (error.code === 'ENOENT') return null; throw error; } };
+const missingCode = (error, accepted) => { try { if (utilTypes.isProxy(error)) return false; const d = Object.getOwnPropertyDescriptor(error, 'code'); return Boolean(d && 'value' in d && accepted.includes(d.value)); } catch { return false; } };
+const stat = path => { try { return lstatSync(path); } catch (error) { if (missingCode(error, ['ENOENT'])) return null; throw error; } };
 const canonicalExisting = path => {
   if (typeof realpathSync.native === 'function') {
     try { return realpathSync.native(path); }
@@ -35,22 +42,27 @@ function stagedDivergences(root) {
     if (parent === anchor) break;
     anchor = parent;
   }
-  let hasGitMarker = false;
-  for (let current = anchor; ; current = dirname(current)) {
-    if (stat(join(current, '.git'))) { hasGitMarker = true; break; }
-    if (dirname(current) === current) break;
-  }
   const env = safeGitEnvironment();
+  // The no-repository diagnostic is classified internally in a stable locale.
+  env.LC_ALL = 'C';
+  env.LANGUAGE = 'C';
   let gitCwd = anchor;
   const run = args => spawnSync('git', ['-C', gitCwd, '-c', 'core.fsmonitor=false', ...args], {
     env, timeout: 30000, windowsHide: true, maxBuffer: 16 * 1024 * 1024,
   });
   const repository = run(['rev-parse', '--is-inside-work-tree']);
-  if (repository.error || repository.status !== 0) {
-    if (hasGitMarker) fail('E_GIT', 'Unable to inspect the existing Git repository safely.');
-    if (repository.error?.code === 'ENOENT' || !repository.error && repository.status !== 0) return new Set();
+  if (repository.error || repository.status !== 0 || repository.signal) {
+    if (noGitRepository(anchor, repository)) return new Set();
+    const errorCode = repository.error?.code;
+    const reason = typeof repository.signal === 'string' && /^SIG[A-Z0-9]{1,16}$/.test(repository.signal)
+      ? `signal ${repository.signal}`
+      : typeof errorCode === 'string' && /^[A-Z0-9_]{1,32}$/.test(errorCode)
+        ? `execution error ${errorCode}`
+        : Number.isInteger(repository.status) && repository.status >= 0 && repository.status <= 255
+          ? `exit status ${repository.status}` : 'unknown execution failure';
+    fail('E_GIT', `Unable to inspect Git worktree safely (${reason}). Check the Git installation and configuration.`);
   }
-  if (repository.error || repository.status !== 0 || repository.stdout.toString('utf8').trim() !== 'true') fail('E_GIT', 'Unable to inspect Git worktree.');
+  if (repository.stdout.toString('utf8').trim() !== 'true') fail('E_GIT', 'Unable to inspect Git worktree.');
   const top = run(['rev-parse', '--show-toplevel']);
   if (top.error || top.status !== 0) fail('E_GIT', 'Unable to inspect Git worktree root.');
   const topLines = gitOutputLines(top.stdout.toString('utf8'));
@@ -87,7 +99,7 @@ function stagedDivergences(root) {
     return result;
   };
   const paths = new Set(records(stagedResult.stdout).map(decode));
-  const entries = new Map();
+  const entries = new Map(), gitlinks = new Set();
   for (const bytes of records(indexResult.stdout)) {
     const tab = bytes.indexOf(9);
     const record = bytes.subarray(0, tab).toString('ascii');
@@ -96,6 +108,14 @@ function stagedDivergences(root) {
     if (!match) fail('E_GIT', 'Unable to parse the Git index safely.');
     const rawName = bytes.subarray(tab + 1);
     const name = rawName.toString('utf8');
+    if (match[1] === '160000') {
+      gitlinks.add(name);
+      const indexedParts = name.split('/');
+      if (prefixParts.length && indexedParts.length <= prefixParts.length && gitPathsOverlap(name, prefix, { root: gitCwd, allowMissingTarget: true })) {
+        fail('E_STAGED', 'Target is inside a Git submodule whose index cannot be safely inspected.');
+      }
+      paths.add(name);
+    }
     if (!paths.has(name)) continue;
     if (!Buffer.from(name, 'utf8').equals(rawName)) fail('E_GIT', 'Unable to safely inspect a non-UTF-8 staged path.');
     if (entries.has(name) || match[3] !== '0') entries.set(name, null);
@@ -104,11 +124,13 @@ function stagedDivergences(root) {
   const divergent = new Set();
   divergent.deleted = new Set();
   divergent.stagedNames = new Set();
+  divergent.gitlinks = new Set();
   for (const name of paths) {
     const parts = name.split('/');
     if (parts.length <= prefixParts.length || prefixParts.some((_part, index) => !gitPathsOverlap(prefixParts.slice(0, index + 1).join('/'), parts.slice(0, index + 1).join('/'), { root: gitCwd }))) continue;
     const path = parts.slice(prefixParts.length).join('/');
     divergent.stagedNames.add(path);
+    if (gitlinks.has(name)) divergent.gitlinks.add(path);
     const entry = entries.get(name);
     // Distinguish a staged deletion from unresolved index stages.
     if (!entries.has(name)) { divergent.add(path); divergent.deleted.add(path); continue; }
@@ -270,12 +292,21 @@ function atomicWrite(root, path, content, mode, onPublished, beforePublish, excl
   const file = safePath(root, path);
   mkdirSync(dirname(file), { recursive: true });
   const temporary = `${file}.agentdevkit-${randomUUID()}`;
-  let primaryError, guard;
+  let primaryError, primaryFailed = false, guard, renamed = false, temporaryCreated = false, publishedStat;
   try {
-    writeFileSync(temporary, content, { flag: 'wx', ...(mode === undefined ? {} : { mode }) });
+    try {
+      const temporaryMode = !exclusive && nativeMetadataCopySupported && mode !== undefined ? 0o600 : mode;
+      writeFileSync(temporary, content, { flag: 'wx', ...(temporaryMode === undefined ? {} : { mode: temporaryMode }) });
+      temporaryCreated = true;
+    } catch (error) {
+      // A failed exclusive write may have collided or left partial bytes.
+      // Neither outcome proves ownership of the name, so do not remove it.
+      throw withUncertainPath(error, temporary);
+    }
+    if (!exclusive && nativeMetadataCopySupported) stageReplacementWithNativeMetadata(file, temporary, content, mode, path);
     if (mode !== undefined) chmodSync(temporary, mode);
     const writtenMode = stat(temporary).mode & 0o777;
-    const publishedStat = lstatSync(temporary, { bigint: true });
+    publishedStat = lstatSync(temporary, { bigint: true });
     let publishedIdentity = null;
     if (holdIdentity && publishedStat.ino) {
       try {
@@ -293,9 +324,12 @@ function atomicWrite(root, path, content, mode, onPublished, beforePublish, excl
     };
     beforePublish?.();
     {
-      try { if (exclusive) linkSync(temporary, file); else renameSync(temporary, file); }
-      catch (error) {
-        if (exclusive) explainUnsupportedHardlink(error);
+      try {
+        if (exclusive) linkSync(temporary, file);
+        else { renameSync(temporary, file); renamed = true; }
+      }
+      catch (failure) {
+        const error = exclusive ? explainUnsupportedHardlink(failure) : failure;
         // A remote filesystem may report a failure after publishing. Record the
         // action only when both names still identify our temporary inode.
         let published = false;
@@ -303,21 +337,38 @@ function atomicWrite(root, path, content, mode, onPublished, beforePublish, excl
           const source = exclusive ? lstatSync(temporary, { bigint: true }) : publishedStat, target = lstatSync(file, { bigint: true });
           published = Boolean(error.code !== 'EEXIST' && !source.isSymbolicLink() && !target.isSymbolicLink() && source.ino && source.dev === target.dev && source.ino === target.ino);
         } catch { /* Unverifiable outcomes are left untouched. */ }
-        if (published) recordPublication();
-        else try { error.uncertainPaths = [...new Set([...(error.uncertainPaths || []), path])]; } catch { /* Keep the original error. */ }
-        throw error;
+        if (published) { recordPublication(); throw error; }
+        throw withUncertainPath(error, path);
       }
     }
     recordPublication();
     return writtenMode;
-  } catch (error) { primaryError = error; throw error; }
+  } catch (error) { primaryError = error; primaryFailed = true; throw error; }
   finally {
     if (guard !== undefined) try { closeSync(guard); } catch { /* Do not replace the original result. */ }
-    try { rmSync(temporary, { force: true }); }
-    catch (failure) {
-      const error = primaryError || failure;
-      try { error.cleanupFailures = [...(error.cleanupFailures || []), { path: temporary, message: failure.message }]; } catch { /* Keep the original error. */ }
-      if (!primaryError) throw failure;
+    // After a successful rename, another writer may already own the old name.
+    // A same-inode rename can leave the original name; preserve that ambiguity.
+    if (temporaryCreated && !renamed) {
+      if (primaryFailed) {
+        // Publication may have failed before or after changing either name.
+        // A different writer may now own the temporary name; retain it.
+        const reported = withUncertainPath(primaryError, temporary);
+        if (reported !== primaryError) throw reported;
+      } else try {
+        // Detect a replacement before cleanup. This check and removal are not
+        // atomic; callers must not treat it as complete concurrent protection.
+        const current = lstatSync(temporary, { bigint: true });
+        if (!publishedStat?.ino || !current.isFile() || current.isSymbolicLink()
+          || current.dev !== publishedStat.dev || current.ino !== publishedStat.ino) {
+          throw Object.assign(new Error('Temporary file changed; preserved for review.'), { code: 'E_CHANGED' });
+        }
+        rmSync(temporary, { force: true });
+      }
+      catch (failure) {
+        const error = failure;
+        try { error.cleanupFailures = [...(error.cleanupFailures || []), { path: temporary, message: failure.message }]; } catch { /* Keep the original error. */ }
+        throw withUncertainPath(failure, temporary);
+      }
     }
   }
 }
@@ -351,6 +402,25 @@ function nativeMarkdown(path) {
 }
 const nativeToml = path => path.startsWith('.gemini/commands/') && path.endsWith('.toml');
 const nativeManagedText = path => nativeMarkdown(path) || nativeToml(path);
+
+// Check the planned managed-block change again when applying it. TOML block
+// removal can reserialize the prompt even when its meaning stays the same.
+function allowsStagedBlock(path, current, content, knownBlock) {
+  if (!current || !Buffer.isBuffer(content) || !nativeManagedText(path)) return false;
+  try {
+    if (!nativeToml(path) && content.subarray(0, current.length).equals(current)) {
+      const digest = managedBlockDigest(content);
+      const stripped = digest && stripManagedContent(content, digest);
+      const extra = stripped?.slice(current.toString('utf8').length);
+      return Boolean(stripped?.startsWith(current.toString('utf8')) && extra !== undefined && /^[\r\n]*$/.test(extra));
+    }
+    if (knownBlock) {
+      const strip = nativeToml(path) ? stripTomlContent : stripManagedContent;
+      return Buffer.from(strip(current, knownBlock)).equals(content);
+    }
+  } catch { /* Invalid or unproven block. */ }
+  return false;
+}
 
 export function loadState(root) {
   const content = read(root, actualStatePath(root)); if (content === null) return null;
@@ -412,12 +482,26 @@ function assertNoLegacyReferences(value) {
   }
 }
 
+function assertMigrationDirectoryMetadata(root, folder, info) {
+  if ((process.platform === 'darwin' || process.platform === 'linux') && (info.mode & 0o7000)) {
+    throw Object.assign(new Error('State directory has special POSIX bits; review: ' + folder), { code: 'E_PROTECTED_METADATA', path: folder, metadataTargetVerified: true, metadataReason: 'special-mode-directory' });
+  }
+  if (process.platform === 'darwin') {
+    const result = inspectMacXattr(safePath(root, folder));
+    if (result !== 'empty') {
+      throw Object.assign(new Error('State directory extended attributes require review: ' + folder), { code: result === 'present' ? 'E_PROTECTED_METADATA' : 'E_METADATA_UNSUPPORTED', path: folder, metadataTargetVerified: true, metadataReason: result === 'present' ? 'xattr-directory-present' : 'xattr-directory-unverified' });
+    }
+  }
+}
+
 function legacyStateMigration(root) {
   if (actualStatePath(root) !== legacyStatePath) return null;
   const base = '.pbai4devs/estado', files = [], directories = [];
   const visit = folder => {
+    assertNoNestedGit(root, [folder]);
     const info = stat(safePath(root, folder));
     if (!info?.isDirectory()) fail('E_STATE', `Invalid state directory: ${folder}`);
+    assertMigrationDirectoryMetadata(root, folder, info);
     const names = readdirSync(safePath(root, folder)).sort();
     directories.push({ path: folder, mode: info.mode & 0o777, names });
     for (const name of names) {
@@ -576,7 +660,18 @@ function readDerivedState(target) {
       for (const [path, digest] of Object.entries(entries)) if (!canonicalEntrypoint(path) || !/^[a-f0-9]{64}$/.test(digest)) fail('E_STATE', 'Invalid derived entrypoint state.');
       for (const [path, digest] of Object.entries(outputs)) if (!allowedManaged(path) || !/^\.[^/]+\/(?:skills|agents|rules)\.json$/.test(path) || !/^[a-f0-9]{64}$/.test(digest)) fail('E_STATE', 'Invalid derived output state.');
       for (const [path, digest] of Object.entries(blocks)) if (!(nativeManagedText(path) || path === '.pbai4devs/.gitignore' || adapterRoots.some(root => path === `${root}/.gitignore`)) || !/^[a-f0-9]{64}$/.test(digest)) fail('E_STATE', 'Invalid derived block state.');
-      for (const [path, digest] of Object.entries(files)) if (!allowedManaged(path) || !/\.(?:md|mdc|toml)$/.test(path) || !/^[a-f0-9]{64}$/.test(digest)) fail('E_STATE', 'Invalid derived file state.');
+      // Legacy standalone sync can record Claude rules under ignored folders.
+      // Accept this narrow provenance only so those paths can be preserved;
+      // content hashes never authorize deleting or overwriting Claude rules.
+      const legacyClaudeRule = path => typeof path === 'string' && /^\.claude\/rules\/.+\.md$/.test(path)
+        && !/[\\|\x00-\x1f\x7f:]/.test(path)
+        && !['readme.md', 'instructions.md'].includes(path.split('/').at(-1).toLowerCase())
+        && path.split('/').every(part => part && part !== '.' && part !== '..' && part.toLowerCase() !== '.git');
+      for (const [path, digest] of Object.entries(files)) {
+        const forbiddenClaude = path.startsWith('.claude/rules/') && (path.split('/').some(part => part.toLowerCase() === '.git')
+          || ['readme.md', 'instructions.md'].includes(path.split('/').at(-1).toLowerCase()));
+        if (forbiddenClaude || !(allowedManaged(path) || legacyClaudeRule(path)) || !/\.(?:md|mdc|toml)$/.test(path) || !/^[a-f0-9]{64}$/.test(digest)) fail('E_STATE', 'Invalid derived file state.');
+      }
       for (const [path, digest] of Object.entries(catalogs)) if (!/^\.pbai4devs\/(?:catalog|skills|agents|rules)\.json$/.test(path) || !/^[a-f0-9]{64}$/.test(digest)) fail('E_STATE', 'Invalid derived catalogue state.');
       for (const [path, digest] of Object.entries(removedFiles)) if (canonicalEntrypoint(path) || !(nativeMarkdown(path) || nativeToml(path)) || !/^[a-f0-9]{64}$/.test(digest)) fail('E_STATE', 'Invalid removed file state.');
       const installed = loadState(target);
@@ -588,8 +683,34 @@ function readDerivedState(target) {
   return { entries, outputs, blocks, files, catalogs, config, removedBlocks, removedFiles };
 }
 
+// Diagnostic only: equal hashes or blocks do not prove current ownership.
+export function diagnosePreservedDerivedToml(derivedFiles, preserved, knownBlocks, readContent) {
+  const diagnostics = [];
+  for (const [path, digest] of Object.entries(derivedFiles)) {
+    if (!nativeToml(path) || !preserved.has(path)) continue;
+    let current;
+    try { current = readContent(path); }
+    catch { diagnostics.push({ code: 'derived-file-unverified', path }); continue; }
+    if (current === null) { diagnostics.push({ code: 'derived-file-missing', path }); continue; }
+    if (!Buffer.isBuffer(current)) { diagnostics.push({ code: 'derived-file-unverified', path }); continue; }
+    if (hash(current) === digest) continue;
+    const block = knownBlocks[path];
+    if (block) {
+      try { if (blockDigest(path, current) === block) continue; }
+      catch { /* A malformed or unverified block cannot suppress the warning. */ }
+    }
+    diagnostics.push({ code: 'derived-file-diverged', path });
+  }
+  return diagnostics.sort((a, b) => a.path.localeCompare(b.path));
+}
+
 export function planInstallation({ target, language = 'pt', mode = 'init', force = false, clients }) {
   assertUnredirectedGitEnvironment();
+  const initialStatePath = actualStatePath(target);
+  const initialDerivedPath = initialStatePath.replace(/agentdevkit\.json$/, 'derived.json');
+  const initialStateBytes = read(target, initialStatePath), initialDerivedBytes = read(target, initialDerivedPath);
+  const stageDependencies = new Map();
+  const sameBytes = (left, right) => left === null ? right === null : Boolean(right && left.equals(right));
   let previous = loadState(target);
   const installedState = previous;
   const migration = legacyStateMigration(target);
@@ -600,7 +721,7 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
   const selected = normalizeClients(clients ?? previous?.clients ?? ['all']);
   const active = resolveAdapters(selected);
   const changingClients = clients !== undefined || mode === 'agents';
-  const ownedEntrypoints = new Set(), mixedPaths = new Set(), nativeInputs = new Map();
+  const ownedEntrypoints = new Set(), mixedPaths = new Set(), satisfiedReferences = new Set(), nativeInputs = new Map();
   const observeNative = (path, content) => {
     if (nativeInputs.has(path)) {
       const original = nativeInputs.get(path);
@@ -608,6 +729,9 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
     } else nativeInputs.set(path, content);
   };
   const { entries: derivedEntries, outputs: derivedOutputs, blocks: derivedBlocks, files: derivedFiles, catalogs: derivedCatalogs, config: derivedConfig, removedBlocks, removedFiles } = readDerivedState(target);
+  const removalDiagnostics = Object.keys(removedFiles).filter(path => !Object.hasOwn(installedState?.files ?? {}, path))
+    .sort().map(path => ({ code: 'removed-file-unverified', path }));
+  const unknownRemovedFiles = new Set(removalDiagnostics.map(item => item.path));
   const derivedConfigFiles = derivedConfig ? { '.pbai4devs/espelhos.conf': derivedConfig } : {};
   if (previous) previous = { ...previous, files: Object.fromEntries(Object.entries(previous.files).filter(([path, digest]) => removedFiles[path] !== digest)) };
   const previousBlocks = Object.fromEntries(Object.entries(previous?.blocks || {}).filter(([path]) => !removedBlocks.includes(path)));
@@ -619,12 +743,41 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
   const preserved = new Map();
   const recordPreserved = (path, reason) => { preserved.set(path, { path, reason }); return true; };
   const fallbackChecks = new Map();
-  const outputBlocked = path => {
+  let outputBoundaryFailure, outputBoundaryMayHaveStageEffects = true;
+  const outputBlocked = (path, context) => {
+    try {
     const result = nativeOutputBoundary(target, path, ownedPaths);
     if (fallbackChecks.has(path) && JSON.stringify(fallbackChecks.get(path)) !== JSON.stringify(result)) fail('E_CHANGED', `Skill route changed while planning: ${path}`);
     fallbackChecks.set(path, result);
     if (result.blocked) recordPreserved(result.path, result.reason);
     return result;
+    } catch (cause) {
+      // Preserve the cause, but never expose arbitrary messages or paths.
+      let truncated = false;
+      const data = (object, key) => {
+        try {
+          if ((typeof object !== 'object' || object === null) && typeof object !== 'function') return undefined;
+          if (utilTypes.isProxy(object)) { truncated = true; return undefined; }
+          const d = Object.getOwnPropertyDescriptor(object, key);
+          if (!d) return undefined;
+          if (!Object.hasOwn(d, 'value')) { truncated = true; return undefined; }
+          return d.value;
+        } catch { truncated = true; return undefined; }
+      };
+      // A callback may throw an arbitrary object, including one with a Proxy
+      // prototype. Inspect only its own code; never traverse its prototype or
+      // infer a primary cause from an untrusted errors property.
+      const allowed = new Set(['EACCES', 'EPERM', 'EIO', 'ENOENT', 'ENOTDIR', 'ELOOP', 'EEXIST', 'EISDIR', 'EMFILE', 'ENFILE', 'ENAMETOOLONG', 'ESTALE', 'ETIMEDOUT', 'E_CHANGED', 'E_PATH', 'E_SYMLINK', 'E_GIT', 'E_NESTED_GIT', 'E_PROTECTED_METADATA', 'E_METADATA_UNSUPPORTED']);
+      const candidate = data(cause, 'code');
+      const code = typeof candidate === 'string' && allowed.has(candidate) ? candidate : undefined;
+      if (!code) truncated = true;
+      const reported = new Error('Unable to inspect project output; review the project path.', { cause });
+      if (code) reported.code = code;
+      if (truncated) reported.diagnosticsTruncated = true;
+      outputBoundaryMayHaveStageEffects = context?.stageMayHaveEffects !== false;
+      outputBoundaryFailure = reported;
+      throw reported;
+    }
   };
   const stagedHuman = stagedDivergences(target);
   const native = path => canonicalEntrypoint(path) || path === 'README.md' || adapterRoots.some(root => path === root || path.startsWith(`${root}/`));
@@ -653,7 +806,7 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
     return recordPreserved(path, item.isFile() ? 'existing-file' : 'existing-directory');
   };
   const stage = realpathSync(mkdtempSync(join(tmpdir(), 'agentdevkit-')));
-  let stageSyncError, stageFailure;
+  let stageSyncError, stageFailure, stageSyncFailed = false, stageFailed = false;
   try {
     const existing = copyResources(join(target, '.pbai4devs'), join(stage, '.pbai4devs'));
     const bundled = mode === 'init' || mode === 'update' ? copyResources(join(packageRoot, '.pbai4devs'), join(stage, '.pbai4devs')) : [];
@@ -701,11 +854,41 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
     const stagingState = '.pbai4devs/state/agentdevkit.json', stagingDerived = '.pbai4devs/state/derived.json';
     if (previous) write(stage, stagingState, JSON.stringify(previous));
     if (Object.keys(derivedEntries).length || Object.keys(derivedOutputs).length || Object.keys(derivedBlocks).length || Object.keys(derivedFiles).length || Object.keys(derivedCatalogs).length || derivedConfig || removedBlocks.length || Object.keys(removedFiles).length) {
-      write(stage, stagingDerived, JSON.stringify({ schemaVersion: 1, entries: derivedEntries, outputs: derivedOutputs, blocks: derivedBlocks, files: derivedFiles, catalogs: derivedCatalogs, ...(derivedConfig ? { config: derivedConfig } : {}), removedBlocks, removedFiles }));
+      write(stage, stagingDerived, JSON.stringify({ schemaVersion: 1, entries: derivedEntries, outputs: derivedOutputs, blocks: derivedBlocks, files: derivedFiles, catalogs: derivedCatalogs, ...(derivedConfig ? { config: derivedConfig } : {}), removedBlocks, removedFiles: {} }));
+    }
+    // A read-only preview identifies catalogued destinations using exactly
+    // the synchronizer's own selected layouts, including native exceptions.
+    const candidates = Object.keys(derivedFiles).filter(path => {
+      const old = previous?.files?.[path], later = derivedFiles[path];
+      return active.roots.some(root => path.startsWith(root + '/')) && old && old !== later
+        && !previousBlocks[path] && !derivedBlocks[path]
+        && !Object.hasOwn(removedFiles, path) && !removedBlocks.includes(path);
+    });
+    if (previous && candidates.length) {
+      let preview;
+      try { preview = synchronize({ root: stage, check: true, force: true, localIgnores: false, generateEntrypoints: false, recordDerivedState: false, outputBlocked, output() {} }); }
+      catch (error) { stageSyncError = error; stageSyncFailed = true; throw error; }
+      const conflicts = new Set(preview.conflictPaths);
+      const stagedState = { ...previous, files: { ...previous.files } };
+      let changed = false;
+      for (const path of candidates) {
+        if (!conflicts.has(path) || stagedContains(target, stagedHuman, path) || outputBlocked(path).blocked) continue;
+        const current = read(target, path);
+        if (!current || hash(current) !== derivedFiles[path]) continue;
+        observeNative(path, current);
+        if (actualStatePath(target) !== initialStatePath
+          || !sameBytes(read(target, initialStatePath), initialStateBytes)
+          || !sameBytes(read(target, initialDerivedPath), initialDerivedBytes)) fail('E_CHANGED', 'Stage state changed while planning.');
+        stageDependencies.set(initialStatePath, initialStateBytes ? hash(initialStateBytes) : null);
+        stageDependencies.set(initialDerivedPath, initialDerivedBytes ? hash(initialDerivedBytes) : null);
+        stageDependencies.set(path, hash(current));
+        delete stagedState.files[path]; changed = true;
+      }
+      if (changed) write(stage, stagingState, JSON.stringify(stagedState));
     }
     let synchronized;
     try { synchronized = synchronize({ root: stage, force: true, localIgnores: false, generateEntrypoints: false, recordDerivedState: false, outputBlocked, output() {} }); }
-    catch (error) { stageSyncError = error; throw error; }
+    catch (error) { stageSyncError = error; stageSyncFailed = true; throw error; }
     rmSync(join(stage, stagingState), { force: true }); rmSync(join(stage, stagingDerived), { force: true });
     for (const canonical of active.entrypoints) {
       const name = entryPaths.get(canonical);
@@ -756,22 +939,101 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
       migratedHuman.add(stateReadme);
       recordPreserved(stateReadme, 'existing-file');
     }
+    const protectedClaude = new Set(), protectedUnknownRemoved = new Set(), protectedDivergedDerived = new Set(), legacyClaudeUnverified = new Set();
+    for (const path of unknownRemovedFiles) {
+      if (desired.has(path)) protectedUnknownRemoved.add(path);
+    }
     for (const [path, content] of desired) {
       if (!nativeManagedText(path) || canonicalEntrypoint(path)) continue;
       const current = read(target, path);
       observeNative(path, current);
       if (!current) continue;
+      // A divergent earlier direct-sync record cannot authorise extending a
+      // native agent or its YAML. Preserve bytes until a person can review.
+      let confirmedBlock = false;
+      if (blockHash(path)) {
+        try { confirmedBlock = blockDigest(path, current) === blockHash(path); } catch { /* Preserve ambiguous content. */ }
+      }
+      if (!nativeToml(path) && derivedFiles[path] && hash(current) !== derivedFiles[path]
+        && !confirmedBlock) {
+        observeNative(path, current);
+        protectedDivergedDerived.add(path); recordPreserved(path, 'derived-file-diverged');
+        desired.delete(path); continue;
+      }
+      const legacyMatch = path.match(/^\.claude\/rules\/([a-z0-9-]+)\/RULE\.md$/);
+      const sourcePath = legacyMatch ? `.pbai4devs/rules/${legacyMatch[1]}/RULE.md` : null;
+      const actualSource = sourcePath && read(target, sourcePath), stagedSource = sourcePath && read(stage, sourcePath);
+      if (legacyMatch && actualSource && stagedSource?.equals(actualSource)
+        && isLegacyExact(actualSource, current, content, legacyMatch[1])
+        && !stagedContains(target, stagedHuman, path) && !stagedContains(target, stagedHuman, sourcePath)
+        && !previous?.files?.[path] && !previous?.blocks?.[path] && !derivedFiles[path] && !derivedBlocks[path]
+        && !derivedEntries[path] && !derivedOutputs[path] && !derivedCatalogs[path]
+        && !removedBlocks.includes(path) && !Object.hasOwn(removedFiles, path)) {
+        observeNative(sourcePath, actualSource); stageDependencies.set(sourcePath, hash(actualSource)); stageDependencies.set(path, hash(current));
+        recordPreserved(path, 'legacy-claude-scope-unverified'); satisfiedReferences.add(path); legacyClaudeUnverified.add(path); desired.delete(path); continue;
+      }
       const known = [previous?.files[path], derivedFiles[path]].some(digest => digest && digest === hash(current));
-      if (known) continue;
+      if (known) {
+        if (path.startsWith('.claude/rules/') && !current.equals(content)) {
+          protectedClaude.add(path); recordPreserved(path, 'claude-metadata-unverified'); desired.delete(path);
+        }
+        continue;
+      }
+      if (path.startsWith('.claude/rules/')) {
+        protectedClaude.add(path); recordPreserved(path, 'claude-scope-preserved');
+        desired.delete(path);
+        continue;
+      }
+      // A reference whose only difference is CRLF already satisfies the new
+      // output. Preserve its bytes and avoid appending a duplicate block; this
+      // comparison neither adopts the file nor permits its replacement.
+      if (!nativeToml(path) && !installedState?.blocks?.[path]
+        && !derivedFiles[path] && !derivedBlocks[path] && !derivedEntries[path] && !derivedOutputs[path] && !derivedCatalogs[path]
+        && !removedBlocks.includes(path) && !Object.hasOwn(removedFiles, path)) {
+        const text = current.toString('utf8'), normalized = Buffer.from(text.replaceAll('\r\n', '\n'));
+        if (text.includes('\r\n') && Buffer.from(text).equals(current) && normalized.equals(content)
+          && (!installedState?.files?.[path] || hash(normalized) === installedState.files[path])) {
+          const match = normalized.toString('utf8').match(/(?:^|\n)Leia e siga \[origem\]\(([^)\r\n]+)\)\.\n?$/);
+          let sourcePath;
+          try { if (match) sourcePath = posix.normalize(posix.join(posix.dirname(path), decodeURIComponent(match[1]))); } catch { /* Ambiguous references remain on the normal preservation path. */ }
+          if (sourcePath && /^\.pbai4devs\/(?:skills|agents|commands|rules)\/.+\/(?:SKILL|AGENT|COMMAND|RULE)\.md$/.test(sourcePath)) {
+            const sourceBytes = read(target, sourcePath);
+            if (preservedHub.has(sourcePath) && !sameBytes(sourceBytes, read(stage, sourcePath))) fail('E_CHANGED', `Source changed while planning: ${sourcePath}`);
+            stageDependencies.set(path, hash(current));
+            stageDependencies.set(sourcePath, sourceBytes ? hash(sourceBytes) : null);
+            recordPreserved(path, 'existing-reference-satisfied');
+            satisfiedReferences.add(path); desired.delete(path); continue;
+          }
+        }
+      }
+      // Exact bytes satisfy discovery without transferring ownership.
+      if (!nativeToml(path) && !installedState?.files?.[path] && !installedState?.blocks?.[path]
+        && !derivedFiles[path] && !derivedBlocks[path] && !derivedEntries[path] && !derivedOutputs[path] && !derivedCatalogs[path] && !removedBlocks.includes(path)
+        && !Object.hasOwn(removedFiles, path) && current.equals(content)) {
+        recordPreserved(path, 'existing-reference-satisfied');
+        satisfiedReferences.add(path); desired.delete(path); continue;
+      }
+      if (nativeToml(path) && !blockHash(path) && extractTomlManagedBlock(current)) {
+        // A marker alone does not establish ownership of an existing block.
+        recordPreserved(path, 'existing-managed-block');
+        desired.delete(path);
+        continue;
+      }
       const source = content.toString('utf8'), marker = '<!-- gerado: sincronizar-agentes -->';
       const index = source.indexOf(marker);
       if (!nativeToml(path) && index < 0) fail('E_TEMPLATE', `Missing reference marker: ${path}`);
       const body = nativeToml(path) ? JSON.parse(source.match(/^prompt = (.+)$/m)[1]) : source.slice(index + marker.length).trim();
-      const merged = (nativeToml(path) ? mergeTomlContent : mergeManagedContent)(current, body, { expectedHash: blockHash(path) });
+      if (nativeToml(path) && !blockHash(path) && promptMatchesCompleteReference(current, body)) {
+        recordPreserved(path, 'existing-prompt-satisfied');
+        desired.delete(path);
+        continue;
+      }
+      const selectedBody = nativeToml(path) ? geminiReferenceBody(current, body, blockHash(path)) : body;
+      const merged = (nativeToml(path) ? mergeTomlContent : mergeManagedContent)(current, selectedBody, { expectedHash: blockHash(path) });
       desired.set(path, Buffer.from(merged.text)); mixedPaths.add(path); recordPreserved(path, 'existing-file-extended');
     }
     // Native discovery manifests must not advertise resources omitted at a human boundary.
-    const overlapsPreserved = path => [...preserved.keys()].some(kept => !mixedPaths.has(kept) && (path === kept || path.startsWith(`${kept}/`) || kept.startsWith(`${path}/`)));
+    const overlapsPreserved = path => [...preserved.keys()].some(kept => !mixedPaths.has(kept) && !satisfiedReferences.has(kept) && (path === kept || path.startsWith(`${kept}/`) || kept.startsWith(`${path}/`)));
     for (const [path, content] of desired) if (/^\.agents\/(skills|rules|agents)\.json$/.test(path)) {
       const discovery = JSON.parse(content);
       discovery.entries = discovery.entries.filter(entry => !overlapsPreserved(entry.path));
@@ -806,15 +1068,44 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
     }
     desired.set(statePath, stateContent);
     const derivedPath = actualStatePath(target).replace(/agentdevkit\.json$/, 'derived.json');
+    // Legacy migration must preserve the staged source and copy byte for byte.
+    // Do not recreate a correlated retired output when that migration cannot
+    // also reconcile its old derived marker under those existing guarantees.
+    if (migration) {
+      const blocked = Object.entries(removedFiles).find(([path, digest]) =>
+        installedState?.files?.[path] === digest && !stat(safePath(target, path))
+        && [...desired.keys()].some(candidate => gitPathsOverlap(path, candidate, { root: target, allowMissingTarget: true })));
+      if (blocked) fail('E_MIGRATION_REVIEW', `Legacy removal record needs review before reactivation: ${blocked[0]}`);
+    }
     const derivedBytes = !migration ? read(target, derivedPath) : null;
     let nextDerivedBytes = derivedBytes;
     if (nextDerivedBytes && Object.keys(removedFiles).length) {
       const finalState = JSON.parse(stateContent);
       const remaining = Object.fromEntries(Object.entries(removedFiles).filter(([path, digest]) =>
-        finalState.files[path] === digest && !stat(safePath(target, path))));
+        unknownRemovedFiles.has(path) || finalState.files[path] === digest && !stat(safePath(target, path)) && !desired.has(path)));
       if (Object.keys(remaining).length !== Object.keys(removedFiles).length) {
         observeNative(derivedPath, derivedBytes);
         nextDerivedBytes = replaceJsonMember(nextDerivedBytes, 'removedFiles', Object.keys(remaining).length ? remaining : undefined);
+      }
+    }
+    // Narrow transition: a direct-sync-only file being replaced by this plan
+    // can transfer its prior overlay into the newly installed record.
+    if (nextDerivedBytes && Object.keys(derivedFiles).length) {
+      const finalState = JSON.parse(stateContent);
+      const remaining = Object.fromEntries(Object.entries(derivedFiles).filter(([path, digest]) => {
+        if (Object.hasOwn(installedState?.files ?? {}, path) || installedState?.blocks?.[path]
+          || Object.hasOwn(removedFiles, path) || removedBlocks.includes(path)
+          || derivedBlocks[path] || mixedPaths.has(path) || preserved.has(path)
+          || !synchronized.ownedOutputs.includes(path) || stagedContains(target, stagedHuman, path)) return true;
+        const current = read(target, path), content = desired.get(path);
+        if (!current || !content || hash(current) !== digest || current.equals(content)
+          || finalState.files[path] !== hash(content)) return true;
+        observeNative(path, current);
+        return false;
+      }));
+      if (Object.keys(remaining).length !== Object.keys(derivedFiles).length) {
+        observeNative(derivedPath, derivedBytes);
+        nextDerivedBytes = replaceJsonMember(nextDerivedBytes, 'files', Object.keys(remaining).length ? remaining : undefined);
       }
     }
     if (nextDerivedBytes && Object.keys(derivedCatalogs).length) {
@@ -831,6 +1122,7 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
     if (nextDerivedBytes && Object.keys(derivedBlocks).length) {
       const finalState = JSON.parse(stateContent);
       const remaining = Object.fromEntries(Object.entries(derivedBlocks).filter(([path, digest]) => {
+        if (unknownRemovedFiles.has(path)) return true;
         const content = desired.get(path);
         // A deselected generated block is removed later in this transaction.
         // Drop its overlay only if its current bytes are still proven; edited
@@ -854,7 +1146,7 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
       }
     }
     if (nextDerivedBytes && !nextDerivedBytes.equals(derivedBytes)) desired.set(derivedPath, nextDerivedBytes);
-    const changes = [], conflicts = [];
+    const changes = [], conflicts = [...protectedClaude, ...protectedUnknownRemoved, ...protectedDivergedDerived];
     const aliasedEntrypoint = path => canonicalEntrypoint(path) && entryPaths.get(canonicalEntrypoint(path)) !== path;
     const generatedInternal = new Set(['.pbai4devs/catalog.json', '.pbai4devs/skills.json', '.pbai4devs/agents.json', '.pbai4devs/rules.json', '.pbai4devs/espelhos.conf']);
     for (const [path, content] of desired) {
@@ -885,6 +1177,10 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
       if (migration && path.startsWith('.pbai4devs/estado/')) continue;
       if (path === '.gitignore') { recordPreserved(path, 'project-owned'); continue; }
       if (aliasedEntrypoint(path)) continue;
+      if (path.startsWith('.claude/rules/')) {
+        if (boundary(path) || read(target, path)) { if (active.roots.includes('.claude')) conflicts.push(path); recordPreserved(path, 'claude-metadata-unverified'); }
+        continue;
+      }
       const current = read(target, path); if (!current) continue;
       const known = wholeRecords.some(record => record[path] === hash(current));
       if (stagedContains(target, stagedHuman, path)) { recordPreserved(path, 'staged-content-differs'); continue; }
@@ -896,11 +1192,16 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
       const path = canonicalEntrypoint(recordedPath) ? entryPaths.get(canonicalEntrypoint(recordedPath)) : recordedPath;
       if (desired.has(path)) continue;
       if (changes.some(change => change.path === path)) continue;
+      if (unknownRemovedFiles.has(path)) { recordPreserved(path, 'removed-file-unverified'); continue; }
       if (path === '.gitignore' || path.endsWith('/.gitignore')) { if (read(target, path)) recordPreserved(path, 'existing-ignore'); continue; }
+      if (path.startsWith('.claude/rules/')) {
+        if (boundary(path) || read(target, path)) { if (active.roots.includes('.claude')) conflicts.push(path); recordPreserved(path, 'claude-metadata-unverified'); }
+        continue;
+      }
       const current = read(target, path); if (!current) continue;
       const source = current.toString('utf8');
       const block = path.endsWith('/.gitignore') ? extractBlock(source, '# BEGIN AGENT IGNORE', '# END AGENT IGNORE') : nativeToml(path) ? extractTomlManagedBlock(current) : extractManagedBlock(current);
-      if (!block || hash(block) !== digest) conflicts.push(path);
+      if (!block || blockDigest(path, current) !== digest) conflicts.push(path);
       if (!block) continue;
       let content = path.endsWith('/.gitignore') ? source.replace(block, '') : (nativeToml(path) ? stripTomlContent : stripManagedContent)(current, digest);
       let removable = path.endsWith('/.gitignore') && !content.trim();
@@ -909,6 +1210,22 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
         if (source === entryContent(null, template, previous?.language || language, canonicalEntrypoint(path))) { content = ''; removable = true; }
       }
       changes.push({ path, action: removable ? 'remove' : 'update', content: removable ? null : Buffer.from(content), beforeHash: hash(current) });
+    }
+    const claudeScopeBoundaries = new Set();
+    for (const omission of synchronized.claudeRetiredTargets || []) {
+      const path = omission.target;
+      if (boundary(path)) { claudeScopeBoundaries.add(path); continue; }
+      const item = stat(safePath(target, path));
+      if (item && !item.isFile()) {
+        recordPreserved(path, item.isDirectory() ? 'existing-directory' : 'non-file');
+        if (active.roots.includes('.claude') && ['update', 'sync'].includes(mode)) conflicts.push(path);
+        claudeScopeBoundaries.add(path);
+        continue;
+      }
+      const current = read(target, path);
+      if (!current) continue;
+      // Hash antigo não comprova identidade, modo, ACL ou xattrs atuais.
+      conflicts.push(path); recordPreserved(path, 'claude-scope-preserved');
     }
     function nativeFiles(root) {
       if (boundary(root)) return [];
@@ -927,13 +1244,64 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
       };
       visit(root); return files;
     }
+    // Regras do cliente desmarcado são preservadas sem provar ownership.
+    // Enquanto existirem, a configuração ativa é desconhecida e check/doctor
+    // devem continuar sinalizando o risco, inclusive após mudar a seleção.
+    const retainedClaude = active.roots.includes('.claude') ? [] : scanRetainedClaude(target);
+    const retainedClaudeRules = retainedClaude.map(item => item.path);
+    if (active.roots.includes('.claude')) {
+      for (const path of [...claudeScopeBoundaries, ...legacyClaudeUnverified]) retainedClaudeRules.push(path);
+      for (const [path, item] of preserved) {
+        if ((path === '.claude' || path === '.claude/rules' || path.startsWith('.claude/rules/'))
+          && ['symbolic-link', 'non-directory', 'non-file', 'existing-directory'].includes(item.reason)
+        ) {
+          if (!retainedClaudeRules.includes(path)) retainedClaudeRules.push(path);
+          // Initial setup can preserve a pre-existing client boundary, but an
+          // update must not report the rule scope as fully verified through it.
+          if (path.startsWith('.claude/rules/') && ['update', 'sync'].includes(mode)) conflicts.push(path);
+        }
+      }
+    }
+    for (const item of retainedClaude) recordPreserved(item.path, item.reason);
+    retainedClaudeRules.sort();
+    if (active.roots.includes('.claude')) for (const item of scanRetainedClaude(target)) {
+      const full = item.path;
+      if (item.reason === 'claude-scan-incomplete') {
+        conflicts.push(full); recordPreserved(full, item.reason); continue;
+      }
+      if (item.reason !== 'claude-activation-unverified') {
+        if (!retainedClaudeRules.includes(full)) retainedClaudeRules.push(full);
+        recordPreserved(full, item.reason); continue;
+      }
+      if (desired.has(full) || legacyClaudeUnverified.has(full)) continue;
+      const known = [previous?.files[full], derivedFiles[full], knownBlocks[full]].some(Boolean);
+      if (!known) {
+        const info = stat(safePath(target, full));
+        if (!info?.isFile() || info.size > 1024 * 1024) {
+          if (!retainedClaudeRules.includes(full)) retainedClaudeRules.push(full);
+          recordPreserved(full, 'claude-scan-incomplete'); continue;
+        }
+        const current = read(target, full), text = current?.toString('utf8');
+        if (!current) continue;
+        if (!resemblesClaudeReference(full, text)) {
+          if (mayReferenceClaudeRule(full, text)) {
+            if (!retainedClaudeRules.includes(full)) retainedClaudeRules.push(full);
+            recordPreserved(full, 'claude-scope-unverified');
+          }
+          continue;
+        }
+      }
+      conflicts.push(full); recordPreserved(full, 'claude-metadata-unverified');
+    }
+    retainedClaudeRules.sort();
     for (const root of changingClients ? [] : active.roots) for (const full of nativeFiles(root)) {
       const path = full.slice(root.length + 1);
       if (!['skills', 'agents', 'commands', 'rules', 'instructions', 'prompts'].includes(path.split('/')[0])) continue;
       if (desired.has(full) || changes.some(change => change.path === full)) continue;
       const current = read(target, full);
       const known = [previous?.files[full], derivedFiles[full]].some(digest => digest && digest === hash(current));
-      if (preserved.has(full) || !known || !generatedReference(current)) { recordPreserved(full, 'existing-file'); continue; }
+      if (preserved.has(full)) continue;
+      if (!known || !generatedReference(current)) { recordPreserved(full, 'existing-file'); continue; }
       changes.push({ path: full, action: 'remove', content: null, beforeHash: hash(current) });
     }
     const legacy = '.pbai4devs/adapters/README.md', legacyRoot = '.pbai4devs/adapters';
@@ -957,23 +1325,7 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
     for (const change of changes) {
       if (!stagedContains(target, stagedHuman, change.path)) continue;
       const current = read(target, change.path);
-      if (change.action === 'update' && current && change.content && nativeManagedText(change.path)) {
-        // Preserve every byte outside a known managed block. Appending a block
-        // is also safe when the complete existing file is an exact prefix.
-        if (!nativeToml(change.path) && change.content.subarray(0, current.length).equals(current)) {
-          try {
-            const digest = managedBlockDigest(change.content);
-            const stripped = digest && stripManagedContent(change.content, digest);
-            const extra = stripped?.slice(current.toString('utf8').length);
-            if (stripped?.startsWith(current.toString('utf8')) && extra !== undefined && /^[\r\n]*$/.test(extra)) change.stagedBlockAllowed = true;
-          } catch { /* Invalid or unproven block: keep the path blocked. */ }
-        } else if (knownBlocks[change.path]) {
-          try {
-            const strip = nativeToml(change.path) ? stripTomlContent : stripManagedContent;
-            if (Buffer.from(strip(current, knownBlocks[change.path])).equals(change.content)) change.stagedBlockAllowed = true;
-          } catch { /* An edited block is not safe to remove. */ }
-        }
-      }
+      if (change.action === 'update' && allowsStagedBlock(change.path, current, change.content, knownBlocks[change.path])) change.stagedBlockAllowed = true;
       if (change.action === 'remove' && migration) {
         const item = migration.files.find(file => file.path === change.path);
         const copy = item && changes.find(candidate => candidate.path === item.target && candidate.action === 'create');
@@ -981,51 +1333,230 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
           && changes.indexOf(copy) < changes.indexOf(change)) change.stagedMigrationTarget = item.target;
       }
     }
+    const backupNeeded = changes.some(change => change.beforeHash !== null);
+    for (const path of unknownRemovedFiles) {
+      if (changes.some(change => gitPathsOverlap(change.path, path, { root: target, allowMissingTarget: true }))) {
+        conflicts.push(path); if (!preserved.has(path)) recordPreserved(path, 'removed-file-unverified');
+      }
+    }
+    const protectedGitlinks = changes.filter(change => stagedContains(target, stagedHuman.gitlinks || new Set(), change.path));
+    if (backupNeeded && stagedContains(target, stagedHuman.gitlinks || new Set(), '.agent-tests/agentdevkit/backups')) fail('E_STAGED', 'Backup would be inside a Git submodule; contents are preserved.');
+    if (protectedGitlinks.length) fail('E_STAGED', 'A planned change is inside a Git submodule; its contents are preserved.');
     const stagedChanges = changes.filter(change => stagedContains(target, stagedHuman, change.path) && !change.stagedDeletionAllowed && !change.stagedBlockAllowed && !change.stagedMigrationTarget);
     if (stagedChanges.length) fail('E_STAGED', `Staged content differs from the working tree for planned changes: ${stagedChanges.map(change => `${change.action} ${change.path}`).join(', ')}. Preserve and review these paths before updating.`);
+    assertNoNestedGit(target, [...changes.map(change => change.path), ...(migration?.directories || []).flatMap(item => [item.path, item.path.replace(/^\.pbai4devs\/estado/, '.pbai4devs/state')])]);
+    if (backupNeeded) assertNoNestedGit(target, ['.agent-tests/agentdevkit/backups']);
     const retiredRoots = adapterRoots.filter(root => !active.roots.includes(root) && changes.some(change => change.action === 'remove' && change.path.startsWith(`${root}/`) && (previous?.files[change.path] || previous?.blocks[change.path])));
-    const ownedOutputs = [...new Set([...synchronized.ownedOutputs, ...ownedEntrypoints, statePath])].filter(path => !mixedPaths.has(path) && !overlapsPreserved(path));
+    const ownedOutputs = [...new Set([...synchronized.ownedOutputs, ...ownedEntrypoints, statePath])].filter(path => !mixedPaths.has(path) && !legacyClaudeUnverified.has(path) && !overlapsPreserved(path));
     // Ignore rules affect only untracked files. Never remove existing index
     // entries on behalf of the project; staged bytes are checked separately.
     const untrack = { root: target, paths: [], hashes: {}, index: '', conflicts: [] };
     const localIgnore = planLocalIgnore(target, { outputs: ownedOutputs, templateRoot: stage });
     const localIgnoreCheck = checkLocalIgnore(localIgnore, { replacedBlocks: replacedIgnoreBlocks(target, changes, previous) });
     conflicts.push(...(untrack?.conflicts || []), ...localIgnoreCheck.missing);
+    const derivedFileDiagnostics = diagnosePreservedDerivedToml(derivedFiles, preserved, knownBlocks, path => read(target, path));
+    const hardlinkBlockers = changes.flatMap(change => {
+      const info = stat(safePath(target, change.path));
+      if (!info?.isFile()) return [];
+      if (!Number.isSafeInteger(info.nlink) || info.nlink < 1) return [{ path: change.path, code: 'hardlink-unverified' }];
+      return info.nlink > 1 ? [{ path: change.path, code: 'hardlink-shared' }] : [];
+    });
+    const ownerBlockers = changes.flatMap(change => {
+      const issue = fileOwnerIssue(stat(safePath(target, change.path)));
+      return issue ? [{ path: change.path, code: issue }] : [];
+    });
+    const aclBlockers = process.platform === 'darwin' ? changes.flatMap(change => {
+      const file = safePath(target, change.path), info = stat(file);
+      if (!info?.isFile()) return [];
+      const acl = inspectMacAcl(file);
+      const safeUpdate = change.action === 'update' && nativeMetadataCopySupported
+        && acl === 'present' && inspectMacWriteProtection(file) === 'clear';
+      return acl === 'empty' || safeUpdate ? [] : [{ path: change.path, code: acl === 'present' ? 'acl-present' : 'acl-unverified' }];
+    }) : [];
+    const linuxXattrChecks = process.platform === 'linux' ? changes.flatMap(change => {
+      const file = safePath(target, change.path), info = stat(file);
+      return info?.isFile() ? [{ path: change.path, action: change.action, status: inspectLinuxXattr(file) }] : [];
+    }) : [];
+    const xattrBlockers = linuxXattrChecks.filter(item => item.status === 'present'
+      && !(item.action === 'update' && nativeMetadataCopySupported)).map(item => ({ path: item.path, code: 'xattr-present' }));
+    const xattrUnverified = linuxXattrChecks.filter(item => item.status !== 'present').map(item => item.path);
     // A conflict means ownership or the managed bytes could not be proven.
     // Backups do not authorize replacing user content, even with --force.
-    return { target, language, mode, changes, conflicts: [...new Set(conflicts)].sort(), canApply: !conflicts.length && !untrack?.conflicts?.length && !localIgnoreCheck.missing.length, manifest, retiredRoots, ownedOutputs, untrack, localIgnore, localIgnoreCheck, migration, fallbackChecks: [...fallbackChecks], fallbackOwnedPaths: ownedPaths, preserved: [...preserved.values()].sort((a, b) => a.path.localeCompare(b.path)) };
-  } catch (error) { stageFailure = error; throw error; }
+    return { target, language, mode, changes, stageDependencies: [...stageDependencies].map(([path, expectedHash]) => ({ path, expectedHash })), conflicts: [...new Set(conflicts)].sort(), canApply: !conflicts.length && !untrack?.conflicts?.length && !localIgnoreCheck.missing.length && !hardlinkBlockers.length && !ownerBlockers.length && !aclBlockers.length && !xattrBlockers.length, hardlinkBlockers, ownerBlockers, aclBlockers, xattrBlockers, xattrUnverified, manifest, retiredRoots, ownedOutputs, untrack, localIgnore, localIgnoreCheck, migration, fallbackChecks: [...fallbackChecks], fallbackOwnedPaths: ownedPaths, retainedClaudeRules, derivedFileDiagnostics, removalDiagnostics, scopeOmissions: (synchronized.scopeOmissions || []).map(item => (retainedClaudeRules.length || conflicts.some(path => path.startsWith('.claude/rules/'))) ? { ...item, status: 'activation-unverified' } : item), preserved: [...preserved.values()].sort((a, b) => a.path.localeCompare(b.path)) };
+  } catch (error) { stageFailure = error; stageFailed = true; throw error; }
   finally {
-    let cleanupFailure;
-    try { rmSync(stage, { recursive: true, force: true }); } catch (error) { cleanupFailure = error; }
-    if (stageFailure && stageFailure === stageSyncError) {
+    let callbackFailure = Boolean(stageFailed && outputBoundaryFailure && stageFailure === outputBoundaryFailure);
+    if (!callbackFailure && stageFailed && outputBoundaryFailure) {
+      try { callbackFailure = primaryDiagnosticError(stageFailure) === outputBoundaryFailure; } catch { /* Keep the synchronizer boundary. */ }
+    }
+    // Inspect only own data descriptors. Any accessor, proxy, mixed diagnostic
+    // or graph limit retains the stage without disclosing arbitrary paths.
+    const uncertainCause = error => {
+      const pending = [error], seen = new Set();
+      while (pending.length) {
+        const item = pending.pop();
+        if (!item || (typeof item !== 'object' && typeof item !== 'function') || seen.has(item)) continue;
+        if (seen.size >= 64 || utilTypes.isProxy(item)) return true;
+        seen.add(item);
+        for (const key of ['uncertainPaths', 'rollbackPreservedPaths', 'cleanupFailures', 'diagnosticsTruncated', 'operationMayBePartial']) {
+          let d; try { d = Object.getOwnPropertyDescriptor(item, key); } catch { return true; }
+          if (d && (!Object.hasOwn(d, 'value') || d.value !== undefined && d.value !== null && d.value !== false)) return true;
+        }
+        let cause, errors;
+        try { cause = Object.getOwnPropertyDescriptor(item, 'cause'); errors = Object.getOwnPropertyDescriptor(item, 'errors'); } catch { return true; }
+        if (cause) { if (!Object.hasOwn(cause, 'value')) return true; if (cause.value) pending.push(cause.value); }
+        if (errors) {
+          if (!Object.hasOwn(errors, 'value') || utilTypes.isProxy(errors.value) || !Array.isArray(errors.value)) return true;
+          let length; try { length = Object.getOwnPropertyDescriptor(errors.value, 'length')?.value; } catch { return true; }
+          if (!Number.isSafeInteger(length) || length > 64) return true;
+          for (let i = 0; i < length; i++) { let d; try { d = Object.getOwnPropertyDescriptor(errors.value, String(i)); } catch { return true; } if (d) { if (!Object.hasOwn(d, 'value')) return true; pending.push(d.value); } }
+        }
+      }
+      return false;
+    };
+    const callbackUncertain = callbackFailure && (outputBoundaryMayHaveStageEffects || stageFailure !== outputBoundaryFailure || uncertainCause(outputBoundaryFailure));
+    const syncDiagnostics = stageFailed && stageSyncFailed && Object.is(stageFailure, stageSyncError) && !callbackFailure ? collectErrorDiagnostics(stageFailure) : null;
+    const preserveStage = callbackUncertain || Boolean(syncDiagnostics && (syncDiagnostics.preservedPaths.length || syncDiagnostics.cleanupFailures.length || syncDiagnostics.truncated));
+    let cleanupFailure, cleanupFailed = false;
+    // An uncertain staged name may have been replaced; recursive cleanup
+    // would erase it and discard the only diagnostics. Keep the private stage.
+    if (!preserveStage) try { rmSync(stage, { recursive: true, force: true }); } catch (error) { cleanupFailure = error; cleanupFailed = true; }
+    if (callbackFailure) {
+      // Keep the synchronizer's complete causal chain, even if it wrapped the
+      // callback with an aggregate containing stage cleanup failures.
+      const reported = new Error(outputBoundaryFailure.message, { cause: stageFailure });
+      if (outputBoundaryFailure.code) reported.code = outputBoundaryFailure.code;
+      if (callbackUncertain) { reported.uncertainPaths = [stage]; reported.diagnosticsTruncated = true; }
+      if (outputBoundaryFailure.diagnosticsTruncated) reported.diagnosticsTruncated = true;
+      if (cleanupFailed) {
+        Object.defineProperty(reported, 'cleanupError', { value: cleanupFailure });
+        reported.uncertainPaths = [stage]; reported.cleanupFailures = [{ path: stage, message: 'cleanup failed' }]; reported.operationMayBePartial = true;
+      }
+      throw markDiagnosticsBoundary(reported);
+    }
+    if (stageFailed && stageSyncFailed && Object.is(stageFailure, stageSyncError)) {
       // Synchronizer diagnostics refer to the private stage, not the project.
       // Once the stage is gone, report only the original operation failure.
-      let primary = stageFailure;
-      while (primary instanceof AggregateError && primary.errors?.length) primary = primary.errors[0];
-      const reported = new Error(cleanupFailure ? stageFailure.message : primary.message);
-      reported.code = stageFailure.code || primary.code;
-      reported.hardlinkUnsupported = stageFailure.hardlinkUnsupported || primary.hardlinkUnsupported;
-      if (cleanupFailure) {
-        const diagnostics = collectErrorDiagnostics(stageFailure);
-        reported.rollbackPreservedPaths = diagnostics.preservedPaths.map(path => resolve(stage, path));
-        reported.cleanupFailures = [...diagnostics.cleanupFailures.map(item => ({ ...item, path: resolve(stage, item.path) })), { path: stage, message: cleanupFailure.message }];
-        if (diagnostics.truncated) reported.diagnosticsTruncated = true;
+      const primary = primaryDiagnosticError(stageFailure);
+      const stageCode = stageFailure?.code || primary?.code;
+      // Paths from the private stage must never be attributed to the project.
+      const metadataStage = ['E_PROTECTED_METADATA', 'E_METADATA_UNSUPPORTED'].includes(stageCode);
+      const detail = metadataStage ? 'Metadata verification failed in private staging; no project path is identified.' : (cleanupFailed || preserveStage ? stageFailure?.message : primary?.message) || 'Synchronization failed in private staging.';
+      const reported = new Error(detail, { cause: stageFailure });
+      // API callers can explicitly inspect the secondary error; it is not
+      // included in the mapped public diagnostics or ordinary serialization.
+      if (cleanupFailed) Object.defineProperty(reported, 'cleanupError', { value: cleanupFailure });
+      reported.code = stageCode;
+      reported.hardlinkUnsupported = stageFailure?.hardlinkUnsupported || primary?.hardlinkUnsupported;
+      reported.diagnosticsScope = 'staging';
+      if (syncDiagnostics.possiblePartial) reported.operationMayBePartial = true;
+      if (cleanupFailed || preserveStage) {
+        reported.rollbackPreservedPaths = [...(preserveStage ? [stage] : []), ...syncDiagnostics.preservedPaths.map(path => resolve(stage, path))];
+        // Keep secondary filesystem messages out of the staged diagnostics;
+        // the original synchronization failure remains available as the cause.
+        reported.cleanupFailures = [...syncDiagnostics.cleanupFailures.map(item => ({ path: resolve(stage, item.path), message: 'cleanup failed' })), ...(cleanupFailed ? [{ path: stage, message: 'cleanup failed' }] : [])];
+        if (syncDiagnostics.truncated) reported.diagnosticsTruncated = true;
       }
+      throw markDiagnosticsBoundary(reported);
+    }
+    if (cleanupFailed) {
+      // Neither failure is guaranteed to be extensible. Keep the primary
+      // cause and the uncertain stage without annotating either original.
+      const original = stageFailed ? stageFailure : cleanupFailure;
+      const primary = primaryDiagnosticError(original);
+      const reported = new Error(stageFailed ? original?.message || 'Stage operation failed.' : 'Cleanup failed in private staging.', { cause: original });
+      if (stageFailed) Object.defineProperty(reported, 'cleanupError', { value: cleanupFailure });
+      reported.code = original?.code || primary?.code;
+      if (Number.isInteger(original?.exitCode ?? primary?.exitCode)) reported.exitCode = original?.exitCode ?? primary.exitCode;
+      if (original?.hardlinkUnsupported || primary?.hardlinkUnsupported) reported.hardlinkUnsupported = true;
+      if (typeof (original?.nestedGitPath ?? primary?.nestedGitPath) === 'string') reported.nestedGitPath = original?.nestedGitPath ?? primary.nestedGitPath;
+      reported.operationMayBePartial = true;
+      reported.uncertainPaths = [stage];
+      reported.cleanupFailures = [{ path: stage, message: 'cleanup failed' }];
+      if (!stageFailed) { reported.diagnosticsScope = 'staging'; throw markDiagnosticsBoundary(reported); }
       throw reported;
     }
-    if (cleanupFailure) {
-      if (stageFailure) stageFailure.cleanupFailures = [...(stageFailure.cleanupFailures || []), { path: stage, message: cleanupFailure.message }];
-      else { cleanupFailure.cleanupFailures = [{ path: stage, message: cleanupFailure.message }]; throw cleanupFailure; }
+    if (stageFailed && !stageSyncFailed && (stageFailure === null || (typeof stageFailure !== 'object' && typeof stageFailure !== 'function'))) {
+      const reported = new Error('Stage operation failed.', { cause: stageFailure });
+      reported.code = 'E_OPERATION'; reported.diagnosticsScope = 'staging';
+      throw markDiagnosticsBoundary(reported);
     }
   }
 }
 
 export function applyPlan(plan) {
   assertUnredirectedGitEnvironment();
+  if (!plan.canApply && !plan.conflicts?.length && !plan.localIgnoreCheck?.missing?.length && plan.ownerBlockers?.length) {
+    const blocker = plan.ownerBlockers[0], issue = fileOwnerIssue(stat(safePath(plan.target, blocker.path)));
+    if (issue !== blocker.code) fail('E_CHANGED', 'The planned file owner changed; review and create a new plan.');
+    throw Object.assign(new Error('File ownership or readability requires review.'), { code: issue.endsWith('-unverified') ? 'E_METADATA_UNSUPPORTED' : 'E_PROTECTED_METADATA', path: blocker.path, metadataTargetVerified: true, metadataReason: issue });
+  }
+  if (!plan.canApply && !plan.conflicts?.length && !plan.localIgnoreCheck?.missing?.length && plan.hardlinkBlockers?.length) {
+    const blocker = plan.hardlinkBlockers[0], info = stat(safePath(plan.target, blocker.path));
+    if (!info?.isFile()) fail('E_CHANGED', 'The planned file changed; review and create a new plan.');
+    if (!Number.isSafeInteger(info.nlink) || info.nlink < 1) throw Object.assign(new Error('Hardlink count could not be verified; preserved for review.'), { code: 'E_METADATA_UNSUPPORTED', path: blocker.path, metadataTargetVerified: true, metadataReason: 'hardlink-unverified' });
+    if (info.nlink === 1 || blocker.code !== 'hardlink-shared') fail('E_CHANGED', 'The planned hardlink status changed; review and create a new plan.');
+    throw Object.assign(new Error('Existing file has multiple hardlinks; preserved for review.'), { code: 'E_PROTECTED_METADATA', path: blocker.path, metadataTargetVerified: true, metadataReason: 'hardlink-shared' });
+  }
+  if (!plan.canApply && !plan.conflicts?.length && !plan.localIgnoreCheck?.missing?.length && plan.aclBlockers?.length && process.platform === 'darwin') {
+    const blocker = plan.aclBlockers[0], file = safePath(plan.target, blocker.path), info = stat(file);
+    if (!info?.isFile()) fail('E_CHANGED', 'The planned file changed; review and create a new plan.');
+    const acl = inspectMacAcl(file);
+    if (acl === 'empty') fail('E_CHANGED', 'The planned ACL status changed; review and create a new plan.');
+    throw Object.assign(new Error('ACL requires review.'), { code: acl === 'present' ? 'E_PROTECTED_METADATA' : 'E_METADATA_UNSUPPORTED', path: blocker.path, metadataTargetVerified: true, metadataReason: acl === 'present' ? 'acl-present' : 'acl-unverified' });
+  }
+  if (!plan.canApply && !plan.conflicts?.length && !plan.localIgnoreCheck?.missing?.length && plan.xattrBlockers?.length && process.platform === 'linux') {
+    const blocker = plan.xattrBlockers[0], file = safePath(plan.target, blocker.path);
+    if (!stat(file)?.isFile() || inspectLinuxXattr(file) !== 'present') fail('E_CHANGED', 'The planned metadata changed; review and create a new plan.');
+    throw Object.assign(new Error('Extended attributes require review.'), { code: 'E_PROTECTED_METADATA', path: blocker.path, metadataTargetVerified: true, metadataReason: 'xattr-present' });
+  }
   if (!plan.canApply) fail('E_CONFLICT', text(plan.language, 'conflict'));
+  if (!Array.isArray(plan.changes)) fail('E_PLAN', 'The installation plan must contain a list of changes.');
+  const assertActionContent = (action, content, code) => {
+    if (action === 'remove' ? content !== null : !['create', 'update'].includes(action) || !Buffer.isBuffer(content)) {
+      fail(code, 'The installation action and its content are inconsistent.');
+    }
+  };
+  const assertStaticContents = code => {
+    for (const change of plan.changes) {
+      if (!['create', 'update', 'remove'].includes(change.action)) fail(code, 'The installation plan contains an unknown action.');
+      if (change.action === 'create' ? change.beforeHash !== null : typeof change.beforeHash !== 'string' || !/^[a-f0-9]{64}$/.test(change.beforeHash)) {
+        fail(code, 'The installation action and its previous state are inconsistent.');
+      }
+      const descriptor = Object.getOwnPropertyDescriptor(change, 'content');
+      if (!descriptor) fail(code, 'The installation action is missing content.');
+      // Defer accessors until execution: they can report a failure without
+      // being evaluated during planning. Normal plans contain data properties.
+      if ('value' in descriptor) assertActionContent(change.action, descriptor.value, code);
+    }
+  };
+  const plannedPaths = new Set();
+  for (const change of plan.changes) {
+    if (!change || typeof change.path !== 'string' || plannedPaths.has(change.path)) {
+      fail('E_PLAN', 'The installation plan contains an invalid or duplicate path.');
+    }
+    plannedPaths.add(change.path);
+  }
+  assertStaticContents('E_PLAN');
+  const plannedActions = plan.changes.map(change => [change.path, change.action]);
+  const assertActionsUnchanged = () => {
+    if (!Array.isArray(plan.changes) || plan.changes.length !== plannedActions.length
+      || plannedActions.some(([path, action], index) => plan.changes[index]?.path !== path || plan.changes[index]?.action !== action)) {
+      fail('E_CHANGED', 'The installation actions changed during application.');
+    }
+  };
   assertLocalIgnoreUnchanged(plan.localIgnore);
   const { target } = plan;
+  // These were real inputs to private-stage decisions, even if not outputs.
+  const assertStageDependencies = () => {
+    if (plan.stageDependencies !== undefined && !Array.isArray(plan.stageDependencies)) fail('E_PLAN', 'Invalid stage dependencies.');
+    for (const item of plan.stageDependencies || []) {
+      if (!item || typeof item.path !== 'string' || (item.expectedHash !== null && !/^[a-f0-9]{64}$/.test(item.expectedHash))) fail('E_PLAN', 'Invalid stage dependency.');
+      const current = read(target, item.path);
+      if ((current ? hash(current) : null) !== item.expectedHash) fail('E_CHANGED', 'Stage input changed after planning: ' + item.path);
+    }
+  };
+  assertStageDependencies();
   const assertFallbackChecks = () => {
     for (const [path, expected] of plan.fallbackChecks || []) {
       let current;
@@ -1036,7 +1567,15 @@ export function applyPlan(plan) {
   };
   assertFallbackChecks();
   const stagedHuman = stagedDivergences(target);
+  if (plan.changes.some(change => stagedContains(target, stagedHuman.gitlinks || new Set(), change.path))
+    || plan.changes.some(change => change.beforeHash !== null) && stagedContains(target, stagedHuman.gitlinks || new Set(), '.agent-tests/agentdevkit/backups')) fail('E_STAGED', 'A planned change is inside a Git submodule; its contents are preserved.');
   const currentState = loadState(target);
+  const derivedState = readDerivedState(target);
+  const currentBlocks = {
+    ...Object.fromEntries(Object.entries(currentState?.blocks || {}).filter(([path]) => !derivedState.removedBlocks.includes(path))),
+    ...derivedState.blocks,
+  };
+  const approvedStagedContents = new Map();
   const stagedChanges = plan.changes.filter(change => {
     if (!stagedContains(target, stagedHuman, change.path)) return false;
     const current = read(target, change.path);
@@ -1044,7 +1583,16 @@ export function applyPlan(plan) {
     if (!current) return true;
     if (change.stagedDeletionAllowed && stagedContains(target, stagedHuman.deleted || new Set(), change.path)
       && currentState?.files?.[change.path] === change.beforeHash) return false;
-    if (change.stagedBlockAllowed) return false; // Exact source and planned bytes were checked above.
+    if (change.stagedBlockAllowed && change.action === 'update') {
+      const proposed = change.content;
+      if (Buffer.isBuffer(proposed)) {
+        const content = Buffer.from(proposed);
+        if (allowsStagedBlock(change.path, current, content, currentBlocks[change.path])) {
+          approvedStagedContents.set(change.path, content);
+          return false;
+        }
+      }
+    }
     if (change.stagedMigrationTarget) {
       const copy = plan.changes.find(candidate => candidate.path === change.stagedMigrationTarget && candidate.action === 'create');
       if (copy?.content?.equals(current) && plan.changes.indexOf(copy) < plan.changes.indexOf(change)
@@ -1053,10 +1601,12 @@ export function applyPlan(plan) {
     return true;
   });
   if (stagedChanges.length) fail('E_STAGED', `Staged content differs from the working tree for planned changes: ${stagedChanges.map(change => `${change.action} ${change.path}`).join(', ')}. Preserve and review these paths before updating.`);
+  assertNoNestedGit(target, [...plan.changes.map(change => change.path), ...(plan.migration?.directories || []).flatMap(item => [item.path, item.path.replace(/^\.pbai4devs\/estado/, '.pbai4devs/state')])]);
   if (plan.migration) {
     if (stat(safePath(target, '.pbai4devs/state'))) fail('E_CHANGED', 'State destination appeared after planning.');
     for (const directory of plan.migration.directories) {
       const info = stat(safePath(target, directory.path));
+      if (info?.isDirectory()) assertMigrationDirectoryMetadata(target, directory.path, info);
       if (!info?.isDirectory() || (info.mode & 0o777) !== directory.mode || JSON.stringify(readdirSync(safePath(target, directory.path)).sort()) !== JSON.stringify(directory.names)) fail('E_CHANGED', `State directory changed after planning: ${directory.path}`);
     }
     for (const item of plan.migration.files) {
@@ -1064,16 +1614,131 @@ export function applyPlan(plan) {
       if (!info?.isFile() || (info.mode & 0o777) !== item.mode || hash(readFileSync(safePath(target, item.path))) !== hash(item.content)) fail('E_CHANGED', `State file changed after planning: ${item.path}`);
     }
   }
-  const backup = `.agent-tests/agentdevkit/backups/${Date.now()}-${randomUUID()}`;
-  safePath(target, backup);
+  const backupParent = '.agent-tests/agentdevkit/backups';
+  safePath(target, backupParent);
   for (const change of plan.changes) safePath(target, change.path);
   const before = new Map(plan.changes.map(change => [change.path, read(target, change.path)]));
+  const assertNoSharedLinks = (path, info) => {
+    if (info?.isFile() && (!Number.isSafeInteger(info.nlink) || info.nlink < 1)) throw Object.assign(new Error('Hardlink count could not be verified; preserved for review.'), {
+      code: 'E_METADATA_UNSUPPORTED', path, metadataTargetVerified: true, metadataReason: 'hardlink-unverified',
+    });
+    if (info?.isFile() && info.nlink > 1) throw Object.assign(new Error('Existing file has multiple hardlinks; preserved for review.'), {
+      code: 'E_PROTECTED_METADATA', path, metadataTargetVerified: true, metadataReason: 'hardlink-shared',
+    });
+  };
+  const assertFileOwner = (path, info) => {
+    const issue = fileOwnerIssue(info);
+    if (issue) throw Object.assign(new Error('File ownership or readability requires review.'), { code: issue.endsWith('-unverified') ? 'E_METADATA_UNSUPPORTED' : 'E_PROTECTED_METADATA', path, metadataTargetVerified: true, metadataReason: issue });
+  };
+  for (const change of plan.changes) assertNoSharedLinks(change.path, stat(safePath(target, change.path)));
+  for (const change of plan.changes) assertFileOwner(change.path, stat(safePath(target, change.path)));
+  // Guard actual project files; private staging is not evidence of their metadata.
+  if (process.platform === 'darwin' || process.platform === 'linux') {
+    for (const change of plan.changes) {
+      const info = stat(safePath(target, change.path));
+      // Linux may hide inaccessible xattrs or lack getfattr. Only positive
+      // detection is conclusive; absence of a finding is not a safety proof.
+      if (info?.isFile() && process.platform === 'linux' && inspectLinuxXattr(safePath(target, change.path)) === 'present'
+        && !(change.action === 'update' && nativeMetadataCopySupported)) {
+        throw Object.assign(new Error('Extended attributes require review.'), { code: 'E_PROTECTED_METADATA', path: change.path, metadataTargetVerified: true, metadataReason: 'xattr-present' });
+      }
+      if (info?.isFile() && process.platform === 'darwin') {
+        const protection = inspectMacWriteProtection(safePath(target, change.path));
+        if (protection !== 'clear') {
+          const code = protection === 'protected' ? 'E_PROTECTED_METADATA' : 'E_METADATA_UNSUPPORTED';
+          throw Object.assign(new Error('File metadata prevents a safe update.'), { code, path: change.path, metadataTargetVerified: true, metadataReason: protection === 'protected' ? 'acl-deny' : 'acl-unverified' });
+        }
+        const acl = inspectMacAcl(safePath(target, change.path));
+        if (acl !== 'empty' && !(change.action === 'update' && nativeMetadataCopySupported && acl === 'present')) {
+          const code = acl === 'present' ? 'E_PROTECTED_METADATA' : 'E_METADATA_UNSUPPORTED';
+          throw Object.assign(new Error('ACL requires review.'), { code, path: change.path, metadataTargetVerified: true, metadataReason: acl === 'present' ? 'acl-present' : 'acl-unverified' });
+        }
+        const result = inspectMacXattr(safePath(target, change.path));
+        if (result !== 'empty' && !(change.action === 'update' && nativeMetadataCopySupported && result === 'present')) {
+          const code = result === 'present' ? 'E_PROTECTED_METADATA' : 'E_METADATA_UNSUPPORTED';
+          throw Object.assign(new Error('Extended attributes require review.'), { code, path: change.path, metadataTargetVerified: true, metadataReason: result === 'present' ? 'xattr-present' : 'xattr-unverified' });
+        }
+      }
+      if (info?.isFile() && (info.mode & 0o7000)) {
+        throw Object.assign(new Error('Existing file has special POSIX mode bits; preserved for review.'), {
+          code: 'E_PROTECTED_METADATA', path: change.path, metadataTargetVerified: true,
+        });
+      }
+    }
+  }
   const beforeModes = new Map(plan.changes.map(change => {
     const info = stat(safePath(target, change.path));
     return [change.path, info ? info.mode & 0o777 : undefined];
   }));
   for (const change of plan.changes) if ((before.get(change.path) ? hash(before.get(change.path)) : null) !== change.beforeHash) fail('E_CHANGED', `File changed after planning: ${change.path}`);
-  for (const [path, content] of before) if (content) write(target, `${backup}/${path}`, content, beforeModes.get(path));
+  // Plans produced by planInstallation use arrays. Restrict external plans
+  // to reusable collections whose contents can be compared before backup.
+  const retired = plan.retiredRoots;
+  if (retired && !Array.isArray(retired) && !(retired instanceof Set)) fail('E_PLAN', 'Directory pruning roots must be an array or Set.');
+  // Conditional candidates only: actual pruning still checks each directory
+  // when reached. This does not describe all filesystem effects or backup.
+  const pruneCandidates = derivePruneCandidates(plan);
+  const pruneSnapshot = JSON.stringify(pruneCandidates);
+  const assertPrunePlanUnchanged = () => {
+    if (JSON.stringify(derivePruneCandidates(plan)) !== pruneSnapshot) fail('E_CHANGED', 'Directory pruning plan changed during application.');
+  };
+  const copies = [...before].filter(([, content]) => content !== null);
+  let backup = null;
+  if (copies.length) {
+    assertNoNestedGit(target, [backupParent]);
+    let ancestor = '';
+    for (const component of backupParent.split('/')) {
+      ancestor = ancestor ? `${ancestor}/${component}` : component;
+      const directory = safePath(target, ancestor);
+      try { mkdirSync(directory, { mode: 0o700 }); }
+      catch (error) {
+        if (error.code !== 'EEXIST') throw error;
+        const existing = lstatSync(safePath(target, ancestor));
+        if (!existing.isDirectory() || existing.isSymbolicLink()) throw error;
+      }
+    }
+    const directory = mkdtempSync(join(safePath(target, backupParent), `${Date.now()}-`));
+    backup = portable(relative(target, directory));
+    try {
+      const info = lstatSync(safePath(target, backup));
+      if (!info.isDirectory() || info.isSymbolicLink() || process.platform !== 'win32' && (info.mode & 0o077)) {
+        fail('E_BACKUP', 'The new backup directory could not be verified as private.');
+      }
+      if (process.platform === 'darwin' && inspectMacDirectoryAcl(safePath(target, backup)) !== 'empty') fail('E_BACKUP', 'The new backup directory ACL could not be verified as private.');
+      for (const [path, content] of copies) {
+        const backupFile = `${backup}/${path}`;
+        assertNoNestedGit(target, [backupFile]);
+        const destination = safePath(target, backupFile), mode = beforeModes.get(path);
+        mkdirSync(dirname(destination), { recursive: true, mode: 0o700 });
+        assertNoNestedGit(target, [backupFile]);
+        writeFileSync(destination, Buffer.alloc(0), { flag: 'wx', mode: nativeMetadataCopySupported ? 0o600 : mode });
+        const destinationIdentity = lstatSync(destination, { bigint: true });
+        if (nativeMetadataCopySupported) {
+          try { copyFileWithNativeMetadata(safePath(target, path), destination, { destinationIdentity, expectedBytes: content }); }
+          catch (error) {
+            let contentStillMatches = false;
+            try {
+              const current = lstatSync(safePath(target, path), { bigint: true });
+              contentStillMatches = current.isFile() && !current.isSymbolicLink() && read(target, path)?.equals(content) === true;
+            } catch { /* An unreadable or replaced source is a concurrent change. */ }
+            if (!contentStillMatches) fail('E_CHANGED', `File changed while creating its backup: ${path}`);
+            throw error;
+          }
+        }
+        else {
+          writeFileSync(destination, content);
+          chmodSync(destination, mode);
+        }
+      }
+    } catch (error) { throw withUncertainPath(error, backup); }
+  }
+  // No project output has been published yet; do not invoke rollback if a
+  // dependency changed while the backup was being created.
+  try { assertStageDependencies(); }
+  catch (error) {
+    if (backup) throw withUncertainPath(withPotentialPartial(error), backup);
+    throw error;
+  }
   const applied = [], removedDirectories = [], identityGuards = [];
   let identityPressure = false;
   const releaseIdentityGuards = () => {
@@ -1083,29 +1748,43 @@ export function applyPlan(plan) {
   };
   const assertOriginal = path => {
     const file = safePath(target, path), info = stat(file), bytes = before.get(path);
+    assertNoSharedLinks(path, info);
+    assertFileOwner(path, info);
     if (bytes === null ? info !== null : !info?.isFile() || !readFileSync(file).equals(bytes) || (info.mode & 0o777) !== beforeModes.get(path)) fail('E_CHANGED', `File changed before writing: ${path}`);
   };
   try {
+    assertActionsUnchanged();
+    assertStaticContents('E_CHANGED');
+    assertPrunePlanUnchanged();
     for (const change of plan.changes) assertOriginal(change.path);
-    for (const change of plan.changes) {
-      assertOriginal(change.path);
-      const file = safePath(target, change.path);
-      const content = change.content;
-      const signature = { path: change.path, hash: content === null ? null : hash(content) };
-      if (content === null) {
-        const migrated = plan.migration?.files.find(item => item.path === change.path);
+    for (let index = 0; index < plannedActions.length; index++) {
+      if (!Array.isArray(plan.changes) || plan.changes.length !== plannedActions.length) fail('E_CHANGED', 'The installation actions changed during application.');
+      const change = plan.changes[index], [path, action] = plannedActions[index];
+      if (!change || change.path !== path || change.action !== action) fail('E_CHANGED', 'The installation actions changed during application.');
+      assertNoNestedGit(target, [path]);
+      assertOriginal(path);
+      const file = safePath(target, path);
+      // Publish the same private bytes that passed the staged-block check.
+      const content = approvedStagedContents.get(path) ?? change.content;
+      assertActionContent(action, content, 'E_CHANGED');
+      const signature = { path, hash: content === null ? null : hash(content) };
+      if (action === 'remove') {
+        const migrated = plan.migration?.files.find(item => item.path === path);
         if (migrated) {
           const copy = plan.changes.find(candidate => candidate.path === migrated.target && candidate.action === 'create');
           const copied = read(target, migrated.target);
           if (!copy?.content || !copied?.equals(copy.content)
-            || migrated.path !== legacyStatePath && !copied.equals(before.get(change.path))) {
-            fail('E_CHANGED', `Migrated copy changed before removing: ${change.path}`);
+            || migrated.path !== legacyStatePath && !copied.equals(before.get(path))) {
+            fail('E_CHANGED', `Migrated copy changed before removing: ${path}`);
           }
+        }
+        if (process.platform === 'linux' && stat(safePath(target, path))?.isFile() && inspectLinuxXattr(safePath(target, path)) === 'present') {
+          throw Object.assign(new Error('Extended attributes require review.'), { code: 'E_PROTECTED_METADATA', path, metadataTargetVerified: true, metadataReason: 'xattr-present' });
         }
         rmSync(file, { force: true }); applied.push(signature);
       }
       else {
-        const exclusive = before.get(change.path) === null;
+        const exclusive = before.get(path) === null;
         if (!exclusive && identityGuards.length >= 16) {
           const index = identityGuards.findIndex(guard => guard.created);
           if (index !== -1) {
@@ -1113,33 +1792,48 @@ export function applyPlan(plan) {
             try { closeSync(evicted.fd); } catch { /* Preserve the operation result. */ }
           }
         }
-        atomicWrite(target, change.path, content, beforeModes.get(change.path) ?? change.mode, (mode, identity, guard) => {
+        atomicWrite(target, path, content, beforeModes.get(path) ?? change.mode, (mode, identity, guard) => {
           signature.mode = mode; signature.identity = identity; applied.push(signature);
           if (guard !== undefined) identityGuards.push({ fd: guard, signature, created: exclusive });
-        }, () => assertOriginal(change.path), exclusive, !identityPressure && identityGuards.length < 16, releaseIdentityGuards);
+        }, () => assertOriginal(path), exclusive, !identityPressure && identityGuards.length < 16, releaseIdentityGuards);
       }
     }
     if (plan.migration) {
       for (const directory of plan.migration.directories) {
         const destination = directory.path.replace(/^\.pbai4devs\/estado/, '.pbai4devs/state');
+        assertNoNestedGit(target, [directory.path, destination]);
         const file = safePath(target, destination), existing = stat(file);
         if (existing && !existing.isDirectory()) fail('E_CHANGED', `Invalid state destination: ${destination}`);
         if (!existing) mkdirSync(file, { recursive: true, mode: directory.mode });
         chmodSync(file, directory.mode);
       }
       for (const directory of [...plan.migration.directories].sort((a, b) => b.path.length - a.path.length)) {
+        assertNoNestedGit(target, [directory.path]);
         const file = safePath(target, directory.path), info = stat(file);
         if (!info?.isDirectory() || readdirSync(file).length) fail('E_CHANGED', `State directory changed during migration: ${directory.path}`);
+        assertMigrationDirectoryMetadata(target, directory.path, info);
+        if ((info.mode & 0o777) !== directory.mode) fail('E_CHANGED', `State directory mode changed during migration: ${directory.path}`);
         rmdirSync(file); removedDirectories.push({ path: directory.path, mode: directory.mode });
       }
     }
     assertFallbackChecks();
-    pruneRemovedDirectories(plan, directory => removedDirectories.push(directory));
+    assertPrunePlanUnchanged();
+    pruneRemovedDirectories(plan, pruneCandidates, assertPrunePlanUnchanged, directory => removedDirectories.push(directory));
     const changesFallback = plan.changes.some(change => change.path === '.gitignore');
     // Metadata is committed last; its writer rolls back partial writes itself.
     const ignored = applyLocalIgnore(changesFallback ? planLocalIgnore(target, { outputs: plan.ownedOutputs }) : plan.localIgnore);
-    return { changed: Boolean(plan.changes.length || ignored.changed), backup: [...before.values()].some(Boolean) ? backup : null, localIgnorePending: ignored.pending };
+    return { changed: Boolean(plan.changes.length || ignored.changed), backup, localIgnorePending: ignored.pending };
   } catch (error) {
+    error = withPotentialPartial(error);
+    if (backup) error = withUncertainPath(error, backup);
+    if (error.code === 'E_NESTED_GIT') {
+      // A new repository appeared after the preflight. Do not run rollback
+      // through any path whose index may now belong to another worktree.
+      for (const path of [...applied.map(item => item.path), ...removedDirectories.map(item => item.path), error.nestedGitPath]) {
+        if (typeof path === 'string') error = withUncertainPath(error, path);
+      }
+      throw error;
+    }
     if (['EMFILE', 'ENFILE'].includes(error.code)) releaseIdentityGuards();
     const rollbackErrors = [], preserved = [...(Array.isArray(error.uncertainPaths) ? error.uncertainPaths : [])];
     for (const removed of [...removedDirectories].sort((a, b) => a.path.length - b.path.length)) {
@@ -1209,6 +1903,12 @@ export function applyPlan(plan) {
         }
         else rmSync(safePath(target, path), { force: true });
       } catch (failure) {
+        const diagnostics = collectErrorDiagnostics(failure);
+        preserved.push(...diagnostics.preservedPaths);
+        try {
+          if (diagnostics.cleanupFailures.length) error.cleanupFailures = [...(error.cleanupFailures || []), ...diagnostics.cleanupFailures];
+          if (diagnostics.truncated) error.diagnosticsTruncated = true;
+        } catch { /* Preserve the primary error. */ }
         if (failure.code === 'E_CHANGED') preserved.push(path);
         else { rollbackErrors.push(failure); preserved.push(path); }
       }
@@ -1221,7 +1921,7 @@ export function applyPlan(plan) {
     if (preserved.length) {
       try { error.rollbackPreservedPaths = preserved; } catch { /* Preserve a exceção original. */ }
     }
-    if (rollbackErrors.length) throw attachErrorDiagnostics(Object.assign(new AggregateError([error, ...rollbackErrors], `${error.message}; rollback incompleto: ${rollbackErrors.map(failure => failure.message).join('; ')}`, { cause: error }), { code: error.code || 'E_OPERATION', hardlinkUnsupported: error.hardlinkUnsupported }));
+    if (rollbackErrors.length) throw attachErrorDiagnostics(Object.assign(new AggregateError([error, ...rollbackErrors], `${error.message}; rollback incompleto`, { cause: error }), { code: error.code || 'E_OPERATION', hardlinkUnsupported: error.hardlinkUnsupported }));
     throw error;
   } finally {
     // An open descriptor prevents an unlinked published inode from being reused
@@ -1230,8 +1930,10 @@ export function applyPlan(plan) {
   }
 }
 
-function pruneRemovedDirectories(plan, onRemoved) {
-  const { target } = plan;
+// Lexical candidates for normal pruning. A chain stops at the first
+// directory that cannot be removed; the executor rechecks the live tree.
+// Migration, creation, backup and rollback effects are not included.
+export function derivePruneCandidates(plan) {
   const legacy = '.pbai4devs/adapters/README.md';
   const removed = plan.changes.filter(change => change.action === 'remove' && (allowedManaged(change.path) || change.path === legacy));
   const parents = new Set(removed.map(change => portable(dirname(change.path))));
@@ -1239,19 +1941,32 @@ function pruneRemovedDirectories(plan, onRemoved) {
     parents.add('.pbai4devs/adapters/antigravity');
     parents.add('.pbai4devs/adapters/antigravity/agents');
   }
+  const chains = [];
   for (let parent of [...parents].sort((left, right) => right.length - left.length)) {
     const boundary = parent.startsWith('.pbai4devs/') ? '.pbai4devs' : adapterRoots.find(root => parent.startsWith(`${root}/`));
+    const chain = [];
     while (boundary && parent.startsWith(`${boundary}/`)) {
+      chain.push(parent);
+      parent = portable(dirname(parent));
+    }
+    if (chain.length) chains.push(chain);
+  }
+  return { chains, retiredRoots: [...(plan.retiredRoots || [])].filter(root => adapterRoots.includes(root)) };
+}
+
+function pruneRemovedDirectories(plan, candidates, validateCandidates, onRemoved) {
+  const { target } = plan;
+  for (const chain of candidates.chains) {
+    for (const parent of chain) {
       const directory = safePath(target, parent);
       const info = stat(directory);
       if (!info?.isDirectory() || readdirSync(directory).length) break;
       try { rmdirSync(directory); onRemoved?.({ path: parent, mode: info.mode & 0o777 }); }
       catch (error) { if (['ENOENT', 'ENOTEMPTY', 'EEXIST'].includes(error.code)) break; throw error; }
-      parent = portable(dirname(parent));
     }
   }
-  for (const root of plan.retiredRoots || []) {
-    if (!adapterRoots.includes(root)) continue;
+  for (const root of candidates.retiredRoots) {
+    validateCandidates();
     const directory = safePath(target, root);
     const info = stat(directory);
     if (!info?.isDirectory()) continue;
@@ -1260,11 +1975,25 @@ function pruneRemovedDirectories(plan, onRemoved) {
   }
 }
 
+function unverifiedRemovalIssues(state, derived) {
+  return Object.keys(derived.removedFiles).filter(path => !Object.hasOwn(state.files, path))
+    .sort().map(path => ({ code: 'removed-file-unverified', path }));
+}
+
+// Read the removal history before planning, so a later planning failure does
+// not hide an already observed inconsistency. This does not authorize writes.
+export function inspectRemovalHistory(target) {
+  const state = loadState(target);
+  return state ? unverifiedRemovalIssues(state, readDerivedState(target)) : [];
+}
+
 export function inspect(target) {
   const state = loadState(target);
   if (!state) return { installed: false, issues: [{ code: 'missing', path: statePath }] };
   const derived = readDerivedState(target);
-  const issues = [];
+  // An orphaned removal record can be legitimate history, but the current
+  // installation state cannot corroborate it. Do not silently report it clean.
+  const issues = unverifiedRemovalIssues(state, derived);
   for (const [path, digest] of Object.entries(state.files)) {
     if (derived.blocks[path] || derived.removedBlocks.includes(path)) continue;
     const content = read(target, path);

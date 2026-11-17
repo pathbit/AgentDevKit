@@ -5,23 +5,69 @@ import fs from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, existsSync, chmodSync, linkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, dirname, isAbsolute, relative, sep } from 'node:path';
+import { join, dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { planLocalIgnore, checkLocalIgnore, applyLocalIgnore, planUntrack, applyUntrack, restoreUntrack } from '../.pbai4devs/scripts/lib/gitignore.mjs';
 import { safeGitEnvironment, gitOutputLines, gitPathsOverlap } from '../.pbai4devs/scripts/lib/git-environment.mjs';
-import { collectErrorDiagnostics } from '../.pbai4devs/scripts/lib/error-reporting.mjs';
+import { attachErrorDiagnostics, collectErrorDiagnostics, markDiagnosticsBoundary } from '../.pbai4devs/scripts/lib/error-reporting.mjs';
 import { synchronize } from '../.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs';
-import { planInstallation, applyPlan } from '../src/install.mjs';
+import { planInstallation, applyPlan, inspect } from '../src/install.mjs';
 import { main as cliMain } from '../src/cli.mjs';
 const repo = fileURLToPath(new URL('..', import.meta.url));
 const bin = join(repo, 'bin/agentdevkit.mjs');
 const sync = join(repo, '.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs');
+
+test('diagnóstico truncado continua truncado após agregação e nova coleta', () => {
+  const original = new Error('original');
+  original.uncertainPaths = Array.from({ length: 4100 }, (_, index) => `caminho-${index}`);
+  attachErrorDiagnostics(original);
+  assert.equal(original.diagnosticsTruncated, true);
+  const wrapper = new Error('externo', { cause: original });
+  assert.equal(collectErrorDiagnostics(wrapper).truncated, true);
+  const summarized = Object.assign(new Error('resumo'), { diagnosticsTruncated: true });
+  assert.equal(collectErrorDiagnostics(summarized).truncated, true);
+});
+
+test('fronteira preserva causa e evita expor diagnósticos não mapeados', () => {
+  const cause = Object.assign(new Error('erro do estágio'), { uncertainPaths: ['caminho/relativo'], cleanupFailures: [{ path: 'temporário/relativo', message: 'falha' }] });
+  const retained = markDiagnosticsBoundary(Object.assign(new Error('erro externo', { cause }), {
+    uncertainPaths: ['/tmp/estagio/caminho/relativo'],
+    cleanupFailures: [{ path: '/tmp/estagio/temporário/relativo', message: 'falha' }],
+    diagnosticsTruncated: true,
+  }));
+  const outer = new AggregateError([retained], 'outro erro');
+  const result = collectErrorDiagnostics(outer);
+  assert.deepEqual(result.preservedPaths, ['/tmp/estagio/caminho/relativo']);
+  assert.deepEqual(result.cleanupFailures, [{ path: '/tmp/estagio/temporário/relativo', message: 'falha' }]);
+  assert.equal(result.truncated, true); assert.equal(retained.cause, cause);
+  const removed = markDiagnosticsBoundary(new Error('estágio removido', { cause }));
+  assert.deepEqual(collectErrorDiagnostics(new AggregateError([removed], 'externo')).preservedPaths, []);
+  assert.equal(removed.cause, cause);
+});
 const env = { ...process.env, GIT_OPTIONAL_LOCKS: '0', GIT_CONFIG_NOSYSTEM: '1' };
 const run = (cwd, command, args) => spawnSync(command, args, { cwd, env, encoding: 'utf8', timeout: 180000, maxBuffer: 20 * 1024 * 1024 });
 const git = (root, ...args) => { const r = run(root, 'git', args); assert.equal(r.status, 0, r.stderr); return r.stdout.trim(); };
 const put = (root, path, contents) => { const file = join(root, path); mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, contents); };
+
+test('diagnóstico reconhece marcador legado com BOM sem alterar exclusões ou índice', t => {
+  const root = mkdtempSync(join(tmpdir(), 'adk-legacy-bom-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  git(root, 'init', '-q');
+  put(root, 'humano.txt', 'preparado\n'); git(root, 'add', 'humano.txt');
+  const index = readFileSync(join(root, '.git/index'));
+  for (const ending of ['\n', '\r\n']) {
+    const exclude = '\uFEFF# BEGIN AGENTDEVKIT LOCAL 1234567890abcdef' + ending + '/.claude/' + ending + '# END AGENTDEVKIT LOCAL 1234567890abcdef' + ending;
+    put(root, '.git/info/exclude', exclude);
+    const plan = planLocalIgnore(root, { templateRoot: repo }), result = checkLocalIgnore(plan);
+    assert.ok(result.pending.some(item => item.code === 'shared-ignore-legacy'));
+    assert.equal(result.ok, false);
+    assert.equal(readFileSync(join(root, '.git/info/exclude'), 'utf8'), exclude);
+    assert.deepEqual(readFileSync(join(root, '.git/index')), index);
+  }
+});
 const stageSynthetic = (root, path, contents) => {
   const blob = spawnSync('git', ['-C', root, 'hash-object', '-w', '--stdin'], { env, input: contents, encoding: 'utf8' });
   assert.equal(blob.status, 0, blob.stderr);
@@ -36,11 +82,16 @@ test('saída Git preserva espaços e trata CRLF no Windows', () => {
 
 test('diagnósticos percorrem agregados e ciclos com limites e deduplicação', () => {
   const primary = new Error('principal'); primary.rollbackPreservedPaths = ['primeiro', 'primeiro'];
-  primary.cleanupFailures = [{ path: 'tmp', message: 'EACCES' }, { path: 'tmp', message: 'EACCES' }, null];
+  primary.cleanupFailures = [{ path: 'tmp', message: 'EACCES' }, { path: 'tmp', message: 'EACCES' }];
   const aggregate = new AggregateError([primary], 'agregado', { cause: primary }); primary.cause = aggregate;
   const result = collectErrorDiagnostics(aggregate);
   assert.deepEqual(result.preservedPaths, ['primeiro']); assert.deepEqual(result.cleanupFailures, [{ path: 'tmp', message: 'EACCES' }]);
   assert.equal(result.truncated, false);
+  primary.cleanupFailures.push(null);
+  const partial = collectErrorDiagnostics(aggregate);
+  assert.equal(partial.truncated, true);
+  assert.deepEqual(partial.preservedPaths, ['primeiro']);
+  assert.deepEqual(partial.cleanupFailures, [{ path: 'tmp', message: 'EACCES' }]);
   const malformed = {}; Object.defineProperty(malformed, 'cause', { get() { throw new Error('getter'); } });
   assert.equal(collectErrorDiagnostics(malformed).truncated, true);
   const huge = new AggregateError(Array.from({ length: 4200 }, () => new Error('x')));
@@ -118,13 +169,15 @@ test('projeto novo cria somente ignore do kit, sem mexer na configuracao Git', {
   assert.match(directCheck.stdout, /dados privados podem ficar visiveis/);
   const exclude = join(root, '.git/info/exclude'), originalExclude = readFileSync(exclude);
   const oldBlock = '# BEGIN AGENTDEVKIT LOCAL 1234567890abcdef\n/.claude/\n# END AGENTDEVKIT LOCAL 1234567890abcdef\n';
-  writeFileSync(exclude, oldBlock);
-  for (const args of [['sync', '--check'], ['doctor']]) {
-    const result = run(root, process.execPath, [bin, ...args, '--target', root, '--json']);
-    assert.equal(result.status, 1, result.stdout + result.stderr);
-    const data = JSON.parse(result.stdout); assert.equal(data.ok, false);
-    assert.ok(data.issues?.some(item => item.code === 'shared-ignore-legacy') || data.localIgnore?.pending.some(item => item.code === 'shared-ignore-legacy'));
-    assert.equal(readFileSync(exclude, 'utf8'), oldBlock);
+  for (const content of [oldBlock, `\uFEFF${oldBlock}`]) {
+    writeFileSync(exclude, content);
+    for (const args of [['sync', '--check'], ['doctor']]) {
+      const result = run(root, process.execPath, [bin, ...args, '--target', root, '--json']);
+      assert.equal(result.status, 1, result.stdout + result.stderr);
+      const data = JSON.parse(result.stdout); assert.equal(data.ok, false);
+      assert.ok(data.issues?.some(item => item.code === 'shared-ignore-legacy') || data.localIgnore?.pending.some(item => item.code === 'shared-ignore-legacy'));
+      assert.equal(readFileSync(exclude, 'utf8'), content);
+    }
   }
   writeFileSync(exclude, originalExclude);
   put(root, '.claude/auth.json', '{"test":"sem credenciais reais"}\n');
@@ -257,9 +310,39 @@ test('playwright e resultados visíveis são informados em qualquer caixa', t =>
 });
 
 test('ambiente Git remove variáveis em qualquer caixa antes da consulta', () => {
-  const source = { git_dir: 'fora', GIT_WORK_TREE: 'fora', Git_Common_Dir: 'fora', git_index_file: 'fora', GIT_EXTERNAL_DIFF: 'fora', Git_Optional_Locks: '1', PATH: '/bin' };
-  assert.deepEqual(safeGitEnvironment(source), { PATH: '/bin', GIT_OPTIONAL_LOCKS: '0' });
+  const source = { git_dir: 'fora', GIT_WORK_TREE: 'fora', Git_Common_Dir: 'fora', git_index_file: 'fora', GIT_EXTERNAL_DIFF: 'fora', Git_Optional_Locks: '1', git_trace: 'fora', GIT_TRACE2_EVENT: 'fora', PATH: '/bin' };
+  assert.deepEqual(safeGitEnvironment(source), { PATH: '/bin', GIT_OPTIONAL_LOCKS: '0', GIT_TRACE2: '0', GIT_TRACE2_EVENT: '0', GIT_TRACE2_PERF: '0' });
   assert.equal(source.git_dir, 'fora');
+});
+
+test('consultas Git não criam arquivos de trace herdados do ambiente ou da configuração global', t => {
+  const root = mkdtempSync(join(tmpdir(), 'adk-git-trace-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const config = join(root, 'gitconfig');
+  const configured = ['normalTarget', 'eventTarget', 'perfTarget'].map(name => ({ name, path: join(root, `${name}.log`) }));
+  writeFileSync(config, `[trace2]\n${configured.map(item => `\t${item.name} = ${JSON.stringify(item.path.replaceAll('\\', '/'))}`).join('\n')}\n`);
+  const base = { ...safeGitEnvironment(process.env), GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: config };
+  for (const key of ['GIT_TRACE', 'GIT_TRACE2', 'GIT_TRACE2_EVENT', 'GIT_TRACE2_PERF']) {
+    const path = join(root, `${key}.log`), raw = { ...base, [key]: path };
+    const control = spawnSync('git', ['version'], { cwd: root, env: raw, encoding: 'utf8' });
+    assert.equal(control.status, 0, control.stderr);
+    assert.ok(existsSync(path), `${key} deveria gerar um trace no controle`);
+    rmSync(path);
+    const check = spawnSync('git', ['version'], { cwd: root, env: safeGitEnvironment(raw), encoding: 'utf8' });
+    assert.equal(check.status, 0, check.stderr);
+    assert.equal(existsSync(path), false, `${key} gerou trace na consulta isolada`);
+  }
+  const globalControl = { ...base };
+  for (const key of ['GIT_TRACE2', 'GIT_TRACE2_EVENT', 'GIT_TRACE2_PERF']) delete globalControl[key];
+  const control = spawnSync('git', ['version'], { cwd: root, env: globalControl, encoding: 'utf8' });
+  assert.equal(control.status, 0, control.stderr);
+  for (const item of configured) {
+    assert.ok(existsSync(item.path), `${item.name} deve gerar trace no controle`);
+    rmSync(item.path);
+  }
+  const check = spawnSync('git', ['version'], { cwd: root, env: safeGitEnvironment(base), encoding: 'utf8' });
+  assert.equal(check.status, 0, check.stderr);
+  for (const item of configured) assert.equal(existsSync(item.path), false, `${item.name} não deve criar trace`);
 });
 
 test('diagnóstico de arquivos privados respeita a precedência real de ignore global', t => {
@@ -448,6 +531,646 @@ test('protege índice quando caminho temporário e Git usam nomes físicos difer
   assert.equal(existsSync(join(root, '.gemini/agents/revisor.md')), false);
 });
 
+for (const marker of ['diretório', 'arquivo']) for (const committed of [false, true]) {
+  test(`init recusa destino dentro de gitlink ${committed ? 'commitado' : 'staged'} com .git ${marker}`, { timeout: 120000 }, t => {
+    const outer = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-nested-git-')));
+    t.after(() => rmSync(outer, { recursive: true, force: true }));
+    const root = join(outer, 'project'), nested = join(root, '.agents'); mkdirSync(nested, { recursive: true });
+    git(root, 'init', '-q', '-b', 'main');
+    if (marker === 'arquivo') git(nested, 'init', '-q', '--separate-git-dir', join(outer, 'nested.git'));
+    else git(nested, 'init', '-q');
+    git(nested, 'config', 'user.name', 'Fixture'); git(nested, 'config', 'user.email', 'fixture@example.invalid');
+    put(nested, 'seed.txt', 'base\n'); git(nested, 'add', 'seed.txt'); git(nested, 'commit', '-qm', 'base');
+    const oid = git(nested, 'rev-parse', 'HEAD');
+    git(root, 'update-index', '--add', '--cacheinfo', `160000,${oid},.agents`);
+    git(root, 'config', 'diff.ignoreSubmodules', 'all');
+    if (committed) {
+      git(root, 'config', 'user.name', 'Fixture'); git(root, 'config', 'user.email', 'fixture@example.invalid'); git(root, 'commit', '-qm', 'submódulo');
+    }
+    const target = 'agents/analista-performance.md'; put(nested, target, '# Somente staged\n'); git(nested, 'add', '-f', target); rmSync(join(nested, target));
+    const topIndex = readFileSync(join(root, '.git/index')), innerIndexPath = git(nested, 'rev-parse', '--git-path', 'index');
+    const innerIndex = readFileSync(isAbsolute(innerIndexPath) ? innerIndexPath : join(nested, innerIndexPath));
+    assert.throws(() => planInstallation({ target: root, mode: 'init', clients: ['codex'] }), error => error.code === 'E_STAGED');
+    assert.equal(existsSync(join(nested, target)), false);
+    assert.deepEqual(readFileSync(join(root, '.git/index')), topIndex);
+    assert.deepEqual(readFileSync(isAbsolute(innerIndexPath) ? innerIndexPath : join(nested, innerIndexPath)), innerIndex);
+    assert.equal(git(nested, 'show', `:${target}`), '# Somente staged');
+  });
+}
+
+test('init recusa projeto sob gitlink externo não inicializado', { timeout: 120000 }, t => {
+  const outer = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-gitlink-parent-')));
+  t.after(() => rmSync(outer, { recursive: true, force: true }));
+  const root = join(outer, 'repository'), source = join(outer, 'source'), project = join(root, '.agents/project');
+  mkdirSync(project, { recursive: true }); mkdirSync(source);
+  git(root, 'init', '-q', '-b', 'main'); git(source, 'init', '-q');
+  git(source, 'config', 'user.name', 'Fixture'); git(source, 'config', 'user.email', 'fixture@example.invalid');
+  put(source, 'seed', 'base\n'); git(source, 'add', 'seed'); git(source, 'commit', '-qm', 'base');
+  git(root, 'update-index', '--add', '--cacheinfo', `160000,${git(source, 'rev-parse', 'HEAD')},.agents`);
+  const index = readFileSync(join(root, '.git/index'));
+  assert.throws(() => planInstallation({ target: project, mode: 'init', clients: ['codex'] }), error => error.code === 'E_STAGED');
+  assert.deepEqual(readFileSync(join(root, '.git/index')), index);
+  assert.equal(existsSync(join(project, '.pbai4devs')), false);
+});
+
+test('sync recusa projeto sob gitlink externo não inicializado', { timeout: 120000 }, t => {
+  const outer = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-sync-gitlink-parent-')));
+  t.after(() => rmSync(outer, { recursive: true, force: true }));
+  const root = join(outer, 'repository'), source = join(outer, 'source'), project = join(root, '.agents/project');
+  mkdirSync(project, { recursive: true }); mkdirSync(source);
+  git(root, 'init', '-q'); git(source, 'init', '-q');
+  git(source, 'config', 'user.name', 'Fixture'); git(source, 'config', 'user.email', 'fixture@example.invalid');
+  put(source, 'seed', 'base\n'); git(source, 'add', 'seed'); git(source, 'commit', '-qm', 'base');
+  put(project, '.pbai4devs/espelhos.conf', 'agente|.claude|plano\n');
+  for (const name of ['agents.ignore', 'shared.ignore', 'local.ignore', 'clients.json']) put(project, `.pbai4devs/templates/gitignore/${name}`, readFileSync(join(repo, '.pbai4devs/templates/gitignore', name)));
+  put(project, '.pbai4devs/skills/demo/SKILL.md', '---\nname: demo\ndescription: Fixture.\n---\n\n# Demo\n');
+  git(root, 'update-index', '--add', '--cacheinfo', `160000,${git(source, 'rev-parse', 'HEAD')},.agents`);
+  const index = readFileSync(join(root, '.git/index'));
+  const options = { root: project, localIgnores: false, generateEntrypoints: false, output() {} };
+  assert.equal(synchronize({ ...options, check: true }).exitCode, 1);
+  assert.throws(() => synchronize(options), /[ÍíIi]ndice Git/);
+  assert.equal(existsSync(join(project, '.claude/skills/demo/SKILL.md')), false);
+  assert.deepEqual(readFileSync(join(root, '.git/index')), index);
+});
+
+test('projeto dentro de submódulo inicializado usa seu próprio índice', { timeout: 120000 }, t => {
+  const outer = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-initialized-submodule-')));
+  t.after(() => rmSync(outer, { recursive: true, force: true }));
+  const root = join(outer, 'repository'), project = join(root, 'module'); mkdirSync(project, { recursive: true });
+  git(root, 'init', '-q'); git(project, 'init', '-q');
+  git(project, 'config', 'user.name', 'Fixture'); git(project, 'config', 'user.email', 'fixture@example.invalid');
+  put(project, 'seed', 'base\n'); git(project, 'add', 'seed'); git(project, 'commit', '-qm', 'base');
+  git(root, 'update-index', '--add', '--cacheinfo', `160000,${git(project, 'rev-parse', 'HEAD')},module`);
+  put(project, 'humano.txt', 'conteúdo staged\n'); git(project, 'add', 'humano.txt');
+  const outerIndex = readFileSync(join(root, '.git/index')), innerIndex = readFileSync(join(project, '.git/index'));
+  applyPlan(planInstallation({ target: project, mode: 'init', clients: ['codex'] }));
+  assert.ok(existsSync(join(project, '.agents/agents/analista-performance.md')));
+  assert.deepEqual(readFileSync(join(root, '.git/index')), outerIndex);
+  assert.deepEqual(readFileSync(join(project, '.git/index')), innerIndex);
+  assert.equal(git(project, 'show', ':humano.txt'), 'conteúdo staged');
+});
+
+test('gitlink não relacionado não bloqueia o cliente selecionado', { timeout: 120000 }, t => {
+  const outer = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-gitlink-unrelated-')));
+  t.after(() => rmSync(outer, { recursive: true, force: true }));
+  const root = join(outer, 'project'), nested = join(root, 'vendor'); mkdirSync(nested, { recursive: true });
+  git(root, 'init', '-q', '-b', 'main'); git(nested, 'init', '-q');
+  git(nested, 'config', 'user.name', 'Fixture'); git(nested, 'config', 'user.email', 'fixture@example.invalid');
+  put(nested, 'human.txt', 'preservar\n'); git(nested, 'add', 'human.txt'); git(nested, 'commit', '-qm', 'base');
+  git(root, 'update-index', '--add', '--cacheinfo', `160000,${git(nested, 'rev-parse', 'HEAD')},vendor`);
+  const index = readFileSync(join(root, '.git/index')), inner = readFileSync(join(nested, '.git/index'));
+  const plan = planInstallation({ target: root, mode: 'init', clients: ['codex'] }); applyPlan(plan);
+  assert.equal(readFileSync(join(nested, 'human.txt'), 'utf8'), 'preservar\n');
+  assert.deepEqual(readFileSync(join(root, '.git/index')), index);
+  assert.deepEqual(readFileSync(join(nested, '.git/index')), inner);
+  assert.ok(existsSync(join(root, '.agents/agents/analista-performance.md')));
+});
+
+test('gitlink não inicializado não autoriza acrescentar bloco a arquivo interno', { timeout: 120000 }, t => {
+  const outer = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-gitlink-block-')));
+  t.after(() => rmSync(outer, { recursive: true, force: true }));
+  const root = join(outer, 'project'), source = join(outer, 'source'); mkdirSync(root); mkdirSync(source);
+  git(root, 'init', '-q', '-b', 'main'); git(source, 'init', '-q');
+  git(source, 'config', 'user.name', 'Fixture'); git(source, 'config', 'user.email', 'fixture@example.invalid');
+  put(source, 'seed', 'base\n'); git(source, 'add', 'seed'); git(source, 'commit', '-qm', 'base');
+  git(root, 'update-index', '--add', '--cacheinfo', `160000,${git(source, 'rev-parse', 'HEAD')},.agents`);
+  const file = '.agents/agents/analista-performance.md', content = '# Documento humano\n'; put(root, file, content);
+  const index = readFileSync(join(root, '.git/index'));
+  assert.throws(() => planInstallation({ target: root, mode: 'init', clients: ['codex'] }), error => error.code === 'E_STAGED');
+  assert.equal(readFileSync(join(root, file), 'utf8'), content);
+  assert.deepEqual(readFileSync(join(root, '.git/index')), index);
+});
+
+for (const operation of ['init', 'sync']) test(`${operation} recusa backup em Git aninhado`, { timeout: 120000 }, t => {
+  const root = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-nested-backup-')));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  git(root, 'init', '-q', '-b', 'main'); put(root, '.gitignore', '# humano\n'); git(root, 'add', '.gitignore');
+  const syncOptions = { root, force: true, localIgnores: false, generateEntrypoints: false, output() {} };
+  if (operation === 'init') put(root, 'AGENTS.md', '# Instruções humanas\n');
+  else {
+    put(root, '.pbai4devs/espelhos.conf', 'agente|.claude|plano\n');
+    for (const name of ['agents.ignore', 'shared.ignore', 'local.ignore', 'clients.json']) put(root, `.pbai4devs/templates/gitignore/${name}`, readFileSync(join(repo, '.pbai4devs/templates/gitignore', name)));
+    put(root, '.pbai4devs/skills/demo/SKILL.md', '---\nname: demo\ndescription: Original.\n---\n\n# Demo\n');
+    synchronize(syncOptions);
+    put(root, '.pbai4devs/skills/demo/SKILL.md', '---\nname: demo\ndescription: Alterada.\n---\n\n# Demo\n');
+  }
+  const nested = join(root, '.agent-tests'); mkdirSync(nested); git(nested, 'init', '-q');
+  put(nested, 'human.txt', 'preservar\n'); git(nested, 'add', 'human.txt');
+  const topIndex = readFileSync(join(root, '.git/index')), innerIndex = readFileSync(join(nested, '.git/index'));
+  const action = operation === 'init' ? () => { const plan = planInstallation({ target: root, mode: 'init', clients: ['codex'] }); applyPlan(plan); }
+    : () => synchronize(syncOptions);
+  assert.throws(action, error => error.code === 'E_NESTED_GIT');
+  assert.deepEqual(fs.readdirSync(nested).sort(), ['.git', 'human.txt']);
+  assert.equal(readFileSync(join(nested, 'human.txt'), 'utf8'), 'preservar\n');
+  assert.deepEqual(readFileSync(join(root, '.git/index')), topIndex); assert.deepEqual(readFileSync(join(nested, '.git/index')), innerIndex);
+  if (operation === 'sync') {
+    synchronize({ ...syncOptions, force: false });
+    assert.deepEqual(fs.readdirSync(nested).sort(), ['.git', 'human.txt']);
+    assert.deepEqual(readFileSync(join(nested, '.git/index')), innerIndex);
+  }
+});
+
+for (const operation of ['init', 'sync']) test(`${operation} recusa backup sob gitlink não inicializado`, { timeout: 120000 }, t => {
+  const outer = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-backup-gitlink-')));
+  t.after(() => rmSync(outer, { recursive: true, force: true }));
+  const root = join(outer, 'project'), source = join(outer, 'source'); mkdirSync(root); mkdirSync(source);
+  git(root, 'init', '-q', '-b', 'main'); git(source, 'init', '-q');
+  git(source, 'config', 'user.name', 'Fixture'); git(source, 'config', 'user.email', 'fixture@example.invalid');
+  put(source, 'seed', 'base\n'); git(source, 'add', 'seed'); git(source, 'commit', '-qm', 'base');
+  const options = { root, force: true, localIgnores: false, generateEntrypoints: false, output() {} };
+  if (operation === 'init') put(root, 'AGENTS.md', '# Humano\n');
+  else {
+    put(root, '.pbai4devs/espelhos.conf', 'agente|.claude|plano\n');
+    for (const name of ['agents.ignore', 'shared.ignore', 'local.ignore', 'clients.json']) put(root, `.pbai4devs/templates/gitignore/${name}`, readFileSync(join(repo, '.pbai4devs/templates/gitignore', name)));
+    put(root, '.pbai4devs/skills/demo/SKILL.md', '---\nname: demo\ndescription: Antes.\n---\n\n# Demo\n'); synchronize(options);
+    put(root, '.pbai4devs/skills/demo/SKILL.md', '---\nname: demo\ndescription: Depois.\n---\n\n# Demo\n');
+  }
+  git(root, 'update-index', '--add', '--cacheinfo', `160000,${git(source, 'rev-parse', 'HEAD')},.agent-tests`);
+  mkdirSync(join(root, '.agent-tests')); const index = readFileSync(join(root, '.git/index'));
+  const action = operation === 'init' ? () => { const plan = planInstallation({ target: root, mode: 'init', clients: ['codex'] }); applyPlan(plan); }
+    : () => synchronize(options);
+  assert.throws(action, /[Ss]ubm[oó]dulo|Git submodule/);
+  assert.deepEqual(fs.readdirSync(join(root, '.agent-tests')), []);
+  assert.deepEqual(readFileSync(join(root, '.git/index')), index);
+});
+
+for (const location of ['irmao', 'candidato', 'descendente', 'alias']) test(`sync identifica gitlink ${location} da pasta exclusiva de backup`, { timeout: 120000 }, t => {
+  const outer = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-backup-gitlink-specific-')));
+  t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); rmSync(outer, { recursive: true, force: true }); });
+  const root = join(outer, 'project'), source = join(outer, 'source'); mkdirSync(root); mkdirSync(source);
+  git(root, 'init', '-q'); git(source, 'init', '-q');
+  git(source, 'config', 'user.name', 'Fixture'); git(source, 'config', 'user.email', 'fixture@example.invalid');
+  put(source, 'seed', 'base\n'); git(source, 'add', 'seed'); git(source, 'commit', '-qm', 'base');
+  const options = { root, force: true, localIgnores: false, generateEntrypoints: false, output() {} };
+  put(root, '.pbai4devs/espelhos.conf', 'agente|.claude|plano\n');
+  for (const name of ['agents.ignore', 'shared.ignore', 'local.ignore', 'clients.json']) put(root, `.pbai4devs/templates/gitignore/${name}`, readFileSync(join(repo, '.pbai4devs/templates/gitignore', name)));
+  put(root, '.pbai4devs/skills/demo/SKILL.md', '---\nname: demo\ndescription: Antes.\n---\n\n# Demo\n'); synchronize(options);
+  put(root, '.pbai4devs/skills/demo/SKILL.md', '---\nname: demo\ndescription: Depois.\n---\n\n# Demo\n');
+  const candidate = '.agent-tests/sync-backup.12345678-1234-4234-8234-123456789abc';
+  const link = location === 'irmao' ? '.agent-tests/unrelated' : location === 'candidato' ? candidate : location === 'alias' ? candidate.toUpperCase() : `${candidate}/inner`;
+  git(root, 'update-index', '--add', '--cacheinfo', `160000,${git(source, 'rev-parse', 'HEAD')},${link}`);
+  if (location === 'irmao') put(root, `${link}/sentinela`, 'conteúdo humano\n');
+  const index = readFileSync(join(root, '.git/index'));
+  t.mock.method(crypto, 'randomUUID', () => '12345678-1234-4234-8234-123456789abc'); syncBuiltinESMExports();
+  if (location === 'irmao') {
+    const result = synchronize(options);
+    assert.ok(result.backupRoot); assert.equal(readFileSync(join(root, link, 'sentinela'), 'utf8'), 'conteúdo humano\n');
+  } else {
+    assert.equal(synchronize({ ...options, check: true }).exitCode, 1);
+    assert.throws(() => synchronize(options), /[Ss]ubm[oó]dulo/);
+    assert.equal(existsSync(join(root, '.agent-tests')), false);
+  }
+  assert.deepEqual(readFileSync(join(root, '.git/index')), index);
+});
+
+test('sync preserva pasta de backup criada concorrentemente', { timeout: 120000 }, t => {
+  const root = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-backup-exclusive-')));
+  t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); rmSync(root, { recursive: true, force: true }); });
+  git(root, 'init', '-q');
+  const options = { root, force: true, localIgnores: false, generateEntrypoints: false, output() {} };
+  put(root, '.pbai4devs/espelhos.conf', 'agente|.claude|plano\n');
+  for (const name of ['agents.ignore', 'shared.ignore', 'local.ignore', 'clients.json']) put(root, `.pbai4devs/templates/gitignore/${name}`, readFileSync(join(repo, '.pbai4devs/templates/gitignore', name)));
+  put(root, '.pbai4devs/skills/demo/SKILL.md', '---\nname: demo\ndescription: Antes.\n---\n\n# Demo\n'); synchronize(options);
+  put(root, '.pbai4devs/skills/demo/SKILL.md', '---\nname: demo\ndescription: Depois.\n---\n\n# Demo\n');
+  const candidate = join(root, '.agent-tests/sync-backup.12345678-1234-4234-8234-123456789abc'), mkdir = fs.mkdirSync;
+  t.mock.method(crypto, 'randomUUID', () => '12345678-1234-4234-8234-123456789abc');
+  t.mock.method(fs, 'mkdirSync', (path, ...args) => {
+    if (resolve(path) === candidate && !existsSync(candidate)) { mkdir(path); writeFileSync(join(candidate, 'sentinela'), 'humano\n'); }
+    return mkdir(path, ...args);
+  });
+  syncBuiltinESMExports();
+  let failure; try { synchronize(options); } catch (error) { failure = error; }
+  assert.equal(failure?.code, 'EEXIST', failure?.stack);
+  assert.equal(readFileSync(join(candidate, 'sentinela'), 'utf8'), 'humano\n');
+  assert.ok(collectErrorDiagnostics(failure).preservedPaths.includes(candidate));
+});
+
+test('sync não sobrescreve arquivo criado concorrentemente dentro do backup', { timeout: 120000 }, t => {
+  const root = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-backup-file-exclusive-')));
+  t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); rmSync(root, { recursive: true, force: true }); });
+  git(root, 'init', '-q');
+  const options = { root, force: true, localIgnores: false, generateEntrypoints: false, output() {} };
+  put(root, '.pbai4devs/espelhos.conf', 'agente|.claude|plano\n');
+  for (const name of ['agents.ignore', 'shared.ignore', 'local.ignore', 'clients.json']) put(root, `.pbai4devs/templates/gitignore/${name}`, readFileSync(join(repo, '.pbai4devs/templates/gitignore', name)));
+  put(root, '.pbai4devs/skills/demo/SKILL.md', '---\nname: demo\ndescription: Antes.\n---\n\n# Demo\n'); synchronize(options);
+  put(root, '.pbai4devs/skills/demo/SKILL.md', '---\nname: demo\ndescription: Depois.\n---\n\n# Demo\n');
+  const backupRoot = join(root, '.agent-tests/sync-backup.12345678-1234-4234-8234-123456789abc'), open = fs.openSync;
+  let collision;
+  t.mock.method(crypto, 'randomUUID', () => '12345678-1234-4234-8234-123456789abc');
+  t.mock.method(fs, 'openSync', (path, flags, ...args) => {
+    if (!collision && typeof path === 'string' && resolve(path).startsWith(backupRoot + sep) && flags === 'wx+') {
+      collision = resolve(path); writeFileSync(path, 'sentinela humana\n', { flag: 'wx' });
+    }
+    return open(path, flags, ...args);
+  });
+  syncBuiltinESMExports();
+  let failure; try { synchronize(options); } catch (error) { failure = error; }
+  assert.ok(collision, `fixture deve criar o arquivo no momento da tentativa exclusiva (cwd=${process.cwd()})`);
+  assert.equal(failure?.code, 'EEXIST');
+  assert.equal(readFileSync(collision, 'utf8'), 'sentinela humana\n');
+  assert.ok(collectErrorDiagnostics(failure).preservedPaths.includes(backupRoot));
+});
+
+test('falha congelada durante backup parcial informa a pasta preservada', { timeout: 120000 }, t => {
+  const root = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-backup-partial-')));
+  t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); rmSync(root, { recursive: true, force: true }); });
+  git(root, 'init', '-q');
+  const options = { root, force: true, localIgnores: false, generateEntrypoints: false, output() {} };
+  put(root, '.pbai4devs/espelhos.conf', 'agente|.claude|plano\n');
+  for (const name of ['agents.ignore', 'shared.ignore', 'local.ignore', 'clients.json']) put(root, `.pbai4devs/templates/gitignore/${name}`, readFileSync(join(repo, '.pbai4devs/templates/gitignore', name)));
+  put(root, '.pbai4devs/skills/demo/SKILL.md', '---\nname: demo\ndescription: Antes.\n---\n\n# Demo\n'); synchronize(options);
+  put(root, '.pbai4devs/skills/demo/SKILL.md', '---\nname: demo\ndescription: Depois.\n---\n\n# Demo\n');
+  const backupRoot = join(root, '.agent-tests/sync-backup.12345678-1234-4234-8234-123456789abc');
+  const originalOpen = fs.openSync, originalWrite = fs.writeSync, originalClose = fs.closeSync;
+  const failure = Object.freeze(Object.assign(new Error('falha sintética'), { code: 'EIO' }));
+  let fd, partial;
+  t.mock.method(crypto, 'randomUUID', () => '12345678-1234-4234-8234-123456789abc');
+  t.mock.method(fs, 'openSync', (path, flags, ...args) => {
+    const result = originalOpen(path, flags, ...args);
+    if (typeof path === 'string' && resolve(path).startsWith(backupRoot + sep) && flags === 'wx+') { fd = result; partial = resolve(path); }
+    return result;
+  });
+  t.mock.method(fs, 'writeSync', (path, data, ...args) => {
+    if (path === fd && partial) { originalWrite(fd, 'parcial'); throw failure; }
+    return originalWrite(path, data, ...args);
+  });
+  t.mock.method(fs, 'closeSync', value => {
+    originalClose(value);
+    if (value === fd) throw Object.assign(new Error('falha sintética ao fechar'), { code: 'ENOSPC' });
+  });
+  syncBuiltinESMExports();
+  let error; try { synchronize(options); } catch (caught) { error = caught; }
+  assert.ok(partial); assert.equal(error?.code, 'EIO'); assert.equal(error.cause, failure);
+  assert.equal(readFileSync(partial, 'utf8'), 'parcial');
+  assert.ok(collectErrorDiagnostics(error).preservedPaths.includes(backupRoot));
+  assert.ok(collectErrorDiagnostics(error).cleanupFailures.some(item => item.path === partial));
+});
+
+test('falha do sync após publicação informa backup sem alterar índice ou ignore', { timeout: 120000 }, t => {
+  const root = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-sync-backup-diagnostic-')));
+  t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); rmSync(root, { recursive: true, force: true }); });
+  git(root, 'init', '-q');
+  put(root, '.gitignore', '# regra humana\n'); put(root, 'humano.txt', 'conteúdo preparado\n');
+  git(root, 'add', '--', '.gitignore', 'humano.txt');
+  const options = { root, force: true, localIgnores: false, generateEntrypoints: false, output() {} };
+  put(root, '.pbai4devs/espelhos.conf', 'agente|.claude|plano\n');
+  for (const name of ['agents.ignore', 'shared.ignore', 'local.ignore', 'clients.json']) put(root, `.pbai4devs/templates/gitignore/${name}`, readFileSync(join(repo, '.pbai4devs/templates/gitignore', name)));
+  put(root, '.pbai4devs/skills/demo/SKILL.md', '---\nname: demo\ndescription: Antes.\n---\n\n# Demo\n'); synchronize(options);
+  put(root, '.pbai4devs/skills/demo/SKILL.md', '---\nname: demo\ndescription: Depois.\n---\n\n# Demo\n');
+  const index = readFileSync(join(root, '.git/index')), ignore = readFileSync(join(root, '.gitignore'));
+  const rename = fs.renameSync, cause = Object.freeze(Object.assign(new Error('falha após publicação'), { code: 'EIO' }));
+  let injected = false, failure;
+  t.mock.method(fs, 'renameSync', (source, target, ...args) => {
+    const result = rename(source, target, ...args);
+    if (!injected && target === join(root, '.pbai4devs/catalog.json')) { injected = true; throw cause; }
+    return result;
+  });
+  syncBuiltinESMExports();
+  try { synchronize(options); } catch (error) { failure = error; }
+  finally { t.mock.restoreAll(); syncBuiltinESMExports(); }
+  assert.ok(injected && failure); assert.equal(failure.code, 'EIO');
+  const backups = fs.readdirSync(join(root, '.agent-tests')).filter(name => name.startsWith('sync-backup.'));
+  assert.equal(backups.length, 1);
+  assert.ok(collectErrorDiagnostics(failure).preservedPaths.includes(join(root, '.agent-tests', backups[0])));
+  assert.deepEqual(readFileSync(join(root, '.git/index')), index);
+  assert.deepEqual(readFileSync(join(root, '.gitignore')), ignore);
+});
+
+test('sync executado diretamente orienta revisão após falha de publicação', { timeout: 120000 }, t => {
+  const root = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-sync-direct-diagnostic-')));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  git(root, 'init', '-q'); put(root, '.gitignore', '# regra humana\n'); put(root, 'humano.txt', 'sentinela preparada\n');
+  git(root, 'add', '--', '.gitignore', 'humano.txt');
+  const options = { root, force: true, localIgnores: false, generateEntrypoints: false, output() {} };
+  put(root, '.pbai4devs/espelhos.conf', 'agente|.claude|plano\n');
+  for (const name of ['agents.ignore', 'shared.ignore', 'local.ignore', 'clients.json']) put(root, `.pbai4devs/templates/gitignore/${name}`, readFileSync(join(repo, '.pbai4devs/templates/gitignore', name)));
+  put(root, '.pbai4devs/skills/demo/SKILL.md', '---\nname: demo\ndescription: Antes.\n---\n\n# Demo\n'); synchronize(options);
+  put(root, '.pbai4devs/skills/demo/SKILL.md', '---\nname: demo\ndescription: Depois.\n---\n\n# Demo\n');
+  const index = readFileSync(join(root, '.git/index')), ignore = readFileSync(join(root, '.gitignore'));
+  const hook = join(root, 'injetar-falha.mjs');
+  writeFileSync(hook, `import fs from 'node:fs';\nimport { syncBuiltinESMExports } from 'node:module';\nconst rename = fs.renameSync; let injected = false;\nfs.renameSync = (source, target, ...args) => { const value = rename(source, target, ...args); if (!injected && target === process.env.ADK_TEST_DESTINATION) { injected = true; throw Object.assign(new Error('falha sintética após publicação'), { code: 'EIO' }); } return value; };\nsyncBuiltinESMExports();\n`);
+  const child = spawnSync(process.execPath, ['--import', hook, sync, '--root', root, '--force'], {
+    env: { ...env, ADK_TEST_DESTINATION: join(root, '.pbai4devs/catalog.json') }, encoding: 'utf8', timeout: 120000,
+  });
+  assert.equal(child.status, 2, child.stderr);
+  assert.match(child.stderr, /falha sintética após publicação/);
+  assert.match(child.stderr, /pode ter deixado alterações/);
+  assert.match(child.stderr, /dados parciais ou de outra origem/);
+  assert.match(child.stderr, /sync-backup\./);
+  assert.match(child.stdout, /integridade não verificada/);
+  assert.deepEqual(readFileSync(join(root, '.git/index')), index);
+  assert.deepEqual(readFileSync(join(root, '.gitignore')), ignore);
+  assert.equal(readFileSync(join(root, 'humano.txt'), 'utf8'), 'sentinela preparada\n');
+});
+
+test('backup do sync copia arquivo grande em blocos e conserva modo e bytes', { timeout: 120000 }, t => {
+  const root = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-backup-stream-')));
+  t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); rmSync(root, { recursive: true, force: true }); });
+  git(root, 'init', '-q');
+  const options = { root, force: true, localIgnores: false, generateEntrypoints: false, output() {} };
+  put(root, '.pbai4devs/espelhos.conf', 'agente|.claude|plano\n');
+  for (const name of ['agents.ignore', 'shared.ignore', 'local.ignore', 'clients.json']) put(root, `.pbai4devs/templates/gitignore/${name}`, readFileSync(join(repo, '.pbai4devs/templates/gitignore', name)));
+  put(root, '.pbai4devs/skills/demo/SKILL.md', `---\nname: demo\ndescription: ${'A'.repeat(200000)}\n---\n\n# Demo\n`); synchronize(options);
+  const name = '.pbai4devs/catalog.json', source = join(root, name);
+  const bytes = readFileSync(source);
+  // Special bits are rejected before backup; sync-special-mode tests that guard.
+  const requestedMode = process.platform === 'win32' ? 0o666 : 0o755; chmodSync(source, requestedMode);
+  const beforeMode = fs.statSync(source).mode & 0o7777;
+  fs.utimesSync(source, new Date(Date.now() - 86400000), new Date(Date.now() + 86400000));
+  put(root, '.pbai4devs/skills/demo/SKILL.md', '---\nname: demo\ndescription: Depois.\n---\n\n# Demo\n');
+  const open = fs.openSync, read = fs.readSync, close = fs.closeSync; let sourceFd, sourceAtime, reads = 0, maximum = 0;
+  t.mock.method(fs, 'openSync', (path, flags, ...args) => {
+    const result = open(path, flags, ...args);
+    if (path === source && typeof flags === 'number') { sourceFd = result; sourceAtime = fs.fstatSync(result, { bigint: true }).atimeNs; }
+    return result;
+  });
+  t.mock.method(fs, 'readSync', (fd, buffer, offset, length, position) => {
+    if (fd === sourceFd) { reads++; maximum = Math.max(maximum, length); }
+    return read(fd, buffer, offset, length, position);
+  });
+  t.mock.method(fs, 'closeSync', fd => { if (fd === sourceFd) sourceFd = undefined; return close(fd); });
+  syncBuiltinESMExports();
+  const result = synchronize(options), copy = join(result.backupRoot, name);
+  const backupAtime = fs.statSync(copy, { bigint: true }).atimeNs;
+  assert.ok(sourceAtime !== undefined && (backupAtime > sourceAtime ? backupAtime - sourceAtime : sourceAtime - backupAtime) < 1000000n, 'acesso do backup deve conservar o tempo da origem capturado');
+  assert.deepEqual(readFileSync(copy), bytes);
+  assert.equal(fs.statSync(copy).mode & 0o7777, beforeMode);
+  assert.ok(reads >= 4); assert.equal(maximum, 65536);
+});
+
+test('backup do sync recusa troca da origem por link antes da abertura', { timeout: 120000, skip: process.platform === 'win32' }, t => {
+  const root = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-backup-source-link-')));
+  const external = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-backup-source-external-')));
+  t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); rmSync(root, { recursive: true, force: true }); rmSync(external, { recursive: true, force: true }); });
+  git(root, 'init', '-q');
+  const options = { root, force: true, localIgnores: false, generateEntrypoints: false, output() {} };
+  put(root, '.pbai4devs/espelhos.conf', 'agente|.claude|plano\n');
+  for (const name of ['agents.ignore', 'shared.ignore', 'local.ignore', 'clients.json']) put(root, `.pbai4devs/templates/gitignore/${name}`, readFileSync(join(repo, '.pbai4devs/templates/gitignore', name)));
+  put(root, '.pbai4devs/skills/demo/SKILL.md', '---\nname: demo\ndescription: Antes.\n---\n\n# Demo\n'); synchronize(options);
+  put(root, '.pbai4devs/skills/demo/SKILL.md', '---\nname: demo\ndescription: Depois.\n---\n\n# Demo\n');
+  const source = join(root, '.pbai4devs/catalog.json'), sentinel = join(external, 'sentinela');
+  writeFileSync(sentinel, 'não copiar\n'); const expected = readFileSync(source), open = fs.openSync;
+  let injected = false;
+  t.mock.method(fs, 'openSync', (path, flags, ...args) => {
+    if (!injected && path === source && typeof flags === 'number') {
+      injected = true; fs.renameSync(source, `${source}.salvo`); fs.symlinkSync(sentinel, source);
+    }
+    return open(path, flags, ...args);
+  });
+  syncBuiltinESMExports();
+  let failure; try { synchronize(options); } catch (error) { failure = error; }
+  assert.equal(injected, true); assert.ok(failure);
+  assert.equal(readFileSync(sentinel, 'utf8'), 'não copiar\n'); assert.deepEqual(readFileSync(`${source}.salvo`), expected);
+  assert.ok(collectErrorDiagnostics(failure).preservedPaths.some(path => path.includes('sync-backup.')));
+});
+
+for (const variant of ['iguais', 'diferentes']) test(`sync interrompe backup substituído após abertura com bytes ${variant}`, { timeout: 120000 }, t => {
+  const root = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-backup-replaced-')));
+  t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); rmSync(root, { recursive: true, force: true }); });
+  git(root, 'init', '-q'); put(root, '.gitignore', '# humano\n'); git(root, 'add', '.gitignore');
+  const options = { root, force: true, localIgnores: false, generateEntrypoints: false, output() {} };
+  put(root, '.pbai4devs/espelhos.conf', 'agente|.claude|plano\n');
+  for (const name of ['agents.ignore', 'shared.ignore', 'local.ignore', 'clients.json']) put(root, `.pbai4devs/templates/gitignore/${name}`, readFileSync(join(repo, '.pbai4devs/templates/gitignore', name)));
+  put(root, '.pbai4devs/skills/demo/SKILL.md', '---\nname: demo\ndescription: Antes.\n---\n\n# Demo\n'); synchronize(options);
+  put(root, '.pbai4devs/skills/demo/SKILL.md', '---\nname: demo\ndescription: Depois.\n---\n\n# Demo\n');
+  const source = join(root, '.pbai4devs/catalog.json'), before = readFileSync(source), index = readFileSync(join(root, '.git/index'));
+  const open = fs.openSync, write = fs.writeSync; let fd, backup, changed = false, human;
+  t.mock.method(fs, 'openSync', (path, flags, ...args) => {
+    const result = open(path, flags, ...args);
+    if (typeof path === 'string' && resolve(path).startsWith(join(root, '.agent-tests') + sep) && (flags === 'wx' || flags === 'wx+')) { fd = result; backup = resolve(path); }
+    return result;
+  });
+  t.mock.method(fs, 'writeSync', (descriptor, ...args) => {
+    const result = write(descriptor, ...args);
+    if (!changed && descriptor === fd && backup) {
+      changed = true; human = variant === 'iguais' ? before : Buffer.from('substituto humano\n');
+      fs.unlinkSync(backup); writeFileSync(backup, human, { flag: 'wx' });
+    }
+    return result;
+  });
+  syncBuiltinESMExports();
+  let failure; try { synchronize(options); } catch (error) { failure = error; }
+  assert.ok(changed && backup, `fixture deve interceptar o backup (cwd=${process.cwd()}, backup=${backup})`); assert.ok(failure, 'backup substituído deve interromper a operação');
+  assert.deepEqual(readFileSync(backup), human); assert.deepEqual(readFileSync(source), before);
+  assert.deepEqual(readFileSync(join(root, '.git/index')), index);
+  assert.ok(collectErrorDiagnostics(failure).preservedPaths.some(path => backup.startsWith(path + sep)));
+});
+
+test('sync limita backup quando origem cresce durante a cópia', { timeout: 120000 }, t => {
+  const root = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-backup-growing-')));
+  t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); rmSync(root, { recursive: true, force: true }); });
+  git(root, 'init', '-q');
+  const options = { root, force: true, localIgnores: false, generateEntrypoints: false, output() {} };
+  put(root, '.pbai4devs/espelhos.conf', 'agente|.claude|plano\n');
+  for (const name of ['agents.ignore', 'shared.ignore', 'local.ignore', 'clients.json']) put(root, `.pbai4devs/templates/gitignore/${name}`, readFileSync(join(repo, '.pbai4devs/templates/gitignore', name)));
+  put(root, '.pbai4devs/skills/demo/SKILL.md', '---\nname: demo\ndescription: Antes.\n---\n\n# Demo\n'); synchronize(options);
+  put(root, '.pbai4devs/skills/demo/SKILL.md', '---\nname: demo\ndescription: Depois.\n---\n\n# Demo\n');
+  const source = join(root, '.pbai4devs/catalog.json'), originalSize = fs.statSync(source).size, appended = Buffer.alloc(131072, 'x');
+  const open = fs.openSync, read = fs.readSync; let sourceFd, backup, injected = false;
+  t.mock.method(fs, 'openSync', (path, flags, ...args) => {
+    const result = open(path, flags, ...args);
+    if (path === source && typeof flags === 'number') sourceFd = result;
+    if (typeof path === 'string' && resolve(path).startsWith(join(root, '.agent-tests') + sep) && flags === 'wx+') backup = resolve(path);
+    return result;
+  });
+  t.mock.method(fs, 'readSync', (fd, ...args) => {
+    if (!injected && fd === sourceFd && backup) { injected = true; fs.appendFileSync(source, appended); }
+    return read(fd, ...args);
+  });
+  syncBuiltinESMExports();
+  let failure; try { synchronize(options); } catch (error) { failure = error; }
+  assert.ok(injected && backup && failure); assert.equal(fs.statSync(source).size, originalSize + appended.length);
+  assert.ok(fs.statSync(backup).size <= originalSize, 'cópia parcial não deve incluir bytes além do tamanho capturado');
+  assert.ok(collectErrorDiagnostics(failure).preservedPaths.some(path => backup.startsWith(path + sep)));
+});
+
+test('sync detecta corrupção do backup com tamanho inalterado', { timeout: 120000 }, t => {
+  const root = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-backup-corrupt-')));
+  t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); rmSync(root, { recursive: true, force: true }); });
+  git(root, 'init', '-q');
+  const options = { root, force: true, localIgnores: false, generateEntrypoints: false, output() {} };
+  put(root, '.pbai4devs/espelhos.conf', 'agente|.claude|plano\n');
+  for (const name of ['agents.ignore', 'shared.ignore', 'local.ignore', 'clients.json']) put(root, `.pbai4devs/templates/gitignore/${name}`, readFileSync(join(repo, '.pbai4devs/templates/gitignore', name)));
+  put(root, '.pbai4devs/skills/demo/SKILL.md', '---\nname: demo\ndescription: Antes.\n---\n\n# Demo\n'); synchronize(options);
+  put(root, '.pbai4devs/skills/demo/SKILL.md', '---\nname: demo\ndescription: Depois.\n---\n\n# Demo\n');
+  const source = join(root, '.pbai4devs/catalog.json'), before = readFileSync(source), open = fs.openSync, write = fs.writeSync;
+  let fd, backup, corrupted = false;
+  t.mock.method(fs, 'openSync', (path, flags, ...args) => {
+    const result = open(path, flags, ...args);
+    if (typeof path === 'string' && resolve(path).startsWith(join(root, '.agent-tests') + sep) && flags === 'wx+') { fd = result; backup = resolve(path); }
+    return result;
+  });
+  t.mock.method(fs, 'writeSync', (target, data, offset, length, position) => {
+    if (!corrupted && target === fd && Buffer.isBuffer(data) && length > 0) {
+      corrupted = true; const changed = Buffer.from(data.subarray(offset, offset + length)); changed[0] ^= 1;
+      return write(target, changed, 0, changed.length, position);
+    }
+    return write(target, data, offset, length, position);
+  });
+  syncBuiltinESMExports();
+  let failure; try { synchronize(options); } catch (error) { failure = error; }
+  assert.ok(corrupted && backup && failure); assert.deepEqual(readFileSync(source), before);
+  assert.equal(fs.statSync(backup).size, before.length); assert.notDeepEqual(readFileSync(backup), before);
+  assert.ok(collectErrorDiagnostics(failure).preservedPaths.some(path => backup.startsWith(path + sep)));
+});
+
+test('planejamento em estágio consulta o sync sem criar backups', { timeout: 120000 }, t => {
+  const root = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-stage-readonly-')));
+  t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); rmSync(root, { recursive: true, force: true }); });
+  git(root, 'init', '-q'); put(root, '.gitignore', '# humano\n'); git(root, 'add', '.gitignore');
+  applyPlan(planInstallation({ target: root, mode: 'init', clients: ['codex'] }));
+  const skill = '.pbai4devs/skills/projeto/configurar-projeto/SKILL.md';
+  put(root, skill, readFileSync(join(root, skill), 'utf8').replace(/^description:.*$/m, 'description: edição humana.'));
+  const before = readFileSync(join(root, skill)), index = readFileSync(join(root, '.git/index')), ignore = readFileSync(join(root, '.gitignore'));
+  const open = fs.openSync; let backupOpens = 0;
+  t.mock.method(fs, 'openSync', (path, flags, ...args) => {
+    if (typeof path === 'string' && path.includes('sync-backup.') && flags === 'wx+') backupOpens++;
+    return open(path, flags, ...args);
+  });
+  syncBuiltinESMExports();
+  const plan = planInstallation({ target: root, mode: 'agents', clients: ['claude'] });
+  assert.ok(plan); assert.equal(backupOpens, 0, 'a prévia somente leitura não deve iniciar a cópia de backup');
+  assert.deepEqual(readFileSync(join(root, skill)), before);
+  assert.deepEqual(readFileSync(join(root, '.git/index')), index);
+  assert.deepEqual(readFileSync(join(root, '.gitignore')), ignore);
+  assert.equal(existsSync(join(root, '.agent-tests')), false);
+});
+
+for (const entry of ['planejador', 'CLI JSON', 'doctor JSON', 'doctor humano']) for (const language of entry.startsWith('doctor') ? ['pt', 'en', 'es'] : ['pt']) test(`erro agrupado em estágio removido preserva código e causa (${entry}, ${language})`, { timeout: 120000 }, async t => {
+  const root = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-stage-aggregate-'))); let stage;
+  t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); if (stage && existsSync(stage)) rmSync(stage, { recursive: true, force: true }); rmSync(root, { recursive: true, force: true }); });
+  git(root, 'init', '-q'); put(root, '.gitignore', '# regra humana\n'); put(root, 'humano.txt', 'sentinela preparada\n');
+  git(root, 'add', '--', '.gitignore', 'humano.txt');
+  const doctor = entry.startsWith('doctor'), human = entry === 'doctor humano';
+  if (doctor) {
+    applyPlan(planInstallation({ target: root, mode: 'init', clients: ['codex'] }));
+    const skill = '.pbai4devs/skills/projeto/configurar-projeto/SKILL.md';
+    put(root, skill, readFileSync(join(root, skill), 'utf8').replace(/^description:.*$/m, 'description: Conteúdo humano sintético.'));
+    assert.ok(inspect(root).issues.length > 0, 'doctor deve iniciar com outra ocorrência');
+  }
+  const index = readFileSync(join(root, '.git/index')), ignore = readFileSync(join(root, '.gitignore'));
+  const primary = Object.freeze(Object.assign(new Error('falha primária sintética'), { code: 'EIO' }));
+  const failure = Object.freeze(new AggregateError([primary], 'falha agrupada sintética'));
+  const createStage = fs.mkdtempSync, mkdir = fs.mkdirSync; let injected = false;
+  t.mock.method(fs, 'mkdtempSync', (...args) => { const result = createStage(...args); if (String(args[0]).includes('agentdevkit-')) stage = fs.realpathSync(result); return result; });
+  t.mock.method(fs, 'mkdirSync', (path, ...args) => {
+    const native = doctor ? '.agents' : '.claude';
+    if (!injected && stage && typeof path === 'string' && (path === join(stage, native) || path.startsWith(join(stage, native) + sep))) { injected = true; throw failure; }
+    return mkdir(path, ...args);
+  });
+  syncBuiltinESMExports();
+  let error, details;
+  if (entry === 'planejador') {
+    try { planInstallation({ target: root, mode: 'init', clients: ['claude'] }); } catch (caught) { error = caught; }
+    details = error?.message;
+  } else {
+    let text = '';
+    const argv = doctor ? ['doctor', '--target', root, '--lang', language] : ['init', '--agents', 'claude', '--target', root];
+    if (!human) argv.push('--json');
+    const exit = await cliMain(argv, { cwd: root, stdout: { write: value => { text += value; } } });
+    assert.notEqual(exit, 0);
+    if (human) {
+      assert.match(text, /planejamento falhou em um estágio temporário|planning failed in a temporary stage|planificación falló en un área temporal/i);
+      assert.doesNotMatch(text, /pode ter deixado caminhos temporários|may have left temporary paths|puede haber dejado rutas temporales/i);
+      assert.match(text, /claude-inspection-unverified: \.claude\/rules \(EIO\)/);
+    } else {
+      const result = JSON.parse(text); assert.equal(result.ok, false);
+      error = result.error; details = result.error.detail;
+      if (doctor) {
+        assert.match(result.next[0].label, /planejamento falhou em um estágio temporário|planning failed in a temporary stage|planificación falló en un área temporal/i);
+        assert.ok(!result.error.preservedPaths?.length, 'nenhum caminho de estágio removido deve ser listado');
+        assert.ok(result.issues.some(item => item.causeCode === 'EIO'));
+      }
+    }
+  }
+  assert.ok(injected && stage); assert.equal(existsSync(stage), false);
+  if (!human) assert.equal(error?.code, 'EIO');
+  if (!doctor) assert.match(details, /falha primária sintética/);
+  assert.deepEqual(readFileSync(join(root, '.git/index')), index);
+  assert.deepEqual(readFileSync(join(root, '.gitignore')), ignore);
+  assert.equal(readFileSync(join(root, 'humano.txt'), 'utf8'), 'sentinela preparada\n');
+});
+
+test('migração recusa Git aninhado antes de ler seus arquivos', { timeout: 120000 }, t => {
+  const root = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-nested-legacy-')));
+  t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); rmSync(root, { recursive: true, force: true }); });
+  git(root, 'init', '-q', '-b', 'main'); put(root, '.gitignore', '# humano\n'); git(root, 'add', '.gitignore');
+  applyPlan(planInstallation({ target: root, mode: 'init', clients: ['codex'] }));
+  fs.renameSync(join(root, '.pbai4devs/state'), join(root, '.pbai4devs/estado'));
+  const nested = join(root, '.pbai4devs/estado/custom'); mkdirSync(nested); git(nested, 'init', '-q');
+  put(nested, '.git/sentinela', 'privado sintético\n'); const index = readFileSync(join(root, '.git/index'));
+  const read = fs.readFileSync; let exposed = false;
+  t.mock.method(fs, 'readFileSync', (path, ...args) => { if (String(path).startsWith(join(nested, '.git') + sep)) exposed = true; return read(path, ...args); });
+  syncBuiltinESMExports();
+  assert.throws(() => planInstallation({ target: root, mode: 'update' }), error => error.code === 'E_NESTED_GIT');
+  assert.equal(exposed, false); assert.deepEqual(readFileSync(join(root, '.git/index')), index);
+  assert.equal(fs.existsSync(join(root, '.pbai4devs/state')), false);
+});
+
+for (const marker of ['diretório', 'arquivo']) for (const operation of ['init', 'sync']) {
+  test(`${operation} recusa Git aninhado independente com .git ${marker}`, { timeout: 120000 }, t => {
+    const outer = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-nested-independent-')));
+    t.after(() => rmSync(outer, { recursive: true, force: true }));
+    const root = join(outer, 'project'), nested = join(root, '.agents'); mkdirSync(nested, { recursive: true });
+    git(root, 'init', '-q', '-b', 'main'); put(root, '.gitignore', '# ignore humano\n'); git(root, 'add', '.gitignore');
+    if (marker === 'arquivo') git(nested, 'init', '-q', '--separate-git-dir', join(outer, 'nested.git'));
+    else git(nested, 'init', '-q');
+    const item = operation === 'init' ? 'agents/analista-performance.md' : 'skills/demo/SKILL.md';
+    put(nested, item, '# Apenas staged\n'); git(nested, 'add', '-f', item); rmSync(join(nested, item));
+    if (operation === 'sync') {
+      put(root, '.pbai4devs/espelhos.conf', 'agente|.agents|plano\n');
+      for (const name of ['agents.ignore', 'shared.ignore', 'local.ignore', 'clients.json']) put(root, `.pbai4devs/templates/gitignore/${name}`, readFileSync(join(repo, '.pbai4devs/templates/gitignore', name)));
+      put(root, '.pbai4devs/skills/demo/SKILL.md', '---\nname: demo\ndescription: Fixture.\n---\n\n# Demo\n');
+    }
+    const topIndex = readFileSync(join(root, '.git/index')), indexPath = git(nested, 'rev-parse', '--git-path', 'index');
+    const innerIndex = isAbsolute(indexPath) ? indexPath : join(nested, indexPath), beforeInner = readFileSync(innerIndex);
+    const beforeIgnore = readFileSync(join(root, '.gitignore'));
+    if (operation === 'sync') {
+      const preview = synchronize({ root, check: true, localIgnores: false, generateEntrypoints: false, output() {} });
+      assert.equal(preview.exitCode, 1);
+      assert.ok(preview.preserved.some(item => item.path === '.agents' && item.reason === 'nested-git'));
+      assert.equal(existsSync(join(nested, item)), false);
+    }
+    const action = operation === 'init' ? () => planInstallation({ target: root, mode: 'init', clients: ['codex'] })
+      : () => synchronize({ root, localIgnores: false, generateEntrypoints: false, output() {} });
+    assert.throws(action, error => error.code === 'E_NESTED_GIT');
+    assert.equal(existsSync(join(nested, item)), false);
+    assert.deepEqual(readFileSync(join(root, '.git/index')), topIndex); assert.deepEqual(readFileSync(innerIndex), beforeInner);
+    assert.deepEqual(readFileSync(join(root, '.gitignore')), beforeIgnore);
+    assert.equal(git(nested, 'show', `:${item}`), '# Apenas staged');
+  });
+}
+
+for (const operation of ['init', 'sync']) test(`${operation} não reverte arquivos após detectar Git aninhado criado durante aplicação`, { timeout: 120000 }, t => {
+  const root = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-nested-late-'))), nested = join(root, '.agents');
+  t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); rmSync(root, { recursive: true, force: true }); });
+  git(root, 'init', '-q', '-b', 'main'); let action;
+  if (operation === 'init') {
+    const plan = planInstallation({ target: root, mode: 'init', clients: ['codex'] }); action = () => applyPlan(plan);
+  } else {
+    put(root, '.pbai4devs/espelhos.conf', 'agente|.agents|plano\n');
+    for (const name of ['agents.ignore', 'shared.ignore', 'local.ignore', 'clients.json']) put(root, `.pbai4devs/templates/gitignore/${name}`, readFileSync(join(repo, '.pbai4devs/templates/gitignore', name)));
+    for (const name of ['demo', 'segundo']) put(root, `.pbai4devs/skills/${name}/SKILL.md`, `---\nname: ${name}\ndescription: Fixture.\n---\n\n# Demo\n`);
+    action = () => synchronize({ root, localIgnores: false, generateEntrypoints: false, output() {} });
+  }
+  const link = fs.linkSync; let injected = false, first, stagedBytes, stagedIndex;
+  t.mock.method(fs, 'linkSync', (from, to) => {
+    const result = link(from, to);
+    if (!injected && typeof to === 'string' && to.startsWith(nested + sep)) {
+      injected = true; first = to; git(nested, 'init', '-q');
+      const name = relative(nested, to).split(sep).join('/'); git(nested, 'add', '-f', '--', name);
+      stagedBytes = readFileSync(first); stagedIndex = readFileSync(join(nested, '.git/index'));
+    }
+    return result;
+  });
+  syncBuiltinESMExports();
+  let failure; try { action(); } catch (error) { failure = error; }
+  assert.equal(failure?.code, 'E_NESTED_GIT'); assert.ok(injected && first && stagedBytes && stagedIndex);
+  assert.deepEqual(readFileSync(first), stagedBytes); assert.deepEqual(readFileSync(join(nested, '.git/index')), stagedIndex);
+  assert.ok(collectErrorDiagnostics(failure).preservedPaths.some(path => first === join(root, path) || first.startsWith(join(root, path) + sep)));
+  assert.equal(git(nested, 'show', `:${relative(nested, first).split(sep).join('/')}`), stagedBytes.toString('utf8').trim());
+});
+
 test('criação do instalador recusa arquivo humano surgido após validação', { timeout: 120000 }, t => {
   const root = mkdtempSync(join(tmpdir(), 'adk-exclusive-install-')); t.after(() => rmSync(root, { recursive: true, force: true }));
   git(root, 'init', '-q', '-b', 'main');
@@ -464,36 +1187,51 @@ test('criação do instalador recusa arquivo humano surgido após validação', 
   assert.ok(injected); assert.equal(readFileSync(destination, 'utf8'), 'humano concorrente\n');
 });
 
-for (const format of ['json', 'humano']) test(`init em stage sem hardlinks diagnostica falha sem caminhos fantasmas em ${format}`, { timeout: 120000 }, async t => {
-  const root = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-stage-no-hardlink-'))); t.after(() => rmSync(root, { recursive: true, force: true }));
+for (const format of ['json', 'humano']) test(`init em stage sem hardlinks preserva diagnóstico e estágio em ${format}`, { timeout: 120000 }, async t => {
+  const root = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-stage-no-hardlink-'))); let stageRoot;
+  t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); if (stageRoot) rmSync(stageRoot, { recursive: true, force: true }); rmSync(root, { recursive: true, force: true }); });
   git(root, 'init', '-q', '-b', 'main'); put(root, 'human.txt', 'humano staged\n'); git(root, 'add', 'human.txt');
   const index = readFileSync(join(root, '.git/index')); let stage;
+  const createStage = fs.mkdtempSync;
+  t.mock.method(fs, 'mkdtempSync', (...args) => { const result = createStage(...args); stageRoot = fs.realpathSync(result); return result; });
   t.mock.method(fs, 'linkSync', (from, to) => { stage = from; throw Object.assign(new Error('operation not supported by filesystem'), { code: 'ENOTSUP' }); });
   syncBuiltinESMExports(); t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
   let output = ''; const writer = { write: chunk => { output += chunk; }, isTTY: false };
   const status = await cliMain(['init', '--agents', 'codex', '--target', root, '--yes', ...(format === 'json' ? ['--json'] : [])], { cwd: root, stdout: writer, stderr: writer, stdin: { isTTY: false } });
-  assert.notEqual(status, 0); assert.ok(stage); assert.equal(existsSync(stage), false);
+  assert.notEqual(status, 0); assert.ok(stage && existsSync(stage)); assert.ok(fs.lstatSync(stage).isFile());
+  assert.ok(stageRoot && existsSync(stageRoot));
   assert.deepEqual(readFileSync(join(root, '.git/index')), index); assert.equal(readFileSync(join(root, 'human.txt'), 'utf8'), 'humano staged\n');
   assert.deepEqual(fs.readdirSync(root).sort(), ['.git', 'human.txt']);
   if (format === 'json') {
     const result = JSON.parse(output); assert.equal(result.error.code, 'ENOTSUP'); assert.match(result.error.detail, /hard.?links?/i);
-    assert.doesNotMatch(result.error.detail, /rollback incompleto/); assert.equal(result.error.preservedPaths, undefined); assert.equal(result.error.cleanupFailures, undefined);
-  } else { assert.match(output, /hard.?links?/i); assert.doesNotMatch(output, /caminhos preservados/); }
+    assert.ok(result.error.preservedPaths.includes(stageRoot));
+    assert.ok(result.error.preservedPaths.includes(stage));
+    assert.equal(result.next.length, 1); assert.equal(result.next[0].stage, 'revisao'); assert.equal(result.next[0].command, undefined);
+  } else {
+    assert.match(output, /hard.?links?/i);
+    const listed = output.match(/^Revise os caminhos preservados: (.*)\.$/m)?.[1].split(', ') || [];
+    assert.ok(listed.includes(stageRoot)); assert.ok(listed.includes(stage));
+    assert.match(output, /pode ter deixado/i); assert.doesNotMatch(output, /^\s*>.*\b(?:init|update|sync)\b/m);
+  }
 });
 
 test('falha de limpeza do stage informa diretório temporário real e preserva erro primário', { timeout: 120000 }, async t => {
   const root = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-stage-cleanup-'))); let stage;
-  const remove = fs.rmSync;
+  const remove = fs.rmSync, createStage = fs.mkdtempSync, originalRead = fs.readFileSync;
   t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); if (stage) remove(stage, { recursive: true, force: true }); remove(root, { recursive: true, force: true }); });
   git(root, 'init', '-q', '-b', 'main'); put(root, 'human.txt', 'humano staged\n'); git(root, 'add', 'human.txt');
   const index = readFileSync(join(root, '.git/index'));
-  t.mock.method(fs, 'linkSync', from => { stage = from.match(/^.*?[\\/]agentdevkit-[^\\/]+/)[0]; throw Object.assign(new Error('operation not supported'), { code: 'ENOTSUP' }); });
+  t.mock.method(fs, 'mkdtempSync', (...args) => { const result = createStage(...args); stage = fs.realpathSync(result); return result; });
+  t.mock.method(fs, 'readFileSync', (path, ...args) => {
+    if (stage && String(path).startsWith(stage + sep) && String(path).endsWith(`${sep}espelhos.conf`)) throw Object.assign(new Error('falha de leitura do estágio'), { code: 'EIO' });
+    return originalRead(path, ...args);
+  });
   t.mock.method(fs, 'rmSync', (path, ...args) => { if (path === stage) throw Object.assign(new Error('stage ocupado'), { code: 'EACCES' }); return remove(path, ...args); });
   syncBuiltinESMExports();
   let output = ''; const writer = { write: chunk => { output += chunk; }, isTTY: false };
   const status = await cliMain(['init', '--agents', 'codex', '--target', root, '--yes', '--json'], { cwd: root, stdout: writer, stderr: writer, stdin: { isTTY: false } });
-  const result = JSON.parse(output); assert.notEqual(status, 0); assert.equal(result.error.code, 'ENOTSUP'); assert.match(result.error.detail, /hard.?links?/i);
-  assert.ok(existsSync(stage)); assert.ok(result.error.cleanupFailures.some(item => item.path === stage && item.message === 'stage ocupado'));
+  const result = JSON.parse(output); assert.notEqual(status, 0); assert.equal(result.error.code, 'EIO'); assert.match(result.error.detail, /falha de leitura do estágio/);
+  assert.ok(existsSync(stage)); assert.ok(result.error.cleanupFailures.some(item => item.path === stage && item.message === 'cleanup failed'));
   assert.ok((result.error.preservedPaths || []).every(path => {
     const local = relative(stage, path);
     return local && !isAbsolute(local) && local !== '..' && !local.startsWith(`..${sep}`);
@@ -548,75 +1286,136 @@ test('falha após publicação não apaga edição humana concorrente', { timeou
   assert.equal(readFileSync(destination, 'utf8'), 'humano concorrente\n');
 });
 
-for (const format of ['json', 'humano']) test(`publicação incerta e falha de limpeza informam caminho em ${format}`, { timeout: 120000 }, async t => {
+for (const format of ['json', 'humano']) test(`publicação incerta preserva e informa temporário em ${format}`, { timeout: 120000 }, async t => {
   const root = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-uncertain-output-'))); t.after(() => rmSync(root, { recursive: true, force: true }));
   git(root, 'init', '-q', '-b', 'main');
   const link = fs.linkSync, lstat = fs.lstatSync, remove = fs.rmSync;
-  let temporary, destination, injected = false;
+  let temporary, destination, injected = false, cleanupAttempted = false;
   t.mock.method(fs, 'linkSync', (from, to) => {
     link(from, to);
     if (!injected && to.startsWith(root)) { injected = true; temporary = from; destination = to; throw Object.assign(new Error('falha original'), { code: 'EIO' }); }
   });
   t.mock.method(fs, 'lstatSync', (path, ...args) => { if (injected && path === temporary) throw Object.assign(new Error('stat indisponível'), { code: 'EACCES' }); return lstat(path, ...args); });
-  t.mock.method(fs, 'rmSync', (path, ...args) => { if (injected && path === temporary) throw Object.assign(new Error('limpeza indisponível'), { code: 'EACCES' }); return remove(path, ...args); });
+  t.mock.method(fs, 'rmSync', (path, ...args) => { if (injected && path === temporary) { cleanupAttempted = true; throw Object.assign(new Error('limpeza indisponível'), { code: 'EACCES' }); } return remove(path, ...args); });
   syncBuiltinESMExports(); t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
   let output = ''; const writer = { write: chunk => { output += chunk; }, isTTY: false };
   const args = ['init', '--agents', 'codex', '--target', root, '--yes', ...(format === 'json' ? ['--json'] : [])];
   const status = await cliMain(args, { cwd: root, stdout: writer, stderr: writer, stdin: { isTTY: false } });
-  assert.notEqual(status, 0); assert.ok(injected); assert.ok(existsSync(destination));
+  assert.notEqual(status, 0); assert.ok(injected); assert.ok(existsSync(destination)); assert.ok(existsSync(temporary)); assert.equal(cleanupAttempted, false);
   const relativePath = destination.slice(root.length + 1).split(/[\\/]/).join('/');
   if (format === 'json') {
     const result = JSON.parse(output);
     assert.equal(result.error.code, 'EIO'); assert.equal(result.error.detail, 'falha original');
     assert.ok(result.error.preservedPaths.includes(relativePath));
-    assert.ok(result.error.cleanupFailures.some(item => item.path === temporary && item.message === 'limpeza indisponível'));
-  } else { assert.match(output, /Revise os caminhos preservados/); assert.ok(output.includes(relativePath)); assert.ok(output.includes(temporary)); }
+    assert.ok(result.error.preservedPaths.includes(temporary));
+    assert.equal(result.next.length, 1);
+    assert.equal(result.next[0].stage, 'revisao');
+    assert.equal(result.next[0].command, undefined);
+    assert.match(result.next[0].instruction, /preserv/i);
+  } else {
+    assert.match(output, /Revise os caminhos preservados/); assert.ok(output.includes(relativePath)); assert.ok(output.includes(temporary));
+    assert.match(output, /pode ter deixado/i);
+    assert.doesNotMatch(output, /^\s*>.*\b(?:init|update|sync)\b/m);
+  }
 });
 
-for (const format of ['json', 'humano']) test(`erro agregado informa rollback e limpeza em ${format}`, { timeout: 120000 }, async t => {
+for (const [language, wording] of [['pt', /pode ter deixado/i], ['en', /may have left/i], ['es', /puede haber dejado/i]]) test(`falha após publicação sem diagnóstico específico não recomenda outra mutação (${language})`, { timeout: 120000 }, async t => {
+  const root = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-partial-next-')));
+  t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); rmSync(root, { recursive: true, force: true }); });
+  git(root, 'init', '-q', '-b', 'main');
+  const link = fs.linkSync, mkdir = fs.mkdirSync; let published = false, failed = false;
+  t.mock.method(fs, 'linkSync', (from, to) => {
+    const value = link(from, to);
+    if (from.includes('.agentdevkit-') && to.startsWith(root + sep)) published = true;
+    return value;
+  });
+  t.mock.method(fs, 'mkdirSync', (path, ...args) => {
+    if (published && !failed && typeof path === 'string' && path.startsWith(root + sep)) {
+      failed = true; throw Object.assign(new Error('erro após publicação'), { code: 'EIO' });
+    }
+    return mkdir(path, ...args);
+  });
+  syncBuiltinESMExports();
+  let output = ''; const writer = { write: chunk => { output += chunk; }, isTTY: false };
+  const status = await cliMain(['init', '--agents', 'codex', '--lang', language, '--target', root, '--yes', '--json'], { cwd: root, stdout: writer, stderr: writer, stdin: { isTTY: false } });
+  assert.notEqual(status, 0); assert.equal(published, true); assert.equal(failed, true);
+  const result = JSON.parse(output);
+  assert.equal(result.error.code, 'EIO'); assert.equal(result.error.preservedPaths, undefined);
+  assert.equal(result.next.length, 1); assert.equal(result.next[0].stage, 'revisao');
+  assert.equal(result.next[0].command, undefined); assert.match(result.next[0].label, wording);
+});
+
+for (const format of ['api', 'json', 'humano']) test(`erro agregado informa rollback e temporário preservado em ${format}`, { timeout: 120000 }, async t => {
   const root = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-aggregate-output-'))); t.after(() => rmSync(root, { recursive: true, force: true }));
   git(root, 'init', '-q', '-b', 'main');
-  const link = fs.linkSync, remove = fs.rmSync; let first, temporary, second;
+  const plan = format === 'api' ? planInstallation({ target: root, mode: 'init', clients: ['codex'] }) : null;
+  const link = fs.linkSync, remove = fs.rmSync; let first, temporary, second, cleanupAttempted = false, rollbackInjected = false;
+  const secondaryMarker = 'SENTINELA_ROLLBACK_SECUNDARIO_472';
+  let primaryError, secondaryError;
   t.mock.method(fs, 'linkSync', (from, to) => {
     link(from, to);
     if (!from.includes('.agentdevkit-')) return;
     if (!first) first = to;
-    else if (!second) { second = to; temporary = from; throw Object.assign(new Error('falha original'), { code: 'EIO' }); }
+    else if (!second) { second = to; temporary = from; primaryError = Object.assign(new Error('falha original'), { code: 'EIO' }); throw primaryError; }
   });
   t.mock.method(fs, 'rmSync', (path, ...args) => {
-    if (path === temporary || path === first) throw Object.assign(new Error('limpeza indisponível'), { code: 'EACCES' });
+    if (path === temporary) cleanupAttempted = true;
+    if (path === temporary || path === first) {
+      if (path === first) rollbackInjected = true;
+      secondaryError = Object.assign(new Error(secondaryMarker), { code: 'EACCES' });
+      throw secondaryError;
+    }
     return remove(path, ...args);
   });
   syncBuiltinESMExports(); t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
   let output = ''; const writer = { write: chunk => { output += chunk; }, isTTY: false };
-  const status = await cliMain(['init', '--agents', 'codex', '--target', root, '--yes', ...(format === 'json' ? ['--json'] : [])], { cwd: root, stdout: writer, stderr: writer, stdin: { isTTY: false } });
-  assert.notEqual(status, 0); assert.ok(first); assert.ok(second); assert.ok(temporary); assert.ok(existsSync(first));
+  let status, apiError;
+  if (format === 'api') {
+    try { applyPlan(plan); } catch (error) { apiError = error; }
+    status = apiError ? 1 : 0;
+  } else status = await cliMain(['init', '--agents', 'codex', '--target', root, '--yes', ...(format === 'json' ? ['--json'] : [])], { cwd: root, stdout: writer, stderr: writer, stdin: { isTTY: false } });
+  assert.notEqual(status, 0); assert.ok(first); assert.ok(second); assert.ok(temporary); assert.ok(existsSync(first)); assert.ok(existsSync(temporary)); assert.equal(cleanupAttempted, false);
+  assert.equal(rollbackInjected, true, 'a fixture deve produzir a falha secundária');
+  assert.equal(output.includes(secondaryMarker), false, 'a saída não deve expor mensagem secundária do rollback');
   const relativePath = first.slice(root.length + 1).split(/[\\/]/).join('/');
-  if (format === 'json') {
+  if (format === 'api') {
+    assert.ok(apiError instanceof AggregateError);
+    assert.equal(apiError.cause, primaryError); assert.equal(apiError.errors[0], primaryError);
+    assert.ok(apiError.errors.includes(secondaryError)); assert.equal(apiError.code, 'EIO');
+    assert.equal(apiError.message.includes(secondaryMarker), false);
+  } else if (format === 'json') {
     const result = JSON.parse(output); assert.equal(result.error.code, 'EIO'); assert.match(result.error.detail, /falha original/);
     assert.ok(result.error.preservedPaths.includes(relativePath));
-    assert.ok(result.error.cleanupFailures.some(item => item.path === temporary && item.message === 'limpeza indisponível'));
+    assert.ok(result.error.preservedPaths.includes(temporary)); assert.match(result.error.detail, /rollback incompleto/);
   } else { assert.match(output, /Revise os caminhos preservados/); assert.ok(output.includes(relativePath)); assert.ok(output.includes(temporary)); }
 });
 
 for (const flow of ['instalador', 'sync']) for (const format of ['json', 'humano']) test(`limpeza isolada de ${flow} informa caminho em ${format}`, { timeout: 120000 }, async t => {
   const root = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-cleanup-output-'))); t.after(() => rmSync(root, { recursive: true, force: true }));
   git(root, 'init', '-q', '-b', 'main');
-  const link = fs.linkSync, remove = fs.rmSync; let temporary;
+  const link = fs.linkSync, remove = fs.rmSync, createStage = fs.mkdtempSync; let temporary, stage;
+  t.mock.method(fs, 'mkdtempSync', (...args) => { const result = createStage(...args); stage = fs.realpathSync(result); return result; });
   t.mock.method(fs, 'linkSync', (from, to) => {
     link(from, to);
     if (!temporary && (flow === 'sync' ? from.includes('.sync.') : from.includes('.agentdevkit-'))) temporary = from;
   });
   t.mock.method(fs, 'rmSync', (path, ...args) => { if (path === temporary) throw Object.assign(new Error('limpeza indisponível'), { code: 'EACCES' }); return remove(path, ...args); });
-  syncBuiltinESMExports(); t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
+  syncBuiltinESMExports(); t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); if (stage) remove(stage, { recursive: true, force: true }); });
   let output = ''; const writer = { write: chunk => { output += chunk; }, isTTY: false };
   const status = await cliMain(['init', '--agents', 'codex', '--target', root, '--yes', ...(format === 'json' ? ['--json'] : [])], { cwd: root, stdout: writer, stderr: writer, stdin: { isTTY: false } });
   assert.notEqual(status, 0); assert.ok(temporary);
   if (format === 'json') {
     const result = JSON.parse(output); assert.equal(result.error.code, 'EACCES'); assert.equal(result.error.detail, 'limpeza indisponível');
-    if (flow === 'sync') { assert.equal(existsSync(temporary), false); assert.equal(result.error.cleanupFailures, undefined); }
-    else assert.ok(result.error.cleanupFailures.some(item => item.path === temporary && item.message === 'limpeza indisponível'));
-  } else if (flow === 'sync') { assert.equal(existsSync(temporary), false); assert.doesNotMatch(output, /Revise os caminhos preservados/); }
+    if (flow === 'sync') { assert.equal(existsSync(temporary), true); assert.ok(result.error.preservedPaths.includes(stage)); }
+    assert.ok(result.error.cleanupFailures.some(item => item.path === temporary && item.message === 'cleanup failed'));
+  } else if (flow === 'sync') {
+    assert.equal(existsSync(temporary), true);
+    const prefix = 'Revise os caminhos preservados: ';
+    const line = output.split('\n').find(value => value.startsWith(prefix));
+    assert.ok(line, 'a saída humana deve informar os caminhos preservados');
+    assert.ok(line.slice(prefix.length).split(', ').includes(stage));
+    assert.ok(output.includes(temporary));
+  }
   else { assert.match(output, /Revise os caminhos preservados/); assert.ok(output.includes(temporary)); }
 });
 
@@ -625,19 +1424,22 @@ for (const failureMode of ['isolada', 'dupla']) test(`sync mantém erro primári
   git(root, 'init', '-q', '-b', 'main'); put(root, '.pbai4devs/espelhos.conf', 'agente|.claude|plano\n');
   for (const name of ['agents.ignore', 'shared.ignore', 'local.ignore', 'clients.json']) put(root, `.pbai4devs/templates/gitignore/${name}`, readFileSync(join(repo, '.pbai4devs/templates/gitignore', name)));
   put(root, '.pbai4devs/skills/demo/SKILL.md', '---\nname: demo\ndescription: Fixture.\n---\n\n# Demo\n');
-  const destination = join(root, '.claude/skills/demo/SKILL.md'), link = fs.linkSync, remove = fs.rmSync; let temporary;
+  const destination = join(root, '.claude/skills/demo/SKILL.md'), link = fs.linkSync, remove = fs.rmSync; let temporary, cleanupAttempted = false;
   t.mock.method(fs, 'linkSync', (from, to) => {
     link(from, to);
     if (to === destination) { temporary = from; if (failureMode === 'dupla') throw Object.assign(new Error('falha original'), { code: 'EIO' }); }
   });
-  t.mock.method(fs, 'rmSync', (path, ...args) => { if (path === temporary) throw Object.assign(new Error('limpeza indisponível'), { code: 'EACCES' }); return remove(path, ...args); });
+  t.mock.method(fs, 'rmSync', (path, ...args) => { if (path === temporary) { cleanupAttempted = true; throw Object.assign(new Error('limpeza indisponível'), { code: 'EACCES' }); } return remove(path, ...args); });
   syncBuiltinESMExports(); t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
   assert.throws(() => synchronize({ root, localIgnores: false, generateEntrypoints: false, output() {} }), error => {
     assert.equal(error.code, failureMode === 'dupla' ? 'EIO' : 'EACCES');
     assert.equal(error.message, failureMode === 'dupla' ? 'falha original' : 'limpeza indisponível');
-    assert.ok(error.cleanupFailures.some(item => item.path === temporary)); return true;
+    if (failureMode === 'dupla') assert.ok(collectErrorDiagnostics(error).preservedPaths.includes(temporary));
+    else assert.ok(error.cleanupFailures.some(item => item.path === temporary));
+    return true;
   });
-  assert.ok(temporary); assert.equal(existsSync(destination), false);
+  assert.ok(temporary); assert.equal(existsSync(temporary), true); assert.equal(existsSync(destination), false);
+  assert.equal(cleanupAttempted, failureMode === 'isolada');
 });
 
 test('rollback do instalador preserva substituto humano de bytes e modo idênticos', { timeout: 120000 }, t => {
@@ -726,6 +1528,43 @@ test('limite de descritores preserva e informa arquivo sem identidade no rollbac
   assert.throws(() => applyPlan(plan), error => { assert.match(error.message, /falha após limite/); assert.ok(error.rollbackPreservedPaths.includes(creates[16].path)); return true; });
   assert.equal(opened, 16); assert.equal(pending.size, 0); assert.ok(existsSync(join(root, creates[16].path)));
   assert.equal(existsSync(join(root, creates[0].path)), false);
+});
+
+test('rollback do sync preserva erros na API sem divulgar mensagem secundária', t => {
+  const root = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-sync-rollback-message-')));
+  t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); rmSync(root, { recursive: true, force: true }); });
+  git(root, 'init', '-q', '-b', 'main');
+  put(root, '.gitignore', '# humano\n'); put(root, 'human.txt', 'staged\n');
+  git(root, 'add', '.gitignore', 'human.txt');
+  fs.appendFileSync(join(root, 'human.txt'), 'unstaged\n');
+  const index = readFileSync(join(root, '.git/index'));
+  const ignore = readFileSync(join(root, '.gitignore')), human = readFileSync(join(root, 'human.txt'));
+  put(root, '.pbai4devs/espelhos.conf', 'agente|.claude|plano\n');
+  for (const name of ['agents.ignore', 'shared.ignore', 'local.ignore', 'clients.json']) put(root, `.pbai4devs/templates/gitignore/${name}`, readFileSync(join(repo, '.pbai4devs/templates/gitignore', name)));
+  put(root, '.pbai4devs/skills/demo/SKILL.md', '---\nname: demo\ndescription: Fixture.\n---\n\n# Demo\n');
+  const link = fs.linkSync, remove = fs.rmSync;
+  const primary = Object.assign(new Error('falha original sintética'), { code: 'EIO' });
+  const marker = 'SENTINELA_ROLLBACK_SYNC_531';
+  const secondary = Object.assign(new Error(marker), { code: 'EACCES' });
+  let first, injected = false;
+  t.mock.method(fs, 'linkSync', (from, to) => {
+    link(from, to);
+    if (!first) first = to; else throw primary;
+  });
+  t.mock.method(fs, 'rmSync', (path, ...args) => {
+    if (path === first) { injected = true; throw secondary; }
+    return remove(path, ...args);
+  });
+  syncBuiltinESMExports();
+  let error;
+  try { synchronize({ root, localIgnores: false, generateEntrypoints: false, output() {} }); } catch (failure) { error = failure; }
+  assert.ok(injected, 'a falha secundária deve ser exercitada');
+  assert.ok(error instanceof AggregateError); assert.equal(error.errors[0], primary);
+  assert.ok(error.errors.includes(secondary)); assert.equal(error.code, 'EIO');
+  assert.equal(error.message.includes(marker), false);
+  assert.deepEqual(readFileSync(join(root, '.git/index')), index);
+  assert.deepEqual(readFileSync(join(root, '.gitignore')), ignore);
+  assert.deepEqual(readFileSync(join(root, 'human.txt')), human);
 });
 
 test('rollback do sync preserva substituto idêntico criado após publicação', t => {

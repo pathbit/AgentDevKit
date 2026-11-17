@@ -105,7 +105,23 @@ function localBlock(current, first, last, body) {
 
 function gitCommand(root, args, input, encoding = 'utf8') {
   const env = safeGitEnvironment();
+  // Git diagnostics are parsed internally; do not depend on the caller's locale.
+  env.LC_ALL = 'C';
+  env.LANGUAGE = 'C';
   return spawnSync('git', [...(['ls-files', 'rm'].includes(args[0]) ? ['--literal-pathspecs'] : []), '-C', root, '-c', 'core.fsmonitor=false', ...args], { input, encoding, env, windowsHide: true, maxBuffer: 16 * 1024 * 1024 });
+}
+
+export function noGitRepository(root, result) {
+  if (result.signal) return false;
+  const unavailable = result.error?.code === 'ENOENT';
+  const notRepository = !result.error && result.status === 128
+    && /not a git repository/i.test(String(result.stderr || ''));
+  if (!unavailable && !notRepository) return false;
+  // A failed Git probe must never hide a repository or linked worktree.
+  for (let current = resolve(root); ; current = dirname(current)) {
+    if (localStat(join(current, '.git'))) return false;
+    if (dirname(current) === current) return true;
+  }
 }
 
 // Compare exact bytes first. Only accept Git's plain text CRLF conversion when
@@ -404,7 +420,10 @@ export function planLocalIgnore(root, { outputs = [], templateRoot } = {}) {
   // Client roots are ignored locally. Projects can explicitly opt in to a
   // complete client with a literal negation in their own root .gitignore.
   const localPolicy = join(templateRoot || root, '.pbai4devs/templates/clients/ADAPTERS.json');
-  const policy = JSON.parse(readFileSync(checkedLocalPath(localStat(localPolicy) ? localPolicy : fileURLToPath(new URL('../../templates/clients/ADAPTERS.json', import.meta.url))), 'utf8'));
+  const policyText = readFileSync(checkedLocalPath(localStat(localPolicy) ? localPolicy : fileURLToPath(new URL('../../templates/clients/ADAPTERS.json', import.meta.url))), 'utf8');
+  let policy;
+  try { policy = JSON.parse(policyText); }
+  catch { throw new SyntaxError('JSON invalido: configuracao de adaptadores.'); }
   const clientRoots = [...new Set(policy.adapters.flatMap(adapter => [adapter.root, ...(adapter.extraRoots || [])]))];
   if (clientRoots.some(path => typeof path !== 'string' || !/^\.[a-z0-9][a-z0-9-]*$/.test(path) || ['.git', '.pbai4devs', '.agent-tests'].includes(path))) throw new Error('Raiz de cliente invalida para exclusao.');
   const roots = [...clientRoots];
@@ -414,7 +433,7 @@ export function planLocalIgnore(root, { outputs = [], templateRoot } = {}) {
     .filter(path => !roots.some(client => path === client || path.startsWith(`${client}/`))).sort();
   const info = gitCommand(resolved.parent, ['rev-parse', '--show-toplevel', '--git-path', 'info/exclude']);
   let location = null;
-  if (info.status === 0) {
+  if (!info.error && info.status === 0 && !info.signal) {
     const lines = gitOutputLines(info.stdout), [reportedTop, reportedExclude] = lines;
     if (lines.length !== 2 || !reportedTop || !reportedExclude) throw new Error('Localizacao Git invalida.');
     const exclude = resolve(resolved.parent, reportedExclude);
@@ -424,7 +443,7 @@ export function planLocalIgnore(root, { outputs = [], templateRoot } = {}) {
     checkedLocalPath(exclude);
     const canonicalExclude = localStat(exclude) ? canonicalExisting(exclude) : join(localRoot(dirname(exclude)).root, basename(exclude));
     location = { top, exclude: checkedLocalPath(canonicalExclude), prefix: portable(prefix) };
-  } else if (info.error && info.error.code !== 'ENOENT' || !info.error && !/not a git repository/i.test(info.stderr || '')) {
+  } else if (!noGitRepository(resolved.parent, info)) {
     throw new Error(`Nao foi possivel localizar Git: ${info.error?.message || info.stderr}`);
   }
   const id = createHash('sha256').update(root).digest('hex').slice(0, 16);
@@ -503,7 +522,7 @@ export function checkLocalIgnore(plan, { replacedBlocks = [] } = {}) {
     }
     for (const path of ambiguousExceptions(plan.root, plan.worktreeLocation, plan.clientRoots, plan.artifacts)) pending.push({ code: 'ignore-ambiguous', path });
     const currentShared = localRead(checkedLocalPath(plan.worktreeLocation.exclude)) ?? '';
-    if (/^# BEGIN AGENTDEVKIT LOCAL [a-f0-9]{16}\r?$/m.test(currentShared)) pending.push({ code: 'shared-ignore-legacy', path: plan.worktreeLocation.exclude });
+    if (/^# BEGIN AGENTDEVKIT LOCAL [a-f0-9]{16}\r?$/m.test(currentShared.replace(/^\uFEFF/, ''))) pending.push({ code: 'shared-ignore-legacy', path: plan.worktreeLocation.exclude });
   return { ok: !plan.trackedOutputs.length && !pending.some(isBlockingLocalIgnore), status: plan.status, missing: [], pending, trackedOutputs: plan.trackedOutputs, changed: 0 };
 }
 
@@ -519,13 +538,18 @@ export function applyLocalIgnore(plan, { validate } = {}) {
   return { status: plan.status, changed: 0, trackedOutputs: plan.trackedOutputs, pending: checked.pending };
 }
 
-export function planUntrack(root, expectedHashes = {}) {
+export function planUntrack(root, expectedHashes = {}, { gitlinkBoundaries = [] } = {}) {
   assertUnredirectedGitEnvironment();
   root = localRoot(root).root;
   const candidates = Object.keys(expectedHashes).map(checkedOutput).sort();
+  const boundaries = gitlinkBoundaries.map(checkedOutput);
   for (const hash of Object.values(expectedHashes)) if (!/^[a-f0-9]{64}$/.test(hash)) throw new Error('Hash de ownership invalido para desindexar.');
-  if (!candidates.length || !localStat(root)) return { root, paths: [], hashes: {}, index: '', conflicts: [] };
+  if ((!candidates.length && !boundaries.length) || !localStat(root)) return { root, paths: [], hashes: {}, index: '', conflicts: [], ...(boundaries.length ? { gitlinkConflicts: [] } : {}) };
   const topResult = gitCommand(root, ['rev-parse', '--show-toplevel']);
+  if (topResult.error || topResult.status !== 0 || topResult.signal) {
+    if (noGitRepository(root, topResult)) return { root, paths: [], hashes: {}, index: '', conflicts: [] };
+    throw new Error(topResult.error?.message || topResult.stderr || 'Falha ao localizar repositorio Git.');
+  }
   const topLines = topResult.status === 0 ? gitOutputLines(topResult.stdout) : [];
   if (topResult.status === 0 && (topLines.length !== 1 || !topLines[0])) throw new Error('Localizacao Git invalida.');
   const top = topResult.status === 0 ? canonicalExisting(topLines[0]) : root;
@@ -534,18 +558,7 @@ export function planUntrack(root, expectedHashes = {}) {
   const rootPrefix = topResult.status === 0 ? portable(local) : '';
   const rootParts = rootPrefix ? rootPrefix.split('/') : [];
   const result = gitCommand(top, ['ls-files', '--stage', '-z'], undefined, null);
-  if (result.status !== 0) {
-    if (result.error?.code === 'ENOENT' || /not a git repository/i.test(result.stderr || '')) {
-      // Fail closed if a repository exists even when Git cannot be launched.
-      let directory = root;
-      while (true) {
-        if (localStat(join(directory, '.git'))) throw new Error('Nao foi possivel consultar o Git deste projeto; indice e arquivos preservados.');
-        const parent = dirname(directory);
-        if (parent === directory) break;
-        directory = parent;
-      }
-      return { root, paths: [], hashes: {}, index: '', conflicts: [] };
-    }
+  if (result.error || result.status !== 0 || result.signal) {
     throw new Error(result.error?.message || result.stderr || 'Falha ao ler indice Git.');
   }
   const conflicts = [];
@@ -553,6 +566,18 @@ export function planUntrack(root, expectedHashes = {}) {
   try { indexText = new TextDecoder('utf-8', { fatal: true }).decode(result.stdout); }
   catch { throw new Error('Indice Git contem caminho nao UTF-8; alteracoes recusadas.'); }
   const records = indexText.split('\0').filter(Boolean);
+  const gitlinkConflicts = new Set(); let gitlinkCoversRoot = false;
+  for (const record of records) {
+    const tab = record.indexOf('\t');
+    if (tab < 0 || !/^160000 [a-f0-9]+ [0-3]$/.test(record.slice(0, tab))) continue;
+    const indexed = record.slice(tab + 1);
+    if (rootPrefix && indexed.split('/').length <= rootParts.length && gitPathsOverlap(indexed, rootPrefix, { root: top, allowMissingTarget: true })) gitlinkCoversRoot = true;
+    for (const boundary of boundaries) {
+      const full = rootPrefix ? `${rootPrefix}/${boundary}` : boundary;
+      if (gitPathsOverlap(indexed, full, { root: top, allowMissingTarget: true })) gitlinkConflicts.add(boundary);
+    }
+  }
+  if (gitlinkCoversRoot) conflicts.push(...candidates);
   const folded = new Map(), prefixes = new Map();
   for (const path of candidates) {
     const key = gitPathKey(path);
@@ -594,7 +619,7 @@ export function planUntrack(root, expectedHashes = {}) {
   // project. Retain the matched records rather than comparing those names.
   const selectedRecords = new Set(paths.flatMap(path => matches.get(path).map(entry => entry.record)));
   const index = records.filter(record => selectedRecords.has(record)).join('\0');
-  return { root, paths, hashes: Object.fromEntries(paths.map(path => [path, expectedHashes[path]])), index, conflicts };
+  return { root, paths, hashes: Object.fromEntries(paths.map(path => [path, expectedHashes[path]])), index, conflicts: [...new Set(conflicts)], ...(boundaries.length ? { gitlinkConflicts: [...gitlinkConflicts] } : {}) };
 }
 
 export function applyUntrack(plan) {

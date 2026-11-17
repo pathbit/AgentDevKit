@@ -18,6 +18,8 @@ para padronizá-los. Acrescente apenas fatos comprovados e preserve o conteúdo
 anterior. Se houver contradição relevante sem solução nas instruções ou
 evidências disponíveis, apresente os fatos e pergunte ao usuário; aguarde a
 resposta antes de editar o documento afetado. Continue tarefas independentes.
+Comandos divergentes não justificam criar um script: confirme a intenção e o
+comportamento disponível antes de decidir o que documentar.
 
 Use o [catálogo](../../../templates/README.md) como lista de lacunas, nunca como
 substituto de um documento existente. Crie somente o que a fase e o pedido
@@ -35,8 +37,9 @@ links e exemplos; compare o conteúdo anterior e confirme que arquivos fora
 do plano permanecem intactos. Repetir a tarefa não deve duplicar seções.
 Código de teste é versionado, evidências ficam ignoradas.
 
-Acione o [revisor](../../../agents/revisor/AGENT.md) em leitura com o diff,
-documentos, critérios e provas. Aplique os achados pertinentes e peça nova
+Após alterações, acione o [revisor](../../../agents/revisor/AGENT.md) em leitura
+com o diff, documentos, critérios e provas; não apresente a revisão como opcional.
+Aplique os achados pertinentes e peça nova
 revisão após correções. Informe impedimentos; não declare aprovação se essa
 revisão não ocorreu. Na entrega, o agente principal registra a decisão do
 revisor no JSON de `revisar-entrega`, após conferir o estado final.

@@ -250,7 +250,9 @@ export function resourceTargets(root, source, kind = 'skills') {
     const format = override || layout;
     const defaultTarget = `${agent}/${resourcePath(source, kind, format)}`;
     const explicitMetadata = rows.some(([entry, target, origin, metadata]) => entry === 'nativo' && target === defaultTarget && origin === source && metadata);
-    let target = `${agent}/${clientResourcePath(source, kind, format, agent, rule, explicitMetadata)}`;
+    const relativeTarget = clientResourcePath(source, kind, format, agent, rule, explicitMetadata);
+    if (relativeTarget === null) continue;
+    let target = `${agent}/${relativeTarget}`;
     if (agent === '.gemini' && kind === 'commands') target = target.replace(/\.md$/, '.toml');
     if (!suppressed.has(target)) targets.push(target);
   }

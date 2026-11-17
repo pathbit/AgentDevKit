@@ -446,7 +446,7 @@ test('env literal aceita apenas strings e variaveis nao protegidas', () => {
 test('Node 24 e o unico runtime; versoes anteriores falham antes de alterar arquivos', async t => {
   assert.doesNotThrow(() => requireNode(24, '24.0.0'));
   assert.doesNotThrow(() => requireNode(24, '26.13.0'));
-  for (const version of ['22.22.0', '20.19.0', '', 'invalid']) assert.throws(() => requireNode(24, version), /Node.js >=24/);
+  for (const version of ['22.22.0', '20.19.0', '', 'invalid']) assert.throws(() => requireNode(24, version), /Use Node.js >=24 com npm\. Se não estiver instalado/);
   const { manager, state, local } = fixture(t, { 'test-tool': tool() }, { nodeVersion: '22.22.0' });
   assert.equal(manager.info('test-tool').supported, false);
   await assert.rejects(manager.install('test-tool'), /Node.js >=24/);

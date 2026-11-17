@@ -1,9 +1,25 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import smol from '../.pbai4devs/scripts/lib/smol-toml.cjs';
 import { extractTomlManagedBlock, mergeTomlContent, stripTomlContent, tomlManagedBlockDigest } from '../.pbai4devs/scripts/lib/managed-toml.mjs';
 
 const body = '@{.pbai4devs/commands/revisar-entrega/COMMAND.md}';
-const promptValue = text => JSON.parse(/^\s*(?:prompt|"prompt"|'prompt')\s*=\s*("(?:\\.|[^"\\])*")/m.exec(text)?.[1] || 'null');
+// Parser distribuido com o kit: valida semantica, sem alegar independencia.
+const promptValue = text => smol.parse(text, { integersAsBigInt: true }).prompt;
+const sha = value => createHash('sha256').update(value).digest('hex');
+function withoutMetadata(text) {
+  const matches = [...text.matchAll(/^# ADK-TOML-META-V3 ([A-Za-z0-9_-]+)(\r?\n)/gm)];
+  assert.equal(matches.length, 1, 'deve haver um comentario de proveniencia');
+  const match = matches[0], metadata = JSON.parse(Buffer.from(match[1], 'base64url').toString('utf8'));
+  assert.equal(metadata.v, 3);
+  assert.equal(metadata.lineEol, match[2]);
+  const block = extractTomlManagedBlock(text);
+  assert.ok(block);
+  assert.equal(metadata.blockHash, sha(block));
+  assert.equal(tomlManagedBlockDigest(text), sha(JSON.stringify(['agentdevkit-toml-composite-v1', block, match[0]])));
+  return text.slice(0, match.index) + text.slice(match.index + match[0].length);
+}
 
 test('complementa string basica e preserva tudo fora do valor prompt', () => {
   const source = String.raw`# meu comando
@@ -13,12 +29,13 @@ prompt  = "Leia \"isto\" e C:\\tmp\n{{args}}" # manter
 model = "local"
 `;
   const result = mergeTomlContent(source, body);
-  assert.ok(result.text.startsWith('# meu comando\ndescription = "Minhas regras"\nprompt  = '));
+  assert.ok(withoutMetadata(result.text).startsWith('# meu comando\ndescription = "Minhas regras"\nprompt  = '));
   assert.ok(result.text.endsWith(' # manter\n[settings]\nmodel = "local"\n'));
   assert.ok(promptValue(result.text).startsWith('Leia "isto" e C:\\tmp\n{{args}}'));
   assert.equal(extractTomlManagedBlock(result.text), result.block);
   assert.equal(tomlManagedBlockDigest(result.text), result.sha256);
   assert.equal(mergeTomlContent(result.text, body, { expectedHash: result.sha256 }).text, result.text);
+  assert.equal(stripTomlContent(result.text, result.sha256), source);
 });
 
 test('suporta as quatro formas de string e newline inicial multiline', () => {
@@ -31,9 +48,11 @@ test('suporta as quatro formas de string e newline inicial multiline', () => {
     ["''''citacao''''", "'citacao'"],
   ];
   for (const [encoded, expected] of cases) {
-    const result = mergeTomlContent(`prompt = ${encoded}\n`, body);
+    const source = `prompt = ${encoded}\n`;
+    const result = mergeTomlContent(source, body);
+    withoutMetadata(result.text);
     assert.ok(promptValue(result.text).startsWith(expected), encoded);
-    assert.equal(promptValue(stripTomlContent(result.text, result.sha256)).trimEnd(), expected.trimEnd());
+    assert.equal(stripTomlContent(result.text, result.sha256), source, encoded);
   }
 });
 
@@ -41,33 +60,39 @@ test('decodifica escapes Unicode escalares e continuacoes multiline', () => {
   const source = 'prompt = """\\\n   Ol\\u00E1 \\\n    mundo \\U0001F600 \\b\\t\\f\\r\\"\\\\\n"""\n';
   const result = mergeTomlContent(source, body);
   assert.ok(promptValue(result.text).startsWith('Olá mundo 😀 \b\t\f\r"\\\n'));
+  withoutMetadata(result.text);
   assert.equal(mergeTomlContent(result.text, body, { expectedHash: result.sha256 }).changed, false);
+  assert.equal(stripTomlContent(result.text, result.sha256), source);
 });
 
 test('preserva BOM, CRLF, chaves quoted e comentarios', () => {
   const prefix = '\ufeff# comando\r\ndescription = \'Minha descricao\'\r\n"prompt" = ';
   const suffix = ' # meu comentario\r\n[config]\r\nmodel = "local"\r\n';
-  const result = mergeTomlContent(Buffer.from(prefix + "'''\r\nMinha linha\r\nOutra linha'''" + suffix), body);
-  assert.ok(result.text.startsWith(prefix));
+  const source = prefix + "'''\r\nMinha linha\r\nOutra linha'''" + suffix;
+  const result = mergeTomlContent(Buffer.from(source), body);
+  assert.ok(withoutMetadata(result.text).startsWith(prefix));
   assert.ok(result.text.endsWith(suffix));
-  assert.ok(promptValue(result.text).startsWith('Minha linha\r\nOutra linha'));
+  assert.ok(promptValue(result.text).startsWith(promptValue(source)));
   assert.equal(tomlManagedBlockDigest(result.text), result.sha256);
+  assert.equal(stripTomlContent(result.text, result.sha256), source);
 });
 
 test('insere prompt ausente antes de tabelas sem alterar prompt de tabela', () => {
   const source = '# meu comando\ndescription = "Descricao"\n[config]\nprompt = "Outro significado"\n';
   const result = mergeTomlContent(source, body);
-  assert.ok(result.text.startsWith('# meu comando\ndescription = "Descricao"\nprompt = '));
+  assert.ok(withoutMetadata(result.text).startsWith('# meu comando\ndescription = "Descricao"\nprompt = '));
   assert.ok(result.text.endsWith('[config]\nprompt = "Outro significado"\n'));
   assert.equal(extractTomlManagedBlock(source), null);
   assert.equal(mergeTomlContent(result.text, body, { expectedHash: result.sha256 }).changed, false);
+  assert.equal(stripTomlContent(result.text, result.sha256), source);
 });
 
 test('ignora palavras prompt e headers dentro de outras strings e arrays', () => {
   const source = 'description = """\nprompt = \'fake\'\n[nao-e-tabela]\n"""\nnotes = ["x", { prompt = "interno" }, # comentario\n "y"]\nprompt = \'Minha instrucao\'\n';
   const result = mergeTomlContent(source, body);
-  assert.ok(result.text.startsWith(source.slice(0, source.lastIndexOf('prompt ='))));
+  assert.ok(withoutMetadata(result.text).startsWith(source.slice(0, source.lastIndexOf('prompt ='))));
   assert.ok(promptValue(result.text).startsWith('Minha instrucao'));
+  assert.equal(stripTomlContent(result.text, result.sha256), source);
 });
 
 test('edicoes humanas antes/depois e dentro do prompt ficam preservadas', () => {
@@ -77,7 +102,8 @@ test('edicoes humanas antes/depois e dentro do prompt ficam preservadas', () => 
   assert.ok(result.text.startsWith('description = "Atualizada"'));
   assert.ok(result.text.endsWith('# nota final\n'));
   assert.ok(promptValue(result.text).startsWith('Humano revisado'));
-  assert.equal(promptValue(stripTomlContent(result.text, result.sha256)).trim(), 'Humano revisado');
+  withoutMetadata(result.text);
+  assert.equal(stripTomlContent(result.text, result.sha256), 'description = "Atualizada"\nprompt = "Humano revisado"\n# nota final\n');
 });
 
 test('bloco adulterado, incompleto ou duplicado nao e substituido', () => {

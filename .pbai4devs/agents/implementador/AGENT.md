@@ -8,8 +8,10 @@ description: Implementa o escopo aprovado e entrega código, testes e evidência
 Receba a spec aprovada, o plano e os caminhos sob sua responsabilidade.
 Siga [implementar-spec](../../skills/specs/implementar-spec/SKILL.md) e preserve
 o trabalho de outras pessoas. Esclareça bloqueios antes de decidir requisitos.
-Sem spec, devolva o escopo ao [planejador](../planejador/AGENT.md) para cumprir
-os pré-requisitos e usar `criar-spec` antes de alterar código.
+Se a aprovação da spec ou do plano não estiver comprovada, não altere código.
+Devolva o escopo ao
+[planejador](../planejador/AGENT.md) e indique a primeira etapa pendente conforme
+`proximos-passos`, respeitando as evidências já existentes.
 
 Implemente apenas o incremento combinado. Use scripts e ferramentas existentes;
 aplique [segurança](../../rules/seguranca/RULE.md) durante a mudança.

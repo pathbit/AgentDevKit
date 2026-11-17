@@ -5,7 +5,65 @@ import { spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { checkHumanExcludeBytes, checkNativeOwnership, checkOriginals, checkPreservedLinks, checkPreservedManagedEdit, fileSnapshot, gitSnapshot, hash, linkedDirectoryPaths, mayAliasPath, outputDirectory, parseCliResult, prepareOutput, stateJson } from './oss-compatibility.mjs';
+import { checkDoctorIssues, checkExcludeOrigin, checkHumanExcludeBytes, checkNativeOwnership, checkOriginals, checkPreservedLinks, checkPreservedManagedEdit, checkStandaloneSync, checkSyncIssues, classifyIgnoreStatus, environment, fileSnapshot, gitSnapshot, hash, linkedDirectoryPaths, mayAliasPath, outputDirectory, parseCliResult, prepareOutput, stateJson } from './oss-compatibility.mjs';
+
+test('artefatos visíveis são observados e falhas do Git são recusadas', () => {
+  assert.deepEqual(classifyIgnoreStatus('tmp/probe', 0), { path: 'tmp/probe', ignored: true, status: 0 });
+  assert.deepEqual(classifyIgnoreStatus('tmp/probe', 1), { path: 'tmp/probe', ignored: false, status: 1 });
+  assert.throws(() => classifyIgnoreStatus('tmp/probe', 128), /Falha ao consultar ignore/);
+  assert.throws(() => classifyIgnoreStatus('tmp/probe', null), /Falha ao consultar ignore/);
+});
+
+test('prova de exclusão humana exige a regra e origem exatas', () => {
+  const valid = '.git/info/exclude:2:/oss-human-private/\toss-human-private/probe\n';
+  assert.doesNotThrow(() => checkExcludeOrigin(valid));
+  assert.throws(() => checkExcludeOrigin(valid.replace('.git/info/exclude', '.gitignore')), /não foi a regra efetiva/);
+  assert.throws(() => checkExcludeOrigin(valid.replace('/oss-human-private/', '!/oss-human-private/')), /não foi a regra efetiva/);
+  assert.throws(() => checkExcludeOrigin(valid + valid), /não foi a regra efetiva/);
+});
+
+test('doctor deve identificar exatamente a fixture privada visível, sem omitir outras falhas', () => {
+  const path = '.opencode/settings.local.json';
+  assert.doesNotThrow(() => checkDoctorIssues({ issues: [{ code: 'private-file-visible', path }] }, path, false));
+  assert.doesNotThrow(() => checkDoctorIssues({ issues: [] }, path, true));
+  assert.throws(() => checkDoctorIssues({ issues: [] }, path, false), /problemas ausentes/);
+  assert.throws(() => checkDoctorIssues({ issues: [{ code: 'private-file-visible', path }, { code: 'broken' }] }, path, false), /inesperados/);
+  assert.throws(() => checkDoctorIssues({ issues: [{ code: 'private-file-visible', path: 'outro' }] }, path, false), /inesperados/);
+  assert.throws(() => checkDoctorIssues({}, path, true), /problemas ausentes/);
+});
+
+test('sync distingue alertas de visibilidade de erros além da fixture privada', () => {
+  const path = '.opencode/settings.local.json';
+  const value = { conflicts: [], localIgnore: { pending: [{ code: 'output-visible', path: 'AGENTS.md' }, { code: 'private-file-visible', path }], trackedOutputs: [] } };
+  assert.doesNotThrow(() => checkSyncIssues(value, path, false));
+  const extra = structuredClone(value); extra.localIgnore.pending.push({ code: 'ignore-ambiguous', path: '.gitignore' });
+  assert.throws(() => checkSyncIssues(extra, path, false), /inesperados/);
+  const tracked = structuredClone(value); tracked.localIgnore.trackedOutputs.push('.claude/secret');
+  assert.throws(() => checkSyncIssues(tracked, path, false), /rastreados/);
+  assert.throws(() => checkSyncIssues(value, path, true), /inesperados/);
+});
+
+test('sync independente exige resumo limpo e pendência privada exata', () => {
+  const summary = '0 desatualizadas; 0 obsoletas; 0 conflitos; 0 origens nativas ausentes; 0 documentos antigos; 0 indices derivados; 0 gitignores; ';
+  const path = '.opencode/settings.local.json';
+  assert.doesNotThrow(() => checkStandaloneSync(`${summary}1 exclusoes locais.\nPendente: private-file-visible: ${path}\n`, path, false));
+  assert.doesNotThrow(() => checkStandaloneSync(`${summary}0 exclusoes locais.\n`, path, true));
+  assert.throws(() => checkStandaloneSync(`${summary}2 exclusoes locais.\nPendente: private-file-visible: ${path}\n`, path, false), /problemas inesperados/);
+  assert.throws(() => checkStandaloneSync(`${summary}1 exclusoes locais.\nPendente: private-file-visible: outro\n`, path, false), /Pendências inesperadas/);
+});
+
+test('ambiente OSS não herda ignore padrão XDG da máquina', t => {
+  const root = mkdtempSync(join(tmpdir(), 'agentdevkit-oss-xdg-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const output = join(root, 'output'), foreign = join(root, 'foreign'), project = join(root, 'project');
+  mkdirSync(output); mkdirSync(join(foreign, 'git'), { recursive: true }); mkdirSync(project);
+  writeFileSync(join(foreign, 'git', 'ignore'), '.claude/settings.local.json\n');
+  assert.equal(spawnSync('git', ['init', '-q', '--template=', project]).status, 0);
+  const isolated = environment(output);
+  const command = env => spawnSync('git', ['-C', project, 'check-ignore', '--no-index', '--quiet', '--', '.claude/settings.local.json'], { env }).status;
+  assert.equal(command({ ...isolated, XDG_CONFIG_HOME: foreign }), 0);
+  assert.equal(command(isolated), 1);
+});
 
 function outputFixture(t) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'agentdevkit-oss-output-')));
@@ -20,6 +78,16 @@ function outputFixture(t) {
   git(['add', '.gitignore']);
   return { root, environment, git, target: 'tmp/oss/run', index: join(root, '.git/index'), config: join(root, '.git/config') };
 }
+
+test('exceção ampla do EF6 pode reabrir um cache dentro do cliente', t => {
+  const f = outputFixture(t), cache = join(f.root, '.claude/.Cache');
+  mkdirSync(cache, { recursive: true }); writeFileSync(join(cache, 'probe'), 'fixture\n');
+  const visible = () => f.git(['-c', 'core.excludesFile=', 'status', '--short', '--untracked-files=all']).stdout.split('\n').some(line => line.endsWith('.claude/.Cache/probe'));
+  writeFileSync(join(f.root, '.gitignore'), '*.[Cc]ache\n');
+  assert.equal(visible(), false);
+  writeFileSync(join(f.root, '.gitignore'), '*.[Cc]ache\n!*.[Cc]ache/\n');
+  assert.equal(visible(), true);
+});
 
 test('destino OSS respeita ignore efetivo e recusa Git redirecionado sem alterar índice', t => {
   const f = outputFixture(t), originalIndex = readFileSync(f.index), originalConfig = readFileSync(f.config);
@@ -345,7 +413,7 @@ test('verificação OSS detecta alteração dos bytes do índice com entradas in
   assert.throws(() => checkOriginals(root, { files: {}, git: before }, git), /Git indexSha256 alterado/);
 });
 
-test('exclusões locais humanas sobrevivem a acréscimos do kit', t => {
+test('exclusões locais não podem receber acréscimos nem alterações do kit', t => {
   const root = mkdtempSync(join(tmpdir(), 'agentdevkit-oss-exclude-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   mkdirSync(join(root, '.git/info'), { recursive: true }); writeFileSync(join(root, '.git/config'), 'config');
@@ -353,9 +421,26 @@ test('exclusões locais humanas sobrevivem a acréscimos do kit', t => {
   writeFileSync(path, original);
   const git = () => '', baseline = { files: {}, git: gitSnapshot(root, git), excludeOriginal: original.toString('base64') };
   writeFileSync(path, Buffer.concat([original, Buffer.from('# BEGIN AGENTDEVKIT LOCAL example\n# END AGENTDEVKIT LOCAL example\n')]));
+  assert.throws(() => checkOriginals(root, baseline, git), /Exclusões locais humanas foram alteradas/);
+  writeFileSync(path, original);
   assert.doesNotThrow(() => checkOriginals(root, baseline, git));
   writeFileSync(path, '# modified\n/private/\n');
   assert.throws(() => checkOriginals(root, baseline, git), /Exclusões locais humanas foram alteradas/);
+});
+
+test('snapshot OSS detecta alterações de modo dos arquivos internos Git', t => {
+  if (process.platform === 'win32') { t.skip('bits POSIX não comprovam ACL no Windows'); return; }
+  const root = mkdtempSync(join(tmpdir(), 'agentdevkit-oss-mode-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  mkdirSync(join(root, '.git/info'), { recursive: true });
+  for (const path of ['.git/config', '.git/index', '.git/info/exclude']) { writeFileSync(join(root, path), 'conteúdo\n'); chmodSync(join(root, path), 0o600); }
+  const git = () => '', baseline = { files: {}, git: gitSnapshot(root, git) };
+  for (const [path, field] of [['.git/config', 'configMode'], ['.git/index', 'indexMode'], ['.git/info/exclude', 'excludeMode']]) {
+    chmodSync(join(root, path), 0o644);
+    assert.throws(() => checkOriginals(root, baseline, git), new RegExp(`Git ${field} alterado`));
+    chmodSync(join(root, path), 0o600);
+  }
+  assert.doesNotThrow(() => checkOriginals(root, baseline, git));
 });
 
 test('leitura das exclusões recusa ancestral simbólico mesmo com conteúdo igual', t => {

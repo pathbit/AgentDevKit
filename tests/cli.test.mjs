@@ -10,7 +10,7 @@ import { spawnSync } from 'node:child_process';
 import { run } from '../bin/agentdevkit.mjs';
 import { resolveTarget } from '../src/install.mjs';
 import { packageInfo } from '../src/config.mjs';
-import { parseArgs } from '../src/cli.mjs';
+import { main as cliMain, parseArgs, print } from '../src/cli.mjs';
 
 const project = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const bin = join(project, 'bin/agentdevkit.mjs');
@@ -22,6 +22,24 @@ function fixture(t) {
   return root;
 }
 const put = (root, path, value) => { const file = join(root, path); mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, value); };
+
+test('conflitos aparecem na saída humana mesmo sem alterações planejadas', () => {
+  const conflicts = ['.claude/rules/a/RULE.md', 'linha\nextra', 'c', 'd', 'e', 'f'];
+  for (const [language, label] of [['pt', 'Conflitos'], ['en', 'Conflicts'], ['es', 'Conflictos']]) {
+    let human = '';
+    const result = { language, message: 'revisar', plan: [], conflicts, next: [] };
+    print(result, { json: false }, { write: value => { human += value; } });
+    assert.ok(human.includes(`${label}: 6.`));
+    assert.ok(human.includes(JSON.stringify(conflicts[0])));
+    assert.ok(human.includes(JSON.stringify(conflicts[1])));
+    assert.ok(!human.includes('linha\nextra'));
+    assert.ok(!human.includes(JSON.stringify(conflicts[5])));
+    assert.match(human, /--json/);
+    let json = '';
+    print(result, { json: true }, { write: value => { json += value; } });
+    assert.deepEqual(JSON.parse(json).conflicts, conflicts);
+  }
+});
 function cli(root, args, expected = 0) {
   const result = spawnSync(process.execPath, [bin, ...args, '--target', root, '--json'], { encoding: 'utf8', timeout: 180000 });
   assert.equal(result.status, expected, `agentdevkit ${args.join(' ')}: ${result.error?.stack || ''}\nsignal: ${result.signal || 'none'}\n${result.stdout || ''}${result.stderr || ''}`);
@@ -62,6 +80,45 @@ test('tools encaminha flags do processo filho sem mudar idioma ou destino da CLI
   const value = JSON.parse(result.stdout);
   assert.equal(value.command, 'tools'); assert.equal(value.language, 'pt');
   assert.equal(value.target, root); assert.deepEqual(JSON.parse(value.toolOutput), opaque);
+});
+
+for (const [language, wording] of [['pt', /pode ter deixado/i], ['en', /may have left/i], ['es', /puede haber dejado/i]]) for (const format of ['json', 'humano']) {
+  test(`falha de tools preserva saída e não recomenda nova mutação (${language}, ${format})`, t => {
+    const root = fixture(t);
+    put(root, '.pbai4devs/state/agentdevkit.json', JSON.stringify({ schemaVersion: 1, version: packageInfo.version, language, clients: ['codex'], files: {}, blocks: {} }));
+    put(root, '.pbai4devs/scripts/preparar-ferramentas/SCRIPT.mjs', 'import { writeFileSync } from "node:fs";\nwriteFileSync("tool-output.tmp", "parcial\\n");\nconsole.log("erro sintético da ferramenta");\nprocess.exit(17);\n');
+    put(root, '.gitignore', '# regra humana\n');
+    assert.equal(spawnSync('git', ['-C', root, 'add', '.gitignore']).status, 0);
+    const index = readFileSync(join(root, '.git/index')), ignore = readFileSync(join(root, '.gitignore'));
+    const args = ['--target', root, '--lang', language, ...(format === 'json' ? ['--json'] : []), 'tools', 'setup'];
+    const result = spawnSync(process.execPath, [bin, ...args], { encoding: 'utf8', timeout: 60000 });
+    assert.equal(result.status, 17, result.stdout + result.stderr);
+    assert.equal(readFileSync(join(root, 'tool-output.tmp'), 'utf8'), 'parcial\n');
+    assert.deepEqual(readFileSync(join(root, '.git/index')), index);
+    assert.deepEqual(readFileSync(join(root, '.gitignore')), ignore);
+    assert.match(result.stdout, /erro sintético da ferramenta/);
+    if (format === 'json') {
+      const value = JSON.parse(result.stdout);
+      assert.equal(value.ok, false); assert.equal(value.next.length, 1);
+      assert.equal(value.next[0].stage, 'revisao'); assert.equal(value.next[0].command, undefined);
+      assert.match(value.next[0].label, wording);
+    } else {
+      assert.match(result.stdout, wording);
+      assert.doesNotMatch(result.stdout, /^\s*>.*\b(?:init|update|sync|tools)\b/m);
+    }
+  });
+}
+
+test('falha de saída após instalação concluída orienta revisar o estado', { timeout: 120000 }, async t => {
+  const root = fixture(t); let output = '', writes = 0;
+  const writer = { isTTY: false, write: chunk => { if (++writes === 1) throw new Error('falha sintética de saída'); output += chunk; } };
+  const status = await cliMain(['init', '--target', root, '--agents', 'codex', '--lang', 'pt', '--yes', '--json'], { cwd: root, stdout: writer, stderr: writer, stdin: { isTTY: false } });
+  assert.notEqual(status, 0);
+  assert.equal(existsSync(join(root, '.pbai4devs/state/agentdevkit.json')), true);
+  const value = JSON.parse(output);
+  assert.equal(value.ok, false); assert.match(value.error.detail, /falha sintética de saída/);
+  assert.equal(value.next.length, 1); assert.equal(value.next[0].stage, 'revisao');
+  assert.equal(value.next[0].command, undefined); assert.match(value.next[0].label, /pode ter deixado/i);
 });
 
 test('help e version independem de cwd reservado, destino e estado do projeto', t => {
@@ -337,4 +394,21 @@ test('bootstrap automatico preserva argumentos e status sem instalar ferramentas
   let output = '';
   assert.equal(await run(['--json'], { nodeVersion: '22.0.0', ensureRuntime: async () => { throw new Error('offline'); }, stdout: { write: value => { output += value; } } }), 1);
   assert.equal(JSON.parse(output).ok, false); assert.ok(JSON.parse(output).next.length);
+});
+
+test('falha no bootstrap respeita idioma e separador de argumentos', async () => {
+  for (const [args, language, json] of [
+    [['init', '--target', 'en', '--lang', 'es', '--json'], 'es', true],
+    [['init', '--lang', 'en', '--lang', 'ES', '--json'], 'es', true],
+    [['lang', 'en', '--json'], 'en', true],
+    [['tools', 'run', '--intent', '--lang', 'en', '--json'], 'en', true],
+    [['lang', 'en', '--lang', 'es', '--help', '--json'], 'es', true],
+    [['tools', 'run', '--', '--lang', 'en', '--json'], 'pt', false],
+  ]) {
+    let output = '';
+    const status = await run(args, { nodeVersion: '22.0.0', ensureRuntime: async () => { throw new Error('offline'); }, stdout: { write: value => { output += value; } } });
+    assert.equal(status, 1);
+    if (json) assert.equal(JSON.parse(output).language, language);
+    else assert.match(output, /^Não foi possível preparar Node\.js 24\+\./);
+  }
 });

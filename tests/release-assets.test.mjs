@@ -1,12 +1,16 @@
 import test from 'node:test';
+import fs from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { gunzipSync } from 'node:zlib';
 import { npmExecutable } from '../scripts/release/assets.mjs';
+import { markVerified, runPipeline, portableProfiles, fullOnlyTests } from '../scripts/release/pipeline.mjs';
+import { devNull } from 'node:os';
 
 const project = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const version = '1.2.3';
@@ -187,7 +191,7 @@ test('falha do npm final limpa o staging e preserva as fontes', t => {
   assert.match(result.stderr, /pack-final-fixture/);
   assert.deepEqual(readFileSync(join(root, 'README.md')), before);
   assert.deepEqual(readdirSync(temporary), []);
-  assert.deepEqual(readdirSync(output), []);
+  assert.equal(existsSync(output), false);
 });
 
 test('notas incluem os dois destinos e respeitam a prioridade GitHub configurada', t => {
@@ -248,4 +252,157 @@ test('versão não estável e versões inconsistentes do lock não geram pacote'
     assert.match(result.stderr, scenario.message);
     assert.equal(existsSync(join(root, '.agent-tests/release')), false);
   });
+});
+
+// These fixtures exercise assembly and staging; a simulated full profile does not prove the test suites ran.
+test('build, marcação e repetição preservam saída e criam provas novas isoladas', t => {
+  const {root,output,temporary}=fixture(t),runner=mkdtempSync(join(project,'.agent-tests','runner-repeat-'));
+  t.after(()=>rmSync(runner,{recursive:true,force:true}));
+  const first=execute(root);assert.equal(first.status,0,first.stdout+first.stderr);
+  const snapshot=()=>Object.fromEntries(readdirSync(output).sort().map(n=>[n,readFileSync(join(output,n))]));
+  const sourceBefore=snapshot();
+  writeFileSync(join(runner,'agentdevkit-package'),'conteúdo humano');
+  const firstMark=markVerified(output,{RUNNER_TEMP:runner});
+  assert.deepEqual(snapshot(),sourceBefore);assert.equal(readFileSync(join(runner,'agentdevkit-package'),'utf8'),'conteúdo humano');
+  const again=execute(root);assert.equal(again.status,0,again.stdout+again.stderr);assert.deepEqual(snapshot(),sourceBefore);
+  const secondMark=markVerified(output,{RUNNER_TEMP:runner});
+  assert.notEqual(firstMark,secondMark);assert.deepEqual(snapshot(),sourceBefore);
+  for(const dir of [firstMark,secondMark]){
+    const manifest=JSON.parse(readFileSync(join(dir,'package-manifest.json')));
+    assert.equal(manifest.verification.status,'passed');assert.equal(manifest.verification.profile,'full');
+    assert.deepEqual(readFileSync(join(dir,manifest.file)),sourceBefore[manifest.file]);
+  }
+  assert.deepEqual(readdirSync(temporary),[]);
+});
+
+test('saída antiga marcada só é reutilizada se for idêntica fora de verification', t => {
+  const {root,output}=fixture(t),first=execute(root);assert.equal(first.status,0,first.stdout+first.stderr);
+  const file=join(output,'package-manifest.json'),manifest=JSON.parse(readFileSync(file));
+  manifest.verification={status:'passed',profile:'full',sourceCommit:manifest.sourceCommit,checkedAt:'2026-11-16T00:00:00.000Z'};
+  writeFileSync(file,JSON.stringify(manifest,null,2)+'\n');
+  if(process.platform!=='win32')chmodSync(output,0o755);
+  const before=readFileSync(file),result=execute(root);
+  assert.equal(result.status,0,result.stdout+result.stderr);
+  assert.deepEqual(readFileSync(file),before);
+  const runner=mkdtempSync(join(project,'.agent-tests','runner-legacy-'));
+  t.after(()=>rmSync(runner,{recursive:true,force:true}));
+  const staged=markVerified(output,{RUNNER_TEMP:runner});
+  assert.notEqual(JSON.parse(readFileSync(join(staged,'package-manifest.json'))).verification.checkedAt,manifest.verification.checkedAt);
+  assert.deepEqual(readFileSync(file),before);
+});
+
+test('saída anterior divergente é preservada em vez de reescrita', async t => {
+  for(const kind of ['archive','checksum','notes','extra','bad-verification','extra-verification','duplicate-key']) await t.test(kind,sub=>{
+    const {root,output,temporary}=fixture(sub), first=execute(root);assert.equal(first.status,0,first.stdout+first.stderr);
+    const manifestPath=join(output,'package-manifest.json');
+    if(kind==='archive')writeFileSync(join(output,'agentdevkit-'+version+'.tgz'),'tar humano');
+    if(kind==='checksum')writeFileSync(join(output,'SHA256SUMS'),'checksum humano');
+    if(kind==='notes')writeFileSync(join(output,'NOTES.txt'),'notas humanas');
+    if(kind==='extra')writeFileSync(join(output,'HUMANO.txt'),'arquivo humano');
+    if(['bad-verification','extra-verification','duplicate-key'].includes(kind)){
+      const value=JSON.parse(readFileSync(manifestPath));
+      value.verification={status:kind==='bad-verification'?'pending':'passed',profile:'full',sourceCommit:value.sourceCommit,checkedAt:'2026-11-16T00:00:00.000Z'};
+      if(kind==='extra-verification')value.verification.human='não perder';
+      let text=JSON.stringify(value,null,2)+'\n';
+      if(kind==='duplicate-key')text=text.replace('  "verification": {','  "verification": {},\n  "verification": {');
+      writeFileSync(manifestPath,text);
+    }
+    const names=readdirSync(output).sort(),before=Object.fromEntries(names.map(n=>[n,readFileSync(join(output,n))]));
+    const result=execute(root);assert.equal(result.status,1,result.stdout+result.stderr);assert.match(result.stderr,/Saída anterior divergente/);
+    assert.deepEqual(readdirSync(output).sort(),names);
+    for(const name of names)assert.deepEqual(readFileSync(join(output,name)),before[name],name);
+    assert.deepEqual(readdirSync(temporary),[]);
+  });
+});
+
+test('perfil completo simulado repete build e expõe caminho novo sem alterar índice ou saída', t => {
+  const {root,output}=fixture(t),runner=mkdtempSync(join(project,'.agent-tests','runner-full-'));
+  t.after(()=>rmSync(runner,{recursive:true,force:true}));
+  const tests=join(root,'tests');mkdirSync(tests);
+  for(const name of [...new Set([...Object.values(portableProfiles).flat(),...Object.keys(fullOnlyTests)])])writeFileSync(join(tests,name),'');
+  const policy='.pbai4devs/templates/clients/ADAPTERS.json';
+  mkdirSync(dirname(join(root,policy)),{recursive:true});cpSync(join(project,policy),join(root,policy));
+  const env={...Object.fromEntries(Object.entries(process.env).filter(([name])=>!/^GIT_|^NODE_OPTIONS$/i.test(name))),GIT_CONFIG_GLOBAL:devNull,GIT_CONFIG_NOSYSTEM:'1',GIT_TERMINAL_PROMPT:'0',GIT_OPTIONAL_LOCKS:'0',
+    RUNNER_TEMP:runner,GITHUB_OUTPUT:join(runner,'outputs'),npm_execpath:npmExecutable(),npm_config_offline:'true',npm_config_cache:join(root,'npm-cache')};
+  writeFileSync(env.GITHUB_OUTPUT,'');
+  for(const args of [['init','--quiet'],['add','--','README.md']]){
+    const r=spawnSync('git',args,{cwd:root,env,encoding:'utf8'});assert.equal(r.status,0,r.stderr);
+  }
+  const indexPath=join(root,'.git/index'),indexBefore=readFileSync(indexPath),calls=[];
+  const stub=(_root,args)=>calls.push(args);
+  runPipeline('full',{root,env,run:stub,artifactOutput:env.GITHUB_OUTPUT});
+  const saved=Object.fromEntries(readdirSync(output).map(n=>[n,readFileSync(join(output,n))]));
+  runPipeline('full',{root,env,run:stub,artifactOutput:env.GITHUB_OUTPUT});
+  const destinations=readFileSync(env.GITHUB_OUTPUT,'utf8').trim().split('\n').map(line=>line.replace(/^artifact_path=/,''));
+  assert.equal(destinations.length,2);assert.notEqual(destinations[0],destinations[1]);
+  for(const dir of destinations)assert.equal(JSON.parse(readFileSync(join(dir,'package-manifest.json'))).verification.profile,'full');
+  assert.ok(calls.some(args=>args.includes('tests/distribution.test.mjs')));
+  const outputBefore=readFileSync(env.GITHUB_OUTPUT);
+  runPipeline('full',{root,env,run:stub});
+  assert.deepEqual(readFileSync(env.GITHUB_OUTPUT),outputBefore,'GITHUB_OUTPUT ignorado sem opção explícita');
+  const human=join(root,'README.md'),humanBefore=readFileSync(human), rootBefore=readdirSync(root).sort();
+  assert.throws(()=>runPipeline('full',{root,env:{...env,RUNNER_TEMP:root},run:stub,artifactOutput:human}),/Saída do workflow inválida/);
+  assert.deepEqual(readFileSync(human),humanBefore);assert.deepEqual(readdirSync(root).sort(),rootBefore);
+  const append=fs.appendFileSync;let appendError;
+  fs.appendFileSync=(path,...args)=>{if(String(path)===env.GITHUB_OUTPUT)throw Object.assign(new Error('falha sintética'),{code:'EACCES'});return append(path,...args)};
+  syncBuiltinESMExports();
+  try {runPipeline('full',{root,env,run:stub,artifactOutput:env.GITHUB_OUTPUT})}catch(error){appendError=error}
+  finally {fs.appendFileSync=append;syncBuiltinESMExports();}
+  assert.equal(appendError?.cause?.code,'EACCES');assert.equal(appendError?.preservedPaths?.length,1);
+  assert.ok(appendError.message.includes(appendError.preservedPaths[0]));
+  assert.ok(existsSync(join(appendError.preservedPaths[0],'package-manifest.json')));
+  for(const [name,bytes] of Object.entries(saved))assert.deepEqual(readFileSync(join(output,name)),bytes,name);
+  assert.deepEqual(readFileSync(indexPath),indexBefore);
+});
+
+test('links em pastas de release são recusados sem escrever no destino', async t => {
+  for(const item of ['.agent-tests','.agent-tests/release']) await t.test(item,sub=>{
+    const {root,temporary}=fixture(sub), external=mkdtempSync(join(project,'.agent-tests','release-external-'));
+    sub.after(()=>rmSync(external,{recursive:true,force:true}));
+    writeFileSync(join(external,'humano.txt'),'conteúdo humano');
+    if(item.includes('/'))mkdirSync(join(root,'.agent-tests'));
+    try{symlinkSync(external,join(root,item),'dir')}catch(error){
+      if(['EPERM','EACCES','ENOSYS'].includes(error.code))return sub.skip('links indisponíveis');
+      throw error;
+    }
+    const result=execute(root);
+    assert.equal(result.status,1,result.stdout+result.stderr);assert.match(result.stderr,/Diretório de release inválido/);
+    assert.deepEqual(readdirSync(external),['humano.txt']);
+    assert.equal(readFileSync(join(external,'humano.txt'),'utf8'),'conteúdo humano');
+    assert.deepEqual(readdirSync(temporary),[]);
+  });
+});
+
+test('erro de npm e falha de limpeza preservam as duas causas e informam áreas temporárias', t => {
+  const {root,output,temporary}=fixture(t),hook=join(root,'cleanup-failure.mjs');
+  writeFileSync(hook,[
+    "import fs from 'node:fs'; import {syncBuiltinESMExports} from 'node:module';",
+    "if(process.argv[1]?.endsWith('assets.mjs')){const original=fs.rmSync;fs.rmSync=(p,...a)=>String(p).includes('agentdevkit-package-')?(()=>{throw Object.assign(new Error('cleanup-fixture'),{code:'EACCES'})})():original(p,...a);syncBuiltinESMExports()}",
+    "if(process.argv[1]?.endsWith('npm-cli.js')&&process.argv[2]==='pack'&&!process.argv.includes('--dry-run')){process.stderr.write('pack-final-fixture');process.exit(77)}"
+  ].join('\n'));
+  const before=readFileSync(join(root,'README.md'));
+  const result=execute(root,{env:{NODE_OPTIONS:'--import='+JSON.stringify(pathToFileURL(hook).href)}});
+  assert.equal(result.status,1,result.stdout+result.stderr);
+  assert.match(result.stderr,/pack-final-fixture/);assert.match(result.stderr,/Falha ao limpar área temporária/);assert.match(result.stderr,/EACCES/);
+  const roots=readdirSync(temporary).filter(n=>n.startsWith('agentdevkit-package-'));
+  assert.equal(roots.length,1);assert.ok(result.stderr.includes(join(temporary,roots[0])));
+  const release=join(root,'.agent-tests/release'),stages=readdirSync(release).filter(n=>n.startsWith('.release-staging-'));
+  assert.equal(stages.length,1);assert.ok(result.stderr.includes(join(release,stages[0])));
+  assert.equal(existsSync(output),false);assert.deepEqual(readFileSync(join(root,'README.md')),before);
+});
+
+test('falha ao copiar verificação e falha de limpeza mantêm causa e caminho da cópia', t => {
+  const {root,output}=fixture(t),first=execute(root);assert.equal(first.status,0,first.stdout+first.stderr);
+  const runner=mkdtempSync(join(project,'.agent-tests','runner-cleanup-'));
+  t.after(()=>rmSync(runner,{recursive:true,force:true}));
+  const before=readFileSync(join(output,'package-manifest.json')),originalWrite=fs.writeFileSync,originalRemove=fs.rmSync;
+  fs.writeFileSync=(path,...args)=>{if(String(path).includes('agentdevkit-package-'))throw Object.assign(new Error('cópia sintética'),{code:'EACCES'});return originalWrite(path,...args)};
+  fs.rmSync=(path,...args)=>{if(String(path).includes('agentdevkit-package-'))throw Object.assign(new Error('limpeza sintética'),{code:'EBUSY'});return originalRemove(path,...args)};
+  syncBuiltinESMExports();let failure;
+  try{markVerified(output,{RUNNER_TEMP:runner})}catch(error){failure=error}
+  finally{fs.writeFileSync=originalWrite;fs.rmSync=originalRemove;syncBuiltinESMExports()}
+  assert.equal(failure?.cause?.code,'EACCES');assert.equal(failure?.errors?.[1]?.code,'EBUSY');
+  assert.equal(failure?.preservedPaths?.length,1);assert.ok(failure.message.includes(failure.preservedPaths[0]));
+  assert.equal(existsSync(failure.preservedPaths[0]),true);
+  assert.deepEqual(readFileSync(join(output,'package-manifest.json')),before);
 });

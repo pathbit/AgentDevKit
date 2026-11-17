@@ -87,12 +87,14 @@ test('check Git distingue fontes de saídas e não gera arquivos no checkout', t
 });
 
 test('perfis portáteis cobrem cada suíte uma vez e o comando local executa todos', () => {
-  assert.deepEqual(portableProfiles['portable-selection'], ['client-selection.test.mjs']);
+  assert.deepEqual(portableProfiles['portable-selection'], ['client-selection.test.mjs', 'exact-native-cli.test.mjs', 'agent-sidecar-sync.test.mjs', 'stale-agent-reference.test.mjs', 'overlay-stale-plan.test.mjs', 'codex-derived-reference.test.mjs', 'stage-preview-combined.test.mjs', 'removed-file-diagnostic.test.mjs', 'removed-file-protection.test.mjs', 'removed-overlay.test.mjs', 'migration-tombstone.test.mjs']);
   assert.deepEqual(portableProfiles['portable-selection-codex'], ['client-selection-obstructions-codex.test.mjs']);
   assert.deepEqual(portableProfiles['portable-selection-all'], ['client-selection-obstructions-all.test.mjs']);
-  assert.deepEqual(portableProfiles['portable-projects'], ['client-ignore.test.mjs', 'git-configuration-preservation.test.mjs', 'native-coexistence.test.mjs', 'oss-preservation.test.mjs', 'project-matrix.test.mjs']);
-  assert.deepEqual(portableProfiles['portable-migration'], ['state-migration.test.mjs', 'preservation-lifecycle.test.mjs']);
-  const expected = ['adapters.test.mjs', 'cli.test.mjs', 'client-selection.test.mjs', 'client-selection-obstructions-codex.test.mjs', 'client-selection-obstructions-all.test.mjs', 'client-ignore.test.mjs', 'git-configuration-preservation.test.mjs', 'development-ecosystem.test.mjs', 'documentation-compatibility.test.mjs', 'github-packages.test.mjs', 'native-coexistence.test.mjs', 'next.test.mjs', 'managed-content.test.mjs', 'managed-content-helper.test.mjs', 'managed-toml.test.mjs', 'managed-preservation.test.mjs', 'security-ecosystem.test.mjs', 'source-layout.test.mjs', 'state-migration.test.mjs', 'preservation-lifecycle.test.mjs', 'file-modes.test.mjs', 'oss-preservation.test.mjs', 'project-matrix.test.mjs', 'release-pipeline.test.mjs', 'release-resilience.test.mjs', 'resource-coverage.test.mjs'].sort();
+  assert.deepEqual(portableProfiles['portable-projects'], ['client-ignore.test.mjs', 'callback-boundary-isolated.test.mjs', 'diagnostic-collector-safe.test.mjs', 'cleanup-failure.test.mjs', 'concurrent-recovery.test.mjs', 'git-configuration-preservation.test.mjs', 'git-legacy-exclude.test.mjs', 'git-locale.test.mjs', 'hardlink-unknown.test.mjs', 'hardlink-plan.test.mjs', 'makefile-guards.test.mjs', 'native-macos-metadata-gate.test.mjs', 'native-metadata.test.mjs', 'native-coexistence.test.mjs', 'oss-preservation.test.mjs', 'project-matrix.test.mjs', 'matrix-audit.test.mjs', 'pre-sync-stage-diagnostics.test.mjs', 'recovery-backup.test.mjs', 'recovery-diagnostics.test.mjs', 'recovery-effects.test.mjs', 'recovery-exclusive.test.mjs', 'recovery-plan-coverage.test.mjs', 'recovery-records.test.mjs', 'recovery-store.test.mjs', 'sync-backup-failure.test.mjs', 'sync-remove-failure.test.mjs', 'sync-logical-order.test.mjs', 'mac-acl-protection.test.mjs', 'mac-acl-plan.test.mjs', 'mac-backup-acl.test.mjs', 'mac-xattr-probe.test.mjs', 'mac-xattr-removal.test.mjs', 'xattr-stage-diagnostics.test.mjs', 'cli-special-mode.test.mjs', 'sync-special-mode.test.mjs', 'sync-temporary-privacy.test.mjs', 'temporary-preservation.test.mjs']);
+  assert.deepEqual(portableProfiles['portable-migration'], ['cli-line-endings.test.mjs', 'linux-inplace-metadata-experiment.test.mjs', 'linux-xattr-probe.test.mjs', 'state-migration.test.mjs', 'state-special-mode.test.mjs', 'state-directory-xattr.test.mjs', 'preservation-lifecycle.test.mjs']);
+  const expected = ['adapters.test.mjs', 'claude-agent-evidence.test.mjs', 'claude-evidence.test.mjs', 'claude-legacy-exact.test.mjs', 'claude-legacy-exact-flow.test.mjs', 'claude-rule-cli.test.mjs', 'claude-rule-scope.test.mjs', 'claude-rule-scope-integration.test.mjs', 'cli.test.mjs', 'client-selection.test.mjs', 'client-selection-obstructions-codex.test.mjs', 'client-selection-obstructions-all.test.mjs', 'client-ignore.test.mjs', 'callback-boundary-isolated.test.mjs', 'diagnostic-collector-safe.test.mjs', 'cleanup-failure.test.mjs', 'concurrent-recovery.test.mjs', 'compose-package-smoke.test.mjs', 'copilot-evidence.test.mjs', 'copilot-fleet-evidence.test.mjs', 'git-configuration-preservation.test.mjs', 'git-legacy-exclude.test.mjs', 'git-locale.test.mjs', 'hardlink-unknown.test.mjs', 'hardlink-plan.test.mjs', 'makefile-guards.test.mjs', 'development-ecosystem.test.mjs', 'documentation-compatibility.test.mjs', 'github-packages.test.mjs', 'native-client-matrix.test.mjs', 'native-macos-metadata-gate.test.mjs', 'native-metadata.test.mjs', 'native-coexistence.test.mjs', 'next.test.mjs', 'managed-content.test.mjs', 'managed-content-helper.test.mjs', 'managed-toml.test.mjs', 'toml-prompt-equivalence.test.mjs', 'toml-composite.test.mjs', 'toml-human-after.test.mjs', 'toml-marker-context.test.mjs', 'gemini-command-fixture.test.mjs', 'gemini-unowned-block.test.mjs', 'gemini-derived-command.test.mjs', 'gemini-derived-diagnostic.test.mjs', 'gemini-toml-staged-lifecycle.test.mjs', 'gemini-reference-body.test.mjs', 'gemini-large-integer.test.mjs', 'gemini-xattr-preservation.test.mjs', 'sync-skill-collision.test.mjs', 'scoped-rule-clients.test.mjs', 'gemini-toml-lifecycle-reader.test.mjs', 'managed-preservation.test.mjs', 'security-ecosystem.test.mjs', 'source-layout.test.mjs', 'sync-logical-order.test.mjs', 'mac-acl-protection.test.mjs', 'mac-acl-plan.test.mjs', 'mac-backup-acl.test.mjs', 'mac-xattr-probe.test.mjs', 'mac-xattr-removal.test.mjs', 'xattr-stage-diagnostics.test.mjs', 'cli-special-mode.test.mjs', 'sync-special-mode.test.mjs', 'sync-temporary-privacy.test.mjs', 'state-migration.test.mjs', 'preservation-lifecycle.test.mjs', 'file-modes.test.mjs', 'oss-preservation.test.mjs', 'project-matrix.test.mjs', 'matrix-audit.test.mjs', 'pre-sync-stage-diagnostics.test.mjs', 'recovery-backup.test.mjs', 'recovery-diagnostics.test.mjs', 'recovery-effects.test.mjs', 'recovery-exclusive.test.mjs', 'recovery-plan-coverage.test.mjs', 'recovery-records.test.mjs', 'recovery-store.test.mjs', 'sync-backup-failure.test.mjs', 'sync-remove-failure.test.mjs', 'temporary-preservation.test.mjs', 'release-pipeline.test.mjs', 'release-resilience.test.mjs', 'resource-coverage.test.mjs'].sort();
+  expected.push('cli-line-endings.test.mjs', 'linux-inplace-metadata-experiment.test.mjs', 'linux-xattr-probe.test.mjs', 'json-diagnostics.test.mjs', 'exact-native-cli.test.mjs', 'exact-native-sync.test.mjs', 'agent-sidecar-sync.test.mjs', 'stale-agent-reference.test.mjs', 'overlay-stale-plan.test.mjs', 'codex-derived-reference.test.mjs', 'stage-preview-combined.test.mjs', 'removed-file-diagnostic.test.mjs', 'removed-file-protection.test.mjs', 'removed-overlay.test.mjs', 'migration-tombstone.test.mjs', 'runtime-minimum.test.mjs', 'state-special-mode.test.mjs', 'state-directory-xattr.test.mjs');
+  expected.sort();
   const combined = Object.values(portableProfiles).flat();
   assert.equal(new Set(combined).size, combined.length);
   assert.deepEqual(combined.toSorted(), expected);
@@ -102,8 +104,9 @@ test('perfis portáteis cobrem cada suíte uma vez e o comando local executa tod
     const group = [];
     runPipeline(profile, { root, run(_root, args) { group.push(args); } });
     assert.deepEqual(group[0], ['--test', '--test-concurrency=2', ...files.map(file => `tests/${file}`)]);
-    assert.equal(group.length, profile === 'portable-resources' ? 9 : 1);
+    assert.equal(group.length, profile === 'portable-resources' ? 10 : 1);
     if (profile === 'portable-resources') assert.ok(group.some(args => args.includes('.pbai4devs/scripts/revisar-entrega/tests/TEST.mjs')));
+    if (profile === 'portable-resources') assert.ok(group.some(args => args.includes('.pbai4devs/scripts/reunir-contexto-spec/tests/TEST.mjs')));
     calls.push(...group);
   }
   const individual = calls.splice(0);
@@ -127,21 +130,50 @@ test('classificação exige justificar cada suíte e detecta ausências e duplic
   assert.throws(() => verifyPortableClassification(['a.test.mjs'], { profiles: { a: [] }, fullOnly: { 'a.test.mjs': '' } }), /justificativa/);
 });
 
-test('perfil completo isola a seleção e executa todas as demais suítes uma vez', () => {
+test('perfil completo executa recuperação primeiro e cada suíte uma vez', () => {
   const files = readdirSync(join(root, 'tests'));
   const groups = fullTestGroups(files);
-  assert.deepEqual(groups[0], ['client-selection.test.mjs', 'client-selection-obstructions-codex.test.mjs', 'client-selection-obstructions-all.test.mjs']);
+  assert.deepEqual(groups[0], ['concurrent-recovery.test.mjs']);
+  assert.deepEqual(groups[1], ['client-selection.test.mjs', 'client-selection-obstructions-codex.test.mjs', 'client-selection-obstructions-all.test.mjs']);
   const expected = files.filter(name => name.endsWith('.test.mjs') && name !== 'distribution.test.mjs').sort();
   assert.deepEqual(groups.flat().sort(), expected);
   assert.equal(new Set(groups.flat()).size, expected.length);
   assert.throws(() => fullTestGroups(files.filter(name => name !== 'client-selection.test.mjs')), /seleção ausente/);
-  for (const file of groups[0]) assert.throws(() => fullTestGroups(files.filter(name => name !== file)), /seleção ausente/);
-  const calls = [], failure = new Error('falha do segundo grupo');
-  assert.throws(() => runPipeline('full', { root, run(_root, args) {
-    calls.push(args);
+  for (const file of groups[1]) assert.throws(() => fullTestGroups(files.filter(name => name !== file)), /seleção ausente/);
+  assert.throws(() => fullTestGroups(files.filter(name => name !== 'concurrent-recovery.test.mjs')), /recuperação ausente/);
+  const calls = [], environments = [], failure = new Error('falha do segundo grupo');
+  assert.throws(() => runPipeline('full', { root, env: { ADK_STRICT_RECOVERY_TEST: '0', adk_strict_recovery_test: '0', ADK_STRICT_CLAUDE_SCOPE_TEST: '0', adk_strict_claude_scope_test: '0', NODE_OPTIONS: '--test-name-pattern=skip', node_options: 'ignored' }, run(_root, args, env) {
+    calls.push(args); environments.push(env);
     if (calls.length === 2) throw failure;
   } }), error => error === failure);
-  assert.deepEqual(calls, groups.map(group => ['--test', '--test-concurrency=4', ...group.map(file => `tests/${file}`)]));
+  assert.deepEqual(calls, groups.slice(0, 2).map(group => ['--test', '--test-concurrency=4', ...group.map(file => `tests/${file}`)]));
+  assert.ok(environments.every(env => env.ADK_STRICT_RECOVERY_TEST === '1'));
+  assert.ok(environments.every(env => env.ADK_STRICT_CLAUDE_SCOPE_TEST === '1'));
+  for (const name of ['ADK_STRICT_RECOVERY_TEST', 'ADK_STRICT_CLAUDE_SCOPE_TEST']) {
+    assert.ok(environments.every(env => Object.keys(env).filter(key => key.toUpperCase() === name).length === 1));
+  }
+  assert.ok(environments.every(env => !Object.keys(env).some(key => key.toUpperCase() === 'NODE_OPTIONS')));
+  const firstFailure = new Error('recuperação falhou'); let invoked = 0;
+  assert.throws(() => runPipeline('full', { root, run() { invoked++; throw firstFailure; } }), error => error === firstFailure);
+  assert.equal(invoked, 1);
+});
+
+test('perfil completo não aceita filtro herdado que oculte testes', t => {
+  const directory = fixture(t), file = join(directory, 'gate.test.mjs');
+  writeFileSync(file, "import test from 'node:test'; test('required gate', () => { throw Error('gate-executed'); });\n");
+  const stop = new Error('prova concluída'); let executed = false;
+  assert.throws(() => runPipeline('full', {
+    root, env: { ...process.env, NODE_OPTIONS: '--test-name-pattern=does-not-exist' },
+    run(_root, args, env) {
+      if (!args.includes('tests/concurrent-recovery.test.mjs')) return;
+      const childEnv = { ...env }; delete childEnv.NODE_TEST_CONTEXT;
+      const result = spawnSync(process.execPath, ['--test', file], { cwd: root, env: childEnv, encoding: 'utf8', shell: false });
+      assert.equal(result.status, 1, result.stderr);
+      assert.match(result.stdout + result.stderr, /gate-executed/);
+      executed = true; throw stop;
+    },
+  }), error => error === stop);
+  assert.equal(executed, true);
 });
 
 test('as suítes de obstrução cobrem as duas seleções e os cinco casos', () => {
@@ -156,15 +188,36 @@ test('matriz roda cada grupo portátil exatamente uma vez em cada SO e falhas bl
   const workflow = readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8');
   assert.match(workflow, /fail-fast:\s*false/);
   assert.doesNotMatch(workflow, /continue-on-error:/);
-  const jobTimeout = Number(workflow.match(/timeout-minutes:\s*(\d+)/)?.[1]);
+  const verifyBody = workflow.split(/^  verify:\s*$/m)[1]?.split(/^  [\w-]+:\s*$/m)[0];
+  assert.ok(verifyBody, 'Job verify ausente');
+  const jobTimeout = Number(verifyBody.match(/^    timeout-minutes:\s*(\d+)\s*$/m)?.[1]);
   assert.ok(nodeProcessTimeoutMs >= 20 * 60 * 1000);
   assert.ok(jobTimeout * 60 * 1000 >= nodeProcessTimeoutMs + 5 * 60 * 1000);
-  const rows = [...workflow.matchAll(/- os:\s*(\S+)\s+node:\s*(\d+)\s+profile:\s*(\S+)/g)].map(match => ({ os: match[1], node: match[2], profile: match[3] }));
+  const minimumBody = workflow.split(/^  minimum-runtime:\s*$/m)[1]?.split(/^  [\w-]+:\s*$/m)[0];
+  assert.ok(minimumBody, 'Job de runtime mínimo ausente');
+  const minimumSystems = [...minimumBody.matchAll(/- os:\s*(\S+)/g)].map(match => match[1]).sort();
+  assert.deepEqual(minimumSystems, ['macos-15-intel', 'ubuntu-latest', 'windows-latest']);
+  assert.deepEqual([...minimumBody.matchAll(/node-version:\s*([\d.]+)/g)].map(match => match[1]), ['24.13.0', '18.20.8']);
+  assert.match(minimumBody, /ADK_TEST_NODE24=/);
+  assert.match(minimumBody, /ADK_EXPECT_NODE18:\s*'1'/);
+  assert.match(minimumBody, /node --test tests\/runtime-minimum\.test\.mjs/);
+  const rows = [...verifyBody.matchAll(/- os:\s*(\S+)\s+node:\s*(\d+)\s+profile:\s*(\S+)/g)].map(match => ({ os: match[1], node: match[2], profile: match[3] }));
   for (const os of ['windows-latest', 'macos-15-intel']) {
-    assert.deepEqual(rows.filter(row => row.os === os && row.node === '24').map(row => row.profile).sort(), Object.keys(portableProfiles).sort());
+    const expectedProfiles = [...Object.keys(portableProfiles), ...(os === 'macos-15-intel' ? ['native-macos-metadata'] : [])].sort();
+    assert.deepEqual(rows.filter(row => row.os === os && row.node === '24').map(row => row.profile).sort(), expectedProfiles);
   }
   assert.ok(rows.some(row => row.os === 'ubuntu-latest' && row.node === '24' && row.profile === 'full'));
   assert.match(workflow, /if:\s*matrix\.profile == 'full'/);
+  const metadataStep = verifyBody.split(/^      - name: Install Linux metadata test tools\r?$/m)[1]?.split(/^      - /m)[0];
+  assert.ok(metadataStep, 'Instalação das ferramentas de metadados ausente');
+  assert.match(metadataStep, /^        if:\s*runner\.os == 'Linux' && matrix\.profile == 'full'\s*$/m);
+  assert.match(metadataStep, /^          sudo apt-get install -y attr acl\s*$/m);
+  const verifyStep = verifyBody.split(/^      - name: Verify the selected profile\r?$/m)[1]?.split(/^      - /m)[0];
+  assert.ok(verifyStep, 'Passo de verificação ausente');
+  assert.match(verifyStep, /^        env:\s*$/m);
+  assert.match(verifyStep, /^          NODE_OPTIONS:\s*''\s*$/m);
+  assert.match(verifyStep, /^          ADK_REQUIRE_LINUX_XATTR:\s*\$\{\{\s*runner\.os == 'Linux' && matrix\.profile == 'full' && '1' \|\| '0'\s*\}\}\s*$/m);
+  assert.match(verifyStep, /^        run:\s*node scripts\/release\/pipeline\.mjs \$\{\{ matrix\.profile \}\} --github-output\s*$/m);
   for (const profile of ['portable', ...Object.keys(portableProfiles)]) {
     const calls = [];
     const failure = new Error('falha real da suíte');
@@ -305,12 +358,16 @@ test('falha no upload mantém draft e não publica parcialmente', async t => {
 });
 
 test('staging não reempacota; pacote alterado é recusado antes de marcar aprovação', t => {
-  const directory = fixture(t);
-  const staged = markVerified(directory, { RUNNER_TEMP: directory });
+  const directory = fixture(t), runner = mkdtempSync(join(root, '.agent-tests', 'runner-test-'));
+  t.after(() => rmSync(runner, { recursive: true, force: true }));
+  const sourceBefore = readFileSync(join(directory, 'package-manifest.json'));
+  const staged = markVerified(directory, { RUNNER_TEMP: runner });
+  assert.deepEqual(readFileSync(join(directory, 'package-manifest.json')), sourceBefore);
   assert.deepEqual(readFileSync(join(staged, manifest().file)), readFileSync(join(directory, manifest().file)));
   assert.equal(JSON.parse(readFileSync(join(staged, 'package-manifest.json'))).verification.profile, 'full');
+  assert.doesNotThrow(() => verifyDistribution(staged, resolution));
   writeFileSync(join(directory, manifest().file), 'tampered');
-  assert.throws(() => markVerified(directory, { RUNNER_TEMP: directory }), /mudou/);
+  assert.throws(() => markVerified(directory, { RUNNER_TEMP: runner }), /mudou/);
 });
 
 test('cliente HTTP limita o token aos hosts oficiais e propaga falhas', async () => {
@@ -522,4 +579,11 @@ test('workflow real cria tag somente depois do CI concluído e chama release sem
   assert.match(job, /actions:\s*write/);
   assert.match(job, /node scripts\/release\/auto-tag\.mjs/);
   assert.doesNotMatch(job, /gh run watch|workflow.*wait/);
+});
+
+test('CI envia artefato da execução pelo caminho exclusivo e opção explícita', () => {
+  const workflow=readFileSync(join(root,'.github/workflows/ci.yml'),'utf8');
+  assert.match(workflow,/node scripts\/release\/pipeline\.mjs \$\{\{ matrix\.profile \}\} --github-output/);
+  assert.match(workflow,/id: verify/);
+  assert.match(workflow,/path: \$\{\{ steps\.verify\.outputs\.artifact_path \}\}/);
 });

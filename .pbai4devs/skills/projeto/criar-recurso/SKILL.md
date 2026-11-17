@@ -19,6 +19,7 @@ Para os demais tipos, esclareça finalidade, público, saída e dúvidas que afe
 as decisões. Crie só o necessário: `.pbai4devs/<tipo>/<nome>/<TIPO>.md` para
 recursos dos agentes; `.pbai4devs/templates/<nome>/TEMPLATE.md` para modelos;
 documentos reais no destino acordado, somente quando o projeto começar.
+Em cada Markdown novo, inclusive modelos, inclua frontmatter YAML adequado e H1.
 Scripts e configurações usam seu formato próprio na mesma organização por nome.
 Scripts de suporte seguem `executar-script`: escreva `.mjs` para Node.js 24+,
 reutilizando o código comum, sem variantes por sistema operacional.

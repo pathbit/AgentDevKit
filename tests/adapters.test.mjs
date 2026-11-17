@@ -1,8 +1,10 @@
 import '../.pbai4devs/scripts/lib/test-git-environment.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { spawnSync } from 'node:child_process';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { adapters, adapterRoots, availableClients, normalizeClients, resolveAdapters, adapterManifest, writeAdapterManifest } from '../src/adapters/index.mjs';
 import { synchronize } from '../.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs';
@@ -10,10 +12,15 @@ import { synchronize } from '../.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mj
 const project = fileURLToPath(new URL('..', import.meta.url));
 const write = (root, file, text) => { mkdirSync(dirname(join(root, file)), { recursive: true }); writeFileSync(join(root, file), text); };
 const read = (root, file) => readFileSync(join(root, file), 'utf8');
-function fixture(t) {
-  mkdirSync(join(project, '.agent-tests'), { recursive: true });
-  const root = mkdtempSync(join(project, '.agent-tests/adapters-'));
+function fixture(t, { gitRepository = true } = {}) {
+  const root = mkdtempSync(join(realpathSync(tmpdir()), 'adapters-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
+  if (gitRepository) {
+    const git = spawnSync('git', ['init', '--quiet', '--template=', root], { encoding: 'utf8' });
+    assert.equal(git.error, undefined);
+    assert.equal(git.signal, null);
+    assert.equal(git.status, 0, git.stderr);
+  }
   write(root, '.pbai4devs/skills/projeto/example/SKILL.md', '---\nname: example\ndescription: Exemplo.\n---\n\n# Exemplo\n');
   write(root, '.pbai4devs/commands/projeto/check/COMMAND.md', '---\ndescription: Checagem.\n---\n\n# Checagem\n');
   write(root, '.pbai4devs/rules/projeto/style/RULE.md', '---\ntrigger: always_on\ndescription: Estilo.\n---\n\n# Estilo\n');
@@ -25,6 +32,18 @@ function fixture(t) {
   write(root, '.pbai4devs/templates/gitignore/clients.json', '{".agents":{"allow":["skills.json","rules.json","agents.json"]}}\n');
   return root;
 }
+
+test('sincroniza seleção representativa em projeto sem repositório Git ancestral', t => {
+  const root = fixture(t, { gitRepository: false });
+  for (let folder = root; ; folder = dirname(folder)) {
+    if (existsSync(join(folder, '.git'))) return t.skip('diretório temporário dentro de um repositório');
+    if (dirname(folder) === folder) break;
+  }
+  writeAdapterManifest(root, { clients: 'claude' });
+  assert.equal(synchronize({ localIgnores: false, generateEntrypoints: false, root, output() {} }).exitCode, 0);
+  assert.ok(existsSync(join(root, '.claude/skills/example/SKILL.md')));
+  assert.equal(synchronize({ localIgnores: false, generateEntrypoints: false, root, check: true, output() {} }).exitCode, 0);
+});
 
 test('writer e deterministico e nao executa a sincronizacao', t => {
   const root = fixture(t);
@@ -63,6 +82,34 @@ test('clientes recebem grupos e excecoes nativas pesquisadas', t => {
   assert.equal(synchronize({ localIgnores: false, generateEntrypoints: false, root, check: true, output() {} }).exitCode, 0);
 });
 
+test('regra Git no Cursor usa relevância e mantém bytes do índice da fixture', t => {
+  const root = fixture(t);
+  const rule = '.pbai4devs/rules/git/RULE.md', metadata = '.pbai4devs/rules/git/cursor.yaml';
+  write(root, rule, read(project, rule));
+  write(root, metadata, read(project, metadata));
+  write(root, 'humano.txt', 'conteúdo preparado\n');
+  const git = spawnSync('git', ['-C', root, 'add', 'humano.txt'], { encoding: 'utf8' });
+  assert.equal(git.status, 0, git.stderr);
+  const index = readFileSync(join(root, '.git/index'));
+  writeAdapterManifest(root, { clients: 'cursor' });
+  assert.equal(synchronize({ localIgnores: false, generateEntrypoints: false, root, output() {} }).exitCode, 0);
+  const source = read(root, rule), generated = read(root, '.cursor/rules/git.mdc');
+  assert.match(source, /^trigger: model_decision$/m);
+  assert.match(generated, /^description: Regras ao consultar, preparar, integrar ou publicar alterações Git, incluindo índice e autoria\.$/m);
+  assert.match(generated, /^alwaysApply: false$/m);
+  assert.doesNotMatch(generated, /^globs:/m);
+  const link = generated.match(/Leia e siga \[origem\]\(([^)]+)\)\./);
+  assert.ok(link);
+  assert.equal(resolve(dirname(join(root, '.cursor/rules/git.mdc')), link[1]), join(root, rule));
+  assert.match(source, /Autor e committer devem ser o usuário, nunca um agente/);
+  assert.match(source, /não adicione coautoria/);
+  assert.match(source, /não execute a consulta e informe a limitação/);
+  assert.match(source, /Se a identidade do usuário não estiver clara, pergunte/);
+  assert.match(source, /Não altere a\s+configuração ou a assinatura criptográfica automaticamente/);
+  assert.match(source, /não reescreva\s+autores humanos existentes/);
+  assert.deepEqual(readFileSync(join(root, '.git/index')), index);
+});
+
 test('revisor OpenCode gerado bloqueia edição, shell e delegação com permissões V2', t => {
   const root = fixture(t);
   const sidecar = '.pbai4devs/agents/revisor/opencode.yaml';
@@ -79,6 +126,27 @@ test('revisor OpenCode gerado bloqueia edição, shell e delegação com permiss
     assert.match(frontmatter[1], new RegExp(`^  - action: ${action}\\r?\\n    resource: ["']\\*["']\\r?\\n    effect: deny$`, 'm'));
   }
   assert.ok(generated.includes('.pbai4devs/agents/revisor/AGENT.md'));
+});
+
+test('implementador Claude declara preload da skill e mantém apontamentos para as fontes', t => {
+  const root = fixture(t);
+  const agent = '.pbai4devs/agents/implementador/AGENT.md';
+  const metadata = '.pbai4devs/agents/implementador/claude.yaml';
+  const skill = '.pbai4devs/skills/specs/implementar-spec/SKILL.md';
+  for (const file of [agent, metadata, skill]) write(root, file, read(project, file));
+  writeAdapterManifest(root, { clients: 'claude' });
+  assert.equal(synchronize({ localIgnores: false, generateEntrypoints: false, root, output() {} }).exitCode, 0);
+  const generated = read(root, '.claude/agents/implementador.md');
+  assert.match(generated, /^skills: \[implementar-spec\]$/m);
+  assert.ok(generated.includes(agent));
+  const generatedSkill = read(root, '.claude/skills/implementar-spec/SKILL.md');
+  assert.ok(generatedSkill.includes(skill));
+  for (const wrapper of [generated, generatedSkill]) {
+    const body = wrapper.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, '')
+      .replace(/^# .+$/m, '').replace(/^<!--.*-->$/gm, '').trim();
+    assert.match(body, /^Leia e siga \[origem\]\([^\n]+\)\.$/);
+  }
+  assert.equal(synchronize({ localIgnores: false, generateEntrypoints: false, root, check: true, output() {} }).exitCode, 0);
 });
 
 test('cada excecao de layout tem motivo e fontes oficiais', () => {
@@ -200,11 +268,12 @@ test('selecao invalida falha antes de alterar manifesto ou criar pastas', t => {
   const root = fixture(t);
   writeAdapterManifest(root, { clients: 'claude' });
   const original = read(root, '.pbai4devs/espelhos.conf');
+  const entries = readdirSync(root);
   for (const clients of [null, {}, [], '', ' ', ',', 'missing', ['all', 'codex'], ['vscode', 'all'], ['claude', 1]]) {
     assert.throws(() => normalizeClients(clients));
     assert.throws(() => writeAdapterManifest(root, { clients }));
     assert.equal(read(root, '.pbai4devs/espelhos.conf'), original);
-    assert.deepEqual(readdirSync(root), ['.pbai4devs']);
+    assert.deepEqual(readdirSync(root), entries);
   }
 });
 

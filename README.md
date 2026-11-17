@@ -32,6 +32,9 @@ Linux. Na pasta do seu projeto, instale pelo **npm público**, sem login:
 npx @pathbit/agentdevkit init
 ```
 
+Para pnpm, Yarn ou Bun, veja as alternativas no
+[guia de instalação](docs/guides/installation.md).
+
 Ou use **GitHub Packages**, após [autenticar no GitHub][github-install]:
 
 ```console

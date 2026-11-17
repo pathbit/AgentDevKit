@@ -8,9 +8,30 @@ import { ensureRuntime, environmentWithNode } from '../.pbai4devs/scripts/prepar
 const file = fileURLToPath(import.meta.url);
 export async function run(argv = process.argv.slice(2), options = {}) {
   const version = options.nodeVersion || process.versions.node;
-  const language = argv.includes('en') ? 'en' : argv.includes('es') ? 'es' : 'pt';
+  const separator = argv.indexOf('--'), globalArgs = separator < 0 ? argv : argv.slice(0, separator);
+  let selectedLanguage = '', command = '', languageArgument = '', terminalOption = false;
+  for (let index = 0; index < globalArgs.length; index++) {
+    const arg = globalArgs[index];
+    if (arg === '--lang') selectedLanguage = globalArgs[++index] || '';
+    else if (['--target', '--agents', '--clients'].includes(arg) || arg === '--intent' && command !== 'tools') index++;
+    else if (['--help', '-h', '--version', '-v'].includes(arg) && command !== 'tools') terminalOption = true;
+    else if (!arg.startsWith('-') && !command) command = arg;
+    else if (!arg.startsWith('-') && ['lang', 'language'].includes(command) && !languageArgument) languageArgument = arg;
+  }
+  const locale = String((terminalOption ? '' : languageArgument) || selectedLanguage).toLowerCase();
+  const language = locale === 'en' ? 'en' : locale === 'es' ? 'es' : 'pt';
   if (!(options.bun ?? process.versions.bun) && Number(version.split('.')[0]) >= 24) {
-    const { main } = await import('../src/cli.mjs'); return main(argv, options);
+    let main;
+    try { ({ main } = await import('../src/cli.mjs')); }
+    catch (error) {
+      if (error?.code !== 'E_ADAPTER_POLICY_JSON') throw error;
+      const message = language === 'en' ? 'Invalid adapter configuration JSON.' : language === 'es' ? 'JSON de configuracion de adaptadores invalido.' : 'JSON de configuracao de adaptadores invalido.';
+      const output = options.stdout || process.stdout;
+      if (globalArgs.includes('--json')) output.write(`${JSON.stringify({ ok: false, command: 'startup', language, message, error: { code: 'E_ADAPTER_POLICY_JSON' }, next: [] })}\n`);
+      else output.write(`${message}\n`);
+      return 1;
+    }
+    return main(argv, options);
   }
   let error;
   try {
@@ -23,7 +44,7 @@ export async function run(argv = process.argv.slice(2), options = {}) {
   const message = language === 'en' ? 'Could not prepare Node.js 24+.' : language === 'es' ? 'No se pudo preparar Node.js 24+.' : 'Não foi possível preparar Node.js 24+.';
   const next = [{ command: 'https://nodejs.org/en/download', label: 'Node.js 24+' }];
   const output = options.stdout || process.stdout;
-  if (argv.includes('--json')) output.write(`${JSON.stringify({ ok: false, command: 'runtime', language, message, detail: error?.message, next })}\n`);
+  if (globalArgs.includes('--json')) output.write(`${JSON.stringify({ ok: false, command: 'runtime', language, message, detail: error?.message, next })}\n`);
   else output.write(`${message}\n\n[ ${language === 'en' ? 'Next step' : language === 'es' ? 'Próximo paso' : 'Próximo passo'} ]\n  > ${next[0].command}\n`);
   return 1;
 }

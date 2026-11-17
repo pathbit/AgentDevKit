@@ -34,10 +34,13 @@ as hipóteses e provas relevantes, no ambiente autorizado.
 Não use fixture como prova do produto nem uma captura como única prova
 funcional. Sem a ferramenta exigida ou com falhas, marque **não verificado**
 ou **falhou**; não declare a entrega verificada. Resolva falhas no escopo.
+Critérios de comportamento só passam com execução correspondente. Sem ela,
+marque não verificado, mesmo que a inspeção estática sugira o resultado.
 
 Versione testes e fixtures. Salve saídas, relatórios e capturas em
 `.agent-tests/` ou outro destino ignorado. Relate cada critério como passou,
-falhou ou não verificado, com evidência e limitações.
+falhou ou não verificado, com evidência e limitações. Só marque passou quando
+a prova cobrir todo o critério; exemplos isolados não comprovam a regra geral.
 Para uma entrega, use IDs AC-001 e organize as provas em
 `.agent-tests/<referencia>/<execucao>/`. Encaminhe os resultados ao comando
 `revisar-entrega`; revisão pendente ou critério sem prova impedem a conclusão.

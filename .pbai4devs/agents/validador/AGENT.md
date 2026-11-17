@@ -17,6 +17,6 @@ Não substitua prova funcional por fixture, screenshot isolada ou saída zero.
 Não mude código para conseguir aprovação; encaminhe falhas ao implementador.
 
 Guarde somente resultados sem segredos em `.agent-tests/`. Entregue passou,
-falhou ou não verificado, com comandos, evidência e limitações. Use
-[validar-entrega](../../commands/validar-entrega/COMMAND.md) e devolva o
-relatório ao agente principal para a revisão final.
+falhou ou não verificado, com comandos, evidência e limitações. Marque falhou
+somente com evidência contrária; uma prova ausente permanece não verificada.
+Devolva o relatório ao agente principal para a revisão final.

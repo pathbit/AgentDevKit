@@ -12,9 +12,22 @@ ou diff sejam seguros: use método comprovado para o repositório ou informe a
 limitação. Não execute comandos de escrita quando o pedido for apenas consulta.
 Siga a regra
 compartilhada `.pbai4devs/rules/git/RULE.md` para identidade, mensagem e assinatura.
-Prepare somente arquivos autorizados e avaliados na revisão da entrega. Após
-preparar o índice, execute `revisar-entrega check-commit <relatorio>
-[outros-relatorios...]`: todos os arquivos staged devem ter revisão selada.
+Autor e committer devem ser o usuário; não atribua autoria ou coautoria a
+agentes de código nem adicione identificação deles à mensagem.
+Prepare somente arquivos autorizados e avaliados na revisão da entrega; não
+remova alterações do índice sem autorização. Uma edição não preparada pode
+permanecer fora do commit sem remover a versão preparada. Consulte o comando
+`.pbai4devs/commands/revisar-entrega/COMMAND.md` e, após preparar o índice,
+use o seletor para `revisar-entrega check-commit <relatorio> [outros-relatorios...]`:
+
+```sh
+node .pbai4devs/scripts/executar-script/SCRIPT.mjs --raw \
+  revisar-entrega check-commit <relatorio>
+```
+
+Substitua `<relatorio>` pelo caminho do arquivo e acrescente outros relatórios
+como argumentos. Todos os arquivos staged devem ter revisão selada.
+Sem consultar relatórios ou histórico, informe que eles não foram verificados.
 Se falhar ou o índice mudar, interrompa e refaça a verificação. Crie o commit
 somente com critérios, documentação e revisão aprovados. Confira autor,
 committer e mensagem;

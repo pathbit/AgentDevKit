@@ -25,7 +25,7 @@ permanecem fora do Git; registre uma referência segura ou explique o bloqueio.
 | [v0.0.5](../specs/v0.0.5/SPEC.md) | Instalação pelo registro | Pendente |
 | [v0.0.6](../specs/v0.0.6/SPEC.md) | Apresentação e licença | Pendente |
 | [v0.0.7](../specs/v0.0.7/SPEC.md) | Projetos existentes | Pendente; revisar política Git |
-| [v0.0.8](../specs/v0.0.8/SPEC.md) | Preservação e validação | Pendente; revisar política Git |
+| [v0.0.8](../specs/v0.0.8/SPEC.md) | Preservação e validação | Pendente; revisar política Git e reconciliar rollback e concorrência |
 | [v0.0.9](../specs/v0.0.9/SPEC.md) | Agentes e documentos existentes | Pendente |
 | [Dois registros](../specs/dual-registry/SPEC.md) | Publicação sincronizada | Pendente |
 | [v0.0.10](../specs/v0.0.10/SPEC.md) | Instalação pelos dois registros | Pendente |
@@ -43,6 +43,7 @@ permanecem fora do Git; registre uma referência segura ou explique o bloqueio.
 | [Descoberta](../specs/discovery-preservation/SPEC.md) | Descoberta e preservação | Pendente |
 | [Destinos](../specs/target-paths/SPEC.md) | Destinos de instalação | Pendente |
 | [Ordem](../specs/preimplementation-order/SPEC.md) | Ordem antes da implementação | Pendente |
+| [Recuperação conservadora](../specs/recuperacao-conservadora/SPEC.md) | Recuperação após falha | Rascunho; decisões e provas pendentes |
 
 Ao concluir uma auditoria, acrescente uma referência rastreável por critério,
 com estado e evidência, e atualize a linha correspondente. Veja o

@@ -174,7 +174,7 @@ test('instala e atualiza sobre agentes configurados preservando arquivos, links 
   assert.deepEqual(readFileSync(join(directory, 'outside/config.json')), outside);
 });
 
-test('preserva raiz externa, link pendente e ciclo sem abrir os destinos', async t => {
+test('preserva raiz externa, link pendente e ciclo preservando os destinos', async t => {
   const { root, directory } = fixture(t);
   put(directory, 'outside/secret.txt', 'outside remains unchanged\n');
   put(root, 'CLAUDE.md/notes.txt', 'Existing entrypoint directory\n');
@@ -186,7 +186,11 @@ test('preserva raiz externa, link pendente e ciclo sem abrir os destinos', async
   const installed = await cli(root, ['init', '--yes', '--agents', 'cursor,claude']);
   for (const path of links) assert.ok(installed.preserved.some(item => item.path === path), path);
   assert.ok(installed.preserved.some(item => item.path === 'CLAUDE.md' && item.reason === 'existing-directory'));
-  await cli(root, ['doctor']); await cli(root, ['sync', '--check']);
+  assert.ok(installed.retainedClaudeRules.length); assert.match(installed.warnings.join(' '), /global/i);
+  for (const args of [['doctor'], ['sync', '--check']]) {
+    const result = await cli(root, args, 1);
+    assert.ok(result.retainedClaudeRules.length); assert.match(result.warnings.join(' '), /global/i);
+  }
   await cli(root, ['agents', 'codex,claude']); await cli(root, ['agents', 'cursor,claude']);
   await cli(root, ['update', '--force']);
   assert.deepEqual(snapshot(root, links), before);
@@ -251,7 +255,14 @@ test('migra índices comprovadamente gerados por sincronização standalone', as
   const state = JSON.parse(readFileSync(join(root, '.pbai4devs/state/agentdevkit.json')));
   assert.equal(state.files[path], hash(readFileSync(join(root, path))));
   assert.ok(JSON.parse(readFileSync(join(root, path))).entries.length);
-  await cli(root, ['doctor']); await cli(root, ['sync', '--check']);
+  const legacy = '.claude/rules/seguranca/RULE.md', legacyBytes = readFileSync(join(root, legacy));
+  assert.ok(installed.retainedClaudeRules.includes(legacy)); assert.match(installed.warnings.join(' '), /global/i);
+  for (const args of [['doctor'], ['sync', '--check']]) {
+    const diagnostic = await cli(root, args, 1);
+    assert.ok(diagnostic.retainedClaudeRules.includes(legacy)); assert.match(diagnostic.warnings.join(' '), /global/i);
+    assert.deepEqual(readFileSync(join(root, legacy)), legacyBytes);
+    assert.equal(hash(readFileSync(join(root, path))), state.files[path]);
+  }
 });
 
 test('reconhece índice regenerado por standalone e atualiza o estado pela CLI', async t => {

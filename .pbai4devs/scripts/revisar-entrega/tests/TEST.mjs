@@ -39,11 +39,60 @@ function approved(t, options = {}, setup = () => {}, seal = true) {
 
 test('aprova relatorio completo e liga spec, documentos e evidencias ignoradas', t => {
   const f = approved(t);
-  assert.equal(checkReview(f.file, { root: f.root }).status, 'passed');
+  const result = checkReview(f.file, { root: f.root });
+  assert.equal(result.status, 'passed');
+  assert.equal(result.reviewVerification, 'not-verified');
+  assert.equal(sealReview(f.file, { root: f.root }).reviewVerification, 'not-verified');
   assert.equal(f.report.validation.length, 2);
   assert.ok(f.report.snapshot.files.some(item => item.path === 'README.md'));
   assert.ok(f.report.snapshot.files.some(item => item.path === 'spec.md'));
   assert.equal(f.git('ls-files', '--', '.agent-tests').trim(), '');
+});
+
+for (const [part, label] of [
+  ['report', 'relatorio de revisao'],
+  ['baseline', 'baseline de revisao'],
+  ['seal', 'selo de revisao'],
+]) test(`JSON malformado em ${part} nao expõe conteúdo na API nem na CLI`, t => {
+  const f = approved(t, {}, f => {
+    f.git('add', '--', 'README.md');
+    const scripts = join(f.root, '.pbai4devs/scripts');
+    cpSync(join(projectRoot, '.pbai4devs/scripts/lib'), join(scripts, 'lib'), { recursive: true });
+    mkdirSync(join(scripts, 'revisar-entrega'), { recursive: true });
+    cpSync(join(projectRoot, '.pbai4devs/scripts/revisar-entrega/SCRIPT.mjs'), join(scripts, 'revisar-entrega/SCRIPT.mjs'));
+  });
+  const location = part === 'report' ? f.file : `.agent-tests/mudanca/exec-1/${part}.json`;
+  const marker = 'SYNTHETIC_PRIVATE_MARKER';
+  f.put(location, `${marker} malformed`);
+  const before = readFileSync(join(f.root, location));
+  const index = readFileSync(join(f.root, '.git/index'));
+  const human = readFileSync(join(f.root, 'README.md'));
+  assert.throws(() => checkReview(f.file, { root: f.root }), error => {
+    assert.ok(error instanceof SyntaxError);
+    assert.equal(error.message, `JSON invalido: ${label}.`);
+    assert.ok(!String(error.stack).includes(marker));
+    return true;
+  });
+  const result = spawnSync(process.execPath, [join(f.root, '.pbai4devs/scripts/revisar-entrega/SCRIPT.mjs'), 'check', f.file], {
+    cwd: f.root, encoding: 'utf8', timeout: 30000,
+  });
+  assert.equal(result.error, undefined);
+  assert.equal(result.signal, null);
+  assert.equal(result.status, 1);
+  assert.equal(result.stderr.trim(), `JSON invalido: ${label}.`);
+  assert.ok(!`${result.stdout}${result.stderr}`.includes(marker));
+  assert.deepEqual(readFileSync(join(f.root, location)), before);
+  assert.deepEqual(readFileSync(join(f.root, '.git/index')), index);
+  assert.deepEqual(readFileSync(join(f.root, 'README.md')), human);
+});
+
+test('relatório ausente mantém erro de leitura ENOENT', t => {
+  const f = fixture(t);
+  assert.throws(() => checkReview('.agent-tests/ausente.json', { root: f.root }), error => {
+    assert.equal(error.code, 'ENOENT');
+    assert.ok(!(error instanceof SyntaxError));
+    return true;
+  });
 });
 
 test('instrucoes existentes entram na revisao e mudancas posteriores invalidam o selo', async t => {
@@ -184,7 +233,9 @@ test('prepare, seal, check e check-commit preservam indice com stat defasado', t
   f.put(made.file, JSON.stringify(made.report));
   assert.equal(preserved(() => sealReview(made.file, { root: f.root })).status, 'passed');
   assert.equal(preserved(() => checkReview(made.file, { root: f.root })).status, 'passed');
-  assert.equal(preserved(() => checkCommit([made.file], { root: f.root })).status, 'passed');
+  const commitCheck = preserved(() => checkCommit([made.file], { root: f.root }));
+  assert.equal(commitCheck.status, 'passed');
+  assert.equal(commitCheck.reviewVerification, 'not-verified');
 });
 
 test('coleta automatica inclui staged cancelado e ambas pontas de renomeacao', async t => {
@@ -412,7 +463,9 @@ test('check-commit na CLI aplica a mesma protecao de staged extra', t => {
   for (const file of [script, runtime]) { mkdirSync(dirname(join(f.root, file)), { recursive: true }); cpSync(join(projectRoot, file), join(f.root, file)); }
   const args = [join(f.root, script), 'check-commit', f.file];
   let run = spawnSync(process.execPath, args, { cwd: f.root, encoding: 'utf8' });
-  assert.equal(run.status, 0, run.stderr); assert.equal(JSON.parse(run.stdout).status, 'passed');
+  assert.equal(run.status, 0, run.stderr);
+  const result = JSON.parse(run.stdout);
+  assert.equal(result.status, 'passed'); assert.equal(result.reviewVerification, 'not-verified');
   f.put('extra.txt', 'preparado\n'); f.git('add', 'extra.txt');
   const index = readFileSync(join(f.root, '.git/index'));
   run = spawnSync(process.execPath, args, { cwd: f.root, encoding: 'utf8' });
@@ -779,7 +832,7 @@ test('check-merge prova fast-forward completo sem alterar indice ou arquivos hum
   f.put('human.txt', 'staged humano\n'); f.git('add', 'human.txt'); f.put('human.txt', 'alteracao humana\n');
   const index = readFileSync(join(f.root, '.git/index')), human = readFileSync(join(f.root, 'human.txt'));
   const result = checkMerge([f.file], 'refs/heads/main', { root: f.root });
-  assert.equal(result.status, 'passed'); assert.equal(result.mode, 'fast-forward'); assert.equal(result.changes, 3);
+  assert.equal(result.status, 'passed'); assert.equal(result.reviewVerification, 'not-verified'); assert.equal(result.mode, 'fast-forward'); assert.equal(result.changes, 3);
   assert.equal(result.source, f.git('rev-parse', 'HEAD').trim()); assert.equal(result.target, f.git('rev-parse', 'main').trim());
   assert.deepEqual(readFileSync(join(f.root, '.git/index')), index); assert.deepEqual(readFileSync(join(f.root, 'human.txt')), human);
 });
@@ -790,7 +843,9 @@ test('check-merge funciona na CLI e rejeita relatorio duplicado por alias', t =>
   for (const file of [script, runtime]) { mkdirSync(dirname(join(f.root, file)), { recursive: true }); cpSync(join(projectRoot, file), join(f.root, file)); }
   const args = [join(f.root, script), 'check-merge', '--destino', 'refs/heads/main', f.file];
   const run = spawnSync(process.execPath, args, { cwd: f.root, encoding: 'utf8' });
-  assert.equal(run.status, 0, run.stderr); assert.equal(JSON.parse(run.stdout).status, 'passed');
+  assert.equal(run.status, 0, run.stderr);
+  const result = JSON.parse(run.stdout);
+  assert.equal(result.status, 'passed'); assert.equal(result.reviewVerification, 'not-verified');
   assert.throws(() => checkMerge([f.file, `./${f.file}`], 'refs/heads/main', { root: f.root }), /sem repeticao/);
 });
 

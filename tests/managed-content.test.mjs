@@ -11,6 +11,7 @@ import { applyPlan, inspect, planInstallation } from '../src/install.mjs';
 import { synchronize } from '../.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs';
 import { extractManagedBlock, managedBlockDigest } from '../.pbai4devs/scripts/lib/managed-content.mjs';
 import { extractTomlManagedBlock, tomlManagedBlockDigest } from '../.pbai4devs/scripts/lib/managed-toml.mjs';
+import { inspectFixture } from './gemini-toml-lifecycle-reader.mjs';
 
 const repository = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 function fixture(t) {
@@ -45,6 +46,60 @@ test('entradas novas e geradas importam o nome real de agents.md', async t => {
   assert.deepEqual(inspect(root).issues, []);
   await cli(root, ['sync']);
   await cli(root, ['doctor']);
+});
+
+test('bloco gerenciado preserva texto staged e edição adicional no mesmo arquivo', t => {
+  const { root, git, put, read } = fixture(t);
+  put('AGENTS.md', '# Instruções humanas\n');
+  put('.gitignore', '# Ignore humano\n');
+  git('add', '--', 'AGENTS.md', '.gitignore');
+  const index = readFileSync(join(root, '.git/index'));
+  const exclude = readFileSync(join(root, '.git/info/exclude'));
+  const human = '# Instruções humanas\n\nEdição humana ainda não preparada.\n';
+  put('AGENTS.md', human);
+  const plan = planInstallation({ target: root, mode: 'init', clients: ['claude'] });
+  const change = plan.changes.find(item => item.path === 'AGENTS.md');
+  assert.equal(change?.stagedBlockAllowed, true);
+  const expected = Buffer.from(change.content);
+  applyPlan(plan);
+  assert.deepEqual(readFileSync(join(root, 'AGENTS.md')), expected);
+  assert.ok(read('AGENTS.md').startsWith(human));
+  assert.match(extractManagedBlock(read('AGENTS.md')), /\.pbai4devs/);
+  assert.deepEqual(readFileSync(join(root, '.git/index')), index);
+  assert.deepEqual(readFileSync(join(root, '.git/info/exclude')), exclude);
+  assert.equal(read('.gitignore'), '# Ignore humano\n');
+});
+
+test('sync da CLI incorpora sidecars de agente criados após a instalação', { timeout: 120000 }, async t => {
+  const { root, git, put, read } = fixture(t);
+  put('AGENTS.md', '# Instruções humanas\n');
+  put('.gitignore', '# Ignore humano\n');
+  git('add', '--', 'AGENTS.md', '.gitignore');
+  const index = readFileSync(join(root, '.git/index'));
+  const exclude = readFileSync(join(root, '.git/info/exclude'));
+  await cli(root, ['init', '--agents', 'claude,copilot', '--yes']);
+  const source = '.pbai4devs/agents/curador-notas/AGENT.md';
+  const claude = '.claude/agents/curador-notas.md';
+  const copilot = '.github/agents/curador-notas.agent.md';
+  put(source, '---\nname: curador-notas\ndescription: Analisa notas em modo de leitura.\n---\n\n# Curador de notas\n\nAnalise somente o arquivo solicitado.\n');
+  put('.pbai4devs/agents/curador-notas/claude.yaml', '---\nname: curador-notas\ndescription: Analisa notas em modo de leitura.\ntools: Read, Grep\n---\n');
+  put('.pbai4devs/agents/curador-notas/github.yaml', '---\nname: curador-notas\ndescription: Analisa notas em modo de leitura.\ntools: [read, search]\n---\n');
+  assert.equal(synchronize({ root, output() {} }).exitCode, 0);
+  assert.equal(synchronize({ root, check: true, output() {} }).exitCode, 0);
+  assert.doesNotMatch(read(claude), /^tools:/m);
+  assert.doesNotMatch(read(copilot), /^tools:/m);
+  const preview = await cli(root, ['sync', '--dry-run']);
+  assert.ok(preview.plan.some(item => item.path === '.pbai4devs/espelhos.conf'));
+  await cli(root, ['sync']);
+  assert.match(read(claude), /^tools: Read, Grep$/m);
+  assert.match(read(copilot), /^tools: \[read, search\]$/m);
+  assert.match(read('.pbai4devs/espelhos.conf'), /nativo\|\.claude\/agents\/curador-notas\.md\|/);
+  assert.match(read('.pbai4devs/espelhos.conf'), /nativo\|\.github\/agents\/curador-notas\.agent\.md\|/);
+  await cli(root, ['sync', '--check']);
+  assert.deepEqual(readFileSync(join(root, '.git/index')), index);
+  assert.deepEqual(readFileSync(join(root, '.git/info/exclude')), exclude);
+  assert.equal(read('.gitignore'), '# Ignore humano\n');
+  assert.match(read('AGENTS.md'), /# Instruções humanas/);
 });
 
 test('diagnostico deixa de exigir arquivo humano depois de retirar seu bloco', async t => {
@@ -156,24 +211,56 @@ test('comando Gemini existente recebe referência dentro do prompt sem reescreve
   put(path, original); git('add', '--all'); const index = git('ls-files', '--stage', '-z');
   await cli(root, ['init', '--agents', 'gemini', '--yes']);
   const content = read(path);
-  assert.ok(content.startsWith('# comentário humano\r\ndescription = "Meu comando"\r\nprompt = '));
-  assert.ok(content.endsWith(' # comentário do prompt\r\n\r\n[metadata]\r\ncustom = true\r\n'));
-  assert.match(content, /Siga a rotina do usuário/);
-  assert.match(extractTomlManagedBlock(content), /@\{\.pbai4devs\/commands\/preparar-dev\/COMMAND\.md\}/);
   const state = JSON.parse(read('.pbai4devs/state/agentdevkit.json'));
   assert.equal(state.files[path], undefined);
   assert.equal(state.blocks[path], tomlManagedBlockDigest(content));
+  assert.deepEqual(inspectFixture(content, {
+    original,
+    prefix: '# comentário humano\r\ndescription = "Meu comando"\r\n',
+    suffix: ' # comentário do prompt\r\n\r\n[metadata]\r\ncustom = true\r\n',
+    expectedHash: state.blocks[path],
+    humanPrompt: 'Siga a rotina do usuário.',
+    reference: '@{.pbai4devs/commands/preparar-dev/COMMAND.md}',
+  }), { margins: true, provenanceValid: true, promptValid: true, humanPrompt: true, references: 1, args: 1 });
   assert.equal((await cli(root, ['update'])).changed, false);
   await cli(root, ['doctor']); await cli(root, ['sync', '--check']);
   assert.equal(git('ls-files', '--stage', '-z'), index);
   await cli(root, ['agents', 'codex']);
   assert.equal(extractTomlManagedBlock(read(path)), null);
-  assert.match(read(path), /Siga a rotina do usuário/);
-  assert.ok(read(path).endsWith(' # comentário do prompt\r\n\r\n[metadata]\r\ncustom = true\r\n'));
+  assert.equal(read(path), original);
 });
 
-test('standalone pode promover e retirar um bloco antes de a CLI reconciliar o estado', async t => {
-  const { root, put, read } = fixture(t);
+test('retira bloco Gemini staged preservando edição humana posterior e índice', async t => {
+  const { root, git, put, read } = fixture(t);
+  const path = '.gemini/commands/preparar-dev.toml';
+  put(path, '# comentário humano\r\ndescription = "Meu comando"\r\nprompt = "Siga a rotina do usuário."\r\n');
+  put('.gitignore', '# Ignore humano\n');
+  await cli(root, ['init', '--agents', 'gemini', '--yes']);
+  assert.ok(extractTomlManagedBlock(read(path)));
+  git('add', '-f', '--', path, '.gitignore');
+  const index = readFileSync(join(root, '.git/index'));
+  const exclude = readFileSync(join(root, '.git/info/exclude'));
+  put(path, `${read(path)}\r\n# Edição humana posterior.\r\n`);
+  const plan = planInstallation({ target: root, mode: 'agents', clients: ['codex'] });
+  const change = plan.changes.find(item => item.path === path);
+  assert.equal(change?.stagedBlockAllowed, true);
+  const expected = Buffer.from(change.content);
+  applyPlan(plan);
+  assert.deepEqual(readFileSync(join(root, path)), expected);
+  assert.equal(extractTomlManagedBlock(read(path)), null);
+  assert.match(read(path), /Siga a rotina do usuário/);
+  assert.match(read(path), /# Edição humana posterior\./);
+  assert.deepEqual(readFileSync(join(root, '.git/index')), index);
+  assert.deepEqual(readFileSync(join(root, '.git/info/exclude')), exclude);
+  assert.equal(read('.gitignore'), '# Ignore humano\n');
+});
+
+test('referência derivada editada é preservada e bloqueia sync direto e CLI, inclusive force', async t => {
+  const { root, git, put, read } = fixture(t);
+  put('.gitignore', '# Ignore humano\n');
+  put('humano.txt', 'Preparado no índice.\n');
+  git('add', '--', 'humano.txt', '.gitignore');
+  put('humano.txt', 'Preparado no índice.\nAlteração local.\n');
   await cli(root, ['init', '--agents', 'claude', '--yes']);
   const source = '.pbai4devs/skills/projeto/local-only/SKILL.md';
   put(source, '---\nname: local-only\ndescription: Recurso local para a verificação.\n---\n\n# Recurso local\n\nSiga esta rotina.\n');
@@ -181,18 +268,48 @@ test('standalone pode promover e retirar um bloco antes de a CLI reconciliar o e
   const path = '.claude/skills/local-only/SKILL.md';
   const human = `${read(path)}\n# Política humana\n\nNão remova este texto.\n`;
   put(path, human);
+  const protectedPaths = [path, source, 'humano.txt', '.gitignore', '.git/index', '.git/config', '.git/info/exclude', '.pbai4devs/espelhos.conf', '.pbai4devs/state/agentdevkit.json', '.pbai4devs/state/derived.json'];
+  const before = new Map(protectedPaths.map(name => [name, readFileSync(join(root, name))]));
+  const unchanged = () => { for (const [name, bytes] of before) assert.deepEqual(readFileSync(join(root, name)), bytes, name); };
+  const check = synchronize({ root, check: true, output() {} });
+  assert.equal(check.exitCode, 1);
+  assert.ok(check.conflictPaths.includes(path));
+  assert.ok(check.preserved.some(item => item.path === path && item.reason === 'derived-reference-diverged'));
+  unchanged();
+  for (const force of [false, true]) {
+    assert.throws(() => synchronize({ root, force, output() {} }), /Conteudo proprio preservado; resolva a colisao/);
+    unchanged();
+    const result = await cli(root, ['sync', ...(force ? ['--force'] : [])], 1);
+    assert.ok(result.conflicts?.includes(path));
+    assert.ok(result.preserved?.some(item => item.path === path && item.reason === 'edited-managed-file'));
+    unchanged();
+  }
+  assert.equal(read(path), human);
+  assert.equal(extractManagedBlock(read(path)), null);
+});
+
+test('sync direto adiciona e retira bloco de arquivo humano após a CLI reconciliar o estado', async t => {
+  const { root, put, read } = fixture(t);
+  await cli(root, ['init', '--agents', 'claude', '--yes']);
+  const source = '.pbai4devs/skills/projeto/local-only/SKILL.md';
+  const path = '.claude/skills/local-only/SKILL.md';
+  const human = '# Política humana\n\nNão remova este texto.\n';
+  put(source, '---\nname: local-only\ndescription: Recurso local para a verificação.\n---\n\n# Recurso local\n\nSiga esta rotina.\n');
+  put(path, human);
   assert.equal(synchronize({ root, output() {} }).exitCode, 0);
-  assert.ok(read(path).startsWith(human));
-  assert.ok(extractManagedBlock(read(path)));
-  assert.ok(!inspect(root).issues.some(issue => issue.path === path));
+  const block = '<!-- BEGIN AGENTDEVKIT -->\nLeia e siga [origem](../../../.pbai4devs/skills/projeto/local-only/SKILL.md).\n<!-- END AGENTDEVKIT -->';
+  assert.equal(read(path), `${human}\n${block}\n`);
+  assert.equal(extractManagedBlock(read(path)), block);
   await cli(root, ['sync']);
   rmSync(join(root, source));
   assert.equal(synchronize({ root, output() {} }).exitCode, 0);
   assert.equal(extractManagedBlock(read(path)), null);
-  assert.ok(read(path).startsWith(human));
+  const restored = read(path);
+  assert.ok(restored.startsWith(human));
+  assert.match(restored.slice(human.length), /^\n*$/);
   assert.ok(!inspect(root).issues.some(issue => issue.path === path));
   await cli(root, ['sync']);
-  assert.ok(read(path).startsWith(human));
+  assert.equal(read(path), restored);
   assert.equal(extractManagedBlock(read(path)), null);
 });
 
@@ -208,7 +325,16 @@ for (const mode of ['sync', 'deselect']) test(`recriação própria após remoç
   assert.equal(check.status, 0, `verificar-recursos: ${check.error?.stack || ''}\nsignal: ${check.signal || 'none'}\n${check.stdout || ''}${check.stderr || ''}`);
   const plan = planInstallation({ target: root, mode: mode === 'sync' ? 'sync' : 'agents', ...(mode === 'deselect' ? { clients: ['codex'] } : {}) });
   assert.equal(plan.canApply, true, JSON.stringify(plan.conflicts));
-  await cli(root, mode === 'sync' ? ['sync'] : ['agents', 'codex']); await cli(root, ['doctor']);
+  const retained = mode === 'deselect' ? read('.claude/rules/seguranca/RULE.md') : null;
+  const operation = await cli(root, mode === 'sync' ? ['sync'] : ['agents', 'codex']);
+  if (mode === 'deselect') {
+    assert.equal(read('.claude/rules/seguranca/RULE.md'), retained);
+    assert.ok(operation.retainedClaudeRules.includes('.claude/rules/seguranca/RULE.md'));
+    const diagnosis = await cli(root, ['doctor'], 1);
+    assert.ok(diagnosis.retainedClaudeRules.includes('.claude/rules/seguranca/RULE.md'));
+    const check = await cli(root, ['sync', '--check'], 1);
+    assert.ok(check.retainedClaudeRules.includes('.claude/rules/seguranca/RULE.md'));
+  } else await cli(root, ['doctor']);
   const state = JSON.parse(read('.pbai4devs/state/agentdevkit.json'));
   for (const path of mode === 'sync' ? ['AGENTS.md', native] : ['AGENTS.md']) { assert.ok(state.files[path]); assert.equal(state.blocks[path], undefined); }
   if (mode === 'deselect') assert.equal(existsSync(join(root, native)), false);

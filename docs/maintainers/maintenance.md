@@ -77,6 +77,10 @@ nada. Nunca versione o tarball ou seus relatórios.
 2. Conclua testes, documentação e revisão independente.
 3. Envie o commit à branch principal e acompanhe o CI e a release.
 
+O perfil completo exige os testes estritos de recuperação concorrente. Enquanto
+eles falharem, não há artefato certificado para publicação; consulte o
+[roadmap](../product/roadmap.md) e os [testes](../../tests/README.md).
+
 Após toda a matriz de CI passar, a automação cria a tag `v<versão>` no
 commit verificado e inicia o workflow de release. Um push sem mudança de versão
 publicada não gera outra release. Uma tag existente não é movida: se a versão

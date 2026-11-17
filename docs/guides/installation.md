@@ -27,6 +27,19 @@ Escolha um deles e execute na pasta do projeto.
 npx @pathbit/agentdevkit init
 ```
 
+Com outro gerenciador instalado, você também pode executar:
+
+```console
+pnpm dlx @pathbit/agentdevkit init
+yarn dlx @pathbit/agentdevkit init
+bun x @pathbit/agentdevkit init
+```
+
+As quatro formas foram exercitadas no macOS com a versão `0.0.30` publicada.
+Nessa versão, `init` alterou `.git/info/exclude` nas fixtures testadas; a
+preservação desse arquivo precisa ser validada na próxima publicação. Com Yarn,
+`yarn dlx -q` evita mensagens do gerenciador antes de uma resposta `--json`.
+
 Para escolher explicitamente esse registry:
 
 ```console
@@ -90,9 +103,15 @@ O próximo passo é [preparar as ferramentas](prerequisites.md#depois-de-instala
 | Recursos nos clientes | Apontamentos locais; podem aparecer no Git. |
 | Entradas da raiz criadas pelo kit | Arquivos locais gerados. |
 | Índices, manifesto e seleção | Derivados locais; confira o ignore do kit. |
-| Código, documentos e configurações humanas | Preservados. |
+| Arquivos humanos | Confira o plano e os limites abaixo. |
 | Downloads e resultados de testes | Locais; confira as regras do projeto. |
 | `.pbai4devs/LICENSE` | Licença MIT do kit, copiada do pacote. |
+
+As atualizações preservam ACLs e atributos estendidos suportados pela cópia
+nativa da plataforma. No macOS, ACLs que negam escrita, flags de proteção e
+metadados cuja leitura falha continuam bloqueando a alteração. A verificação
+de diretórios, mudanças simultâneas e ACLs no Windows tem limites; confira
+[conflitos e backups](troubleshooting.md#conflitos-e-backups) antes de restaurar.
 
 O gerador completo permanece no pacote npm. Ele não copia `bin/`, `src/`,
 `scripts/release/` ou os testes do produto para o projeto atendido.
@@ -169,8 +188,9 @@ continuam sujeitos à recusa de segurança. Nenhum link humano é adotado como
 propriedade do kit, e `--force` não o substitui.
 
 Arquivos humanos não se tornam gerenciados apenas por conterem um link.
-As alterações de arquivos existentes preservam permissões, inclusive em backup
-e restauração após falha.
+O kit usa as permissões registradas ao alterar e guardar arquivos; uma
+restauração pode falhar ou perder uma edição concorrente. Consulte os limites
+de [recuperação](troubleshooting.md#conflitos-e-backups) antes de retomá-la.
 
 O [fluxo de trabalho](workflow.md) orienta a próxima etapa do projeto.
 Se houver erro, consulte [solução de problemas](troubleshooting.md).

@@ -1,7 +1,7 @@
 import '../.pbai4devs/scripts/lib/test-git-environment.mjs';
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,8 +16,9 @@ const clientRoots = [...new Set(policy.adapters.flatMap(adapter => [adapter.root
 const globalDirectory = mkdtempSync(join(tmpdir(), 'agentdevkit-git-config-'));
 const globalConfig = join(globalDirectory, 'config');
 writeFileSync(globalConfig, '');
+mkdirSync(join(globalDirectory, 'xdg'));
 after(() => rmSync(globalDirectory, { recursive: true, force: true }));
-const env = { ...process.env, GIT_OPTIONAL_LOCKS: '0', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: globalConfig };
+const env = { ...process.env, XDG_CONFIG_HOME: join(globalDirectory, 'xdg'), GIT_OPTIONAL_LOCKS: '0', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: globalConfig };
 for (const key of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_COMMON_DIR', 'GIT_INDEX_FILE']) delete env[key];
 
 function fixture(t, { git = true } = {}) {
@@ -58,6 +59,26 @@ function ignored(root, path, extraEnv = {}) {
   assert.ok([0, 1].includes(result.status), `check-ignore ${path}: ${result.stderr?.toString() || result.error?.message || ''}`);
   return result.status === 0;
 }
+
+test('backup de conteúdo humano pode ficar visível sem alterar ignores ou índice do projeto', t => {
+  const root = fixture(t), human = '# Instruções humanas\n\nMarcador sintético de conteúdo privado.\n', ignore = '# Regras próprias do projeto\n';
+  put(root, 'AGENTS.md', human); put(root, '.gitignore', ignore);
+  chmodSync(join(root, 'AGENTS.md'), 0o640);
+  const originalMode = statSync(join(root, 'AGENTS.md')).mode;
+  command(root, ['add', '--', 'AGENTS.md', '.gitignore']);
+  const beforeIndex = index(root), beforeExclude = readFileSync(join(root, '.git/info/exclude'));
+  const result = cli(root, ['init', '--agents', 'claude']);
+  assert.equal(result.ok, true); assert.equal(typeof result.backup, 'string');
+  const backup = `${result.backup}/AGENTS.md`;
+  assert.deepEqual(read(root, backup), Buffer.from(human));
+  const modeMask = process.platform === 'win32' ? 0o200 : 0o777;
+  assert.equal(statSync(join(root, backup)).mode & modeMask, originalMode & modeMask);
+  assert.equal(ignored(root, backup), false);
+  assert.match(command(root, ['status', '--short', '--untracked-files=all', '--', backup]), /^\?\? /);
+  assert.deepEqual(index(root), beforeIndex);
+  assert.deepEqual(read(root, '.gitignore'), Buffer.from(ignore));
+  assert.deepEqual(readFileSync(join(root, '.git/info/exclude')), beforeExclude);
+});
 
 test('clientes existentes permanecem visíveis e staged é preservado em todo o ciclo', t => {
   const root = fixture(t);

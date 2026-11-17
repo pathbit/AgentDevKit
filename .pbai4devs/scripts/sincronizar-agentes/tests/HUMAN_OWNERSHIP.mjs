@@ -5,9 +5,10 @@ import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { projectRoot } from '../../lib/runtime.mjs';
+import { collectErrorDiagnostics } from '../../lib/error-reporting.mjs';
 import { isReference, synchronize } from '../SCRIPT.mjs';
 
 const hash = value => createHash('sha256').update(value).digest('hex');
@@ -136,17 +137,28 @@ test('falha ao registrar remoção derivada restaura fallback e preserva índice
   write(root, '.pbai4devs/state/agentdevkit.json', JSON.stringify({ schemaVersion: 1, files: { [fallback]: hash(initial) }, blocks: {} }));
   fs.rmSync(join(root, '.agents/skills')); // A obstrução pertence à fixture.
   const before = snapshot(root), index = fs.readFileSync(join(root, '.git/index'));
-  const originalRename = fs.renameSync;
-  let injected = false;
+  const originalRename = fs.renameSync, originalRemove = fs.rmSync;
+  let injected = false, temporary, temporaryBytes, cleanupAttempted = false;
   t.mock.method(fs, 'renameSync', (from, to) => {
-    if (!injected && to === join(root, '.pbai4devs/state/derived.json')) { injected = true; throw new Error('falha injetada no registro derivado'); }
+    if (!injected && to === join(root, '.pbai4devs/state/derived.json')) {
+      injected = true; temporary = from; temporaryBytes = fs.readFileSync(from);
+      throw new Error('falha injetada no registro derivado');
+    }
     return originalRename(from, to);
+  });
+  t.mock.method(fs, 'rmSync', (path, ...args) => {
+    if (path === temporary) cleanupAttempted = true;
+    return originalRemove(path, ...args);
   });
   syncBuiltinESMExports();
   t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
-  assert.throws(() => run(root), /falha injetada no registro derivado/);
-  assert.equal(injected, true);
-  assert.deepEqual(snapshot(root), before);
+  let failure; try { run(root); } catch (error) { failure = error; }
+  assert.match(failure?.message || '', /falha injetada no registro derivado/);
+  assert.equal(injected, true); assert.ok(temporary && temporaryBytes);
+  assert.equal(cleanupAttempted, false);
+  assert.deepEqual(fs.readFileSync(temporary), temporaryBytes);
+  assert.ok(collectErrorDiagnostics(failure).preservedPaths.includes(temporary));
+  assert.deepEqual(snapshot(root), { ...before, [relative(root, temporary).split(sep).join('/')]: hash(temporaryBytes) });
   assert.deepEqual(fs.readFileSync(join(root, '.git/index')), index);
   assert.deepEqual(fs.readFileSync(join(root, fallback)), initial);
 });
