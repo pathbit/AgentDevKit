@@ -245,6 +245,21 @@ test('sync atualiza apontamento staged equivalente em repositório com autocrlf'
   git(root, 'config', 'core.autocrlf', 'true');
   put(root, pointer, generated);
   git(root, 'add', '-f', '--', pointer);
+  const stagedStat = lstatSync(file(root, pointer), { bigint: true });
+  const stagedDebug = git(root, 'ls-files', '--debug', '-z', '--', pointer).split('\0')[1];
+  const stagedSeparator = String.fromCharCode(0);
+  const stagedFields = stagedDebug.slice(stagedDebug.indexOf(stagedSeparator) + 1)
+    .split(String.fromCharCode(9)).flatMap(part => part.split(String.fromCharCode(10)));
+  const stagedField = name => {
+    const line = stagedFields.find(row => row.trimStart().startsWith(`${name}:`));
+    assert.ok(line, `campo ${name} ausente em git ls-files --debug`);
+    return BigInt(line.slice(line.indexOf(':') + 1).trim());
+  };
+  assert.equal(stagedField('dev'), BigInt.asUintN(32, stagedStat.dev));
+  assert.equal(stagedField('ino'), BigInt.asUintN(32, stagedStat.ino));
+  const inodeTruncated = stagedStat.ino > 0xffff_ffffn;
+  if (inodeTruncated) assert.notEqual(stagedField('ino'), stagedStat.ino);
+  t.diagnostic(`Git index identity: devTruncated=${stagedStat.dev > 0xffff_ffffn}, inodeTruncated=${inodeTruncated}`);
   const index = git(root, 'ls-files', '--stage', '-z');
   const indexBytes = readFileSync(file(root, '.git/index'));
   put(root, original, '---\nname: criar-skill\ndescription: Mudança real.\n---\n\n# Criar skill\n');
