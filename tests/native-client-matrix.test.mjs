@@ -37,10 +37,11 @@ test('estrutura exige origem e referência ao caminho correto', t => {
   }
 });
 test('descoberta exige nome exato e localização do projeto, sem inferir execução', () => {
-  const project = '/tmp/projeto-sintetico';
-  const output = `criar-skill [Enabled]\n  Location:    ${project}/.gemini/skills/criar-skill/SKILL.md\n`;
+  const project = join(tmpdir(), 'projeto-sintetico');
+  const location = join(project, destination('gemini', 'skills', skill));
+  const output = `criar-skill [Enabled]\n  Location:    ${location}\n`;
   assert.equal(discovery('gemini', 'skills', skill, output, project), true);
-  assert.equal(discovery('gemini', 'skills', skill, output, '/tmp/outro'), false);
+  assert.equal(discovery('gemini', 'skills', skill, output, join(tmpdir(), 'outro')), false);
   assert.equal(discovery('gemini', 'skills', skill, output.replace('  Location:', 'outro [Enabled]\n  Location:'), project), false);
   assert.equal(discovery('gemini', 'skills', skill, output.replace('[Enabled]', '[Disabled]'), project), false);
   assert.equal(discovery('gemini', 'agents', agent, output, project), null);

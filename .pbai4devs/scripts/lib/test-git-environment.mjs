@@ -7,6 +7,7 @@ import { join } from 'node:path';
 const directory = mkdtempSync(join(tmpdir(), 'agentdevkit-test-git-'));
 const configuration = join(directory, 'gitconfig');
 const excludes = join(directory, 'exclude');
+export const testGitConfig = configuration;
 writeFileSync(excludes, '');
 // Explicitly override Git's XDG ignore fallback as well as global config.
 writeFileSync(configuration, `[core]\n\texcludesFile = ${JSON.stringify(excludes)}\n\tfsmonitor = false\n`);

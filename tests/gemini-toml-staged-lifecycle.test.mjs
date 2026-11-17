@@ -2,11 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, realpathSync, rmSync, writeFileSync, existsSync } from 'node:fs';
-import { devNull, tmpdir } from 'node:os';
+import { lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, realpathSync, rmSync, writeFileSync, existsSync, statSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tomlManagedBlockDigest } from '../.pbai4devs/scripts/lib/managed-toml.mjs';
+import { testGitConfig } from '../.pbai4devs/scripts/lib/test-git-environment.mjs';
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const cli = join(repo, 'bin/agentdevkit.mjs');
@@ -19,7 +20,7 @@ function fixture(t) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'adk-toml-staged-')));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const home = join(root, 'home'); mkdirSync(home);
-  const env = { PATH: process.env.PATH, HOME: home, USERPROFILE: home, TMPDIR: tmpdir(), TEMP: tmpdir(), TMP: tmpdir(), LC_ALL: 'C', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: process.platform === 'win32' ? 'NUL' : devNull, GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0' };
+  const env = { PATH: process.env.PATH, HOME: home, USERPROFILE: home, TMPDIR: tmpdir(), TEMP: tmpdir(), TMP: tmpdir(), LC_ALL: 'C', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: testGitConfig, GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0' };
   if (process.platform === 'win32') { env.SystemRoot = process.env.SystemRoot; env.ComSpec = process.env.ComSpec; }
   const run = (program, args) => spawnSync(program, args, { cwd: root, env, encoding: 'utf8', timeout: 180000, maxBuffer: 16 * 1024 * 1024 });
   const git = (...args) => { const result = run('git', args); assert.equal(result.status, 0, result.stderr || result.error?.message); return result.stdout; };
@@ -30,7 +31,10 @@ function fixture(t) {
   };
   const put = (path, value) => { mkdirSync(dirname(join(root, path)), { recursive: true }); writeFileSync(join(root, path), value); };
   git('init', '--quiet');
-  assert.equal(realpathSync(git('rev-parse', '--show-toplevel').trim()), root);
+  const gitRoot = git('rev-parse', '--show-toplevel').trim();
+  const rootInfo = statSync(root, { bigint: true }), gitRootInfo = statSync(gitRoot, { bigint: true });
+  assert.equal(gitRootInfo.dev, rootInfo.dev);
+  assert.equal(gitRootInfo.ino, rootInfo.ino);
   put('.gitignore', '# Regra humana\nprivado/\n'); put('HUMAN.md', 'Documento humano.\n'); put(target, original);
   git('add', '--', '.gitignore', 'HUMAN.md');
   const command = args => run(process.execPath, [cli, ...args, '--target', root, '--json']);

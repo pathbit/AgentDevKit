@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
-import { devNull, tmpdir } from 'node:os';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import test from 'node:test';
@@ -12,6 +12,7 @@ import { parseArgs } from '../src/cli.mjs';
 import { packageInfo } from '../src/config.mjs';
 import { findNpmCli } from '../.pbai4devs/scripts/lib/npm.mjs';
 import { inspectDocumentation, inspectProject } from '../.pbai4devs/scripts/inspecionar-projeto/SCRIPT.mjs';
+import { testGitConfig } from '../.pbai4devs/scripts/lib/test-git-environment.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -487,7 +488,7 @@ function intentTree(root) {
 test('next diferencia intenção de produto e execução sem alterar projeto ou Git', t => {
   const { target, write } = fixture(t);
   const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !/^GIT_|^NODE_OPTIONS$/i.test(name)));
-  Object.assign(env, { GIT_CONFIG_GLOBAL: devNull, GIT_CONFIG_NOSYSTEM: '1', GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0', LC_ALL: 'C' });
+  Object.assign(env, { GIT_CONFIG_GLOBAL: testGitConfig, GIT_CONFIG_NOSYSTEM: '1', GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0', LC_ALL: 'C' });
   const git = (...args) => {
     const result = spawnSync('git', args, { cwd: target, env, encoding: 'utf8', timeout: 30000 });
     assert.equal(result.status, 0, result.stderr || result.error?.message); return result.stdout;

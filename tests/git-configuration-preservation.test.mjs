@@ -9,7 +9,7 @@ import { join, dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import crypto from 'node:crypto';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { planLocalIgnore, checkLocalIgnore, applyLocalIgnore, planUntrack, applyUntrack, restoreUntrack } from '../.pbai4devs/scripts/lib/gitignore.mjs';
 import { safeGitEnvironment, gitOutputLines, gitPathsOverlap } from '../.pbai4devs/scripts/lib/git-environment.mjs';
 import { attachErrorDiagnostics, collectErrorDiagnostics, markDiagnosticsBoundary } from '../.pbai4devs/scripts/lib/error-reporting.mjs';
@@ -849,7 +849,7 @@ test('sync executado diretamente orienta revisão após falha de publicação', 
   const index = readFileSync(join(root, '.git/index')), ignore = readFileSync(join(root, '.gitignore'));
   const hook = join(root, 'injetar-falha.mjs');
   writeFileSync(hook, `import fs from 'node:fs';\nimport { syncBuiltinESMExports } from 'node:module';\nconst rename = fs.renameSync; let injected = false;\nfs.renameSync = (source, target, ...args) => { const value = rename(source, target, ...args); if (!injected && target === process.env.ADK_TEST_DESTINATION) { injected = true; throw Object.assign(new Error('falha sintética após publicação'), { code: 'EIO' }); } return value; };\nsyncBuiltinESMExports();\n`);
-  const child = spawnSync(process.execPath, ['--import', hook, sync, '--root', root, '--force'], {
+  const child = spawnSync(process.execPath, ['--import', pathToFileURL(hook).href, sync, '--root', root, '--force'], {
     env: { ...env, ADK_TEST_DESTINATION: join(root, '.pbai4devs/catalog.json') }, encoding: 'utf8', timeout: 120000,
   });
   assert.equal(child.status, 2, child.stderr);

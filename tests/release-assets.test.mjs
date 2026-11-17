@@ -10,7 +10,7 @@ import { spawnSync } from 'node:child_process';
 import { gunzipSync } from 'node:zlib';
 import { npmExecutable } from '../scripts/release/assets.mjs';
 import { markVerified, runPipeline, portableProfiles, fullOnlyTests } from '../scripts/release/pipeline.mjs';
-import { devNull } from 'node:os';
+import { testGitConfig } from '../.pbai4devs/scripts/lib/test-git-environment.mjs';
 
 const project = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const version = '1.2.3';
@@ -322,7 +322,7 @@ test('perfil completo simulado repete build e expõe caminho novo sem alterar í
   for(const name of [...new Set([...Object.values(portableProfiles).flat(),...Object.keys(fullOnlyTests)])])writeFileSync(join(tests,name),'');
   const policy='.pbai4devs/templates/clients/ADAPTERS.json';
   mkdirSync(dirname(join(root,policy)),{recursive:true});cpSync(join(project,policy),join(root,policy));
-  const env={...Object.fromEntries(Object.entries(process.env).filter(([name])=>!/^GIT_|^NODE_OPTIONS$/i.test(name))),GIT_CONFIG_GLOBAL:devNull,GIT_CONFIG_NOSYSTEM:'1',GIT_TERMINAL_PROMPT:'0',GIT_OPTIONAL_LOCKS:'0',
+  const env={...Object.fromEntries(Object.entries(process.env).filter(([name])=>!/^GIT_|^NODE_OPTIONS$/i.test(name))),GIT_CONFIG_GLOBAL:testGitConfig,GIT_CONFIG_NOSYSTEM:'1',GIT_TERMINAL_PROMPT:'0',GIT_OPTIONAL_LOCKS:'0',
     RUNNER_TEMP:runner,GITHUB_OUTPUT:join(runner,'outputs'),npm_execpath:npmExecutable(),npm_config_offline:'true',npm_config_cache:join(root,'npm-cache')};
   writeFileSync(env.GITHUB_OUTPUT,'');
   for(const args of [['init','--quiet'],['add','--','README.md']]){

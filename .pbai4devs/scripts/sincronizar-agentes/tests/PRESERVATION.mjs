@@ -1,7 +1,7 @@
 import '../../lib/test-git-environment.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, linkSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
@@ -238,7 +238,15 @@ test('sync atualiza apontamento staged equivalente em repositório com autocrlf'
   const index = git(root, 'ls-files', '--stage', '-z');
   const indexBytes = readFileSync(file(root, '.git/index'));
   put(root, original, '---\nname: criar-skill\ndescription: Mudança real.\n---\n\n# Criar skill\n');
-  assert.equal(run(root, { force: true }).exitCode, 0);
+  let syncError;
+  try { assert.equal(run(root, { force: true }).exitCode, 0); } catch (error) { syncError = error; }
+  if (syncError) {
+    const stat = lstatSync(file(root, pointer), { bigint: true });
+    const debug = git(root, 'ls-files', '--debug', '-z', '--', pointer);
+    const attributes = git(root, 'check-attr', '-z', 'text', 'eol', 'filter', 'working-tree-encoding', 'ident', '--', pointer);
+    const autocrlf = git(root, 'config', '--bool', 'core.autocrlf');
+    assert.equal(syncError, undefined, `${syncError.message}\nstat=${JSON.stringify({ dev: String(stat.dev), ino: String(stat.ino), uid: String(stat.uid), gid: String(stat.gid), size: String(stat.size), ctimeNs: String(stat.ctimeNs), mtimeNs: String(stat.mtimeNs) })}\nindex=${JSON.stringify(debug)}\nattributes=${JSON.stringify(attributes)}\nautocrlf=${JSON.stringify(autocrlf)}`);
+  }
   assert.equal(git(root, 'ls-files', '--stage', '-z'), index);
   assert.deepEqual(readFileSync(file(root, '.git/index')), indexBytes);
   const updated = readFileSync(file(root, pointer), 'utf8').replaceAll('\r\n', '\n');

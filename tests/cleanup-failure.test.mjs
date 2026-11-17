@@ -6,7 +6,7 @@ import { syncBuiltinESMExports } from 'node:module';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { basename, join, dirname, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { applyPlan, planInstallation } from '../src/install.mjs';
 import { main as cliMain } from '../src/cli.mjs';
 import { synchronize } from '../.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs';
@@ -309,7 +309,7 @@ fs.rmSync = function(path, ...args) {
 syncBuiltinESMExports();\n`);
         const env = { ...process.env, TMPDIR: scratch, TMP: scratch, TEMP: scratch, ADK_LAB_SCRATCH: scratch, ADK_LAB_MARKER: marker, ADK_LAB_FROZEN: frozen ? '1' : '0' };
         const launcher = fileURLToPath(new URL('../bin/agentdevkit.mjs', import.meta.url));
-        const args = ['--import', preload, launcher, 'init', '--target', root, '--agents', 'codex'];
+        const args = ['--import', pathToFileURL(preload).href, launcher, 'init', '--target', root, '--agents', 'codex'];
         if (format === 'json') args.push('--json');
         const result = spawnSync(process.execPath, args, { cwd: root, env, encoding: 'utf8', timeout: 30000 });
         assert.equal(result.error, undefined); assert.equal(result.signal, null); assert.equal(result.status, 1);

@@ -2,10 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
-import { devNull, tmpdir } from 'node:os';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import '../.pbai4devs/scripts/lib/test-git-environment.mjs';
+import { testGitConfig } from '../.pbai4devs/scripts/lib/test-git-environment.mjs';
 import { applyLocalIgnore, checkLocalIgnore, planLocalIgnore } from '../.pbai4devs/scripts/lib/gitignore.mjs';
 
 const repository = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -13,7 +13,7 @@ const cli = join(repository, 'bin/agentdevkit.mjs');
 const sync = join(repository, '.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs');
 const supportsRuntime = Number(process.versions.node.split('.')[0]) >= 24 && !process.versions.bun;
 const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^GIT_/i.test(key)));
-Object.assign(env, { GIT_CONFIG_GLOBAL: devNull, GIT_CONFIG_NOSYSTEM: '1', GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0' });
+Object.assign(env, { GIT_CONFIG_GLOBAL: testGitConfig, GIT_CONFIG_NOSYSTEM: '1', GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0' });
 
 function run(cwd, program, args) {
   return spawnSync(program, args, { cwd, env, encoding: 'utf8', timeout: 120000, maxBuffer: 8 * 1024 * 1024 });

@@ -3,16 +3,17 @@ import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
 import {chmodSync,existsSync,lstatSync,mkdirSync,mkdtempSync,readFileSync,readdirSync,rmSync,writeFileSync} from 'node:fs';
-import {tmpdir,devNull} from 'node:os';
+import {tmpdir} from 'node:os';
 import {dirname,join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {testGitConfig} from '../.pbai4devs/scripts/lib/test-git-environment.mjs';
 const pkg=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const cli=join(pkg,'bin/agentdevkit.mjs');
 const source='.pbai4devs/commands/fixture-modo/COMMAND.md';
 const target='.gemini/commands/fixture-modo.toml';
 const sha=x=>createHash('sha256').update(x).digest('hex');
 const env=Object.fromEntries(Object.entries(process.env).filter(([k])=>!/^GIT_|^NODE_OPTIONS$/i.test(k)));
-Object.assign(env,{GIT_CONFIG_GLOBAL:devNull,GIT_CONFIG_NOSYSTEM:'1',GIT_TERMINAL_PROMPT:'0',GIT_OPTIONAL_LOCKS:'0'});
+Object.assign(env,{GIT_CONFIG_GLOBAL:testGitConfig,GIT_CONFIG_NOSYSTEM:'1',GIT_TERMINAL_PROMPT:'0',GIT_OPTIONAL_LOCKS:'0'});
 function snapshot(root){const rows=[];function visit(p){const full=p?join(root,p):root,s=lstatSync(full);assert.ok(!s.isSymbolicLink()&&(s.isFile()||s.isDirectory()),`tipo inesperado ${p}`);rows.push([p,s.isDirectory()?'d':'f',s.mode&0o7777,s.isFile()?sha(readFileSync(full)):null]);if(s.isDirectory())for(const n of readdirSync(full).sort())visit(p?`${p}/${n}`:n)}visit('');return rows;}
 function prepare(t,action,protectedTarget=true){
  const root=mkdtempSync(join(tmpdir(),'adk-sync-mode-fixture-'));t.after(()=>rmSync(root,{recursive:true,force:true}));

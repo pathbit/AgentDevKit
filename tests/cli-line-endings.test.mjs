@@ -1,4 +1,4 @@
-import '../.pbai4devs/scripts/lib/test-git-environment.mjs';
+import { testGitConfig } from '../.pbai4devs/scripts/lib/test-git-environment.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import { appendFileSync, existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
-import { devNull, tmpdir } from 'node:os';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { applyPlan, planInstallation } from '../src/install.mjs';
@@ -18,7 +18,7 @@ const node24 = Number(process.versions.node.split('.')[0]) >= 24 && !process.ver
 test('CLI preserva referência CRLF já satisfeita sem duplicar bloco ou alterar índice', { skip: !node24, timeout: 180000 }, t => {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'adk-cli-eol-')));
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  const env = { ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^GIT_/i.test(key))), GIT_CONFIG_GLOBAL: devNull, GIT_CONFIG_NOSYSTEM: '1', GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0' };
+  const env = { ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^GIT_/i.test(key))), GIT_CONFIG_GLOBAL: testGitConfig, GIT_CONFIG_NOSYSTEM: '1', GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0' };
   const run = (program, args) => spawnSync(program, args, { cwd: root, env, encoding: 'utf8', timeout: 120000, maxBuffer: 8 * 1024 * 1024 });
   const git = (...args) => { const r = run('git', args); assert.equal(r.status, 0, r.stderr); };
   const command = (...args) => { const r = run(process.execPath, [cli, ...args, '--target', root, '--json']); assert.equal(r.error, undefined); assert.equal(r.signal, null); return { ...r, result: JSON.parse(r.stdout) }; };

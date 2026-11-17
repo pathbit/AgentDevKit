@@ -3,13 +3,14 @@ import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
 import {chmodSync,existsSync,linkSync,lstatSync,mkdirSync,mkdtempSync,readFileSync,readdirSync,rmSync,writeFileSync} from 'node:fs';
-import {tmpdir,devNull} from 'node:os';
+import {tmpdir} from 'node:os';
 import {dirname,join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {testGitConfig} from '../.pbai4devs/scripts/lib/test-git-environment.mjs';
 const cli=resolve(dirname(fileURLToPath(import.meta.url)),'../bin/agentdevkit.mjs');
 const sha=x=>createHash('sha256').update(x).digest('hex');
 const env=Object.fromEntries(Object.entries(process.env).filter(([k])=>!/^GIT_|^NODE_OPTIONS$/i.test(k)));
-Object.assign(env,{GIT_CONFIG_GLOBAL:devNull,GIT_CONFIG_NOSYSTEM:'1',GIT_TERMINAL_PROMPT:'0',GIT_OPTIONAL_LOCKS:'0'});
+Object.assign(env,{GIT_CONFIG_GLOBAL:testGitConfig,GIT_CONFIG_NOSYSTEM:'1',GIT_TERMINAL_PROMPT:'0',GIT_OPTIONAL_LOCKS:'0'});
 for (const [language, expected] of [['pt', 'hardlinks compartilhados'], ['en', 'shared hardlinks'], ['es', 'enlaces físicos compartidos']]) for (const json of [false, true]) {
  test(`init informa hardlink protegido em ${language} json=${json}`, {timeout:240000}, t=>{
   const root=mkdtempSync(join(tmpdir(),'adk-cli-hardlink-')); t.after(()=>rmSync(root,{recursive:true,force:true}));

@@ -26,9 +26,11 @@ test('CLI e sync preservam referência legada e sinalizam escopo não verificado
   const config = run('git', ['config', '--show-origin', '--get', 'core.excludesFile']);
   assert.equal(config.status, 0, config.stderr);
   const [origin, value] = config.stdout.trimEnd().split('\t');
-  const portable = path => path.replaceAll('\\', '/');
-  assert.equal(portable(origin), `file:${portable(gitConfig)}`);
-  assert.equal(portable(value), portable(globalExclude));
+  const unquote = value => value.startsWith('"') ? JSON.parse(value) : value;
+  const originPath = origin.startsWith('file:') ? unquote(origin.slice(5)) : null;
+  assert.ok(originPath, `Git deve informar o arquivo de configuração: ${origin}`);
+  assert.deepEqual(readFileSync(originPath), readFileSync(gitConfig));
+  assert.deepEqual(readFileSync(unquote(value)), readFileSync(globalExclude));
   writeFileSync(join(root, '.gitignore'), '*\n!SENTINELA.txt\n'); writeFileSync(join(root, 'SENTINELA.txt'), 'staged\n'); git('add', '-f', '--', '.gitignore', 'SENTINELA.txt'); appendFileSync(join(root, 'SENTINELA.txt'), 'unstaged\n');
   const sourceBytes = readFileSync(join(kit, source)), text = sourceBytes.toString('utf8'); const head = text.match(/^---\ntrigger: always_on\ndescription: ([\p{L}][\p{L}\p{N} .,-]*)\n---\n/u)?.[0]; const title = text.match(/^# [^\r\n]+$/m)?.[0]; assert(head && title);
   const old = Buffer.from(`${head}\n${title}\n\n<!-- gerado: sincronizar-agentes -->\nLeia e siga [origem](../../../.pbai4devs/rules/ambiente-local/RULE.md).\n`);
