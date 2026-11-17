@@ -7,10 +7,12 @@ import { fixture, read, put, cli } from './client-selection-helpers.mjs';
 
 export const obstructionKinds = Object.freeze(['root-link', 'skills-file', 'group-file', 'leaf-link', 'leaf-directory']);
 
-export function registerObstructionTests(selection) {
+export function registerObstructionTests(selection, kinds = obstructionKinds) {
   if (!['codex', 'all'].includes(selection)) throw new Error('Seleção de teste inválida.');
-  test(`Codex preserva obstruções e usa fallback apenas nas skills afetadas (${selection})`, async t => {
-  for (const kind of obstructionKinds) await t.test(`${selection}/${kind}`, t => {
+  if (!Array.isArray(kinds) || !kinds.length || new Set(kinds).size !== kinds.length
+    || kinds.some(kind => !obstructionKinds.includes(kind))) throw new Error('Partição de obstruções inválida.');
+  test(`Preserva obstruções e usa fallback apenas nas skills afetadas (${selection}: ${kinds.join(', ')})`, async t => {
+  for (const kind of kinds) await t.test(`${selection}/${kind}`, t => {
     const root = fixture(t);
     const git = (...args) => {
       const result = spawnSync('git', ['-C', root, ...args], { encoding: 'utf8' });

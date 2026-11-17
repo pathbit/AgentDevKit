@@ -13,14 +13,16 @@ autenticação por host e links para instalação e pré-requisitos.
 `pipeline.mjs full` verifica produto, infraestrutura, Markdown e o tarball
 exato uma vez. `portable` executa todos os grupos de portabilidade localmente;
 no CI, `portable-cli`, `portable-selection`, `portable-selection-codex`,
-`portable-selection-all`, `portable-projects`, `portable-projects-git`,
-`portable-projects-callbacks`, `portable-projects-matrix`,
+`portable-selection-all-root`, `portable-selection-all-leaf`,
+`portable-projects`, `portable-projects-git`, `portable-projects-callbacks`,
+`portable-projects-matrix`,
 `portable-recovery`, `portable-migration`, `portable-resources` e
 `portable-layout` rodam em jobs separados no Windows e no macOS. Callbacks
 isolados e testes de matriz ficam separados para limitar
 a duração de cada job; os testes Git de maior duração também têm job próprio.
-Os grupos de obstruções testam
-cinco cenários por seleção; o perfil completo executa todas as suítes.
+Os cinco casos de obstrução são preservados; os três casos de raiz e grupo e os
+dois de folha da seleção all ficam em perfis separados. `full` ainda executa
+todas as suítes.
 `smoke` verifica Node 26.
 `check` confere os recursos.
 

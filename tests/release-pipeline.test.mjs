@@ -89,14 +89,15 @@ test('check Git distingue fontes de saídas e não gera arquivos no checkout', t
 test('perfis portáteis cobrem cada suíte uma vez e o comando local executa todos', () => {
   assert.deepEqual(portableProfiles['portable-selection'], ['client-selection.test.mjs', 'exact-native-cli.test.mjs', 'agent-sidecar-sync.test.mjs', 'stale-agent-reference.test.mjs', 'overlay-stale-plan.test.mjs', 'codex-derived-reference.test.mjs', 'stage-preview-combined.test.mjs', 'removed-file-diagnostic.test.mjs', 'removed-file-protection.test.mjs', 'removed-overlay.test.mjs', 'migration-tombstone.test.mjs']);
   assert.deepEqual(portableProfiles['portable-selection-codex'], ['client-selection-obstructions-codex.test.mjs']);
-  assert.deepEqual(portableProfiles['portable-selection-all'], ['client-selection-obstructions-all.test.mjs']);
+  assert.deepEqual(portableProfiles['portable-selection-all-root'], ['client-selection-obstructions-all-root.test.mjs']);
+  assert.deepEqual(portableProfiles['portable-selection-all-leaf'], ['client-selection-obstructions-all-leaf.test.mjs']);
   assert.deepEqual(portableProfiles['portable-projects'], ['client-ignore.test.mjs', 'diagnostic-collector-safe.test.mjs', 'cleanup-failure.test.mjs', 'concurrent-recovery.test.mjs', 'git-legacy-exclude.test.mjs', 'git-locale.test.mjs', 'hardlink-unknown.test.mjs', 'hardlink-plan.test.mjs', 'makefile-guards.test.mjs', 'native-macos-metadata-gate.test.mjs', 'native-metadata.test.mjs', 'oss-preservation.test.mjs', 'matrix-audit.test.mjs', 'pre-sync-stage-diagnostics.test.mjs']);
   assert.deepEqual(portableProfiles['portable-projects-git'], ['git-configuration-preservation.test.mjs']);
   assert.deepEqual(portableProfiles['portable-projects-callbacks'], ['callback-boundary-isolated.test.mjs']);
   assert.deepEqual(portableProfiles['portable-projects-matrix'], ['native-coexistence.test.mjs', 'project-matrix.test.mjs']);
   assert.deepEqual(portableProfiles['portable-recovery'], ['recovery-backup.test.mjs', 'recovery-diagnostics.test.mjs', 'recovery-effects.test.mjs', 'recovery-exclusive.test.mjs', 'recovery-plan-coverage.test.mjs', 'recovery-records.test.mjs', 'recovery-store.test.mjs', 'sync-backup-failure.test.mjs', 'sync-remove-failure.test.mjs', 'sync-logical-order.test.mjs', 'mac-acl-protection.test.mjs', 'mac-acl-plan.test.mjs', 'mac-backup-acl.test.mjs', 'mac-xattr-probe.test.mjs', 'mac-xattr-removal.test.mjs', 'xattr-stage-diagnostics.test.mjs', 'cli-special-mode.test.mjs', 'sync-special-mode.test.mjs', 'sync-temporary-privacy.test.mjs', 'temporary-preservation.test.mjs']);
   assert.deepEqual(portableProfiles['portable-migration'], ['cli-line-endings.test.mjs', 'linux-inplace-metadata-experiment.test.mjs', 'linux-xattr-probe.test.mjs', 'state-migration.test.mjs', 'state-special-mode.test.mjs', 'state-directory-xattr.test.mjs', 'preservation-lifecycle.test.mjs']);
-  const expected = ['adapters.test.mjs', 'claude-agent-evidence.test.mjs', 'claude-evidence.test.mjs', 'claude-legacy-exact.test.mjs', 'claude-legacy-exact-flow.test.mjs', 'claude-rule-cli.test.mjs', 'claude-rule-scope.test.mjs', 'claude-rule-scope-integration.test.mjs', 'cli.test.mjs', 'client-selection.test.mjs', 'client-selection-obstructions-codex.test.mjs', 'client-selection-obstructions-all.test.mjs', 'client-ignore.test.mjs', 'callback-boundary-isolated.test.mjs', 'diagnostic-collector-safe.test.mjs', 'cleanup-failure.test.mjs', 'concurrent-recovery.test.mjs', 'compose-package-smoke.test.mjs', 'copilot-evidence.test.mjs', 'copilot-fleet-evidence.test.mjs', 'git-configuration-preservation.test.mjs', 'git-legacy-exclude.test.mjs', 'git-locale.test.mjs', 'hardlink-unknown.test.mjs', 'hardlink-plan.test.mjs', 'makefile-guards.test.mjs', 'development-ecosystem.test.mjs', 'documentation-compatibility.test.mjs', 'github-packages.test.mjs', 'native-client-matrix.test.mjs', 'native-macos-metadata-gate.test.mjs', 'native-metadata.test.mjs', 'native-coexistence.test.mjs', 'next.test.mjs', 'managed-content.test.mjs', 'managed-content-helper.test.mjs', 'managed-toml.test.mjs', 'toml-prompt-equivalence.test.mjs', 'toml-composite.test.mjs', 'toml-human-after.test.mjs', 'toml-marker-context.test.mjs', 'gemini-command-fixture.test.mjs', 'gemini-unowned-block.test.mjs', 'gemini-derived-command.test.mjs', 'gemini-derived-diagnostic.test.mjs', 'gemini-toml-staged-lifecycle.test.mjs', 'gemini-reference-body.test.mjs', 'gemini-large-integer.test.mjs', 'gemini-xattr-preservation.test.mjs', 'sync-skill-collision.test.mjs', 'scoped-rule-clients.test.mjs', 'gemini-toml-lifecycle-reader.test.mjs', 'managed-preservation.test.mjs', 'security-ecosystem.test.mjs', 'source-layout.test.mjs', 'sync-logical-order.test.mjs', 'mac-acl-protection.test.mjs', 'mac-acl-plan.test.mjs', 'mac-backup-acl.test.mjs', 'mac-xattr-probe.test.mjs', 'mac-xattr-removal.test.mjs', 'xattr-stage-diagnostics.test.mjs', 'cli-special-mode.test.mjs', 'sync-special-mode.test.mjs', 'sync-temporary-privacy.test.mjs', 'state-migration.test.mjs', 'preservation-lifecycle.test.mjs', 'file-modes.test.mjs', 'oss-preservation.test.mjs', 'project-matrix.test.mjs', 'matrix-audit.test.mjs', 'pre-sync-stage-diagnostics.test.mjs', 'recovery-backup.test.mjs', 'recovery-diagnostics.test.mjs', 'recovery-effects.test.mjs', 'recovery-exclusive.test.mjs', 'recovery-plan-coverage.test.mjs', 'recovery-records.test.mjs', 'recovery-store.test.mjs', 'sync-backup-failure.test.mjs', 'sync-remove-failure.test.mjs', 'temporary-preservation.test.mjs', 'release-pipeline.test.mjs', 'release-resilience.test.mjs', 'resource-coverage.test.mjs'].sort();
+  const expected = ['adapters.test.mjs', 'claude-agent-evidence.test.mjs', 'claude-evidence.test.mjs', 'claude-legacy-exact.test.mjs', 'claude-legacy-exact-flow.test.mjs', 'claude-rule-cli.test.mjs', 'claude-rule-scope.test.mjs', 'claude-rule-scope-integration.test.mjs', 'cli.test.mjs', 'client-selection.test.mjs', 'client-selection-obstructions-codex.test.mjs', 'client-selection-obstructions-all-root.test.mjs', 'client-selection-obstructions-all-leaf.test.mjs', 'client-ignore.test.mjs', 'callback-boundary-isolated.test.mjs', 'diagnostic-collector-safe.test.mjs', 'cleanup-failure.test.mjs', 'concurrent-recovery.test.mjs', 'compose-package-smoke.test.mjs', 'copilot-evidence.test.mjs', 'copilot-fleet-evidence.test.mjs', 'git-configuration-preservation.test.mjs', 'git-legacy-exclude.test.mjs', 'git-locale.test.mjs', 'hardlink-unknown.test.mjs', 'hardlink-plan.test.mjs', 'makefile-guards.test.mjs', 'development-ecosystem.test.mjs', 'documentation-compatibility.test.mjs', 'github-packages.test.mjs', 'native-client-matrix.test.mjs', 'native-macos-metadata-gate.test.mjs', 'native-metadata.test.mjs', 'native-coexistence.test.mjs', 'next.test.mjs', 'managed-content.test.mjs', 'managed-content-helper.test.mjs', 'managed-toml.test.mjs', 'toml-prompt-equivalence.test.mjs', 'toml-composite.test.mjs', 'toml-human-after.test.mjs', 'toml-marker-context.test.mjs', 'gemini-command-fixture.test.mjs', 'gemini-unowned-block.test.mjs', 'gemini-derived-command.test.mjs', 'gemini-derived-diagnostic.test.mjs', 'gemini-toml-staged-lifecycle.test.mjs', 'gemini-reference-body.test.mjs', 'gemini-large-integer.test.mjs', 'gemini-xattr-preservation.test.mjs', 'sync-skill-collision.test.mjs', 'scoped-rule-clients.test.mjs', 'gemini-toml-lifecycle-reader.test.mjs', 'managed-preservation.test.mjs', 'security-ecosystem.test.mjs', 'source-layout.test.mjs', 'sync-logical-order.test.mjs', 'mac-acl-protection.test.mjs', 'mac-acl-plan.test.mjs', 'mac-backup-acl.test.mjs', 'mac-xattr-probe.test.mjs', 'mac-xattr-removal.test.mjs', 'xattr-stage-diagnostics.test.mjs', 'cli-special-mode.test.mjs', 'sync-special-mode.test.mjs', 'sync-temporary-privacy.test.mjs', 'state-migration.test.mjs', 'preservation-lifecycle.test.mjs', 'file-modes.test.mjs', 'oss-preservation.test.mjs', 'project-matrix.test.mjs', 'matrix-audit.test.mjs', 'pre-sync-stage-diagnostics.test.mjs', 'recovery-backup.test.mjs', 'recovery-diagnostics.test.mjs', 'recovery-effects.test.mjs', 'recovery-exclusive.test.mjs', 'recovery-plan-coverage.test.mjs', 'recovery-records.test.mjs', 'recovery-store.test.mjs', 'sync-backup-failure.test.mjs', 'sync-remove-failure.test.mjs', 'temporary-preservation.test.mjs', 'release-pipeline.test.mjs', 'release-resilience.test.mjs', 'resource-coverage.test.mjs'].sort();
   expected.push('cli-line-endings.test.mjs', 'linux-inplace-metadata-experiment.test.mjs', 'linux-xattr-probe.test.mjs', 'json-diagnostics.test.mjs', 'exact-native-cli.test.mjs', 'exact-native-sync.test.mjs', 'agent-sidecar-sync.test.mjs', 'stale-agent-reference.test.mjs', 'overlay-stale-plan.test.mjs', 'codex-derived-reference.test.mjs', 'stage-preview-combined.test.mjs', 'removed-file-diagnostic.test.mjs', 'removed-file-protection.test.mjs', 'removed-overlay.test.mjs', 'migration-tombstone.test.mjs', 'runtime-minimum.test.mjs', 'state-special-mode.test.mjs', 'state-directory-xattr.test.mjs');
   expected.sort();
   const combined = Object.values(portableProfiles).flat();
@@ -134,16 +135,17 @@ test('classificação exige justificar cada suíte e detecta ausências e duplic
   assert.throws(() => verifyPortableClassification(['a.test.mjs'], { profiles: { a: [] }, fullOnly: { 'a.test.mjs': '' } }), /justificativa/);
 });
 
-test('perfil completo executa recuperação primeiro e cada suíte uma vez', () => {
+test('perfil completo isola recuperação e obstruções pesadas e executa cada suíte uma vez', () => {
   const files = readdirSync(join(root, 'tests'));
   const groups = fullTestGroups(files);
   assert.deepEqual(groups[0], ['concurrent-recovery.test.mjs']);
-  assert.deepEqual(groups[1], ['client-selection.test.mjs', 'client-selection-obstructions-codex.test.mjs', 'client-selection-obstructions-all.test.mjs']);
+  const selection = ['client-selection.test.mjs', 'client-selection-obstructions-codex.test.mjs', 'client-selection-obstructions-all-root.test.mjs', 'client-selection-obstructions-all-leaf.test.mjs'];
+  assert.deepEqual(groups.slice(1, 5), selection.map(file => [file]));
   const expected = files.filter(name => name.endsWith('.test.mjs') && name !== 'distribution.test.mjs').sort();
   assert.deepEqual(groups.flat().sort(), expected);
   assert.equal(new Set(groups.flat()).size, expected.length);
   assert.throws(() => fullTestGroups(files.filter(name => name !== 'client-selection.test.mjs')), /seleção ausente/);
-  for (const file of groups[1]) assert.throws(() => fullTestGroups(files.filter(name => name !== file)), /seleção ausente/);
+  for (const file of selection) assert.throws(() => fullTestGroups(files.filter(name => name !== file)), /seleção ausente/);
   assert.throws(() => fullTestGroups(files.filter(name => name !== 'concurrent-recovery.test.mjs')), /recuperação ausente/);
   const calls = [], environments = [], failure = new Error('falha do segundo grupo');
   assert.throws(() => runPipeline('full', { root, env: { ADK_STRICT_RECOVERY_TEST: '0', adk_strict_recovery_test: '0', ADK_STRICT_CLAUDE_SCOPE_TEST: '0', adk_strict_claude_scope_test: '0', NODE_OPTIONS: '--test-name-pattern=skip', node_options: 'ignored' }, run(_root, args, env) {
@@ -180,12 +182,22 @@ test('perfil completo não aceita filtro herdado que oculte testes', t => {
   assert.equal(executed, true);
 });
 
-test('as suítes de obstrução cobrem as duas seleções e os cinco casos', () => {
+test('as suítes de obstrução particionam os cinco casos sem duplicar cobertura', () => {
   assert.deepEqual(obstructionKinds, ['root-link', 'skills-file', 'group-file', 'leaf-link', 'leaf-directory']);
-  for (const selection of ['codex', 'all']) {
-    const file = join(root, `tests/client-selection-obstructions-${selection}.test.mjs`);
-    assert.match(readFileSync(file, 'utf8'), new RegExp(`registerObstructionTests\\('${selection}'\\)`));
+  const codexFile = join(root, 'tests/client-selection-obstructions-codex.test.mjs');
+  assert.ok(readFileSync(codexFile, 'utf8').includes("registerObstructionTests('codex')"));
+  const partitions = [
+    ['client-selection-obstructions-all-root.test.mjs', ['root-link', 'skills-file', 'group-file']],
+    ['client-selection-obstructions-all-leaf.test.mjs', ['leaf-link', 'leaf-directory']],
+  ];
+  const covered = [];
+  for (const [file, kinds] of partitions) {
+    const argumentsText = kinds.map(kind => `'${kind}'`).join(', ');
+    assert.ok(readFileSync(join(root, 'tests', file), 'utf8').includes(`registerObstructionTests('all', [${argumentsText}])`));
+    covered.push(...kinds);
   }
+  assert.deepEqual(covered, obstructionKinds);
+  assert.equal(new Set(covered).size, obstructionKinds.length);
 });
 
 test('matriz roda cada grupo portátil exatamente uma vez em cada SO e falhas bloqueiam o CI', () => {

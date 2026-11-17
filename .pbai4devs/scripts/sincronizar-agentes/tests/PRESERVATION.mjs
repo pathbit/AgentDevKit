@@ -64,6 +64,8 @@ test('identidade do índice usa os campos de 32 bits do formato Git', () => {
   assert.equal(gitIndexStatIdentityMatches(info.dev, info.ino, info, 'darwin'), false);
   assert.equal(gitIndexStatIdentityMatches(0x42n, 0x7cn, info, 'darwin'), false);
   assert.equal(gitIndexStatIdentityMatches(0n, 0n, info, 'win32'), true);
+  assert.equal(gitIndexStatIdentityMatches(0n, 0x7bn, info, 'win32'), false);
+  assert.equal(gitIndexStatIdentityMatches(0x42n, 0n, info, 'win32'), false);
   assert.equal(gitIndexStatIdentityMatches(0n, 0n, info, 'darwin'), false);
   assert.equal(gitIndexStatIdentityMatches(null, 0x7bn, info, 'darwin'), false);
 });
@@ -255,11 +257,19 @@ test('sync atualiza apontamento staged equivalente em repositório com autocrlf'
     assert.ok(line, `campo ${name} ausente em git ls-files --debug`);
     return BigInt(line.slice(line.indexOf(':') + 1).trim());
   };
-  assert.equal(stagedField('dev'), BigInt.asUintN(32, stagedStat.dev));
-  assert.equal(stagedField('ino'), BigInt.asUintN(32, stagedStat.ino));
-  const inodeTruncated = stagedStat.ino > 0xffff_ffffn;
-  if (inodeTruncated) assert.notEqual(stagedField('ino'), stagedStat.ino);
-  t.diagnostic(`Git index identity: devTruncated=${stagedStat.dev > 0xffff_ffffn}, inodeTruncated=${inodeTruncated}`);
+  const indexedDev = stagedField('dev'), indexedIno = stagedField('ino');
+  const identityUnavailable = process.platform === 'win32' && indexedDev === 0n && indexedIno === 0n;
+  assert.equal(gitIndexStatIdentityMatches(indexedDev, indexedIno, stagedStat), true);
+  if (identityUnavailable) {
+    t.diagnostic('Git index stat identity unavailable: dev=0 and ino=0; staged blob and stable metadata remain checked.');
+  } else {
+    assert.equal(indexedDev, BigInt.asUintN(32, stagedStat.dev));
+    assert.equal(indexedIno, BigInt.asUintN(32, stagedStat.ino));
+  }
+  const devTruncated = !identityUnavailable && stagedStat.dev > 0xffff_ffffn;
+  const inodeTruncated = !identityUnavailable && stagedStat.ino > 0xffff_ffffn;
+  if (!identityUnavailable && inodeTruncated) assert.notEqual(indexedIno, stagedStat.ino);
+  t.diagnostic(`Git index identity: unavailable=${identityUnavailable}, devTruncated=${devTruncated}, inodeTruncated=${inodeTruncated}`);
   const index = git(root, 'ls-files', '--stage', '-z');
   const indexBytes = readFileSync(file(root, '.git/index'));
   put(root, original, '---\nname: criar-skill\ndescription: Mudança real.\n---\n\n# Criar skill\n');

@@ -49,7 +49,8 @@ export const portableProfiles = Object.freeze({
   'portable-cli': Object.freeze(['cli.test.mjs', 'adapters.test.mjs', 'development-ecosystem.test.mjs', 'security-ecosystem.test.mjs', 'file-modes.test.mjs', 'runtime-minimum.test.mjs']),
   'portable-selection': Object.freeze(['client-selection.test.mjs', 'exact-native-cli.test.mjs', 'agent-sidecar-sync.test.mjs', 'stale-agent-reference.test.mjs', 'overlay-stale-plan.test.mjs', 'codex-derived-reference.test.mjs', 'stage-preview-combined.test.mjs', 'removed-file-diagnostic.test.mjs', 'removed-file-protection.test.mjs', 'removed-overlay.test.mjs', 'migration-tombstone.test.mjs']),
   'portable-selection-codex': Object.freeze(['client-selection-obstructions-codex.test.mjs']),
-  'portable-selection-all': Object.freeze(['client-selection-obstructions-all.test.mjs']),
+  'portable-selection-all-root': Object.freeze(['client-selection-obstructions-all-root.test.mjs']),
+  'portable-selection-all-leaf': Object.freeze(['client-selection-obstructions-all-leaf.test.mjs']),
   'portable-projects': Object.freeze(['client-ignore.test.mjs', 'diagnostic-collector-safe.test.mjs', 'cleanup-failure.test.mjs', 'concurrent-recovery.test.mjs', 'git-legacy-exclude.test.mjs', 'git-locale.test.mjs', 'hardlink-unknown.test.mjs', 'hardlink-plan.test.mjs', 'makefile-guards.test.mjs', 'native-macos-metadata-gate.test.mjs', 'native-metadata.test.mjs', 'oss-preservation.test.mjs', 'matrix-audit.test.mjs', 'pre-sync-stage-diagnostics.test.mjs']),
   'portable-projects-git': Object.freeze(['git-configuration-preservation.test.mjs']),
   'portable-projects-callbacks': Object.freeze(['callback-boundary-isolated.test.mjs']),
@@ -89,12 +90,13 @@ export function fullTestGroups(files) {
   const selection = [
     'client-selection.test.mjs',
     'client-selection-obstructions-codex.test.mjs',
-    'client-selection-obstructions-all.test.mjs',
+    'client-selection-obstructions-all-root.test.mjs',
+    'client-selection-obstructions-all-leaf.test.mjs',
   ];
   const recovery = ['concurrent-recovery.test.mjs'];
   if (!names.includes(recovery[0])) throw new Error('Suíte de recuperação ausente do perfil completo.');
   if (selection.some(name => !names.includes(name))) throw new Error('Suíte de seleção ausente do perfil completo.');
-  return [recovery, selection, names.filter(name => !selection.includes(name) && !recovery.includes(name))];
+  return [recovery, ...selection.map(name => [name]), names.filter(name => !selection.includes(name) && !recovery.includes(name))];
 }
 
 function checkWorkflowOutput(root, env, outputPath) {

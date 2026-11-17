@@ -74,8 +74,12 @@ jobs:
             label: Windows / Node 24 / Codex obstructions
           - os: windows-latest
             node: 24
-            profile: portable-selection-all
-            label: Windows / Node 24 / all-client obstructions
+            profile: portable-selection-all-root
+            label: Windows / Node 24 / all-client root obstructions
+          - os: windows-latest
+            node: 24
+            profile: portable-selection-all-leaf
+            label: Windows / Node 24 / all-client leaf obstructions
           - os: windows-latest
             node: 24
             profile: portable-projects
@@ -122,8 +126,12 @@ jobs:
             label: macOS / Node 24 / Codex obstructions
           - os: macos-15-intel
             node: 24
-            profile: portable-selection-all
-            label: macOS / Node 24 / all-client obstructions
+            profile: portable-selection-all-root
+            label: macOS / Node 24 / all-client root obstructions
+          - os: macos-15-intel
+            node: 24
+            profile: portable-selection-all-leaf
+            label: macOS / Node 24 / all-client leaf obstructions
           - os: macos-15-intel
             node: 24
             profile: portable-projects
