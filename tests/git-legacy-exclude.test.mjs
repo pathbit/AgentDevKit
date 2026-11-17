@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -161,10 +161,11 @@ test('worktree vinculada preserva exclude compartilhado e índices humanos', { s
   git(linked, 'add', '--', 'human.txt');
   const linkedIndex = resolve(linked, git(linked, 'rev-parse', '--git-path', 'index'));
   const linkedExclude = resolve(linked, git(linked, 'rev-parse', '--git-path', 'info/exclude'));
-  const canonicalExclude = path => join(realpathSync(dirname(path)), basename(path));
-  const linkedExcludePath = canonicalExclude(linkedExclude), excludePath = canonicalExclude(exclude);
-  assert.equal(process.platform === 'win32' ? linkedExcludePath.toLowerCase() : linkedExcludePath,
-    process.platform === 'win32' ? excludePath.toLowerCase() : excludePath);
+  assert.equal(basename(linkedExclude), basename(exclude));
+  const linkedParent = statSync(dirname(linkedExclude), { bigint: true });
+  const excludeParent = statSync(dirname(exclude), { bigint: true });
+  assert.equal(linkedParent.dev, excludeParent.dev);
+  assert.equal(linkedParent.ino, excludeParent.ino);
   writeFileSync(exclude, '# regra humana\n# BEGIN AGENTDEVKIT LOCAL 0123456789abcdef\n/.claude/\n');
   const before = snapshots([exclude, index, linkedIndex, join(root, '.git/config'), join(root, '.gitignore'), join(linked, '.gitignore')]);
   const plan = planLocalIgnore(linked);

@@ -880,11 +880,13 @@ usou o pacote público `0.0.30`: o teste do Hibernate detectou alteração de
 exclusões locais e o EF6 foi bloqueado por exceções ambíguas no `.gitignore`.
 Esses resultados não comprovam o comportamento dos demais projetos nem da
 candidata local de escopo Claude.
-Em macOS, a candidata passou nas mesmas cinco operações em 1.000 projetos
-sintéticos distintos: 500 novos e 500 existentes. Após a correção do inspetor,
-um novo pacote local passou em mais 40 projetos. Essas provas não executam os
-clientes ou os fluxos das skills e não comprovam atualização de uma versão
-gerenciada anterior diferente.
+Em macOS ARM64, com Node 26, as cinco operações da candidata local `0.0.30`
+retornaram zero em 1.000 projetos sintéticos: 500 novos e 500 existentes. Foram
+792 casos aprovados, 208 não verificados quanto ao escopo nativo da regra Claude
+e nenhuma falha; o resultado geral permaneceu não verificado. Após a correção
+do inspetor, um novo pacote local passou em mais 40 projetos. Essas provas não
+executam os clientes ou os fluxos das skills e não comprovam atualização de
+uma versão gerenciada anterior diferente.
 Outro pacote local `0.0.30` passou nas verificações da CLI em 200 projetos
 sintéticos adicionais, nas rodadas 26 a 30. Ele antecede o ajuste posterior da
 skill de PRD e também não comprova execução nativa de skills ou agentes.

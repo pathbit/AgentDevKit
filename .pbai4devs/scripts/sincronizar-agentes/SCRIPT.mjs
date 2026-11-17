@@ -55,9 +55,11 @@ function indexStatMatchesFile(root, path, info) {
     return match ? BigInt(match[1]) * 1_000_000_000n + BigInt(match[2].padStart(9, '0')) : null;
   };
   const dev = value('dev'), ino = value('ino'), uid = value('uid'), gid = value('gid'), size = value('size');
+  // Git for Windows and Node report ctime with different semantics.
   return dev !== undefined && ino !== undefined && uid !== undefined && gid !== undefined && size !== undefined
     && BigInt(dev) === info.dev && BigInt(ino) === info.ino && BigInt(uid) === info.uid && BigInt(gid) === info.gid
-    && BigInt(size) === info.size && time('ctime') === info.ctimeNs && time('mtime') === info.mtimeNs;
+    && BigInt(size) === info.size && (process.platform === 'win32' || time('ctime') === info.ctimeNs)
+    && time('mtime') === info.mtimeNs;
 }
 
 function indexBlobMatchesFile(root, path, bytes, info) {
