@@ -24,18 +24,26 @@ test('prova de exclusão humana exige a regra e origem exatas', () => {
 
 test('doctor deve identificar exatamente a fixture privada visível, sem omitir outras falhas', () => {
   const path = '.opencode/settings.local.json';
+  const extra = [{ code: 'ignore-ambiguous', path: '.gitignore: !*.cache/' }];
   assert.doesNotThrow(() => checkDoctorIssues({ issues: [{ code: 'private-file-visible', path }] }, path, false));
   assert.doesNotThrow(() => checkDoctorIssues({ issues: [] }, path, true));
+  assert.doesNotThrow(() => checkDoctorIssues({ issues: [{ code: 'private-file-visible', path }, ...extra] }, path, false, extra));
+  assert.doesNotThrow(() => checkDoctorIssues({ issues: extra }, path, true, extra));
   assert.throws(() => checkDoctorIssues({ issues: [] }, path, false), /problemas ausentes/);
   assert.throws(() => checkDoctorIssues({ issues: [{ code: 'private-file-visible', path }, { code: 'broken' }] }, path, false), /inesperados/);
   assert.throws(() => checkDoctorIssues({ issues: [{ code: 'private-file-visible', path: 'outro' }] }, path, false), /inesperados/);
+  assert.throws(() => checkDoctorIssues({ issues: [{ code: 'private-file-visible', path }] }, path, false, extra), /inesperados/);
   assert.throws(() => checkDoctorIssues({}, path, true), /problemas ausentes/);
 });
 
 test('sync distingue alertas de visibilidade de erros além da fixture privada', () => {
   const path = '.opencode/settings.local.json';
+  const extraIssue = { code: 'ignore-ambiguous', path: '.gitignore: !*.cache/' };
   const value = { conflicts: [], localIgnore: { pending: [{ code: 'output-visible', path: 'AGENTS.md' }, { code: 'private-file-visible', path }], trackedOutputs: [] } };
   assert.doesNotThrow(() => checkSyncIssues(value, path, false));
+  const expected = structuredClone(value); expected.localIgnore.pending.push(extraIssue);
+  assert.doesNotThrow(() => checkSyncIssues(expected, path, false, [extraIssue]));
+  assert.doesNotThrow(() => checkSyncIssues({ conflicts: [], localIgnore: { pending: [extraIssue], trackedOutputs: [] } }, path, true, [extraIssue]));
   const extra = structuredClone(value); extra.localIgnore.pending.push({ code: 'ignore-ambiguous', path: '.gitignore' });
   assert.throws(() => checkSyncIssues(extra, path, false), /inesperados/);
   const tracked = structuredClone(value); tracked.localIgnore.trackedOutputs.push('.claude/secret');
@@ -43,13 +51,33 @@ test('sync distingue alertas de visibilidade de erros além da fixture privada',
   assert.throws(() => checkSyncIssues(value, path, true), /inesperados/);
 });
 
-test('sync independente exige resumo limpo e pendência privada exata', () => {
+test('sync independente confere resumo, ordenação e truncamento com JSON completo', () => {
   const summary = '0 desatualizadas; 0 obsoletas; 0 conflitos; 0 origens nativas ausentes; 0 documentos antigos; 0 indices derivados; 0 gitignores; ';
   const path = '.opencode/settings.local.json';
-  assert.doesNotThrow(() => checkStandaloneSync(`${summary}1 exclusoes locais.\nPendente: private-file-visible: ${path}\n`, path, false));
-  assert.doesNotThrow(() => checkStandaloneSync(`${summary}0 exclusoes locais.\n`, path, true));
-  assert.throws(() => checkStandaloneSync(`${summary}2 exclusoes locais.\nPendente: private-file-visible: ${path}\n`, path, false), /problemas inesperados/);
-  assert.throws(() => checkStandaloneSync(`${summary}1 exclusoes locais.\nPendente: private-file-visible: outro\n`, path, false), /Pendências inesperadas/);
+  const result = pending => ({ localIgnore: { pending } });
+  const single = result([{ code: 'private-file-visible', path }]);
+  assert.doesNotThrow(() => checkStandaloneSync(`${summary}1 exclusoes locais.\nPendente: private-file-visible: ${path}\n`, single));
+  assert.doesNotThrow(() => checkStandaloneSync(`${summary}0 exclusoes locais.\n`, result([])));
+
+  const shortPending = [
+    { code: 'private-file-visible', path },
+    { code: 'private-file-visible', path: '.agents/.Cache/.agentdevkit-ignore-probe' },
+    { code: 'ignore-ambiguous', path: '.gitignore: !*.[Cc]ache/' },
+  ];
+  const short = `${summary}3 exclusoes locais.\nPendente: private-file-visible: ${path}\nPendente: private-file-visible: .agents/.Cache/.agentdevkit-ignore-probe\nPendente: ignore-ambiguous: .gitignore: !*.[Cc]ache/\n`;
+  assert.doesNotThrow(() => checkStandaloneSync(short, result(shortPending)));
+  assert.throws(() => checkStandaloneSync(short.replace('3 exclusoes', '2 exclusoes'), result(shortPending)), /problemas inesperados/);
+
+  const longPending = [
+    ...Array.from({ length: 13 }, (_, index) => ({ code: 'private-file-visible', path: `.client-${index}/settings.local.json` })),
+    { code: 'artifact-unprotected', path: '.agent-tests/probe' },
+    { code: 'output-visible', path: 'AGENTS.md' },
+  ];
+  const visible = longPending.slice(0, 12).map(item => `Pendente: ${item.code}: ${item.path}`).join('\n');
+  const long = `${summary}13 exclusoes locais.\n${visible}\n+3; use agentdevkit sync --check --json para detalhes.\n`;
+  assert.doesNotThrow(() => checkStandaloneSync(long, result(longPending)));
+  assert.throws(() => checkStandaloneSync(long.replace('+3;', '+2;'), result(longPending)), /diverge do JSON/);
+  assert.throws(() => checkStandaloneSync(long.replace('Pendente: private-file-visible: .client-0/settings.local.json', 'Pendente: ignore-ambiguous: unexpected'), result(longPending)), /Prévia de pendências inesperada/);
 });
 
 test('ambiente OSS não herda ignore padrão XDG da máquina', t => {

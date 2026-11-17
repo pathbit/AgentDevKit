@@ -18,6 +18,12 @@ const registry = 'https://registry.npmjs.org';
 const put = (path, text) => { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, text); };
 const json = path => JSON.parse(readFileSync(path, 'utf8'));
 const info = path => { try { return lstatSync(path); } catch (error) { if (error.code === 'ENOENT') return null; throw error; } };
+const expectedProjectIssues = projectId => projectId === 'ef6' ? [
+  ...['.agents', '.agent', '.claude', '.codex', '.cursor', '.github', '.vscode', '.opencode', '.gemini', '.zcode', '.kimi-code', '.kimi', '.minimax', '.mimocode', '.dsh']
+    .map(root => ({ code: 'private-file-visible', path: `${root}/.Cache/.agentdevkit-ignore-probe` })),
+  { code: 'ignore-ambiguous', path: '.gitignore: !**/[Pp]ackages/build/' },
+  { code: 'ignore-ambiguous', path: '.gitignore: !*.[Cc]ache/' },
+] : [];
 
 function parse(args) {
   const options = { version: json(join(repositoryRoot, 'package.json')).version };
@@ -246,25 +252,33 @@ export function checkExcludeOrigin(text) {
   assert.match(text, /^\.git\/info\/exclude:[1-9]\d*:\/oss-human-private\/\toss-human-private\/probe\r?\n$/, 'Regra humana de exclusão não foi a regra efetiva.');
 }
 
-export function checkDoctorIssues(value, privatePath, ignored) {
-  const expected = ignored ? [] : [{ code: 'private-file-visible', path: privatePath }];
+export function checkDoctorIssues(value, privatePath, ignored, extraIssues = []) {
+  const expected = [...(ignored ? [] : [{ code: 'private-file-visible', path: privatePath }]), ...extraIssues];
   assert.deepEqual(value.issues, expected, 'Diagnóstico apresentou problemas ausentes ou inesperados.');
 }
 
-export function checkSyncIssues(value, privatePath, ignored) {
+export function checkSyncIssues(value, privatePath, ignored, extraIssues = []) {
   assert.ok(Array.isArray(value.localIgnore?.pending), 'Diagnóstico sync ausente.');
   const blocking = value.localIgnore.pending.filter(item => !['artifact-unprotected', 'artifact-coverage-unverified', 'output-visible'].includes(item.code));
-  const expected = ignored ? [] : [{ code: 'private-file-visible', path: privatePath }];
+  const expected = [...(ignored ? [] : [{ code: 'private-file-visible', path: privatePath }]), ...extraIssues];
   assert.deepEqual(blocking, expected, 'Sync apresentou problemas ausentes ou inesperados.');
   assert.deepEqual(value.conflicts, [], 'Sync apresentou conflitos.');
   assert.deepEqual(value.localIgnore.trackedOutputs, [], 'Sync detectou artefatos rastreados.');
 }
 
-export function checkStandaloneSync(text, privatePath, ignored) {
-  const summary = `0 desatualizadas; 0 obsoletas; 0 conflitos; 0 origens nativas ausentes; 0 documentos antigos; 0 indices derivados; 0 gitignores; ${ignored ? 0 : 1} exclusoes locais.`;
+export function checkStandaloneSync(text, value) {
+  assert.ok(Array.isArray(value?.localIgnore?.pending), 'Diagnóstico JSON necessário para validar o resumo textual.');
+  const pending = value.localIgnore.pending;
+  const blocking = pending.filter(item => !['artifact-unprotected', 'artifact-coverage-unverified', 'output-visible'].includes(item.code));
+  const summary = `0 desatualizadas; 0 obsoletas; 0 conflitos; 0 origens nativas ausentes; 0 documentos antigos; 0 indices derivados; 0 gitignores; ${blocking.length} exclusoes locais.`;
   assert.equal(text.split(/\r?\n/)[0], summary, 'Resumo do sync independente indica alterações ou problemas inesperados.');
-  const pending = text.split(/\r?\n/).filter(line => line.startsWith('Pendente: '));
-  assert.deepEqual(pending, ignored ? [] : [`Pendente: private-file-visible: ${privatePath}`], 'Pendências inesperadas no sync independente.');
+  const displayed = [...blocking, ...pending.filter(item => !blocking.includes(item))].slice(0, 12);
+  const expectedLines = displayed.map(item => `${blocking.includes(item) ? 'Pendente' : 'Aviso'}: ${item.code}: ${item.path}`);
+  const actualLines = text.split(/\r?\n/).filter(line => /^(?:Pendente|Aviso): /.test(line));
+  assert.deepEqual(actualLines, expectedLines, 'Prévia de pendências inesperada no sync independente.');
+  const truncations = text.split(/\r?\n/).filter(line => /^\+\d+; use agentdevkit sync --check --json para detalhes\.$/.test(line));
+  const expectedTruncations = pending.length > 12 ? [`+${pending.length - 12}; use agentdevkit sync --check --json para detalhes.`] : [];
+  assert.deepEqual(truncations, expectedTruncations, 'Contagem de pendências omitidas diverge do JSON completo.');
 }
 
 function gitSnapshot(root, git) {
@@ -582,28 +596,48 @@ function testProject(project, options, output, env, npm) {
       run('private-ignore-check', 'git', ['-c', `core.hooksPath=${join(output, 'empty-hooks')}`, '-C', directory, 'check-ignore', '--no-index', '--quiet', '--', nativeConfig], output, null);
       return classifyIgnoreStatus(nativeConfig, commands.at(-1).status);
     };
+    const extraIssues = expectedProjectIssues(project.id);
+    for (const issue of extraIssues) {
+      if (issue.code === 'private-file-visible' && issue.path.endsWith('/.agentdevkit-ignore-probe')) {
+        assert.equal(info(join(directory, issue.path)), null, `Sonda diagnostica nao deve existir: ${issue.path}`);
+        run('expected-diagnostic-probe-ignore-check', 'git', [...gitPrefix, 'check-ignore', '--no-index', '--quiet', '--', issue.path], output, null);
+        assert.equal(commands.at(-1).status, 1, `Sonda nao ignorada divergiu do diagnostico: ${issue.path}`);
+      } else if (issue.code === 'ignore-ambiguous') {
+        const match = issue.path.match(/^\.gitignore: (.*)$/);
+        assert.ok(match, `Origem de regra ambigua inesperada: ${issue.path}`);
+        const lines = readFileSync(join(directory, '.gitignore'), 'utf8').split(/\r?\n/);
+        assert.ok(lines.includes(match[1]), `Regra de origem ausente: ${issue.path}`);
+      } else assert.fail(`Diagnostico de projeto nao suportado: ${JSON.stringify(issue)}`);
+    }
     const doctor = name => {
       const observation = privateObservation();
-      const outcome = cli(name, ['doctor', '--target', directory], observation.ignored ? 0 : 1);
-      checkDoctorIssues(outcome, nativeConfig, observation.ignored);
+      const expectedExit = !observation.ignored || extraIssues.length ? 1 : 0;
+      const outcome = cli(name, ['doctor', '--target', directory], expectedExit);
+      checkDoctorIssues(outcome, nativeConfig, observation.ignored, extraIssues);
       checkOriginals(directory, baseline, git);
       return outcome;
     };
     const syncCheck = name => {
       const observation = privateObservation();
-      const outcome = protectedCli(name, ['sync', '--check', '--target', directory], observation.ignored ? 0 : 1);
-      checkSyncIssues(outcome, nativeConfig, observation.ignored);
+      const expectedExit = !observation.ignored || extraIssues.length ? 1 : 0;
+      const outcome = protectedCli(name, ['sync', '--check', '--target', directory], expectedExit);
+      checkSyncIssues(outcome, nativeConfig, observation.ignored, extraIssues);
       return outcome;
     };
-    doctor('doctor');
-    syncCheck('sync-check'); checked('doctor-and-sync');
+    const doctorOutcome = doctor('doctor');
+    const syncOutcome = syncCheck('sync-check');
+    const expectedBlocking = [...(privateObservation().ignored ? [] : [{ code: 'private-file-visible', path: nativeConfig }]), ...extraIssues];
+    const requiresAttention = expectedBlocking.length > 0;
+    result.diagnostics = { status: requiresAttention ? 'attention-required' : 'healthy', doctorOk: doctorOutcome.ok, syncOk: syncOutcome.ok, expectedBlocking };
+    checked(requiresAttention ? 'doctor-and-sync-known-diagnostics' : 'doctor-and-sync', requiresAttention ? 'attention-required' : 'passed');
     const observation = privateObservation();
-    const standaloneCheck = protectedRun('standalone-sync-check', ['.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs', '--check'], observation.ignored ? 0 : 1);
-    checkStandaloneSync(standaloneCheck, nativeConfig, observation.ignored);
-    run('installed-resource-check', process.execPath, ['.pbai4devs/scripts/verificar-recursos/SCRIPT.mjs'], directory, observation.ignored ? 0 : 1);
-    if (!observation.ignored) {
+    const expectedExit = !observation.ignored || extraIssues.length ? 1 : 0;
+    const standaloneCheck = protectedRun('standalone-sync-check', ['.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs', '--check'], expectedExit);
+    checkStandaloneSync(standaloneCheck, syncOutcome);
+    run('installed-resource-check', process.execPath, ['.pbai4devs/scripts/verificar-recursos/SCRIPT.mjs'], directory, expectedExit);
+    if (expectedExit !== 0) {
       const stderr = readFileSync(join(evidence, commands.at(-1).stderr), 'utf8');
-      checkStandaloneSync(stderr, nativeConfig, false);
+      checkStandaloneSync(stderr, syncOutcome);
       // The normal verifier stops at sync when private data is visible. Sync
       // was checked above; separately execute the remaining resource checks.
       const script = 'import { verifyResources } from "./.pbai4devs/scripts/verificar-recursos/SCRIPT.mjs"; const result = verifyResources({root: process.cwd(), synchronize() {}}); if (!Array.isArray(result.messages) || !result.messages.includes("recursos=passed")) throw Error("Verificação de recursos incompleta"); for (const message of result.messages) console.log(message);';
@@ -694,16 +728,18 @@ export function main(args = process.argv.slice(2)) {
   let archiveUnchanged = true;
   if (options.tarball) try { archiveUnchanged = hash(readFileSync(options.tarball)) === options.packageSource.sha256; }
   catch { archiveUnchanged = false; }
-  const report = { status: archiveUnchanged && results.every(result => result.status === 'passed') ? 'passed' : 'failed', version: options.version,
+  const report = { status: archiveUnchanged && results.every(result => result.status === 'passed') ? 'passed' : 'failed',
+    health: results.some(result => result.diagnostics?.status === 'attention-required') ? 'attention-required' : 'healthy', version: options.version,
     packageSource: { ...options.packageSource, ...(options.tarball ? { unchanged: archiveUnchanged } : {}) },
     node: process.version, platform: process.platform, arch: process.arch, output, results,
     limits: ['Somente compatibilidade de instalação do kit; aplicações, builds e serviços não foram executados.',
       'Sem push, alteração de remotes após o clone, configuração global ou credenciais npm.',
       'Links para a raiz do projeto têm identidade, plano e ownership verificados, mas não toda a árvore de destino.',
+      'status=passed valida preservação e comportamento esperado; consulte health e results[].diagnostics para pendências do projeto.',
       'Resultados limitados aos commits, clientes, sistema operacional e runtime registrados.'] };
   prepared.verifyOutput();
   put(join(output, 'REPORT.json'), JSON.stringify(report, null, 2) + '\n');
-  console.log(JSON.stringify({ status: report.status, projects: results.length, report: join(output, 'REPORT.json') }));
+  console.log(JSON.stringify({ status: report.status, health: report.health, projects: results.length, report: join(output, 'REPORT.json') }));
   return report.status === 'passed' ? 0 : 1;
 }
 
