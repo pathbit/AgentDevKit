@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { testGitConfig } from '../.pbai4devs/scripts/lib/test-git-environment.mjs';
 import { applyLocalIgnore, checkLocalIgnore, planLocalIgnore } from '../.pbai4devs/scripts/lib/gitignore.mjs';
@@ -161,7 +161,10 @@ test('worktree vinculada preserva exclude compartilhado e índices humanos', { s
   git(linked, 'add', '--', 'human.txt');
   const linkedIndex = resolve(linked, git(linked, 'rev-parse', '--git-path', 'index'));
   const linkedExclude = resolve(linked, git(linked, 'rev-parse', '--git-path', 'info/exclude'));
-  assert.equal(linkedExclude, exclude);
+  const canonicalExclude = path => join(realpathSync(dirname(path)), basename(path));
+  const linkedExcludePath = canonicalExclude(linkedExclude), excludePath = canonicalExclude(exclude);
+  assert.equal(process.platform === 'win32' ? linkedExcludePath.toLowerCase() : linkedExcludePath,
+    process.platform === 'win32' ? excludePath.toLowerCase() : excludePath);
   writeFileSync(exclude, '# regra humana\n# BEGIN AGENTDEVKIT LOCAL 0123456789abcdef\n/.claude/\n');
   const before = snapshots([exclude, index, linkedIndex, join(root, '.git/config'), join(root, '.gitignore'), join(linked, '.gitignore')]);
   const plan = planLocalIgnore(linked);

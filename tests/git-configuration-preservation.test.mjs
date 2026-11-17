@@ -856,7 +856,7 @@ test('sync executado diretamente orienta revisão após falha de publicação', 
   assert.match(child.stderr, /falha sintética após publicação/);
   assert.match(child.stderr, /pode ter deixado alterações/);
   assert.match(child.stderr, /dados parciais ou de outra origem/);
-  assert.match(child.stderr, /sync-backup\./);
+  assert.match(child.stderr, /sync-backup\.|\.sync-rollback\./);
   assert.match(child.stdout, /integridade não verificada/);
   assert.deepEqual(readFileSync(join(root, '.git/index')), index);
   assert.deepEqual(readFileSync(join(root, '.gitignore')), ignore);
