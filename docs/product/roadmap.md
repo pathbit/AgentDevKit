@@ -880,6 +880,21 @@ usou o pacote público `0.0.30`: o teste do Hibernate detectou alteração de
 exclusões locais e o EF6 foi bloqueado por exceções ambíguas no `.gitignore`.
 Esses resultados não comprovam o comportamento dos demais projetos nem da
 candidata local de escopo Claude.
+Em 17/11/2026, uma candidata local `0.0.30` passou os controles de instalação
+e preservação em nove projetos: Hibernate, EF6, Rust, Go, Tailcat, Requests,
+Express, Zod e Chi. A rodada usou macOS ARM64, Node 26.13 e o tarball SHA-256
+`ca490c637ef2796268daff07f607ded7c65343d8f3038483f6335b948ac8e5f4`. Depois,
+reapliquei o oráculo textual atualizado às saídas registradas dos outros oito
+projetos e repeti o EF6 com diagnósticos esperados explícitos. No EF6, `doctor`
+e `sync --check` exigem atenção: 15 sondas de cache aparecem visíveis ao Git,
+duas regras existentes do `.gitignore` são ambíguas e o teste inclui uma
+sentinela privada visível. Os snapshots verificaram arquivos originais,
+conteúdo humano, índice e exclusões Git, admitindo somente acréscimos
+gerenciados comprovados. `passed` indica aprovação dos controles observados
+nesses projetos e versões, não saúde do EF6. A prova não executa as aplicações
+nem os clientes e skills nativos. O agregado em
+`tmp/oss-compatibility/candidate-final-20261117/AGGREGATE.json` referencia os
+relatórios e as evidências em `tmp/oss-compatibility/`, ignorado pelo Git.
 Em macOS ARM64, com Node 26, as cinco operações da candidata local `0.0.30`
 retornaram zero em 1.000 projetos sintéticos: 500 novos e 500 existentes. Foram
 792 casos aprovados, 208 não verificados quanto ao escopo nativo da regra Claude
