@@ -55,9 +55,14 @@ function indexStatMatchesFile(root, path, info) {
     return match ? BigInt(match[1]) * 1_000_000_000n + BigInt(match[2].padStart(9, '0')) : null;
   };
   const dev = value('dev'), ino = value('ino'), uid = value('uid'), gid = value('gid'), size = value('size');
-  // Git for Windows and Node report ctime with different semantics.
+  const indexedDev = dev === undefined ? null : BigInt(dev), indexedIno = ino === undefined ? null : BigInt(ino);
+  // Git for Windows may store no file identity, and reports ctime differently
+  // from Node. In that case the staged blob and stable stat fields are checked
+  // separately before treating a line-ending-only difference as equivalent.
+  const identityMatches = indexedDev === info.dev && indexedIno === info.ino
+    || process.platform === 'win32' && indexedDev === 0n && indexedIno === 0n;
   return dev !== undefined && ino !== undefined && uid !== undefined && gid !== undefined && size !== undefined
-    && BigInt(dev) === info.dev && BigInt(ino) === info.ino && BigInt(uid) === info.uid && BigInt(gid) === info.gid
+    && identityMatches && BigInt(uid) === info.uid && BigInt(gid) === info.gid
     && BigInt(size) === info.size && (process.platform === 'win32' || time('ctime') === info.ctimeNs)
     && time('mtime') === info.mtimeNs;
 }
