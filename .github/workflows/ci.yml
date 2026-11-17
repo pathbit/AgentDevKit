@@ -82,6 +82,18 @@ jobs:
             label: Windows / Node 24 / projects
           - os: windows-latest
             node: 24
+            profile: portable-projects-git
+            label: Windows / Node 24 / Git preservation
+          - os: windows-latest
+            node: 24
+            profile: portable-projects-callbacks
+            label: Windows / Node 24 / isolated callbacks
+          - os: windows-latest
+            node: 24
+            profile: portable-projects-matrix
+            label: Windows / Node 24 / native coexistence and matrix
+          - os: windows-latest
+            node: 24
             profile: portable-recovery
             label: Windows / Node 24 / recovery and metadata
           - os: windows-latest
@@ -116,6 +128,18 @@ jobs:
             node: 24
             profile: portable-projects
             label: macOS / Node 24 / projects
+          - os: macos-15-intel
+            node: 24
+            profile: portable-projects-git
+            label: macOS / Node 24 / Git preservation
+          - os: macos-15-intel
+            node: 24
+            profile: portable-projects-callbacks
+            label: macOS / Node 24 / isolated callbacks
+          - os: macos-15-intel
+            node: 24
+            profile: portable-projects-matrix
+            label: macOS / Node 24 / native coexistence and matrix
           - os: macos-15-intel
             node: 24
             profile: portable-recovery
