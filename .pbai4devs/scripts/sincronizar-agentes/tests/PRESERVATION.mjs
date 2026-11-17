@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
-import { synchronize } from '../SCRIPT.mjs';
+import { gitIndexStatIdentityMatches, synchronize } from '../SCRIPT.mjs';
 import { indexContentMatches, planUntrack } from '../../lib/gitignore.mjs';
 
 const repository = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
@@ -57,6 +57,16 @@ function withoutGit(t, callback) {
     }
   }
 }
+
+test('identidade do índice usa os campos de 32 bits do formato Git', () => {
+  const info = { dev: 0x1_0000_0042n, ino: 0x3_0000_007bn };
+  assert.equal(gitIndexStatIdentityMatches(0x42n, 0x7bn, info, 'darwin'), true);
+  assert.equal(gitIndexStatIdentityMatches(info.dev, info.ino, info, 'darwin'), false);
+  assert.equal(gitIndexStatIdentityMatches(0x42n, 0x7cn, info, 'darwin'), false);
+  assert.equal(gitIndexStatIdentityMatches(0n, 0n, info, 'win32'), true);
+  assert.equal(gitIndexStatIdentityMatches(0n, 0n, info, 'darwin'), false);
+  assert.equal(gitIndexStatIdentityMatches(null, 0x7bn, info, 'darwin'), false);
+});
 
 test('consulta preserva o projeto mesmo com trace Git herdado', t => {
   const root = fixture(t), trace = file(root, 'trace-sintetico.log');

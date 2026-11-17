@@ -40,6 +40,16 @@ const stat = file => {
   try { return lstatSync(file); }
   catch (error) { if (['ENOENT', 'ENOTDIR'].includes(error.code)) return null; throw error; }
 };
+export function gitIndexStatIdentityMatches(indexedDev, indexedIno, info, platform = process.platform) {
+  if (indexedDev === null || indexedIno === null || !info) return false;
+  // Git index v2-v4 serializes dev and ino as unsigned 32-bit fields. Filesystems
+  // may expose wider values, so compare in the index's representation; the caller
+  // separately checks stable stat fields and the staged blob before accepting it.
+  const indexField = value => BigInt.asUintN(32, value);
+  return indexedDev === indexField(info.dev) && indexedIno === indexField(info.ino)
+    || platform === 'win32' && indexedDev === 0n && indexedIno === 0n;
+}
+
 function indexStatMatchesFile(root, path, info) {
   const result = spawnSync('git', ['--literal-pathspecs', '-C', root, '-c', 'core.fsmonitor=false', 'ls-files', '--debug', '-z', '--', path], {
     encoding: null, env: { ...safeGitEnvironment(), LC_ALL: 'C', LANGUAGE: 'C' }, windowsHide: true, maxBuffer: 1024 * 1024,
@@ -57,10 +67,9 @@ function indexStatMatchesFile(root, path, info) {
   const dev = value('dev'), ino = value('ino'), uid = value('uid'), gid = value('gid'), size = value('size');
   const indexedDev = dev === undefined ? null : BigInt(dev), indexedIno = ino === undefined ? null : BigInt(ino);
   // Git for Windows may store no file identity, and reports ctime differently
-  // from Node. In that case the staged blob and stable stat fields are checked
-  // separately before treating a line-ending-only difference as equivalent.
-  const identityMatches = indexedDev === info.dev && indexedIno === info.ino
-    || process.platform === 'win32' && indexedDev === 0n && indexedIno === 0n;
+  // from Node. The staged blob and stable stat fields are also checked before
+  // treating a line-ending-only difference as equivalent.
+  const identityMatches = gitIndexStatIdentityMatches(indexedDev, indexedIno, info);
   return dev !== undefined && ino !== undefined && uid !== undefined && gid !== undefined && size !== undefined
     && identityMatches && BigInt(uid) === info.uid && BigInt(gid) === info.gid
     && BigInt(size) === info.size && (process.platform === 'win32' || time('ctime') === info.ctimeNs)
