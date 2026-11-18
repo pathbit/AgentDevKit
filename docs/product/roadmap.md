@@ -61,13 +61,13 @@ O [controle das specs](spec-audit.md) reúne o estado da auditoria de cada uma.
   comprovar sua criação pela operação; a preservação desse caso precisa de prova.
   A suíte de preservação Git passou em 140 testes no macOS e 139 no Linux;
   respectivamente um e dois casos foram pulados por dependências de plataforma.
-- [-] Desenvolver a validação dos [registros de recuperação](../specs/registro-recuperacao/SPEC.md);
-  implementar o [diário em disco](../specs/diario-disco/SPEC.md) e integrar
-  [backup e manifesto](../specs/manifesto-recuperacao/SPEC.md), bloqueio e
-  resolução em etapa posterior. O diário isolado agora recusa diretórios e
-  registros com proprietário ou modo incompatível e detecta mudanças
-  observáveis durante a leitura. Isso não comprova ACLs ou segurança contra
-  trocas de ancestrais e não o integra ao instalador ou ao sync.
+- [-] Verificar a integração dos [registros de recuperação](../specs/registro-recuperacao/SPEC.md),
+  do [diário em disco](../specs/diario-disco/SPEC.md) e do
+  [backup e manifesto](../specs/manifesto-recuperacao/SPEC.md) no instalador e
+  no sync. O diário bloqueia novas mutações até a resolução explícita. Os
+  primeiros testes isolados verificaram a recusa de proprietário ou modo
+  incompatível e a detecção de mudanças observáveis durante a leitura. ACLs e
+  trocas de ancestrais exigem verificações próprias.
 - [-] Corrigir a criação de temporários para não ampliar o modo de arquivos
   existentes; a [spec](../specs/sync-permissoes/SPEC.md) registra provas e limites.
 - [-] Concluir e revisar as alterações locais de `init`, `update`, `sync`,
@@ -145,23 +145,21 @@ O [controle das specs](spec-audit.md) reúne o estado da auditoria de cada uma.
   após a última verificação. Definir e testar a política
   de leitura e geração a partir de fontes que estejam em um Git aninhado;
   a proteção atual cobre mutações, não impede essa leitura.
-- [ ] Corrigir a recuperação diante de alterações concorrentes: há reprodução
-  de substituição humana removida ou sobrescrita durante o rollback do
-  instalador e da sincronização, inclusive após atualização e com conteúdo
-  diferente. Revisar o rascunho de
-  [recuperação conservadora](../specs/recuperacao-conservadora/SPEC.md),
-  compará-lo à [spec histórica de rollback][v8] e documentar os limites.
-  O rascunho registra uma reconciliação proposta: manter as garantias de
-  preservação e substituir o rollback automático somente na futura versão que
-  implementar e comprovar o novo contrato. O protocolo continua pendente.
-  Provas e correções de concorrência durante a aplicação são trabalho separado;
-  a correção da recuperação ainda não foi implementada. O perfil completo
-  executa a regressão em modo estrito e bloqueia a certificação enquanto falhar.
-  O instalador agora recusa caminhos exatamente duplicados e confere novamente
-  caminhos e ações após o backup; fixtures cobrem criação, atualização, remoção
-  e alterações mistas. Isso não protege aliases de caminhos nem alterações após
-  a última verificação e não resolve a recuperação concorrente. Uma revisão
-  estática identificou que alterações nos bytes do plano não são comparadas.
+- [-] Validar a [recuperação conservadora](../specs/recuperacao-conservadora/SPEC.md)
+  implementada no instalador e na sincronização. A candidata prepara a cópia
+  anterior e registra a operação antes das mutações. Após uma falha, preserva
+  os caminhos públicos e exige revisão explícita do projeto parcial antes de
+  retomar as alterações. O aceite depende dos resultados da matriz. Provas e
+  correções de concorrência durante a aplicação seguem como trabalho separado.
+  O perfil completo executa a regressão em modo estrito.
+  A investigação começou com substituições humanas removidas ou sobrescritas
+  durante o rollback, inclusive após atualização e com conteúdo diferente.
+  A [spec histórica de rollback][v8] registra o contrato anterior.
+  Durante a investigação, o instalador passou a recusar caminhos exatamente
+  duplicados e conferir novamente caminhos e ações após o backup. As fixtures
+  cobrem criação, atualização, remoção e alterações mistas. Essa verificação
+  cobre nomes exatos até o momento da última conferência. Uma revisão estática
+  identificou que esse controle não comparava alterações nos bytes do plano.
   A candidata recusa ações incompatíveis com o conteúdo ou com o estado
   anterior informado, antes da aplicação; oito cenários sintéticos passaram
   em macOS e Linux. Propriedades calculadas só são avaliadas durante a execução.
@@ -237,12 +235,12 @@ O [controle das specs](spec-audit.md) reúne o estado da auditoria de cada uma.
   os critérios, os casos ambíguos e a validação necessária.
   Validar as demais hipóteses e projetar um plano imutável continuam pendentes.
   Os novos testes são ignorados no Windows.
-  A perda foi reproduzida em macOS e Linux; a prova específica em Windows está
-  pendente. Após acrescentar os seis controles de proteção, a suíte estrita no
+  Antes da implementação da recuperação conservadora, a perda foi reproduzida
+  em macOS e Linux. Após os primeiros controles de proteção, a suíte estrita no
   macOS teve 9 aprovações, 23 falhas e 3 testes ignorados. As falhas incluem
   sobrescrita após atualização, limpeza após publicação e perda de metadados.
-  A matriz CI também exige o perfil nativo de macOS, que rejeita testes
-  ausentes, ignorados ou pendentes e permanece bloqueado pelas falhas reais.
+  A matriz CI exige o perfil nativo de macOS, que rejeita testes ausentes,
+  ignorados ou pendentes.
   Outra fixture reproduziu em macOS e Linux a criação de arquivo fora do
   projeto quando um escritor troca um ancestral do backup por link antes da
   abertura. A criação exclusiva protege o nome final, não os ancestrais.
@@ -253,13 +251,13 @@ O [controle das specs](spec-audit.md) reúne o estado da auditoria de cada uma.
   Os cenários atuais não cobrem todas as formas de alteração.
   Na resposta imediata a uma falha possivelmente parcial de planejamento,
   aplicação ou ferramenta, a CLI orienta revisão e não sugere nova mutação.
-  O incremento local também informa caminhos de backup conhecidos em falhas,
-  sem afirmar que as cópias estejam completas, e distingue caminhos de estágio
-  em fixtures. O sync direto avisa quando a aplicação pode ter ficado parcial.
-  Isso não registra pendência persistente nem corrige o rollback.
+  Uma etapa intermediária passou a informar caminhos de backup conhecidos em
+  falhas, sem afirmar que as cópias estivessem completas, e distinguia caminhos
+  de estágio em fixtures. O sync direto já avisava sobre aplicação parcial.
+  Essa etapa precedeu a introdução do diário persistente.
   Uma investigação local de init, migração e remoção demonstrou que a captura
-  precisa incluir diretórios; a raiz de projeto ausente e o plano prévio do
-  sync direto permanecem pendentes. Ela cobre apenas chamadas instrumentadas.
+  precisa incluir diretórios. A investigação cobriu chamadas instrumentadas e
+  precedeu a reserva da raiz ausente e o manifesto prévio do sync direto.
   O sync agora usa a mesma sequência interna de ações lógicas para calcular
   caminhos afetados e executar escritas e remoções. Cada escrita inclui os
   pais candidatos, verificados novamente no momento da criação. A sequência
@@ -283,8 +281,8 @@ O [controle das specs](spec-audit.md) reúne o estado da auditoria de cada uma.
   grupo inalterado sem ações anteriores. Uma alteração concorrente observada
   é preservada mesmo se tiver os bytes planejados; em falha pré-publicação, a
   limpeza não remove o temporário criado e informa seu caminho como incerto.
-  A proteção não abrange
-  rollback de grupos já alterados, diretórios ou falhas de publicação ambíguas.
+  O caso original exercitava a proteção antes da publicação. O diagnóstico da
+  candidata informa caminhos afetados ou incertos para revisão.
 - [-] Garantir proteção e diagnóstico dos backups que podem conter dados
   privados. Uma fixture confirmou que eles podem aparecer no Git quando o
   projeto não os ignora. Preserve o índice, os ignores e a configuração Git;
@@ -292,23 +290,23 @@ O [controle das specs](spec-audit.md) reúne o estado da auditoria de cada uma.
   [backup privado](../specs/backup-privado/SPEC.md) cobre a pasta do instalador;
   há correção local em avaliação. ACLs, Windows e o restante da recuperação
   exigem validação separada.
-- [ ] Preservar metadados nativos de arquivos existentes. Fixtures em macOS
-  reproduziram perda de ACL e atributos estendidos na `0.0.21` e na candidata;
-  os backups testados também não os preservaram. Na candidata, o sync direto
-  também perdeu ambos ao atualizar o catálogo. Fixtures Linux em tmpfs
-  reproduziram a perda de xattr no instalador, no backup e no sync; ACL Linux
-  continua sem prova. Definir comportamento seguro e testar `init`, `update` e
+- [-] Verificar a preservação de metadados nativos de arquivos existentes nas
+  plataformas suportadas. Fixtures em macOS reproduziram perda de ACL e
+  atributos estendidos na `0.0.21` e em uma candidata anterior. As perdas
+  afetaram os backups testados e a atualização direta do catálogo. Fixtures
+  Linux em tmpfs reproduziram a perda de xattr no instalador, no backup e no
+  sync. O ensaio não cobriu ACL no Linux. Testar `init`, `update` e
   `sync` em cada sistema suportado. Em fixtures macOS, uma ACL que negava
   escrita foi perdida quando o instalador complementou `AGENTS.md` existente e
   quando o sync atualizou o catálogo; ambas as operações retornaram sucesso.
   A flag imutável `uchg` bloqueou a substituição nos dois cenários observados.
   Os testes de ACL devem distinguir regras benignas de negações de escrita.
-  Antes da proteção atual, `update` e os dois modos de sync perderam um atributo
-  sintético em TOML Gemini misto em macOS e Linux. No macOS, a candidata agora
-  recusa alterações quando o utilitário lista atributos no arquivo planejado ou
-  não consegue verificá-los; a regressão desses três fluxos passou por recusa.
-  A listagem não comprova atributos ocultos, ACLs, flags ou autorização; Linux
-  ainda precisa de solução, e a regressão não cobre Windows ou todos os metadados.
+  Antes dos controles de metadados, `update` e os dois modos de sync perderam
+  um atributo sintético em TOML Gemini misto em macOS e Linux. Um controle
+  intermediário no macOS passou a recusar alterações se o utilitário listasse
+  atributos no arquivo planejado ou não conseguisse verificá-los. Os três
+  fluxos passaram por recusa no ensaio. A listagem por si só não comprova
+  atributos ocultos, ACLs, flags ou autorização.
   Um helper experimental no macOS copiou uma ACL benigna e um atributo entre
   arquivos sintéticos; ainda não comprova autorização nem integra o pacote.
   No Linux arm64, um protótipo consultou o tamanho da lista de nomes de xattrs
@@ -428,11 +426,9 @@ O [controle das specs](spec-audit.md) reúne o estado da auditoria de cada uma.
 - [ ] Executar a suíte completa do estado final, incluindo o pacote instalado,
   e acompanhar a matriz real em Linux, Windows e macOS. Os casos NTFS, skips,
   volumes sem hardlinks e limites de concorrência devem ter resultado explícito.
-- [ ] Projetar recuperação conservadora para falhas concorrentes: avaliar
-  backups, registro de operação pendente e revisão do estado parcial sem
-  apagar ou substituir caminhos que possam ter sido alterados por pessoas.
-  A verificação seguida de remoção ou restauração tem uma janela de corrida;
-  resolver o rollback, isoladamente, não comprova segurança durante o apply.
+- [-] Verificar backups, operação pendente e revisão do estado parcial na
+  candidata de recuperação conservadora. A aplicação normal ainda tem janelas
+  entre a verificação e a remoção ou substituição de um caminho.
 - [ ] Atualizar a documentação e registrar evidências e revisão independente
   do diff final antes de criar commit, tag ou publicar uma nova versão.
 
