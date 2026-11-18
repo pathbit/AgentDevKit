@@ -4,7 +4,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { readFileSync } from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { inspect } from '../src/install.mjs';
@@ -62,8 +63,16 @@ test('doctor e checks identificam remoção sem entrada e preservam os dados', a
     assert.throws(() => synchronize({ root, check: true, output: message => directOutput.push(message) }), { code: 'EIO' });
     assert.ok(directOutput.some(message => message.includes(path) && message.includes('preserve e revise')));
   } finally { t.mock.restoreAll(); syncBuiltinESMExports(); }
-  let failureOutput = '';
-  t.mock.method(fs, 'mkdtempSync', () => { throw Object.assign(new Error('falha sintética do estágio'), { code: 'EIO' }); });
+  let failureOutput = '', injected = 0;
+  const stagePrefix = join(fs.realpathSync(tmpdir()), 'agentdevkit-');
+  const originalWrite = fs.writeFileSync;
+  t.mock.method(fs, 'writeFileSync', (file, ...args) => {
+    if (typeof file === 'string' && file.startsWith(stagePrefix) && file.includes(`${sep}.pbai4devs${sep}`)) {
+      injected++;
+      throw Object.assign(new Error('falha sintética do estágio'), { code: 'EIO' });
+    }
+    return originalWrite(file, ...args);
+  });
   syncBuiltinESMExports();
   let status;
   try {
@@ -84,6 +93,7 @@ test('doctor e checks identificam remoção sem entrada e preservam os dados', a
     assert.ok(doctorOutput.includes('Não foi possível concluir o planejamento (EIO)'));
   } finally { t.mock.restoreAll(); syncBuiltinESMExports(); }
   const failedCheck = JSON.parse(failureOutput);
+  assert.equal(injected, 5, 'cada consulta precisa exercitar a falha de cópia no estágio');
   assert.equal(status, 1);
   assert.equal(failedCheck.error.code, 'EIO');
   assert.ok(failedCheck.issues.some(issue => issue.code === diagnostic.code && issue.path === path && issue.observedBeforePlanFailure));

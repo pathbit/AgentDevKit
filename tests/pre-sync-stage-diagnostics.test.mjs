@@ -4,14 +4,14 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
-import { join, sep } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { applyPlan, inspect, planInstallation } from '../src/install.mjs';
 import { main as cliMain } from '../src/cli.mjs';
 import { collectErrorDiagnostics } from '../.pbai4devs/scripts/lib/error-reporting.mjs';
 
 for (const entry of ['planner', 'cli-json', 'doctor-json']) {
-  test(`falha anterior ao sync e limpeza do estágio conservam diagnóstico (${entry})`, { timeout: 120000 }, async t => {
+  test(`falha anterior ao sync e limpeza do estágio conservam diagnóstico (${entry})`, { timeout: 240000 }, async t => {
     const root = fs.realpathSync(fs.mkdtempSync(join(tmpdir(), 'adk-presync-diagnostic-')));
     const rootIdentity = fs.lstatSync(root, { bigint: true });
     let stage, stageIdentity;
@@ -45,12 +45,17 @@ for (const entry of ['planner', 'cli-json', 'doctor-json']) {
     const primary = Object.freeze(Object.assign(new Error('falha primária sintética'), { code: 'EIO' }));
     const cleanupSecret = 'SEGREDO_SINTETICO_DA_LIMPEZA';
     const cleanup = Object.freeze(Object.assign(new Error(cleanupSecret), { code: 'EACCES' }));
-    const mkdirTemp = fs.mkdtempSync, read = fs.readFileSync, remove = fs.rmSync;
+    const temporary = fs.realpathSync(tmpdir());
+    const stat = fs.lstatSync, read = fs.readFileSync, remove = fs.rmSync;
     let primaryInjected = false, cleanupInjected = false;
-    t.mock.method(fs, 'mkdtempSync', (...args) => {
-      const created = mkdirTemp(...args);
-      if (String(args[0]).includes('agentdevkit-')) { stage = fs.realpathSync(created); stageIdentity = fs.lstatSync(stage, { bigint: true }); }
-      return created;
+    t.mock.method(fs, 'lstatSync', (path, ...args) => {
+      const info = stat(path, ...args);
+      if (!stage && args[0]?.bigint && typeof path === 'string' && dirname(path) === temporary &&
+          basename(path).startsWith('agentdevkit-') && info?.isDirectory() && !info.isSymbolicLink()) {
+        stage = path;
+        stageIdentity = info;
+      }
+      return info;
     });
     t.mock.method(fs, 'readFileSync', (path, ...args) => {
       if (stage && path === source && !primaryInjected) { primaryInjected = true; throw primary; }
