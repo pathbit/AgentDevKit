@@ -50,7 +50,7 @@ function trustedRun(run, repository, commit) {
     && run.head_repository?.full_name === repository;
 }
 
-export async function resolveVerifiedPackage({ repository, tag, expectedCommit, request, now = Date.now, sleep = pause, timeoutMs = 2100000, pollMs = 10000 }) {
+export async function resolveVerifiedPackage({ repository, tag, expectedCommit, request, now = Date.now, sleep = pause, timeoutMs = 65 * 60 * 1000, pollMs = 10000 }) {
   if (!/^[\w.-]+\/[\w.-]+$/.test(repository || '')) invalid('Repositório inválido.');
   if (!/^v\d+\.\d+\.\d+$/.test(tag || '')) invalid('A release exige uma tag vX.Y.Z.');
   if (expectedCommit !== undefined && !/^[a-f0-9]{40}$/.test(expectedCommit)) invalid('Commit esperado inválido.');

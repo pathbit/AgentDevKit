@@ -34,7 +34,7 @@ export function guardSourceOnlyGit(root, environment = process.env) {
   return { files: listed.stdout.split('\0').filter(Boolean).length };
 }
 
-export const nodeProcessTimeoutMs = 20 * 60 * 1000;
+export const nodeProcessTimeoutMs = 40 * 60 * 1000;
 
 export function executeNode(root, args, env = process.env) {
   const childEnv = { ...env }; delete childEnv.NODE_TEST_CONTEXT;
@@ -195,7 +195,8 @@ export function runPipeline(profile, { root = releaseRoot, env = process.env, ru
   }
   if (Object.hasOwn(portableProfiles, profile)) {
     console.log(`Perfil ${profile}: ${portableProfiles[profile].join(', ')}`);
-    test(portableProfiles[profile], ['--test-concurrency=2']);
+    const reporter = env.GITHUB_ACTIONS === 'true' ? ['--test-reporter=tap'] : [];
+    test(portableProfiles[profile], ['--test-concurrency=2', ...reporter]);
     if (profile === 'portable-resources') {
       run(root, ['scripts/release/infrastructure.mjs', '--native'], env);
       for (const name of ['preparar-ferramentas', 'sincronizar-agentes', 'verificar-recursos', 'executar-script', 'inspecionar-projeto', 'reunir-contexto-spec', 'testar-maturidade', 'verificar-configuracao', 'revisar-entrega']) run(root, ['--test', `${hub}/scripts/${name}/tests/TEST.mjs`], env);

@@ -151,10 +151,10 @@ test('perfis portáteis cobrem cada suíte uma vez e o comando local executa tod
   assert.equal(new Set(combined).size, combined.length);
   assert.deepEqual(combined.toSorted(), expected);
   const calls = [];
-  const options = { root, run(_root, args) { calls.push(args); } };
+  const options = { root, env: {}, run(_root, args) { calls.push(args); } };
   for (const [profile, files] of Object.entries(portableProfiles)) {
     const group = [];
-    runPipeline(profile, { root, run(_root, args) { group.push(args); } });
+    runPipeline(profile, { root, env: {}, run(_root, args) { group.push(args); } });
     assert.deepEqual(group[0], ['--test', '--test-concurrency=2', ...files.map(file => `tests/${file}`)]);
     assert.equal(group.length, profile === 'portable-resources' ? 11 : 1);
     if (profile === 'portable-resources') assert.ok(group.some(args => args.includes('.pbai4devs/scripts/revisar-entrega/tests/TEST.mjs')));
@@ -164,6 +164,9 @@ test('perfis portáteis cobrem cada suíte uma vez e o comando local executa tod
   const individual = calls.splice(0);
   runPipeline('portable', options);
   assert.deepEqual(calls, individual);
+  calls.length = 0;
+  runPipeline('portable-layout', { ...options, env: { GITHUB_ACTIONS: 'true' } });
+  assert.deepEqual(calls, [['--test', '--test-concurrency=2', '--test-reporter=tap', 'tests/source-layout.test.mjs']]);
   calls.length = 0;
   runPipeline('smoke', options);
   assert.deepEqual(calls, [
@@ -254,7 +257,7 @@ test('matriz roda cada grupo portátil exatamente uma vez em cada SO e falhas bl
   const verifyBody = workflow.split(/^  verify:\s*$/m)[1]?.split(/^  [\w-]+:\s*$/m)[0];
   assert.ok(verifyBody, 'Job verify ausente');
   const jobTimeout = Number(verifyBody.match(/^    timeout-minutes:\s*(\d+)\s*$/m)?.[1]);
-  assert.ok(nodeProcessTimeoutMs >= 20 * 60 * 1000);
+  assert.ok(nodeProcessTimeoutMs >= 40 * 60 * 1000);
   assert.ok(jobTimeout * 60 * 1000 >= nodeProcessTimeoutMs + 5 * 60 * 1000);
   const minimumBody = workflow.split(/^  minimum-runtime:\s*$/m)[1]?.split(/^  [\w-]+:\s*$/m)[0];
   assert.ok(minimumBody, 'Job de runtime mínimo ausente');

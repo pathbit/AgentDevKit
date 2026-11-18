@@ -27,7 +27,10 @@ no CI, `portable-cli`, `portable-selection`, `portable-selection-codex`,
 `portable-cli` confere se a instalação e o sync direto preservam a DACL de
 arquivos atualizados em NTFS, usando uma regra explícita de leitura na fixture.
 Callbacks isolados e testes de matriz ficam separados para limitar a duração
-de cada job. Os testes Git de maior duração também têm job próprio.
+de cada job. Os testes Git de maior duração também têm job próprio. O pipeline
+limita cada processo a 40 minutos. O job de verificação tem até 60 minutos para
+executar todos os seus passos. Os perfis portáteis usam a saída TAP no Actions
+para registrar falhas conforme os testes terminam.
 Os cinco casos de obstrução são preservados; os três casos de raiz e grupo e os
 dois de folha da seleção all ficam em perfis separados. `full` ainda executa
 todas as suítes.
@@ -35,6 +38,7 @@ todas as suítes.
 `check` confere os recursos.
 
 `publish.mjs resolve` localiza um CI de push aprovado do mesmo commit da tag.
+O resolvedor espera até 65 minutos se a execução ainda estiver em andamento.
 `publish` confere procedência e hashes, e publica os mesmos bytes. Ausência de
 artefato válido exige executar o CI; a publicação não gera outro pacote.
 

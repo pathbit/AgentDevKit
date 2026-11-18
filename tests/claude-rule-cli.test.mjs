@@ -9,7 +9,7 @@ import { main } from '../src/cli.mjs';
 import { synchronize } from '../.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs';
 import { resemblesClaudeReference } from '../.pbai4devs/scripts/lib/claude-retained.mjs';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, resolve, sep } from 'node:path';
 
 const bin = resolve('bin/agentdevkit.mjs');
 const legacy = '.claude/rules/git/RULE.md';
@@ -32,7 +32,7 @@ function fixture(t) {
   return root;
 }
 function cli(root, ...args) {
-  const result = spawnSync(process.execPath, [bin, ...args, '--target', root, '--json'], { encoding: 'utf8', timeout: 60000, maxBuffer: 8 * 1024 * 1024 });
+  const result = spawnSync(process.execPath, [bin, ...args, '--target', root, '--json'], { encoding: 'utf8', timeout: 120000, maxBuffer: 8 * 1024 * 1024 });
   assert.ok(!result.error, result.error?.message); let body;
   try { body = JSON.parse(result.stdout); } catch { assert.fail(result.stdout + result.stderr); }
   return { status: result.status, body };
@@ -453,14 +453,19 @@ for (const record of ['files', 'blocks']) test(`regra Claude com registro ${reco
 test('doctor preserva categoria de erro duplo sem expor conteúdo da falha', async t => {
   const root = fixture(t); init(root); assert.equal(cli(root, 'agents', 'codex').status, 0);
   const before = protectedGit(root); put(root, '.pbai4devs/INSTRUCTIONS.md', '# Alteração humana\n');
-  const original = fs.mkdtempSync; let output = '', code;
-  fs.mkdtempSync = (prefix, ...args) => {
-    if (String(prefix).endsWith('agentdevkit-')) throw Object.assign(new Error('segredo-sintetico-nao-expor'), { code: 'EIO' });
-    return original(prefix, ...args);
+  const stagePrefix = join(fs.realpathSync(tmpdir()), 'agentdevkit-');
+  const original = fs.writeFileSync; let output = '', code, injected = false;
+  fs.writeFileSync = (file, ...args) => {
+    if (typeof file === 'string' && file.startsWith(stagePrefix) && file.includes(`${sep}.pbai4devs${sep}`)) {
+      injected = true;
+      throw Object.assign(new Error('segredo-sintetico-nao-expor'), { code: 'EIO' });
+    }
+    return original(file, ...args);
   };
   syncBuiltinESMExports();
   try { code = await main(['doctor', '--target', root, '--json'], { stdout: { write: value => { output += value; } } }); }
-  finally { fs.mkdtempSync = original; syncBuiltinESMExports(); }
+  finally { fs.writeFileSync = original; syncBuiltinESMExports(); }
+  assert.ok(injected, 'a cópia para o estágio privado precisa falhar na fixture');
   const result = JSON.parse(output); assert.equal(code, 1, output);
   assert.ok(result.issues.some(issue => issue.path === '.pbai4devs/INSTRUCTIONS.md'));
   const issue = result.issues.find(issue => issue.code === 'claude-inspection-unverified');

@@ -87,18 +87,19 @@ test('CI que não termina interrompe a espera no prazo sem publicar', async () =
   };
   await assert.rejects(resolveVerifiedPackage({ repository, tag: `v${version}`, request,
     now: () => clock, sleep: async ms => { clock += ms; } }), /Tempo esgotado/);
-  assert.equal(clock, 35 * 60000);
+  assert.equal(clock, 65 * 60000);
 });
 
 test('limites dos jobs dão margem à espera do CI e aos dois registries', () => {
   const workflow = readFileSync(join(root, '.github/workflows/release.yml'), 'utf8');
   const ci = readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8');
-  const ciMinutes = Number(ci.match(/timeout-minutes:\s*(\d+)/)?.[1]);
-  // O teste anterior verifica a espera real de 35 minutos do resolvedor.
-  assert.ok(ciMinutes > 0 && ciMinutes + 5 <= 35);
+  const verify = ci.split(/^  verify:\s*$/m)[1]?.split(/^  [\w-]+:\s*$/m)[0];
+  const ciMinutes = Number(verify?.match(/timeout-minutes:\s*(\d+)/)?.[1]);
+  // O teste anterior verifica a espera real de 65 minutos do resolvedor.
+  assert.ok(ciMinutes > 0 && ciMinutes + 5 <= 65);
   const resolveJob = workflow.split('  resolve:\n')[1].split('\n  publish:')[0];
   const minutes = Number(resolveJob.match(/timeout-minutes:\s*(\d+)/)?.[1]);
-  assert.ok(minutes >= 40);
+  assert.ok(minutes >= 70);
   const publishMinutes = Number(workflow.split('  publish:\n')[1].match(/timeout-minutes:\s*(\d+)/)?.[1]);
   assert.ok(publishMinutes >= 50);
 });
