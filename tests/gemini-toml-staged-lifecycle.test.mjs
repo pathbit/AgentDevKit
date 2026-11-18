@@ -20,19 +20,35 @@ function fixture(t) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'adk-toml-staged-')));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const home = join(root, 'home'); mkdirSync(home);
-  const env = { PATH: process.env.PATH, HOME: home, USERPROFILE: home, TMPDIR: tmpdir(), TEMP: tmpdir(), TMP: tmpdir(), LC_ALL: 'C', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: testGitConfig, GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0' };
-  if (process.platform === 'win32') { env.SystemRoot = process.env.SystemRoot; env.ComSpec = process.env.ComSpec; }
-  const run = (program, args, timeout = 180000) => {
-    const result = spawnSync(program, args, { cwd: root, env, encoding: 'utf8', timeout, maxBuffer: 16 * 1024 * 1024 });
-    assert.equal(result.error, undefined, `${args.slice(0, 2).join(' ')}: ${result.error?.message ?? ''} (${result.signal ?? 'sem sinal'})`);
+  const overrides = {
+    HOME: home, USERPROFILE: home, TMPDIR: tmpdir(), TEMP: tmpdir(), TMP: tmpdir(), LC_ALL: 'C',
+    GIT_CONFIG_GLOBAL: testGitConfig, GIT_CONFIG_NOSYSTEM: '1', GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0',
+  };
+  // test-git-environment.mjs clears inherited Git settings. Keep the host OS
+  // settings and avoid case-insensitive duplicates of the overrides on Windows.
+  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => {
+    const name = process.platform === 'win32' ? key.toUpperCase() : key;
+    return !Object.hasOwn(overrides, name);
+  }));
+  Object.assign(env, overrides);
+  const run = (program, args, expectedStatus = 0, { encoding = 'utf8', timeout = 180000 } = {}) => {
+    const started = performance.now();
+    const result = spawnSync(program, args, { cwd: root, env, encoding, timeout, maxBuffer: 16 * 1024 * 1024 });
+    if (result.error || result.signal || result.status !== expectedStatus) {
+      const elapsed = Math.round(performance.now() - started);
+      const step = [program, ...args.slice(0, 2)].join(' ');
+      assert.fail([
+        `${step} (${elapsed} ms, limite ${timeout} ms): status ${result.status}, esperado ${expectedStatus}`,
+        result.signal && `Sinal: ${result.signal}`,
+        result.error && `${result.error.code}: ${result.error.message}`,
+        result.stdout && `stdout: ${result.stdout}`,
+        result.stderr && `stderr: ${result.stderr}`,
+      ].filter(Boolean).join('\n'));
+    }
     return result;
   };
-  const git = (...args) => { const result = run('git', args); assert.equal(result.status, 0, result.stderr || result.error?.message); return result.stdout; };
-  const gitBlob = () => {
-    const result = spawnSync('git', ['show', `:${target}`], { cwd: root, env, timeout: 180000, maxBuffer: 16 * 1024 * 1024 });
-    assert.equal(result.status, 0, result.stderr?.toString() || result.error?.message);
-    return result.stdout;
-  };
+  const git = (...args) => run('git', args).stdout;
+  const gitBlob = () => run('git', ['show', `:${target}`], 0, { encoding: null }).stdout;
   const put = (path, value) => { mkdirSync(dirname(join(root, path)), { recursive: true }); writeFileSync(join(root, path), value); };
   git('init', '--quiet');
   const gitRoot = git('rev-parse', '--show-toplevel').trim();
@@ -41,8 +57,8 @@ function fixture(t) {
   assert.equal(gitRootInfo.ino, rootInfo.ino);
   put('.gitignore', '# Regra humana\nprivado/\n'); put('HUMAN.md', 'Documento humano.\n'); put(target, original);
   git('add', '--', '.gitignore', 'HUMAN.md');
-  const command = (args, timeout) => run(process.execPath, [cli, ...args, '--target', root, '--json'], timeout);
-  const standalone = () => run(process.execPath, [join(root, '.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs'), '--root', root]);
+  const command = (args, expectedStatus, options) => run(process.execPath, [cli, ...args, '--target', root, '--json'], expectedStatus, options);
+  const standalone = expectedStatus => run(process.execPath, [join(root, '.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs'), '--root', root], expectedStatus);
   const protectedFiles = ['.git/index', '.git/HEAD', '.git/config', '.git/info/exclude', '.gitignore', 'HUMAN.md'];
   const protectedSnapshot = () => Object.fromEntries(protectedFiles.map(path => [path, digest(readFileSync(join(root, path)))]));
   return { root, git, gitBlob, put, command, standalone, protectedSnapshot };
@@ -65,8 +81,7 @@ function tree(root) {
   visit(root); return entries;
 }
 function initialize(f) {
-  const result = f.command(['init', '--agents', 'gemini', '--yes'], 300000);
-  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  const result = f.command(['init', '--agents', 'gemini', '--yes'], 0, { timeout: 300000 });
   assert.equal(JSON.parse(result.stdout).ok, true);
   const content = readFileSync(join(f.root, target), 'utf8');
   for (const marker of ['<!-- BEGIN AGENTDEVKIT -->', '<!-- END AGENTDEVKIT -->']) {
@@ -94,8 +109,7 @@ function assertProtected(f, before, label) {
 
 test('init recusa TOML staged com edição unstaged sem aplicação parcial observada', { timeout: 240000 }, t => {
   const f = fixture(t), before = stageAndEdit(f, edited), snapshot = tree(f.root);
-  const result = f.command(['init', '--agents', 'gemini', '--yes']);
-  assert.equal(result.status, 1, result.stdout + result.stderr);
+  const result = f.command(['init', '--agents', 'gemini', '--yes'], 1);
   assert.equal(JSON.parse(result.stdout).error.code, 'E_STAGED');
   assertProtected(f, before, 'init recusado');
   assert.deepEqual(tree(f.root), snapshot);
@@ -109,13 +123,12 @@ test('update e ambos syncs recusam alteração do bloco staged com edição unst
   const humanEdit = existing.replace('Texto humano', 'Texto humano {{args}}') + '# edição humana unstaged\n';
   assert.notEqual(humanEdit, existing);
   const before = stageAndEdit(f, humanEdit), snapshot = tree(f.root);
-  for (const [label, invoke, status] of [
-    ['update', () => f.command(['update', '--yes']), 1],
-    ['sync CLI', () => f.command(['sync', '--yes']), 1],
-    ['sync direto', () => f.standalone(), 2],
+  for (const [label, invoke] of [
+    ['update', () => f.command(['update', '--yes'], 1)],
+    ['sync CLI', () => f.command(['sync', '--yes'], 1)],
+    ['sync direto', () => f.standalone(2)],
   ]) {
     const result = invoke();
-    assert.equal(result.status, status, `${label}: ${result.stdout}\n${result.stderr}`);
     if (label !== 'sync direto') assert.equal(JSON.parse(result.stdout).error.code, 'E_STAGED', label);
     else {
       assert.match(result.stderr, /[IiÍí]ndice Git contem alteracoes proprias/, label);
@@ -134,7 +147,6 @@ test('troca de cliente preserva índice e remove somente bloco do TOML staged', 
   assert.notEqual(humanEdit, existing);
   const before = stageAndEdit(f, humanEdit);
   const result = f.command(['agents', 'codex', '--yes']);
-  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
   assert.equal(JSON.parse(result.stdout).ok, true);
   assertProtected(f, before, 'troca de cliente');
   assert.equal(readFileSync(join(f.root, target), 'utf8'), edited);

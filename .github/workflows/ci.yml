@@ -126,6 +126,26 @@ jobs:
             label: Windows / Node 24 / managed resources
           - os: windows-latest
             node: 24
+            profile: portable-resources-gemini
+            label: Windows / Node 24 / Gemini resources
+          - os: windows-latest
+            node: 24
+            profile: portable-resources-gemini-staged
+            label: Windows / Node 24 / staged Gemini TOML
+          - os: windows-latest
+            node: 24
+            profile: portable-sync-core
+            label: Windows / Node 24 / sync core scripts
+          - os: windows-latest
+            node: 24
+            profile: portable-sync-ownership
+            label: Windows / Node 24 / sync ownership scripts
+          - os: windows-latest
+            node: 24
+            profile: portable-sync-preservation
+            label: Windows / Node 24 / sync preservation scripts
+          - os: windows-latest
+            node: 24
             profile: portable-layout
             label: Windows / Node 24 / layout
           - os: macos-15-intel
@@ -192,6 +212,26 @@ jobs:
             node: 24
             profile: portable-resources-managed
             label: macOS / Node 24 / managed resources
+          - os: macos-15-intel
+            node: 24
+            profile: portable-resources-gemini
+            label: macOS / Node 24 / Gemini resources
+          - os: macos-15-intel
+            node: 24
+            profile: portable-resources-gemini-staged
+            label: macOS / Node 24 / staged Gemini TOML
+          - os: macos-15-intel
+            node: 24
+            profile: portable-sync-core
+            label: macOS / Node 24 / sync core scripts
+          - os: macos-15-intel
+            node: 24
+            profile: portable-sync-ownership
+            label: macOS / Node 24 / sync ownership scripts
+          - os: macos-15-intel
+            node: 24
+            profile: portable-sync-preservation
+            label: macOS / Node 24 / sync preservation scripts
           - os: macos-15-intel
             node: 24
             profile: portable-layout

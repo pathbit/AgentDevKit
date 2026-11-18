@@ -88,13 +88,24 @@ export const portableProfiles = Object.freeze({
   'portable-resources-managed': Object.freeze([
     'managed-content.test.mjs', 'managed-content-helper.test.mjs', 'managed-toml.test.mjs',
     'toml-prompt-equivalence.test.mjs', 'toml-composite.test.mjs', 'toml-human-after.test.mjs',
-    'toml-marker-context.test.mjs', 'gemini-command-fixture.test.mjs', 'gemini-unowned-block.test.mjs',
-    'gemini-derived-command.test.mjs', 'gemini-derived-diagnostic.test.mjs', 'gemini-toml-staged-lifecycle.test.mjs',
-    'gemini-reference-body.test.mjs', 'gemini-large-integer.test.mjs', 'gemini-xattr-preservation.test.mjs',
-    'sync-skill-collision.test.mjs', 'gemini-toml-lifecycle-reader.test.mjs', 'managed-preservation.test.mjs',
+    'toml-marker-context.test.mjs', 'sync-skill-collision.test.mjs', 'managed-preservation.test.mjs',
   ]),
+  'portable-resources-gemini': Object.freeze([
+    'gemini-command-fixture.test.mjs', 'gemini-unowned-block.test.mjs',
+    'gemini-derived-command.test.mjs', 'gemini-derived-diagnostic.test.mjs',
+    'gemini-reference-body.test.mjs', 'gemini-large-integer.test.mjs', 'gemini-xattr-preservation.test.mjs',
+    'gemini-toml-lifecycle-reader.test.mjs',
+  ]),
+  'portable-resources-gemini-staged': Object.freeze(['gemini-toml-staged-lifecycle.test.mjs']),
   'portable-layout': Object.freeze(['source-layout.test.mjs']),
 });
+
+export const portableSyncProfiles = Object.freeze({
+  'portable-sync-core': Object.freeze(['BASE.mjs']),
+  'portable-sync-ownership': Object.freeze(['HUMAN_OWNERSHIP.mjs', 'COEXISTENCE.mjs', 'MANAGED_CONTENT.mjs', 'CATALOG_OWNERSHIP.mjs']),
+  'portable-sync-preservation': Object.freeze(['LOCAL_IGNORE.mjs', 'PRESERVATION.mjs']),
+});
+const portableProfileNames = [...Object.keys(portableProfiles), ...Object.keys(portableSyncProfiles)];
 
 // Publication and the exact tarball are built and verified once on Linux.
 export const fullOnlyTests = Object.freeze({
@@ -182,7 +193,7 @@ export function runPipeline(profile, { root = releaseRoot, env = process.env, ru
   const hub = '.pbai4devs';
   const tests = 'tests';
   const test = (names, options = [], testEnv = env) => run(root, ['--test', ...options, ...names.map(name => `${tests}/${name}`)], testEnv);
-  if (profile === 'full' || profile === 'portable' || Object.hasOwn(portableProfiles, profile)) {
+  if (profile === 'full' || profile === 'portable' || portableProfileNames.includes(profile)) {
     verifyPortableClassification(readdirSync(join(root, tests)));
   }
   const check = (checkEnv = env) => {
@@ -225,16 +236,23 @@ export function runPipeline(profile, { root = releaseRoot, env = process.env, ru
     return;
   }
   if (profile === 'portable') {
-    for (const name of Object.keys(portableProfiles)) runPipeline(name, { root, env, run });
+    for (const name of portableProfileNames) runPipeline(name, { root, env, run });
+    return;
+  }
+  const reporter = env.GITHUB_ACTIONS === 'true' ? ['--test-reporter=tap'] : [];
+  const portableArgs = ['--test-concurrency=2', ...reporter];
+  if (Object.hasOwn(portableSyncProfiles, profile)) {
+    const files = portableSyncProfiles[profile];
+    console.log(`Perfil ${profile}: ${files.join(', ')}`);
+    run(root, ['--test', ...portableArgs, ...files.map(file => `${hub}/scripts/sincronizar-agentes/tests/${file}`)], env);
     return;
   }
   if (Object.hasOwn(portableProfiles, profile)) {
     console.log(`Perfil ${profile}: ${portableProfiles[profile].join(', ')}`);
-    const reporter = env.GITHUB_ACTIONS === 'true' ? ['--test-reporter=tap'] : [];
-    test(portableProfiles[profile], ['--test-concurrency=2', ...reporter]);
+    test(portableProfiles[profile], portableArgs);
     if (profile === 'portable-resources') {
       run(root, ['scripts/release/infrastructure.mjs', '--native'], env);
-      for (const name of ['preparar-ferramentas', 'sincronizar-agentes', 'verificar-recursos', 'executar-script', 'inspecionar-projeto', 'reunir-contexto-spec', 'testar-maturidade', 'verificar-configuracao', 'revisar-entrega']) run(root, ['--test', `${hub}/scripts/${name}/tests/TEST.mjs`], env);
+      for (const name of ['preparar-ferramentas', 'verificar-recursos', 'executar-script', 'inspecionar-projeto', 'reunir-contexto-spec', 'testar-maturidade', 'verificar-configuracao', 'revisar-entrega']) run(root, ['--test', `${hub}/scripts/${name}/tests/TEST.mjs`], env);
     }
     return;
   }
@@ -243,7 +261,7 @@ export function runPipeline(profile, { root = releaseRoot, env = process.env, ru
     for (const flag of ['--help', '--version']) run(root, ['bin/agentdevkit.mjs', flag], env);
     return;
   }
-  throw new Error(`Use full, portable, ${Object.keys(portableProfiles).join(', ')}, native-macos-metadata, smoke ou check.`);
+  throw new Error(`Use full, portable, ${portableProfileNames.join(', ')}, native-macos-metadata, smoke ou check.`);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

@@ -7,7 +7,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { npmExecutable, sha256 } from '../scripts/release/assets.mjs';
 import { verifyInfrastructure, verifyNativeInfrastructure } from '../scripts/release/infrastructure.mjs';
-import { executeNode, fullTestGroups, guardSourceOnlyGit, markVerified, nodeProcessTimeoutMs, portableProfiles, runPipeline, verifyPortableClassification } from '../scripts/release/pipeline.mjs';
+import { executeNode, fullTestGroups, guardSourceOnlyGit, markVerified, nodeProcessTimeoutMs, portableProfiles, portableSyncProfiles, runPipeline, verifyPortableClassification } from '../scripts/release/pipeline.mjs';
 import { assertApprovedSource, githubRequest, publishVerifiedPackage, releaseTag, resolveVerifiedPackage, verifyDistribution } from '../scripts/release/publish.mjs';
 import { obstructionKinds } from './fixtures/client-selection-obstructions.mjs';
 
@@ -39,7 +39,7 @@ test('full prepara o CLI de skills antes do gate e a matriz executa as suítes n
   const portable = [];
   runPipeline('portable-resources', { root, run(_root, args) { portable.push(args); } });
   assert.deepEqual(portable[1], ['scripts/release/infrastructure.mjs', '--native']);
-  assert.ok(portable.some(args => args.includes('.pbai4devs/scripts/sincronizar-agentes/tests/TEST.mjs')));
+  assert.ok(portable.every(args => !args.includes('.pbai4devs/scripts/sincronizar-agentes/tests/TEST.mjs')));
 });
 
 test('o gate de infraestrutura exige execução completa dos testes da plataforma atual', () => {
@@ -173,9 +173,22 @@ test('perfis portáteis cobrem cada suíte uma vez e o comando local executa tod
     const group = [];
     runPipeline(profile, { root, env: {}, run(_root, args) { group.push(args); } });
     assert.deepEqual(group[0], ['--test', '--test-concurrency=2', ...files.map(file => `tests/${file}`)]);
-    assert.equal(group.length, profile === 'portable-resources' ? 11 : 1);
+    assert.equal(group.length, profile === 'portable-resources' ? 10 : 1);
     if (profile === 'portable-resources') assert.ok(group.some(args => args.includes('.pbai4devs/scripts/revisar-entrega/tests/TEST.mjs')));
     if (profile === 'portable-resources') assert.ok(group.some(args => args.includes('.pbai4devs/scripts/reunir-contexto-spec/tests/TEST.mjs')));
+    calls.push(...group);
+  }
+  const syncDir = '.pbai4devs/scripts/sincronizar-agentes/tests';
+  const syncModules = Object.values(portableSyncProfiles).flat();
+  assert.equal(new Set(syncModules).size, syncModules.length);
+  const aggregate = readFileSync(join(root, syncDir, 'TEST.mjs'), 'utf8');
+  const imported = [...aggregate.matchAll(/^import '\.\/([^']+)';$/gm)].map(match => match[1]);
+  assert.deepEqual(syncModules.toSorted(), imported.toSorted());
+  assert.deepEqual(syncModules.toSorted(), readdirSync(join(root, syncDir)).filter(file => file.endsWith('.mjs') && file !== 'TEST.mjs').sort());
+  for (const [profile, files] of Object.entries(portableSyncProfiles)) {
+    const group = [];
+    runPipeline(profile, { root, env: {}, run(_root, args) { group.push(args); } });
+    assert.deepEqual(group, [['--test', '--test-concurrency=2', ...files.map(file => `${syncDir}/${file}`)]]);
     calls.push(...group);
   }
   const individual = calls.splice(0);
@@ -285,8 +298,9 @@ test('matriz roda cada grupo portátil exatamente uma vez em cada SO e falhas bl
   assert.match(minimumBody, /ADK_EXPECT_NODE18:\s*'1'/);
   assert.match(minimumBody, /node --test tests\/runtime-minimum\.test\.mjs/);
   const rows = [...verifyBody.matchAll(/- os:\s*(\S+)\s+node:\s*(\d+)\s+profile:\s*(\S+)/g)].map(match => ({ os: match[1], node: match[2], profile: match[3] }));
+  const profiles = [...Object.keys(portableProfiles), ...Object.keys(portableSyncProfiles)];
   for (const os of ['windows-latest', 'macos-15-intel']) {
-    const expectedProfiles = [...Object.keys(portableProfiles), ...(os === 'macos-15-intel' ? ['native-macos-metadata'] : [])].sort();
+    const expectedProfiles = [...profiles, ...(os === 'macos-15-intel' ? ['native-macos-metadata'] : [])].sort();
     assert.deepEqual(rows.filter(row => row.os === os && row.node === '24').map(row => row.profile).sort(), expectedProfiles);
   }
   assert.ok(rows.some(row => row.os === 'ubuntu-latest' && row.node === '24' && row.profile === 'full'));
@@ -301,7 +315,7 @@ test('matriz roda cada grupo portátil exatamente uma vez em cada SO e falhas bl
   assert.match(verifyStep, /^          NODE_OPTIONS:\s*''\s*$/m);
   assert.match(verifyStep, /^          ADK_REQUIRE_LINUX_XATTR:\s*\$\{\{\s*runner\.os == 'Linux' && matrix\.profile == 'full' && '1' \|\| '0'\s*\}\}\s*$/m);
   assert.match(verifyStep, /^        run:\s*node scripts\/release\/pipeline\.mjs \$\{\{ matrix\.profile \}\} --github-output\s*$/m);
-  for (const profile of ['portable', ...Object.keys(portableProfiles)]) {
+  for (const profile of ['portable', ...profiles]) {
     const calls = [];
     const failure = new Error('falha real da suíte');
     assert.throws(() => runPipeline(profile, { root, run(_root, args) { calls.push(args); throw failure; } }), error => error === failure);
