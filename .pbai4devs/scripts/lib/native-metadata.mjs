@@ -7,9 +7,9 @@ import { linuxPythonXattrs } from './xattr-probe.mjs';
 const nativePlatform = process.platform;
 export const nativeMetadataCopySupported = nativePlatform === 'darwin' || nativePlatform === 'linux';
 
-function windowsMetadataError(code, path) {
-  return Object.assign(new Error('Cannot verify or preserve Windows file protections.'), {
-    code, path, metadataTargetVerified: true,
+function windowsMetadataError(code, path, message = 'Cannot verify or preserve Windows file protections.') {
+  return Object.assign(new Error(message), {
+    code, ...(path === undefined ? {} : { path, metadataTargetVerified: true }),
   });
 }
 
@@ -120,7 +120,8 @@ function windowsPowerShell(displayPath) {
 
 export function checkWindowsFileChanges(entries) {
   if (nativePlatform !== 'win32' || !entries.length) return;
-  const executable = windowsPowerShell(entries[0].displayPath);
+  const singleEntry = entries.length === 1 ? entries[0] : undefined;
+  const executable = windowsPowerShell(singleEntry?.displayPath);
   // W_OK only checks the read-only attribute on Windows. Opening without
   // truncation or DeleteOnClose asks the OS to evaluate the effective rights
   // required by this plan. All paths are checked before any file is replaced.
@@ -160,12 +161,18 @@ try {
 `;
   const result = spawnSync(executable, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', probe], {
     env: { SystemRoot: process.env.SystemRoot }, input: JSON.stringify({ entries: entries.map(({ path, update }) => ({ path, update })) }),
-    encoding: 'utf8', windowsHide: true, timeout: 30000,
+    encoding: 'utf8', windowsHide: true, timeout: 60000,
   });
   if (result.error || result.status !== 0) {
-    const index = /^\d+$/.test(result.stdout?.trim()) ? Number(result.stdout.trim()) : 0;
-    const displayPath = entries[index]?.displayPath ?? entries[0].displayPath;
-    throw windowsMetadataError(result.status === 2 ? 'E_PROTECTED_METADATA' : 'E_METADATA_UNSUPPORTED', displayPath);
+    const index = /^\d+$/.test(result.stdout?.trim()) ? Number(result.stdout.trim()) : null;
+    const entry = index === null ? singleEntry : entries[index];
+    if (!result.error && result.status === 2) throw windowsMetadataError('E_PROTECTED_METADATA', entry?.displayPath);
+    let message = 'Windows file protection verification returned an unexpected result.';
+    if (result.error) {
+      message = result.error.code === 'ETIMEDOUT' ? 'Windows file protection verification timed out.'
+        : 'Windows file protection verification could not run.';
+    }
+    throw windowsMetadataError('E_METADATA_UNSUPPORTED', entry?.displayPath, message);
   }
 }
 

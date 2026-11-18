@@ -90,7 +90,7 @@ for (const kind of ['install', 'sync']) for (const scenario of ['herdada', 'indi
   });
 }
 
-test('CLI init recusa backup com ACL herdada do diretório do projeto', { timeout: 120000, skip: process.platform !== 'darwin' ? 'ACL macOS requer macOS' : false }, t => {
+test('CLI init recusa diário com ACL herdada antes de copiar dados', { timeout: 120000, skip: process.platform !== 'darwin' ? 'ACL macOS requer macOS' : false }, t => {
   const root = fs.realpathSync(fs.mkdtempSync(join(tmpdir(), 'adk-cli-private-acl-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   assert.equal(spawnSync('git', ['init', '-q', root]).status, 0);
@@ -106,9 +106,13 @@ test('CLI init recusa backup com ACL herdada do diretório do projeto', { timeou
   const cli = fileURLToPath(new URL('../bin/agentdevkit.mjs', import.meta.url));
   const result = spawnSync(process.execPath, [cli, 'init', '--target', root, '--agents', 'codex', '--yes', '--json'], { cwd: root, encoding: 'utf8', timeout: 120000, maxBuffer: 8 * 1024 * 1024 });
   assert.equal(result.status, 1, result.stderr); const body = JSON.parse(result.stdout);
-  assert.equal(body.error.code, 'E_BACKUP');
-  const backup = body.error.preservedPaths?.find(path => path.includes('agentdevkit/backups/'));
-  assert.ok(backup); assert.deepEqual(fs.readdirSync(resolve(root, backup)), []);
+  assert.equal(body.error.code, 'E_RECOVERY_ACL_UNSAFE');
+  assert.equal(body.recovery.status, 'invalid');
+  const store = join(root, '.agent-tests', 'agentdevkit', 'recovery');
+  assert.deepEqual(fs.readdirSync(store), [], 'nenhum registro ou backup deve ter sido gravado');
+  const recoveryAcl = spawnSync('/bin/ls', ['-lde', '--', store], { encoding: 'utf8', env: { PATH: '/usr/bin:/bin', LC_ALL: 'C' } });
+  assert.equal(recoveryAcl.status, 0);
+  assert.match(recoveryAcl.stdout, /\binherited\b/);
   assert.deepEqual(fs.readFileSync(target), before); assert.equal(fs.statSync(target, { bigint: true }).ino, identity.ino);
   for (const [path, content] of snapshots) assert.deepEqual(fs.readFileSync(join(root, path)), content);
 });

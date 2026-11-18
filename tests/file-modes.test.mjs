@@ -150,6 +150,27 @@ test('Windows: o pré-voo verifica vários alvos e identifica o arquivo protegid
   for (const entry of entries) assert.equal(readFileSync(entry.path, 'utf8'), entry.displayPath);
 });
 
+test('Windows: o pré-voo informa timeout sem atribuir a falha a um alvo', { skip: process.platform !== 'win32' }, t => {
+  const entries = ['primeiro.txt', 'segundo.txt'].map(displayPath => ({
+    path: join(tmpdir(), displayPath), displayPath, update: true,
+  }));
+  t.mock.method(childProcess, 'spawnSync', () => ({
+    status: null, error: Object.assign(new Error('detalhe interno'), { code: 'ETIMEDOUT' }), stdout: '',
+  }));
+  syncBuiltinESMExports();
+  try {
+    assert.throws(() => checkWindowsFileChanges(entries), error => {
+      assert.equal(error.code, 'E_METADATA_UNSUPPORTED');
+      assert.equal(error.message, 'Windows file protection verification timed out.');
+      assert.equal(error.path, undefined);
+      return true;
+    });
+  } finally {
+    t.mock.restoreAll();
+    syncBuiltinESMExports();
+  }
+});
+
 test('classifica proprietário e leitura sem presumir suporte no Windows', () => {
   const file = (uid, mode) => ({ uid, mode, isFile: () => true });
   assert.equal(fileOwnerIssue(file(100, 0o640), 'linux', 100), null);

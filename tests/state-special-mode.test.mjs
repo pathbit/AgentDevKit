@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -33,7 +33,7 @@ function cli(root, args, expected = 0) {
   return JSON.parse(result.stdout);
 }
 function fixture(t) {
-  const root = mkdtempSync(join(tmpdir(), 'adk-state-special-'));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'adk-state-special-')));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   git(root, 'init', '--quiet');
   const ignore = Buffer.from('# Regras humanas\r\nnode_modules/\r\n.env\r\n!.env.example\r\n');
