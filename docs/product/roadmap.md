@@ -64,10 +64,10 @@ O [controle das specs](spec-audit.md) reúne o estado da auditoria de cada uma.
 - [-] Verificar a integração dos [registros de recuperação](../specs/registro-recuperacao/SPEC.md),
   do [diário em disco](../specs/diario-disco/SPEC.md) e do
   [backup e manifesto](../specs/manifesto-recuperacao/SPEC.md) no instalador e
-  no sync. O diário bloqueia novas mutações até a resolução explícita. Os
-  primeiros testes isolados verificaram a recusa de proprietário ou modo
-  incompatível e a detecção de mudanças observáveis durante a leitura. ACLs e
-  trocas de ancestrais exigem verificações próprias.
+  no sync. Uma pendência no diário bloqueia novas mutações até a resolução
+  explícita. Os primeiros testes isolados verificaram a recusa de proprietário
+  ou modo incompatível e a detecção de mudanças observáveis durante a leitura.
+  ACLs e trocas de ancestrais exigem verificações próprias.
 - [-] Corrigir a criação de temporários para não ampliar o modo de arquivos
   existentes; a [spec](../specs/sync-permissoes/SPEC.md) registra provas e limites.
 - [-] Concluir e revisar as alterações locais de `init`, `update`, `sync`,
@@ -234,7 +234,7 @@ O [controle das specs](spec-audit.md) reúne o estado da auditoria de cada uma.
   O [rascunho de preservação TOML](../specs/toml-preservacao/SPEC.md) registra
   os critérios, os casos ambíguos e a validação necessária.
   Validar as demais hipóteses e projetar um plano imutável continuam pendentes.
-  Os novos testes são ignorados no Windows.
+  Os testes daquela rodada ainda eram ignorados no Windows.
   Antes da implementação da recuperação conservadora, a perda foi reproduzida
   em macOS e Linux. Após os primeiros controles de proteção, a suíte estrita no
   macOS teve 9 aprovações, 23 falhas e 3 testes ignorados. As falhas incluem
