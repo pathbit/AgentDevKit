@@ -150,6 +150,16 @@ export function captureRecoverySnapshot(root, operations) {
         data = Buffer.alloc(Number(info.size)); let offset = 0;
         while (offset < data.length) { const n = readSync(fd, data, offset, data.length - offset, offset); if (!n) fail('E_RECOVERY_CAPTURE_CHANGED'); offset += n; }
         if (!same(opened, fstatSync(fd, { bigint: true }))) fail('E_RECOVERY_CAPTURE_CHANGED');
+        // A same-size edit can leave the observed timestamps unchanged.
+        const verification = Buffer.alloc(Math.min(data.length, 64 * 1024));
+        for (let verified = 0; verified < data.length;) {
+          const count = readSync(fd, verification, 0, Math.min(verification.length, data.length - verified), verified);
+          if (!count || !verification.subarray(0, count).equals(data.subarray(verified, verified + count))) {
+            fail('E_RECOVERY_CAPTURE_CHANGED');
+          }
+          verified += count;
+        }
+        if (!same(opened, fstatSync(fd, { bigint: true }))) fail('E_RECOVERY_CAPTURE_CHANGED');
       } finally { closeSync(fd); }
       if (operation?.beforeHash !== undefined && operation.beforeHash !== hash(data)) fail('E_RECOVERY_CAPTURE_CHANGED');
       result.push({ path, action: operation?.action || 'retain', type: 'file', mode, data });

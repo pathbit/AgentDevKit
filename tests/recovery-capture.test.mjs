@@ -123,10 +123,25 @@ test('recusa links e hardlinks sem abrir ou modificar o destino', t => {
 
 test('recusa edição durante a leitura em vez de registrar snapshot inconsistente', t => {
   const root = fixture(t), path = join(root, 'arquivo'); fs.writeFileSync(path, 'original');
-  const read = fs.readSync; let changed = false;
+  const read = fs.readSync, lstat = fs.lstatSync, fstat = fs.fstatSync;
+  const before = lstat(path, { bigint: true });
+  const stableTimes = info => {
+    if (info?.dev === before.dev && info.ino === before.ino) {
+      info.mtimeNs = before.mtimeNs;
+      info.ctimeNs = before.ctimeNs;
+    }
+    return info;
+  };
+  t.mock.method(fs, 'lstatSync', (...args) => stableTimes(lstat(...args)));
+  t.mock.method(fs, 'fstatSync', (...args) => stableTimes(fstat(...args)));
+  let changed = false;
   t.mock.method(fs, 'readSync', (...args) => {
     const count = read(...args);
-    if (!changed) { changed = true; fs.writeFileSync(path, 'alterado'); }
+    if (!changed) {
+      assert.equal(count, Number(before.size), 'a fixture precisa ler o conteúdo inicial antes da edição');
+      changed = true;
+      fs.writeFileSync(path, 'alterado');
+    }
     return count;
   });
   syncBuiltinESMExports();
