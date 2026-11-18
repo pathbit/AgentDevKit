@@ -17,7 +17,7 @@ AgentDevKit/
 ├── bin/              entrada do pacote npx
 ├── tests/            testes do produto
 ├── scripts/release/  CI, empacotamento e publicação
-├── examples/         guia e cenários gerados localmente
+├── examples/         guia de exemplos
 ├── docs/             guias e decisões do produto
 └── .pbai4devs/        skills, regras, templates e ferramentas compartilhadas
 ```
@@ -26,7 +26,8 @@ Metadados npm, licença, documentação e workflows do GitHub ficam nos seus
 locais padrão. Pastas nativas dos clientes, índices e estado local não fazem
 parte da fonte versionada.
 
-`npm run examples` gera as árvores de demonstração em `examples/generated/`.
+`npm run examples` gera as árvores de demonstração em uma pasta temporária
+fora de Git, informada pelo comando.
 Elas contêm `.claude`, `.codex` e os demais clientes, sem misturar exemplos com
 a configuração ativa da raiz. `npm run test:examples` executa os cenários.
 O [guia de desenvolvimento](../maintainers/development.md) reúne os comandos
@@ -63,14 +64,13 @@ chaves. Configurações nativas fora desse escopo permanecem sob controle humano
 Nunca é possível ignorar somente um trecho de arquivo no Git. Veja a
 [spec de integração][additive].
 
-O Git usa `info/exclude` para ignorar localmente pastas de clientes, inclusive
-seus arquivos humanos ainda não rastreados. Exceções literais no `.gitignore`
-da raiz permitem versioná-las. Arquivos já rastreados e o índice permanecem;
-sem Git, a proteção fica pendente. A política vem dos templates.
+O kit preserva a configuração Git, os ignores existentes e o índice. Arquivos
+locais podem aparecer no status; o diagnóstico informa essa visibilidade e
+possíveis arquivos privados expostos. A equipe decide as regras do projeto.
 
 O estado registra versão, escolha e propriedade local. Índices e manifesto
 podem ser reconstruídos. Downloads, credenciais e relatórios ficam fora do
-pacote e do Git.
+pacote; confira os ignores do projeto antes de preparar alterações Git.
 
 ## Inventário e evolução documental
 

@@ -19,8 +19,8 @@ npm run check
 ```
 
 O checkout contém fontes. Execute `npm run examples` para explorar os agentes
-em `examples/generated/`, sem criar todas as pastas de clientes na raiz.
-Os exemplos gerados são locais e ignorados; seu guia fica em
+em uma pasta temporária fora de Git, informada pelo comando.
+Para escolher um destino local ignorado, consulte o guia em
 [`examples/`](examples/README.md).
 
 ## Escolher a origem da mudança

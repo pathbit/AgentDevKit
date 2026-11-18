@@ -1,12 +1,16 @@
 #!/usr/bin/env node
 import { createHash, randomUUID } from 'node:crypto';
 import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { tmpdir } from 'node:os';
+import { basename, dirname, isAbsolute, join, parse, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { gitPathsOverlap } from '../lib/git-environment.mjs';
 import { isMain, projectRoot, requireNode } from '../lib/runtime.mjs';
 import { isGeneratedOutput } from '../lib/gitignore.mjs';
 import { resourcePath, synchronize } from '../sincronizar-agentes/SCRIPT.mjs';
+import { clientResourcePath } from '../lib/resource-path.mjs';
+import { buildCatalog } from '../lib/catalog.mjs';
 import { adapterManifest } from '../lib/adapters.mjs';
 import { stateDirectory } from '../lib/state-path.mjs';
 import { nativePathBoundary } from '../lib/native-paths.mjs';
@@ -15,9 +19,9 @@ const assets = join(dirname(fileURLToPath(import.meta.url)), 'assets');
 const owner = 'testar-maturidade';
 const marker = '.maturity-case.json';
 const suiteMarker = '.maturity-suite.json';
+const exampleOutputMarker = '.agentdevkit-example-output.json';
 const generatedCatalogs = new Set(['.pbai4devs/catalog.json', '.pbai4devs/skills.json', '.pbai4devs/agents.json', '.pbai4devs/rules.json']);
 const outputIgnore = '# Exemplos gerados permanecem locais.\n*\n';
-const defaultOutput = root => join(root, 'examples/generated');
 const prepareResources = root => {
   const result = synchronize({ root, localIgnores: false, output: () => {} });
   if (result.exitCode !== 0) fail('Não foi possível preparar os apontamentos do exemplo.');
@@ -44,7 +48,7 @@ const createDirectoryScript = `const fs=require('node:fs');
 const [name,expected,dev,ino]=process.argv.slice(1);
 const info=fs.statSync('.');
 if(fs.realpathSync('.')!==expected || String(info.dev)!==dev || String(info.ino)!==ino) process.exit(73);
-try { fs.mkdirSync(name); } catch(error) { if(error.code==='EEXIST') process.exit(17); throw error; }
+try { fs.mkdirSync(name, { mode: 0o700 }); } catch(error) { if(error.code==='EEXIST') process.exit(17); throw error; }
 `;
 function createChild(root, parent, name, { allowExisting = false } = {}) {
   if (!name || name === '.' || name === '..' || basename(name) !== name) fail('Nome de diretório inválido.');
@@ -61,15 +65,139 @@ function createChild(root, parent, name, { allowExisting = false } = {}) {
   if (!output?.isDirectory() || output.isSymbolicLink()) fail('Diretório de saída inválido.');
   return output;
 }
-function ensureDirectories(root, target) {
-  let current = root;
-  for (const part of relative(root, target).split(sep).filter(Boolean)) {
-    const next = join(current, part), info = stat(next);
-    if (!info) createChild(root, current, part, { allowExisting: true });
-    else if (!info.isDirectory() || info.isSymbolicLink()) fail('Diretório ancestral inválido ou link simbólico.');
-    noLinks(root, next);
-    current = next;
+function pathWithin(parent, child) {
+  const rel = relative(parent, child);
+  return rel === '' || (!isAbsolute(rel) && rel !== '..' && !rel.startsWith(`..${sep}`));
+}
+
+// The standard Darwin /var and /tmp aliases are canonicalized. A user-defined
+// TMPDIR or explicit directory symlink is not trusted and remains forbidden.
+function canonicalTemporaryAlias(path) {
+  const requested = resolve(path), aliases = process.platform === 'darwin' ? ['/tmp', '/var'] : [];
+  for (const alias of aliases) {
+    if (!pathWithin(alias, requested)) continue;
+    if (realpathSync(alias) !== `/private${alias}`) continue;
+    return join(realpathSync(alias), relative(alias, requested));
   }
+  return requested;
+}
+
+function cleanGitEnvironment() {
+  const env = { ...process.env };
+  for (const key of Object.keys(env)) if (/^GIT_/i.test(key)) delete env[key];
+  delete env.NODE_TEST_CONTEXT;
+  env.GIT_OPTIONAL_LOCKS = '0';
+  return env;
+}
+
+// Synthetic child processes must never inherit a user's externally bound Git
+// directory, index, or injected Git configuration.
+function isolatedEnvironment() {
+  const env = cleanGitEnvironment();
+  // Synthetic child projects must not invoke a user's global fsmonitor hook.
+  env.GIT_CONFIG_COUNT = '1';
+  env.GIT_CONFIG_KEY_0 = 'core.fsmonitor';
+  env.GIT_CONFIG_VALUE_0 = 'false';
+  return env;
+}
+
+function assertNoBareGit(path) {
+  for (let current = path; ; current = dirname(current)) {
+    // A bare repository has no .git entry. Recognize its on-disk structure
+    // even if a broken or spoofed Git executable reports “not a repository”.
+    if (stat(join(current, 'HEAD')) && (stat(join(current, 'objects')) || (stat(join(current, 'config')) && stat(join(current, 'refs'))))) {
+      fail(`Saída não pode ficar dentro de repositório Git: ${path}`);
+    }
+    if (dirname(current) === current) break;
+  }
+}
+
+function runGit(path, args, { allowMissing = false, input } = {}) {
+  const env = { ...cleanGitEnvironment(), LC_ALL: 'C', LANG: 'C' };
+  // Read-only queries must evaluate the user's effective ignore configuration.
+  // Do not restore variables that select a different repository or index.
+  for (const [key, value] of Object.entries(process.env)) {
+    if (/^GIT_CONFIG_(?:GLOBAL|SYSTEM|NOSYSTEM|COUNT|PARAMETERS|KEY_\d+|VALUE_\d+)$/i.test(key)) env[key] = value;
+  }
+  const result = spawnSync('git', ['-c', 'core.fsmonitor=false', '-C', path, ...args], { env, input, encoding: 'utf8', timeout: 30000, maxBuffer: 64 * 1024 * 1024, windowsHide: true, shell: false });
+  if (allowMissing && result.error?.code === 'ENOENT') return null;
+  if (result.error || result.signal) fail(`Não foi possível verificar Git na saída: ${result.error?.message || result.signal}`);
+  return result;
+}
+
+function assertOutsideGit(path, { allowMissing = false } = {}) {
+  // Inspect ancestry directly as well: Git can otherwise be influenced by
+  // environment variables, ceiling directories, or malformed .git markers.
+  assertNoBareGit(path);
+  for (let current = path; ; current = dirname(current)) {
+    if (stat(join(current, '.git'))) fail(`Saída não pode ficar dentro de repositório Git: ${path}`);
+    if (dirname(current) === current) break;
+  }
+  const result = runGit(path, ['rev-parse', '--git-dir'], { allowMissing });
+  // Without Git, ancestry checks above are the best available evidence. Refuse
+  // an explicitly bound worktree, whose repository can be outside this path.
+  if (!result) {
+    if (Object.entries(process.env).some(([name, value]) => /^(?:GIT_DIR|GIT_WORK_TREE)$/i.test(name) && value)) fail('Não foi possível verificar Git com worktree definido externamente.');
+    return;
+  }
+  if (result.status === 0) fail(`Saída não pode ficar dentro de repositório Git: ${path}`);
+  if (result.status !== 128 || !/not a git repository/i.test(result.stderr || '')) fail(`Não foi possível verificar Git na saída: ${result.stderr?.trim() || result.status}`);
+}
+
+export function mayAliasPath(left, right, { root, platform = process.platform } = {}) {
+  const a = left.split('/'), b = right.split('/');
+  for (let i = 0; i < Math.min(a.length, b.length); i++) {
+    if (a[i].normalize('NFD').toLowerCase() === b[i].normalize('NFD').toLowerCase()) continue;
+    // Only rule out a match for ordinary ASCII components. Unicode case folds,
+    // filesystem aliases, and unusual characters are conservatively ambiguous.
+    const ordinary = part => /^[a-z0-9_.-]+$/i.test(part) && !part.endsWith('.');
+    // On Windows even an ordinary ASCII name may be an arbitrary 8.3 alias.
+    // A missing entry is distinct from an existing one only when their shared
+    // parent is verified. Check each destination prefix so the helper can
+    // establish that fact for an intermediate component.
+    if (ordinary(a[i]) && ordinary(b[i])) {
+      if (platform !== 'win32') return false;
+      for (let length = 1; length <= b.length; length++) {
+        if (!gitPathsOverlap(left, b.slice(0, length).join('/'), { root, platform, allowMissingTarget: true })) return false;
+      }
+      return true;
+    }
+  }
+  return true;
+}
+
+function assertIgnoredOutput(parent, sourceRoot, outputRoot, expectedTop) {
+  if (Object.entries(process.env).some(([key, value]) => /^GIT_INDEX_FILE$/i.test(key) && value)) fail('Saída local não permite índice Git alternativo.');
+  if (Object.entries(process.env).some(([key, value]) => /^(?:GIT_DIR|GIT_WORK_TREE|GIT_COMMON_DIR|GIT_CEILING_DIRECTORIES)$/i.test(key) && value)) fail('Saída local não permite repositório Git definido externamente.');
+  assertNoBareGit(parent);
+  const repository = runGit(parent, ['rev-parse', '--show-toplevel']);
+  let topName = repository.stdout.endsWith('\n') ? repository.stdout.slice(0, -1) : repository.stdout;
+  if (process.platform === 'win32' && topName.endsWith('\r')) topName = topName.slice(0, -1);
+  if (repository.status !== 0 || !topName) fail('Saída local exige repositório Git válido.');
+  const top = realpathSync.native(topName), gitMarker = stat(join(top, '.git'));
+  if (!gitMarker || gitMarker.isSymbolicLink() || !pathWithin(top, sourceRoot) || !pathWithin(top, outputRoot) || (expectedTop && expectedTop !== top)) fail('Saída local deve permanecer no mesmo repositório da origem.');
+  const target = portable(relative(top, outputRoot));
+  // Git needs a trailing slash to recognize an absent directory. Once the
+  // output exists, check the directory itself without the slash: otherwise
+  // its own .gitignore can mask removal of the project's protection.
+  const ignoredTarget = stat(outputRoot) ? target : `${target}/`;
+  const ignored = runGit(top, ['check-ignore', '--no-index', '--verbose', '-z', '--stdin'], { input: `${ignoredTarget}\0` });
+  if (ignored.status !== 0 && ignored.status !== 1) fail(`Não foi possível verificar ignore no Git: ${ignored.stderr?.trim() || ignored.status}`);
+  if (ignored.status !== 0) fail(`Saída local precisa estar ignorada pelo Git: ${outputRoot}`);
+  const match = ignored.stdout.split('\0');
+  if (match.length !== 5 || match[4] !== '' || !match[0] || !/^[1-9]\d*$/.test(match[1]) || !match[2] || match[2].startsWith('!') || match[3] !== ignoredTarget) fail('Resposta Git inválida ao verificar ignore.');
+  // The permitted root is relative to the project, which may itself be a
+  // subdirectory of the Git worktree. Keep the full worktree-relative target
+  // for comparison, including its project prefix.
+  const projectRootName = portable(relative(sourceRoot, outputRoot)).split('/')[0];
+  if (!/^(?:tmp|temp|\.agent-tests|examples)$/i.test(projectRootName)) fail('Raiz de saída local inválida.');
+  // Filtering pathspecs can hide filesystem-specific Unicode aliases. Inspect
+  // the whole index and fail closed when segment equivalence cannot be proved.
+  const indexed = runGit(top, ['ls-files', '--cached', '-z']);
+  if (indexed.status !== 0) fail('Não foi possível verificar o índice Git.');
+  if (indexed.stdout && !indexed.stdout.endsWith('\0')) fail('Resposta Git inválida ao verificar índice.');
+  if (indexed.stdout.split('\0').filter(Boolean).some(name => mayAliasPath(name, target, { root: top }))) fail(`Saída local contém arquivos ou caminhos ambíguos no índice Git: ${outputRoot}`);
+  return top;
 }
 
 export const SCENARIOS = [
@@ -100,6 +228,7 @@ export function registeredRoots(root) {
 export function resourceTargets(root, source, kind = 'skills') {
   const rows = manifest(root).split(/\r?\n/).filter(line => line && !line.startsWith('#')).map(line => line.split('|'));
   const targets = [], suppressed = new Set();
+  const rule = kind === 'rules' ? buildCatalog(root).catalog.rules.find(entry => entry.path === source) : undefined;
   for (const [type, fallback, primary, resource] of rows) {
     if (type !== 'fallback' || resource !== kind) continue;
     const primaryRow = rows.find(([entry, target]) => entry === 'agente' && target === primary);
@@ -118,7 +247,12 @@ export function resourceTargets(root, source, kind = 'skills') {
     if (type !== 'agente') continue;
     const override = rows.find(([entry, target, resource]) => entry === 'formato' && target === agent && resource === kind)?.[3];
     if (override === 'nenhum') continue;
-    let target = `${agent}/${resourcePath(source, kind, override || layout)}`;
+    const format = override || layout;
+    const defaultTarget = `${agent}/${resourcePath(source, kind, format)}`;
+    const explicitMetadata = rows.some(([entry, target, origin, metadata]) => entry === 'nativo' && target === defaultTarget && origin === source && metadata);
+    const relativeTarget = clientResourcePath(source, kind, format, agent, rule, explicitMetadata);
+    if (relativeTarget === null) continue;
+    let target = `${agent}/${relativeTarget}`;
     if (agent === '.gemini' && kind === 'commands') target = target.replace(/\.md$/, '.toml');
     if (!suppressed.has(target)) targets.push(target);
   }
@@ -163,7 +297,7 @@ export function copyAgentStructure(sourceRoot, destination, { archiveCatalogs = 
     const start = content.indexOf(begin), finish = content.indexOf(end);
     return finish > start && digest(content.slice(start, finish + end.length)) === expected;
   }
-  const files = []; const entrypoints = {}; const catalogSnapshots = []; const overriddenSnapshots = []; const seenSources = new Set(); let skipped = 0;
+  const files = []; const entrypoints = {}; const omittedEntrypoints = []; const catalogSnapshots = []; const overriddenSnapshots = []; const seenSources = new Set(); let skipped = 0;
   function copy(file, targetFile = file) {
     const source = join(sourceRoot, file);
     const item = stat(source); if (!item) return;
@@ -188,7 +322,8 @@ export function copyAgentStructure(sourceRoot, destination, { archiveCatalogs = 
   for (const name of ['AGENTS.md', 'CLAUDE.md', 'GEMINI.md']) {
     const installed = stat(join(sourceRoot, name));
     if (!installed) continue;
-    if (!installed.isFile() || installed.isSymbolicLink()) fail(`Entrada de agente deve ser arquivo regular: ${name}`);
+    if (installed.isSymbolicLink()) { omittedEntrypoints.push(name); skipped++; continue; }
+    if (!installed.isFile()) fail(`Entrada de agente deve ser arquivo regular: ${name}`);
     const template = `.pbai4devs/templates/entrypoints/${name}`;
     const selected = managedEntry(name) && stat(join(sourceRoot, template)) ? template : name;
     const info = stat(join(sourceRoot, selected));
@@ -207,7 +342,7 @@ export function copyAgentStructure(sourceRoot, destination, { archiveCatalogs = 
     copy(path);
   }
   const sourceDigest = digest(files.map(file => `${file}\0${digest(readFileSync(join(destination, file)))}`).join('\n'));
-  return { roots, copiedFiles: files.length, skipped, files, sourceDigest, entrypoints, catalogSnapshots, overriddenSnapshots, toolDefinitions: files.filter(file => /^\.pbai4devs\/tools\/[^/]+\/TOOL\.json$/.test(file)).length };
+  return { roots, copiedFiles: files.length, skipped, files, sourceDigest, entrypoints, omittedEntrypoints, catalogSnapshots, overriddenSnapshots, toolDefinitions: files.filter(file => /^\.pbai4devs\/tools\/[^/]+\/TOOL\.json$/.test(file)).length };
 }
 
 function fixtureOverrides(scenario, sourceRoot) {
@@ -301,43 +436,96 @@ function application(root, scenario) {
 }
 
 function gitInit(root) {
-  const result = spawnSync('git', ['-c', 'init.defaultBranch=main', 'init', '--template=', '-q', root], { encoding: 'utf8' });
+  const result = spawnSync('git', ['-c', 'init.defaultBranch=main', 'init', '--template=', '-q', root], { env: isolatedEnvironment(), encoding: 'utf8' });
   if (result.error || result.status !== 0) fail(`Git init: ${result.error?.message || result.stderr}`);
+  const gitDir = stat(join(root, '.git'));
+  if (!gitDir?.isDirectory() || gitDir.isSymbolicLink()) fail('Git init não criou um repositório local regular no exemplo.');
+}
+
+export function createExampleOutput({ sourceRoot = projectRoot, outputRoot, prefix = 'agentdevkit-maturity-', allowMissingGit = false } = {}) {
+  requireNode(); sourceRoot = realpathSync.native(resolve(sourceRoot));
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*-$/.test(prefix)) fail('Prefixo de saída inválido.');
+  let base = canonicalTemporaryAlias(outputRoot ?? tmpdir());
+  // Check the spelling supplied by the caller before resolving existing
+  // ancestors, so canonicalization cannot silently accept a symlink.
+  noLinks(parse(base).root, base);
+  let existingBase = base;
+  while (!stat(existingBase) && dirname(existingBase) !== existingBase) existingBase = dirname(existingBase);
+  const before = stat(existingBase), canonicalBase = realpathSync.native(existingBase);
+  noLinks(parse(base).root, base);
+  const after = stat(existingBase), canonicalInfo = stat(canonicalBase);
+  if (!before || !after || !canonicalInfo || before.dev !== after.dev || before.ino !== after.ino || before.dev !== canonicalInfo.dev || before.ino !== canonicalInfo.ino) fail('Caminho ancestral alterado durante a validação.');
+  base = join(canonicalBase, relative(existingBase, base));
+  const parent = outputRoot === undefined ? base : dirname(base);
+  const guardRoot = parse(parent).root;
+  noLinks(guardRoot, parent);
+  const withinSource = pathWithin(sourceRoot, base);
+  const localOutput = outputRoot !== undefined && withinSource;
+  const localName = portable(relative(sourceRoot, base));
+  if (withinSource && (!localOutput || !/^(?:tmp|temp|\.agent-tests)(?:\/|$)|^examples\/generated(?:\/|$)/i.test(localName))) fail('Saída local permitida somente em tmp, temp, .agent-tests ou examples/generated.');
+  let existingParent = parent;
+  while (!stat(existingParent) && dirname(existingParent) !== existingParent) existingParent = dirname(existingParent);
+  const existingInfo = stat(existingParent);
+  if (!existingInfo?.isDirectory() || existingInfo.isSymbolicLink()) fail(`A pasta pai da saída deve ser um diretório: ${existingParent}`);
+  if (!localOutput && existingParent !== parent) fail(`A pasta pai da saída deve existir: ${parent}`);
+  const repository = localOutput ? assertIgnoredOutput(existingParent, sourceRoot, base) : (assertOutsideGit(parent, { allowMissing: allowMissingGit }), null);
+  if (outputRoot !== undefined && stat(base)?.isSymbolicLink()) fail(`Saída não pode ser link simbólico: ${base}`);
+  if (outputRoot !== undefined && stat(base)) fail(`Pasta de saída já existe; escolha um destino novo: ${base}`);
+  for (let current = existingParent; ; current = dirname(current)) {
+    if (stat(join(current, suiteMarker)) || stat(join(current, marker)) || stat(join(current, exampleOutputMarker))) fail('Saída não pode ficar dentro de uma execução anterior.');
+    if (dirname(current) === current) break;
+  }
+  // Create only absent local ancestors after the complete destination and
+  // index have passed preflight; existing directories are never replaced.
+  // Recheck the ignore and index around each creation. If a concurrent process
+  // creates a component, createChild fails rather than adopting its contents.
+  if (localOutput && existingParent !== parent) {
+    let current = existingParent;
+    for (const part of relative(existingParent, parent).split(sep).filter(Boolean)) {
+      assertIgnoredOutput(current, sourceRoot, base, repository);
+      createChild(guardRoot, current, part);
+      current = join(current, part);
+      assertIgnoredOutput(current, sourceRoot, base, repository);
+    }
+  }
+  const name = outputRoot === undefined ? `${prefix}${randomUUID()}` : basename(base);
+  const created = createChild(guardRoot, parent, name);
+  outputRoot = join(parent, name);
+  const canonicalOutput = realpathSync(outputRoot);
+  const markerContent = JSON.stringify({ owner, version: 1 }, null, 2) + '\n';
+  let protectedOutput = false;
+  const verifyOutput = (path = outputRoot) => {
+    noLinks(guardRoot, path);
+    const current = stat(outputRoot);
+    if (!current?.isDirectory() || current.dev !== created.dev || current.ino !== created.ino || realpathSync(outputRoot) !== canonicalOutput) fail('Diretório de saída alterado durante a execução.');
+    if (localOutput) assertIgnoredOutput(outputRoot, sourceRoot, outputRoot, repository);
+    else assertOutsideGit(outputRoot, { allowMissing: allowMissingGit });
+    if (protectedOutput) for (const [name, content] of [[exampleOutputMarker, markerContent], ['.gitignore', outputIgnore]]) {
+      const file = join(outputRoot, name), info = stat(file);
+      if (!info?.isFile() || info.isSymbolicLink() || readFileSync(file, 'utf8') !== content) fail(`Proteção da saída alterada durante a execução: ${name}`);
+    }
+  };
+  verifyOutput();
+  writeFileSync(join(outputRoot, exampleOutputMarker), markerContent, { flag: 'wx', mode: 0o600 });
+  writeFileSync(join(outputRoot, '.gitignore'), outputIgnore, { flag: 'wx', mode: 0o600 });
+  protectedOutput = true;
+  verifyOutput();
+  return { outputRoot, verifyOutput };
 }
 
 export function prepareExamples({ sourceRoot = projectRoot, outputRoot, scenarios = SCENARIOS, initializeGit = true, renderResources = prepareResources } = {}) {
   requireNode(); sourceRoot = realpathSync(resolve(sourceRoot));
-  const base = resolve(outputRoot ?? defaultOutput(sourceRoot));
-  const outputPath = portable(relative(sourceRoot, base));
-  if (!(outputPath === 'examples/generated' || outputPath.startsWith('examples/generated/')
-    || outputPath === 'tmp/examples' || outputPath.startsWith('tmp/examples/') || outputPath.startsWith('.agent-tests/'))) fail('Saída permitida somente em examples/generated, tmp/examples ou descendente de .agent-tests.');
-  noLinks(sourceRoot, base);
   const ids = new Set();
   if (!Array.isArray(scenarios) || !scenarios.length) fail('Selecione pelo menos um cenário.');
   for (const scenario of scenarios) {
     if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(scenario.id) || ids.has(scenario.id)) fail('Cenários devem ter IDs únicos e seguros.');
     ids.add(scenario.id);
   }
-  if (outputRoot !== undefined && stat(base)) fail(`Pasta de saída já existe; escolha um destino novo: ${base}`);
-  if (outputRoot !== undefined) {
-    for (let parent = dirname(base); parent !== sourceRoot && parent.startsWith(sourceRoot + sep); parent = dirname(parent)) {
-      if (stat(join(parent, suiteMarker)) || stat(join(parent, marker))) fail('Saída não pode ficar dentro de uma execução anterior.');
-    }
-  }
-  const parent = outputRoot === undefined ? base : dirname(base);
-  ensureDirectories(sourceRoot, parent);
-  const name = outputRoot === undefined ? `maturity-${randomUUID()}` : basename(base);
-  const created = createChild(sourceRoot, parent, name);
-  outputRoot = join(parent, name);
-  const canonicalOutput = realpathSync(outputRoot);
-  const verifyOutput = (path = outputRoot) => {
-    noLinks(sourceRoot, path);
-    const current = stat(outputRoot);
-    if (!current?.isDirectory() || current.dev !== created.dev || current.ino !== created.ino || realpathSync(outputRoot) !== canonicalOutput) fail('Diretório de saída alterado durante a execução.');
-  };
+  const createdOutput = createExampleOutput({ sourceRoot, outputRoot, allowMissingGit: !initializeGit });
+  outputRoot = createdOutput.outputRoot;
+  const verifyOutput = createdOutput.verifyOutput;
   const guarded = (path, operation) => { verifyOutput(path); const value = operation(); verifyOutput(path); return value; };
   guarded(outputRoot, () => write(outputRoot, suiteMarker, JSON.stringify({ owner, version: 1 }, null, 2) + '\n'));
-  guarded(outputRoot, () => write(outputRoot, '.gitignore', outputIgnore));
   guarded(outputRoot, () => writeIndex(outputRoot, [], 'preparing'));
   const examples = [];
   for (const scenario of scenarios) {
@@ -345,6 +533,14 @@ export function prepareExamples({ sourceRoot = projectRoot, outputRoot, scenario
     guarded(outputRoot, () => mkdirSync(destination));
     guarded(destination, () => write(destination, marker, JSON.stringify({ owner, version: 1, id: scenario.id }, null, 2) + '\n'));
     const copied = guarded(destination, () => copyAgentStructure(sourceRoot, destination, { archiveCatalogs: true, archiveOverrides: fixtureOverrides(scenario, sourceRoot), archiveEntrypoints: true }));
+    guarded(destination, () => {
+      // This belongs to the new fixture. The source .gitignore is not changed.
+      const directory = join(destination, '.agent-tests'), ignore = join(directory, '.gitignore');
+      noLinks(destination, directory);
+      mkdirSync(directory, { recursive: true, mode: 0o700 });
+      noLinks(destination, ignore);
+      writeFileSync(ignore, '*\n', { flag: 'wx', mode: 0o600 });
+    });
     guarded(destination, () => planning(destination, scenario));
     const app = guarded(destination, () => application(destination, scenario));
     guarded(destination, () => write(destination, 'README.md', document(scenario.title, `${scenario.note}\n\nEste é um exemplo gerado, não um teste no projeto original. Estados de aprovação/publicação são dados de teste.\nRevisão do gate é simulação contratual, não revisão humana.\nCatálogos originais e arquivos substituídos pela fixture ficam em \`.agent-tests/testar-maturidade/\`; os catálogos operacionais são regenerados.\n\nOs scripts dos agentes foram copiados, sem pacotes ou credenciais conhecidas.\nO filtro não detecta segredos em conteúdo arbitrário.\n${app.tests.length ? `\nPara repetir os testes: \`${scenario.layout === 'legacy' ? 'npm run test:legacy' : 'npm test'}\`.\nO harness executa os testes Node diretamente, sem instalar dependências.\nO teste abre HTTP em porta efêmera e encerra o servidor.\n` : '\nNão há aplicação; a prova real exercita os scripts copiados.\n'}`, `fase: ${scenario.expected}\n`)));
@@ -352,7 +548,7 @@ export function prepareExamples({ sourceRoot = projectRoot, outputRoot, scenario
     if (initializeGit) guarded(destination, () => gitInit(destination));
     examples.push({ ...scenario, root: destination, copied, application: app });
   }
-  guarded(outputRoot, () => write(outputRoot, 'REPORT.json', JSON.stringify({ owner, version: 1, status: 'prepared', scenarios: [...ids], copies: examples.map(example => ({ id: example.id, catalogSnapshots: example.copied.catalogSnapshots, overriddenSnapshots: example.copied.overriddenSnapshots })), results: [] }, null, 2) + '\n'));
+  guarded(outputRoot, () => write(outputRoot, 'REPORT.json', JSON.stringify({ owner, version: 1, status: 'prepared', scenarios: [...ids], copies: examples.map(example => ({ id: example.id, omittedEntrypoints: example.copied.omittedEntrypoints, catalogSnapshots: example.copied.catalogSnapshots, overriddenSnapshots: example.copied.overriddenSnapshots })), results: [] }, null, 2) + '\n'));
   guarded(outputRoot, () => writeIndex(outputRoot, examples, 'prepared'));
   Object.defineProperty(examples, 'verifyOutput', { value: verifyOutput });
   return examples;
@@ -385,10 +581,10 @@ function pointer(root, roots) {
   fail('Nenhum apontamento copiado encontrado.');
 }
 
-function runner(root, logRoot, commands) {
+export function runner(root, logRoot, commands) {
   return (script, args = [], expected = 0, label = script.replaceAll('/', '-')) => {
     const command = [script, ...args];
-    const environment = { ...process.env }; delete environment.NODE_TEST_CONTEXT;
+    const environment = isolatedEnvironment();
     const result = spawnSync(process.execPath, command, { cwd: root, env: environment, encoding: 'utf8', timeout: 180000, maxBuffer: 8 * 1024 * 1024, windowsHide: true });
     const output = `${result.stdout || ''}${result.stderr || ''}`;
     const log = write(root, `${logRoot}/${String(commands.length + 1).padStart(2, '0')}-${label}.log`, output || `(sem saída; status ${result.status})\n`);
@@ -481,7 +677,8 @@ function reviewContract(example, run, proof) {
 export function testExample(example) {
   const commands = []; const logRoot = '.agent-tests/maturity';
   const run = runner(example.root, logRoot, commands);
-  const result = { id: example.id, expected: example.expected, status: 'failed', copied: { files: example.copied.copiedFiles, roots: example.copied.roots, skipped: example.copied.skipped, sourceDigest: example.copied.sourceDigest, entrypoints: example.copied.entrypoints, catalogSnapshots: example.copied.catalogSnapshots, overriddenSnapshots: example.copied.overriddenSnapshots }, commands, limits: ['Cenário sintético: não testa o projeto original no local.', 'Executado somente no SO/runtime deste host.', 'Estado de produto e revisão do gate são dados sintéticos.', 'Build Docker, UI e implantação não são exercitados.', 'Cópia exclui credenciais por nomes conhecidos, sem varredura semântica de segredos.'] };
+  const result = { id: example.id, expected: example.expected, status: 'failed', copied: { files: example.copied.copiedFiles, roots: example.copied.roots, skipped: example.copied.skipped, sourceDigest: example.copied.sourceDigest, entrypoints: example.copied.entrypoints, omittedEntrypoints: example.copied.omittedEntrypoints, catalogSnapshots: example.copied.catalogSnapshots, overriddenSnapshots: example.copied.overriddenSnapshots }, commands, limits: ['Cenário sintético: não testa o projeto original no local.', 'Executado somente no SO/runtime deste host.', 'Estado de produto e revisão do gate são dados sintéticos.', 'Build Docker, UI e implantação não são exercitados.', 'Cópia exclui credenciais por nomes conhecidos, sem varredura semântica de segredos.'] };
+  if (example.copied.omittedEntrypoints?.length) result.limits.push(`Entradas simbólicas não copiadas: ${example.copied.omittedEntrypoints.join(', ')}.`);
   const preserved = hashes(example.root, example.application.protected);
   try {
     const sync = '.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs';
@@ -543,15 +740,19 @@ export function runExamples(options = {}) {
 
 export function main(args = process.argv.slice(2)) {
   requireNode(); const [mode = 'help', ...rest] = args;
-  if (['help', '--help', '-h'].includes(mode)) { console.log('Uso: testar-maturidade prepare|run [--case <id>]. Cada execução cria uma nova pasta em examples/generated.'); return 0; }
+  if (['help', '--help', '-h'].includes(mode)) { console.log('Uso: testar-maturidade prepare|run [--case <id>] [--output <caminho-novo>]. A saída padrão fica na pasta temporária do sistema, fora de Git; destinos locais explícitos precisam estar ignorados.'); return 0; }
   if (!['prepare', 'run'].includes(mode)) fail('Use prepare ou run.');
-  let scenarios = SCENARIOS;
-  if (rest.length) {
-    if (rest.length !== 2 || rest[0] !== '--case') fail('Use --case <id>.');
-    scenarios = SCENARIOS.filter(item => item.id === rest[1]); if (!scenarios.length) fail('Cenário desconhecido.');
+  let scenarios = SCENARIOS, outputRoot, selected;
+  for (let i = 0; i < rest.length; i += 2) {
+    const [flag, value] = [rest[i], rest[i + 1]];
+    if (!value || value.startsWith('--')) fail('Use --case <id> e/ou --output <caminho-novo>.');
+    if (flag === '--case' && selected === undefined) selected = value;
+    else if (flag === '--output' && outputRoot === undefined) outputRoot = value;
+    else fail('Use --case <id> e/ou --output <caminho-novo> uma única vez.');
   }
-  if (mode === 'prepare') { const examples = prepareExamples({ scenarios }); console.log(`prepared=${examples.length}\noutput=${dirname(examples[0].root)}`); return 0; }
-  const result = runExamples({ scenarios }); console.log(`output=${result.outputRoot}`);
+  if (selected !== undefined) { scenarios = SCENARIOS.filter(item => item.id === selected); if (!scenarios.length) fail('Cenário desconhecido.'); }
+  if (mode === 'prepare') { const examples = prepareExamples({ scenarios, outputRoot }); console.log(`prepared=${examples.length}\noutput=${dirname(examples[0].root)}`); return 0; }
+  const result = runExamples({ scenarios, outputRoot }); console.log(`output=${result.outputRoot}`);
   return result.report.status === 'passed' ? 0 : 1;
 }
 

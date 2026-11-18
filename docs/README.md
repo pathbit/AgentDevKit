@@ -17,6 +17,7 @@ pode trocar de agente sem manter várias cópias das mesmas instruções.
 | [Produto](product/README.md) | Requisitos, experiência, arquitetura e roadmap. |
 | [Manutenção](maintainers/README.md) | Desenvolvimento, comunidade e publicação. |
 | [Specs](specs/README.md) | Escopo e critérios de aceite de cada incremento. |
+| [Tarefas](tasks/README.md) | Trabalho e provas das entregas em andamento. |
 
 ## Comece pelo seu objetivo
 

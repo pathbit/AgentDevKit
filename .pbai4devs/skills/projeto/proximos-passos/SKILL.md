@@ -7,8 +7,15 @@ description: Identifica o estado atual e orienta a próxima ação útil do proj
 
 Leia o pedido, o estado salvo e os documentos existentes. Use o idioma de
 `.pbai4devs/state/agentdevkit.json` ou português quando ainda não houver escolha.
-Se a CLI estiver disponível, consulte `agentdevkit next --target . --json`;
-caso contrário, use os arquivos e a inspeção local do projeto.
+Se a CLI estiver disponível, consulte `agentdevkit next --target . --json`.
+Para produto ou funcionalidade, acrescente `--intent product`; para preparar a
+execução de um projeto existente, use `--intent run`. Trate a resposta como
+orientação e confira documentos e evidências. Se o comando falhar, não estiver
+disponível ou não for permitido, informe a lacuna e inspecione os arquivos.
+Para produto, confira `.pbai4devs/state/configuracao/ESTADO.md` e as evidências:
+se a preparação estiver pendente, encaminhe a `configurar-projeto` antes do PRD;
+se não estiver comprovada, peça a confirmação necessária. Preserve documentos e
+decisões existentes. Para executar projeto existente, use `preparar-dev`.
 
 Ao finalizar uma etapa, destaque: resultado, pendências/bloqueios e próxima
 ação com comando ou skill, no formato da

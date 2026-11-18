@@ -27,6 +27,8 @@ atendido; lá os comandos de manutenção usam o pacote por `npx`.
 | `sync` | Atualiza catálogos e apontamentos a partir da fonte local. |
 | `sync --check` | Confere sincronização sem alterar o projeto. |
 | `doctor` | Diagnostica o kit e indica divergências. |
+| `recovery` | Consulta o diário e a cópia da operação pendente. |
+| `recovery resolve <geração> <id>` | Encerra a pendência revisada. |
 | `next` | Mostra a próxima etapa, sem iniciá-la. |
 | `lang [idioma]` | Consulta ou altera o idioma: pt, en ou es. |
 | `agents` | Mostra os clientes disponíveis e a seleção salva. |
@@ -37,6 +39,10 @@ atendido; lá os comandos de manutenção usam o pacote por `npx`.
 
 Sem comando, a CLI executa `init`, que pode criar arquivos. `language` é alias
 de `lang`; `clients`, de `agents`. O idioma não traduz documentos existentes.
+
+Se o diário indicar uma operação pendente, consulte o
+[procedimento de recuperação](troubleshooting.md#retomar-após-uma-interrupção)
+antes de executar `recovery resolve`.
 
 ## Opções
 
@@ -50,6 +56,7 @@ de `lang`; `clients`, de `agents`. O idioma não traduz documentos existentes.
 | `--dry-run` | Exibe o plano sem aplicar alterações. |
 | `--force` | Solicita reparos gerenciados permitidos, com backup. |
 | `--json` | Produz uma resposta JSON para automação. |
+| `--intent product\|run` | Em `next`: produto ou execução. |
 
 O primeiro uso interativo reúne idioma e clientes. Sem interação, valem as
 opções explícitas, a escolha local salva e, por último, `all`. Confira os
@@ -65,7 +72,9 @@ precisa delas; arquivos adicionais da equipe devem ser preservados.
 
 Na versão `0.0.21`, `init --force` e `update --force` podem substituir um
 `.pbai4devs/catalog.json` preexistente. Preserve uma cópia fora do projeto
-antes de executar esses comandos nessa versão.
+antes de executar esses comandos nessa versão. Nas fixtures testadas, `init`
+da `0.0.21` também acrescentou regras a `.git/info/exclude`; confira esse
+arquivo se precisar manter a configuração Git intacta.
 
 Antes de aplicar em projeto existente, confira o plano e depois o diagnóstico:
 
@@ -81,6 +90,16 @@ Use `init --dry-run --json`, `sync --dry-run --json` ou
 `plan`, `conflicts`, `preserved`, `untrackedPaths` e `localIgnore` antes de
 aplicar. Conflitos sem solução interrompem a operação; não presuma que uma
 colisão de nomes torna um arquivo propriedade do kit.
+Ao atualizar uma instalação antiga com regras Claude, a CLI pode preservar
+as regras e recusar a operação por escopo ou metadados não verificados,
+inclusive com `--force`. Revise os arquivos indicados e suas fontes e
+dependências; não apague as regras para contornar a recusa. Um hash registrado
+não comprova os metadados atuais nem a ativação efetiva no cliente.
+A saída humana mostra até cinco caminhos em conflito; use `--json` para a
+lista completa e os motivos disponíveis em `preserved`.
+Uma referência Markdown existente, integralmente idêntica à gerada e sem
+registro anterior, é preservada e pode satisfazer a descoberta sem ser adotada.
+Registros históricos de remoção seguem a política anterior e exigem revisão.
 As verificações não são atômicas com outras alterações no sistema de arquivos:
 evite editar os arquivos envolvidos enquanto a operação estiver em andamento.
 
@@ -88,15 +107,17 @@ O sincronizador independente também pode ser executado pelo
 [script local](../../.pbai4devs/scripts/sincronizar-agentes/README.md). Seu
 `--check` apenas confere e `--force` é explícito na linha de comando. O
 comando agêntico [sincronizar](../../.pbai4devs/commands/sincronizar/COMMAND.md)
-orienta executar o script com `--force`; ele não é o mesmo que `sync` da CLI.
+orienta revisar e aplicar o plano pela CLI; `--force` é uma opção explícita.
 
-No Git, o kit preserva o `.gitignore` da raiz e pode atualizar
-`.git/info/exclude` para ocultar por padrão as pastas dos clientes. O projeto
-pode reabri-las no `.gitignore` da raiz, como em `!/.claude/`; consulte as
-[exceções e seus efeitos](installation.md#git-e-migração). Os comandos não
+Na implementação em desenvolvimento, o kit procura preservar os ignores e a
+configuração existentes, incluindo `.git/info/exclude`. Verifique o
+comportamento da versão usada, inclusive o aviso da `0.0.21` acima. Saídas
+podem ficar visíveis; consulte
+[Git e migração](installation.md#git-e-migração). Os comandos não
 retiram arquivos já rastreados do índice, e `untrackedPaths` permanece vazio
-por compatibilidade. Backups locais ficam em `.agent-tests/` e não substituem
-o histórico Git.
+por compatibilidade. Backups locais ficam em `.agent-tests/`, podem conter
+dados privados e aparecer no Git conforme os ignores existentes; não
+substituem o histórico Git.
 
 ## Ferramentas
 
@@ -119,9 +140,17 @@ do separador. `--help` e `--version` do kit não exigem um projeto instalado.
 As respostas incluem `ok`, `command`, `version`, `language`, `target` e
 `next`. Conforme a operação, há seleção, plano, conflitos, backup e erros.
 Leia os campos estruturados, não dependa da tradução da mensagem.
+Em `next --intent product`, após uma inspeção concluída, `stage` identifica a
+etapa sugerida e `maturity` indica a maturidade detectada. Sem kit instalado ou
+com inventário incompleto, `maturity` não é informado. Não são aprovações.
 `preserved` lista caminhos mantidos pelo projeto e o motivo.
 Um complemento pode ser gerenciado por bloco sem tornar o arquivo propriedade
 do kit. Conteúdo humano não é substituído por `--force`.
+Se o planejamento, a aplicação ou `tools` falhar após uma possível alteração,
+`next` nessa resposta orienta preservar arquivos e revisar o estado antes de
+retomar. Esse aviso não cria uma pendência persistente nem impede outra chamada.
+Se a própria saída falhar, ela pode estar incompleta; não suponha que uma
+resposta JSON parcial possa ser recuperada automaticamente.
 
 | Código | Significado |
 | --- | --- |
@@ -131,6 +160,10 @@ do kit. Conteúdo humano não é substituído por `--force`.
 
 `doctor` verifica o kit, não o produto inteiro. `next` pode terminar com
 sucesso enquanto orienta uma etapa ainda pendente.
+Para uma nova funcionalidade, use `next --intent product`; para preparar a
+execução de um projeto existente, use `next --intent run`. Sem `--intent`, a
+consulta mantém o comportamento anterior. O diagnóstico não inicia a etapa nem comprova
+aprovações: confira os documentos e decisões existentes antes de agir.
 Após produto e design, ele usa os caminhos de roadmap e specs registrados no
 estado. Para orientar uma spec existente, exige uma única referência aberta
 `[ ]` ou em andamento `[-]` no roadmap. Com mais de uma spec, entrega encerrada,
@@ -140,5 +173,9 @@ spec aberta e declarada aprovada, `implementar-spec` verifica o plano antes de
 encaminhar a configuração técnica; `next` não presume aprovação do plano.
 Se o inventário for truncado, `next` orienta inspeção manual, sem escolher uma
 fase ou presumir que um projeto existente está vazio.
+Na intenção de produto, avisos no inventário documental também pedem inspeção:
+isso inclui caminhos inválidos, erros de leitura e links simbólicos não seguidos,
+mesmo quando um link pareça não ser documentação. Consulte o inspetor para ver
+os avisos e decida após verificar os arquivos relevantes.
 
 [Wiki](../README.md) · [Solução de problemas](troubleshooting.md)

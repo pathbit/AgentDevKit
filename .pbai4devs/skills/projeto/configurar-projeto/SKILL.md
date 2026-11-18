@@ -37,6 +37,10 @@ aprovações já dadas.
 
 1. Use `executar-script` com `inspecionar-projeto` e `diagnosticar-ambiente`
    para identificar estrutura, SO, arquitetura e ferramentas.
+   Se a consulta ao Docker falhar, informe que ele não foi verificado; uma
+   falha de acesso ou sandbox não prova que o daemon está parado.
+   Se rede não for permitida e o contexto Docker não for conhecido como local,
+   use `diagnosticar-ambiente --no-docker-probe` pelo seletor.
    Reúna as perguntas do [modelo de ambiente][ambiente]
    antes de instalar. Decisões materiais faltantes voltam ao design.
 2. Prepare as ferramentas definidas em `.pbai4devs/tools/<nome>/TOOL.json` com
@@ -63,7 +67,8 @@ aprovações já dadas.
    evidência da configuração prévia e dos serviços aplicáveis.
 
 Após alterações técnicas, conclua `revisar-entrega`. Sincronize apontamentos
-somente quando recursos dos agentes forem alterados.
+somente quando recursos dos agentes forem alterados. Para verificá-los, use
+`node .pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs --check`.
 
 [ambiente]: ../../../templates/ambiente-local/TEMPLATE.md
 [estrutura]: ../../../rules/ambiente-local/RULE.md

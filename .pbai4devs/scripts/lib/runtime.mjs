@@ -6,7 +6,7 @@ export const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../
 
 export function requireNode(minimum = 24, version = process.versions.node) {
   if (process.versions.bun || !/^\d+\.\d+\.\d+/.test(version || '') || Number(version.split('.')[0]) < minimum) {
-    throw new Error(`Instale Node.js >=${minimum} com npm: https://nodejs.org/en/download .`);
+    throw new Error(`Use Node.js >=${minimum} com npm. Se não estiver instalado: https://nodejs.org/en/download .`);
   }
 }
 

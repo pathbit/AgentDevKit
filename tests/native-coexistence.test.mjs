@@ -1,3 +1,4 @@
+import '../.pbai4devs/scripts/lib/test-git-environment.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -8,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { main } from '../src/cli.mjs';
 import { applyPlan, inspect, planInstallation } from '../src/install.mjs';
 import { synchronize } from '../.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs';
+import { gitPathsOverlap } from '../.pbai4devs/scripts/lib/git-environment.mjs';
 import { extractManagedBlock, managedBlockDigest } from '../.pbai4devs/scripts/lib/managed-content.mjs';
 
 const repository = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -53,6 +55,53 @@ async function cli(root, args, expected = 0) {
   assert.equal(value.ok, expected === 0, stdout);
   return value;
 }
+
+test('regra de sobreposição do Windows permite destino distinto de um link staged', { timeout: 120000 }, t => {
+  const { root, git } = fixture(t);
+  put(root, 'AGENTS.md', '# regras humanas\n');
+  if (!link(t, 'AGENTS.md', join(root, 'CLAUDE.md'))) return;
+  git('add', '--all');
+  const index = readFileSync(join(root, '.git/index'));
+  assert.equal(gitPathsOverlap('CLAUDE.md', '.agents/agents/revisor.md', { root, platform: 'win32', allowMissingTarget: true }), false);
+  assert.equal(gitPathsOverlap('CLAUDE.md', 'AGENTS.md', { root, platform: 'win32' }), true);
+  assert.equal(gitPathsOverlap('CLAUDE.md', 'AGENTS.md', { root, platform: 'win32', allowMissingTarget: true }), false);
+  assert.equal(gitPathsOverlap('CLAUDE.md/nested', '.agents/agents/revisor.md', { root, platform: 'win32', allowMissingTarget: true }), true);
+  const plan = planInstallation({ target: root, mode: 'init', clients: ['codex', 'claude', 'copilot'] });
+  assert.ok(plan.changes.some(change => change.path === '.agents/agents/revisor.md' && change.action === 'create'));
+  assert.ok(plan.preserved.some(item => item.path === 'CLAUDE.md' && item.reason === 'symbolic-link'));
+  applyPlan(plan);
+  assert.equal(readlinkSync(join(root, 'CLAUDE.md')), 'AGENTS.md');
+  assert.deepEqual(readFileSync(join(root, '.git/index')), index);
+});
+
+test('preserva links staged com clientes coexistentes e verifica a sobreposição do Windows', { timeout: 120000 }, t => {
+  const { root, directory, git } = fixture(t);
+  for (const [path, content] of Object.entries({ 'AGENTS.md': '# regras\n', 'packages/core/README.md': '# pacote\n', '.claude/skills/triage/SKILL.md': '# triage\n', '.claude/skills/triage/REFERENCE.md': '# referência\n', '.claude/agents/revisor.md': '# revisor\n', '.claude/.gitignore': 'privado.json\n', '.github/agents/revisor.agent.md': '# revisor\n' })) put(root, path, content);
+  put(directory, 'outside/config.json', '{"humano":true}\n');
+  if (!link(t, 'AGENTS.md', join(root, 'CLAUDE.md')) || !link(t, 'packages/core/README.md', join(root, 'README.md'))
+    || !link(t, '../.claude/skills', join(root, '.codex/skills'), 'dir') || !link(t, '../../outside/config.json', join(root, '.claude/settings.local.json'))) return;
+  git('add', '--all');
+  const index = readFileSync(join(root, '.git/index')), config = readFileSync(join(root, '.git/config'));
+  const linkPaths = ['CLAUDE.md', 'README.md', '.codex/skills', '.claude/settings.local.json'];
+  const before = snapshot(root, linkPaths), outside = readFileSync(join(directory, 'outside/config.json'));
+  const output = '.claude/agents/analista-performance.md';
+  const identities = Object.fromEntries(['.', '.claude', '.claude/agents', ...linkPaths].map(path => {
+    const info = lstatSync(join(root, path), { bigint: true });
+    return [path, { dev: String(info.dev), ino: String(info.ino), link: info.isSymbolicLink() }];
+  }));
+  for (const path of ['CLAUDE.md', 'README.md', '.claude/settings.local.json'])
+    assert.equal(gitPathsOverlap(path, output, { root, platform: 'win32', allowMissingTarget: true }), false, `${path}: ${JSON.stringify(identities)}`);
+  let plan;
+  try { plan = planInstallation({ target: root, mode: 'init', clients: ['codex', 'claude', 'copilot'] }); }
+  catch (error) { error.message += `; lstat: ${JSON.stringify(identities)}`; throw error; }
+  assert.ok(plan.changes.some(change => change.path === output && change.action === 'create'));
+  applyPlan(plan);
+  assert.doesNotThrow(() => planInstallation({ target: root, mode: 'update' }));
+  assert.deepEqual(snapshot(root, linkPaths), before);
+  assert.deepEqual(readFileSync(join(root, '.git/index')), index);
+  assert.deepEqual(readFileSync(join(root, '.git/config')), config);
+  assert.deepEqual(readFileSync(join(directory, 'outside/config.json')), outside);
+});
 
 test('instala e atualiza sobre agentes configurados preservando arquivos, links e índice', async t => {
   const { root, directory, git } = fixture(t);
@@ -117,7 +166,7 @@ test('instala e atualiza sobre agentes configurados preservando arquivos, links 
   assert.deepEqual(readFileSync(join(directory, 'outside/config.json')), outside);
 });
 
-test('preserva raiz externa, link pendente e ciclo sem abrir os destinos', async t => {
+test('preserva raiz externa, link pendente e ciclo preservando os destinos', async t => {
   const { root, directory } = fixture(t);
   put(directory, 'outside/secret.txt', 'outside remains unchanged\n');
   put(root, 'CLAUDE.md/notes.txt', 'Existing entrypoint directory\n');
@@ -129,7 +178,11 @@ test('preserva raiz externa, link pendente e ciclo sem abrir os destinos', async
   const installed = await cli(root, ['init', '--yes', '--agents', 'cursor,claude']);
   for (const path of links) assert.ok(installed.preserved.some(item => item.path === path), path);
   assert.ok(installed.preserved.some(item => item.path === 'CLAUDE.md' && item.reason === 'existing-directory'));
-  await cli(root, ['doctor']); await cli(root, ['sync', '--check']);
+  assert.ok(installed.retainedClaudeRules.length); assert.match(installed.warnings.join(' '), /global/i);
+  for (const args of [['doctor'], ['sync', '--check']]) {
+    const result = await cli(root, args, 1);
+    assert.ok(result.retainedClaudeRules.length); assert.match(result.warnings.join(' '), /global/i);
+  }
   await cli(root, ['agents', 'codex,claude']); await cli(root, ['agents', 'cursor,claude']);
   await cli(root, ['update', '--force']);
   assert.deepEqual(snapshot(root, links), before);
@@ -194,7 +247,14 @@ test('migra índices comprovadamente gerados por sincronização standalone', as
   const state = JSON.parse(readFileSync(join(root, '.pbai4devs/state/agentdevkit.json')));
   assert.equal(state.files[path], hash(readFileSync(join(root, path))));
   assert.ok(JSON.parse(readFileSync(join(root, path))).entries.length);
-  await cli(root, ['doctor']); await cli(root, ['sync', '--check']);
+  const legacy = '.claude/rules/seguranca/RULE.md', legacyBytes = readFileSync(join(root, legacy));
+  assert.ok(installed.retainedClaudeRules.includes(legacy)); assert.match(installed.warnings.join(' '), /global/i);
+  for (const args of [['doctor'], ['sync', '--check']]) {
+    const diagnostic = await cli(root, args, 1);
+    assert.ok(diagnostic.retainedClaudeRules.includes(legacy)); assert.match(diagnostic.warnings.join(' '), /global/i);
+    assert.deepEqual(readFileSync(join(root, legacy)), legacyBytes);
+    assert.equal(hash(readFileSync(join(root, path))), state.files[path]);
+  }
 });
 
 test('reconhece índice regenerado por standalone e atualiza o estado pela CLI', async t => {

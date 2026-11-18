@@ -29,6 +29,10 @@ desativam fsmonitor somente no subprocesso; nenhuma configuração é alterada.
    revisão e `revisar-entrega check <relatorio>` pelo mesmo seletor. Falha,
    critério sem prova ou revisão pendente bloqueiam o commit/merge.
 
+Nas saídas JSON, `reviewVerification: "not-verified"` indica que a aprovação
+foi declarada no relatório: o gate não autentica sua origem nem confirma que
+o revisor atuou. Verifique a resposta real antes de concluir a revisão.
+
 Antes do commit, execute `revisar-entrega check-commit <relatorio>
 [outros-relatorios...]`. A união das revisões seladas deve cobrir todos os
 arquivos preparados, inclusive ambas as pontas de renomeações. O check aceita

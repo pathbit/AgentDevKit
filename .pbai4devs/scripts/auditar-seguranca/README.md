@@ -20,6 +20,10 @@ as exclusões. `--target` restringe a uma pasta dentro do projeto;
 `--include-history` acrescenta o histórico Git ao check de segredos e exige
 que o destino seja a raiz desse repositório. Pastas `dist/` e `build/` também
 são lidas; um bundle de texto não fica oculto por ser um artefato de build.
+`examples/generated/` é excluído somente quando uma regra em `.gitignore`
+idêntico ao blob do índice a ignora e o índice não contém caminhos da pasta.
+Ignore global, `info/exclude` e regras apenas no working tree não a excluem.
+Selecionar a pasta diretamente com `--target` também a analisa.
 
 `update-data` baixa somente bases públicas do OSV por HTTPS, sem analisar ou
 enviar o projeto. As bases ficam no cache local do scanner, com tamanho,
@@ -42,7 +46,14 @@ base ou erro de parsing gera estado incompleto, nunca aprovação.
 Resultados redigidos ficam em `.agent-tests/security/<execução>/report.json`.
 Não incluem código, matches ou valores de segredos. JSON bruto e snapshots
 temporários são removidos. Um destino `--output` precisa ser novo, ignorado
-pelo Git e estar sob `.agent-tests/`.
+pelo Git e estar sob `.agent-tests/`. A pasta de trabalho
+`.agent-tests/security/` também precisa estar ignorada. A auditoria recusa
+redirecionamentos Git e caminhos que possam conflitar com o índice; ela não
+altera a configuração Git; desativa `fsmonitor` nas consultas e no ambiente
+fornecido aos scanners.
+Ao detectar troca da pasta de trabalho, a auditoria interrompe a limpeza e
+preserva o conteúdo encontrado. A verificação e a remoção não são atômicas;
+evite alterar essa pasta durante a execução.
 
 O snapshot aceita até 20 mil arquivos, 10 MiB por arquivo e 256 MiB no total.
 Uma base OSV pode ter até 512 MiB; ultrapassar os limites torna a execução

@@ -7,7 +7,10 @@ import { projectRoot, requireNode, isMain } from '../lib/runtime.mjs';
 import { ToolManager, binaryInvocation, toolEnvironment } from '../preparar-ferramentas/SCRIPT.mjs';
 
 const fail = message => { throw new Error(message); };
-const json = file => JSON.parse(readFileSync(file, 'utf8'));
+const json = (file, label = 'arquivo local') => {
+  const text = readFileSync(file, 'utf8');
+  try { return JSON.parse(text); } catch { throw new SyntaxError(`JSON invalido (${label}).`); }
+};
 const slug = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const repository = /^[a-zA-Z0-9][a-zA-Z0-9_.-]*\/[a-zA-Z0-9][a-zA-Z0-9_.-]*$/;
 const stat = file => { try { return lstatSync(file); } catch (error) { if (error.code === 'ENOENT') return null; throw error; } };
@@ -49,7 +52,7 @@ export function validateCatalog(value) {
 }
 
 export function loadCatalog(root = projectRoot) {
-  return validateCatalog(json(safePath(realpathSync(root), '.pbai4devs/external-skills/CATALOG.json')));
+  return validateCatalog(json(safePath(realpathSync(root), '.pbai4devs/external-skills/CATALOG.json'), 'CATALOG.json'));
 }
 
 export function sourceUrl(entry) {
@@ -111,7 +114,7 @@ export class ExternalSkills {
     const payload = safePath(folder, `.agents/skills/${entry.name}`); const file = safePath(payload, 'SKILL.md');
     const text = readFileSync(file, 'utf8'); const lines = text.replaceAll('\r', '').split('\n'); const closing = lines.indexOf('---', 1);
     if (lines[0] !== '---' || closing < 1 || !lines.slice(1, closing).some(line => new RegExp(`^name:\\s*['\"]?${entry.name}['\"]?\\s*$`).test(line))) fail('Nome ou frontmatter da skill instalado divergente.');
-    const lock = json(safePath(folder, 'skills-lock.json')); const source = lock.skills?.[entry.name];
+    const lock = json(safePath(folder, 'skills-lock.json'), 'skills-lock.json'); const source = lock.skills?.[entry.name];
     if (lock.version !== 2 || Object.keys(lock.skills || {}).length !== 1 || source?.sourceType !== 'github' || source.source?.toLowerCase() !== entry.repository.toLowerCase() || source.ref !== entry.commit || source.skillPath !== entry.path || !/^[a-f0-9]{64}$/.test(source.computedHash || '')) fail('Proveniencia do lock diverge do catalogo revisado.');
     for (const name of readdirSync(folder)) if (!['.agents', '.state', 'skills-lock.json', 'CURRENT.json'].includes(name)) fail(`Saida inesperada do CLI: ${name}`);
     if (readdirSync(join(folder, '.agents')).some(name => name !== 'skills')) fail('Saida inesperada fora da origem unica da skill.');
@@ -121,7 +124,7 @@ export class ExternalSkills {
     const entry = this.entry(id, true); const folder = this.local(id);
     const receiptPath = safePath(folder, 'CURRENT.json');
     if (!existsSync(receiptPath)) fail(`Skill ausente: ${id}; use install ${id}.`);
-    const receipt = json(receiptPath);
+    const receipt = json(receiptPath, 'CURRENT.json');
     if (JSON.stringify(receipt.source) !== JSON.stringify(descriptor(entry))) fail(`Pin ou origem mudou; revise o catalogo e use update ${id}.`);
     const payload = this.validatePayload(folder, entry);
     if (payload.hash !== receipt.payloadHash) fail(`Conteudo local alterado: ${id}; use update ${id} para restaurar o pin revisado.`);

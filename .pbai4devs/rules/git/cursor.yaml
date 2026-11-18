@@ -1,4 +1,4 @@
 ---
-description: Convenções de Git e autoria dos commits do projeto.
-alwaysApply: true
+description: Regras ao consultar, preparar, integrar ou publicar alterações Git, incluindo índice e autoria.
+alwaysApply: false
 ---

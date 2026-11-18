@@ -7,7 +7,8 @@ description: Seleção e uso das automações compartilhadas.
 Pré-requisito: [Node.js 24+ com npm](https://nodejs.org/en/download),
 preferencialmente uma versão LTS. Automações próprias usam `.mjs` e o mesmo
 comando em macOS, Linux e Windows. Bun não faz parte do contrato validado.
-Versione scripts e testes; salve somente resultados em `.agent-tests/`.
+Versione scripts e testes; guarde resultados em `.agent-tests/` somente se o
+projeto a ignorar, ou use uma pasta temporária fora do repositório.
 Prepare ferramentas locais com `preparar-ferramentas`, sem instalações globais.
 O runtime da aplicação será decidido no design doc; este requisito é dos agentes.
 Com Node 18+, o [bootstrap JavaScript](preparar-ferramentas/BOOTSTRAP.md)
@@ -23,20 +24,46 @@ consultar sem executar):
 node .pbai4devs/scripts/executar-script/SCRIPT.mjs diagnosticar-ambiente
 ```
 
+No diagnóstico, `docker.daemonStatus` e `docker.composeStatus` são `available`,
+`unverified`, `not-found` (executável ausente do PATH) ou `not-requested`
+(executável encontrado, mas sondagem desativada).
+Falha na consulta não comprova que o serviço está parado. A consulta usa o
+contexto Docker configurado, que pode ser remoto. Para não chamar Docker, use
+`diagnosticar-ambiente --no-docker-probe` pelo seletor; os booleanos anteriores
+permanecem para compatibilidade.
+
 | Nome | Finalidade |
 | --- | --- |
 | `diagnosticar-ambiente` | Runtimes, pacotes e navegadores disponíveis |
 | `inspecionar-projeto` | Detecta manifests, comandos e estrutura |
+| `reunir-contexto-spec` | Lê os documentos configurados para uma spec |
 | `verificar-configuracao` | Confere o estado antes de implementar código |
 | `preparar-ferramentas` | Instala/atualiza ferramentas locais |
 | `gerenciar-skills-externas` | Instala/check/read de skills curadas locais |
 | `auditar-seguranca` | Scanners offline, bases locais e relatórios redigidos |
 | `revisar-entrega` | Confere documentação, revisão e provas da mudança |
-| `sincronizar-agentes` | Repara com `--force`; `--check` só confere |
+| `sincronizar-agentes` | Atualiza apontamentos; `--check` só confere |
 | `verificar-recursos` | Estrutura Markdown, links e espelhos |
 | `testar-infraestrutura` | Executa `tests/TEST.mjs` com Node |
-| `testar-maturidade` | Gera e executa cenários em `examples/generated/` |
+| `testar-maturidade` | Executa cenários temporários fora de Git |
 | `testar-navegador` | Cenários via conector Playwright; veja a [referência](testar-navegador/REFERENCE.md) |
+
+`testar-infraestrutura` grava cada execução em uma pasta nova de
+`.agent-tests/infraestrutura/` e informa o caminho do relatório. Logs e
+relatórios anteriores são preservados; links simbólicos nos diretórios de
+saída e na descoberta das suítes são recusados. Consumidores do antigo
+`infraestrutura/REPORT.json` devem usar o caminho informado na execução. Uma
+entrada simbólica em `scripts` também interrompe a descoberta quando não for
+uma suíte. O relatório usa `partial` para testes ignorados, pendentes ou sem
+testes observáveis; nesse caso o comando retorna erro para impedir uma prova
+incompleta de passar como completa. O relatório identifica skips por nome,
+arquivo relativo e motivo disponível. Ainda não há política para skips
+aprovados para publicação: o caso específico de alias Windows é identificado
+como esperado em Linux e macOS, mas continua parcial e não comprova Windows.
+No macOS, uma ACL listada ou não verificável no
+diretório de saída interrompe a execução antes da gravação. As verificações
+não isolam os testes nem garantem contenção contra substituições simultâneas
+de caminhos ou ACLs não detectadas.
 
 Cada [ferramenta](../tools/README.md) tem `TOOL.json` e um `SCRIPT.mjs`,
 com ações `install`, `update`, `check`, `info` e `run`.
@@ -53,20 +80,22 @@ O seletor aceita nome ou caminho JavaScript, repassa os argumentos e preserva
 o código de saída. Ele não procura outros interpretadores após uma falha.
 `playwright-mcp` exige o conector: seu `SCRIPT.js` é código para uma página,
 não um programa Node. Novas automações usam `.mjs`; `.bun` não é necessário.
-Os testes de cada script ficam em `<nome>/tests/`; resultados e capturas em
-`.agent-tests/`. Scripts, modelos e ferramentas não têm cópias nos agentes.
+Os testes de cada script ficam em `<nome>/tests/`; confira se os diretórios de
+resultados e capturas estão ignorados. Scripts, modelos e ferramentas não têm
+cópias nos agentes.
 
 Os layouts vêm de `templates/clients/ADAPTERS.json` no hub. O manifesto local
 `espelhos.conf` é gerado dessa fonte. Os metadados nativos ficam ao lado dos
 recursos, com frontmatter YAML sem corpo. Caminhos são relativos à raiz.
 Somente os quatro arquivos principais são fontes; não registre documentos.
-Use `gitignore|pasta` para gerar apenas o `.gitignore`, como em `.vscode`.
+Use `gitignore|pasta` para registrar pastas como `.vscode`; a linha não cria
+um `.gitignore` para o cliente.
 
-`sincronizar-agentes --force` repara os destinos gerenciados com backup em
-`.agent-tests/`. Recursos e configurações humanos permanecem intactos, inclusive
-quando ocupam o caminho de um apontamento. `--check` não altera arquivos.
+`sincronizar-agentes --force` não autoriza substituir conteúdo humano. Backups
+locais podem ficar em `.agent-tests/`; revise-os antes de restaurar.
+`--check` não altera arquivos.
 O sincronizador também gera o catálogo completo e os índices auxiliares a partir
 das fontes. Helpers e testes constam como suporte, sem fingir comandos próprios.
-Ele protege os derivados contra versionamento e preserva regras humanas.
-As políticas vêm dos modelos de gitignore; o estado e os índices são locais.
+Ignores, índice e configuração Git existentes são preservados; confira a
+visibilidade dos derivados antes de adicioná-los. O estado e os índices são locais.
 Os exemplos de maturidade usam cópias locais, sem downloads ou estado pessoal.

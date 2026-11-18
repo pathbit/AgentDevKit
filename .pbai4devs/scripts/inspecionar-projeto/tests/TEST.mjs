@@ -1,11 +1,14 @@
+import '../../lib/test-git-environment.mjs';
 import assert from 'node:assert/strict';
-import { lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import fs from 'node:fs';
+import { lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join, sep } from 'node:path';
+import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 import { projectRoot, requireNode } from '../../lib/runtime.mjs';
-import { inspectDocumentation } from '../SCRIPT.mjs';
+import { inspectDocumentation, inspectProject } from '../SCRIPT.mjs';
 
 requireNode();
 const script = join(projectRoot, '.pbai4devs/scripts/inspecionar-projeto/SCRIPT.mjs');
@@ -23,6 +26,114 @@ function fixture(t) {
   };
   return { root, directory, file, run };
 }
+
+test('inventaria várias specs em ordem estável', t => {
+  const root = mkdtempSync(join(tmpdir(), 'adk-spec-inventory-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const file = (name, content) => {
+    const target = join(root, name);
+    mkdirSync(dirname(target), { recursive: true });
+    writeFileSync(target, content);
+  };
+  file('.pbai4devs/state/configuracao/ESTADO.md', '---\npreparacao: concluido\nconfiguracao_tecnica: pendente\ndocumentos:\n  prd: docs/prd.md\n  ux_ui: docs/ux.md\n  design: docs/design.md\n  roadmap: docs/roadmap.md\n  specs: docs/specs\n---\n');
+  for (const name of ['prd', 'ux', 'design']) file(`docs/${name}.md`, '---\nstatus: aprovado\n---\n');
+  file('docs/roadmap.md', '---\nstatus: aprovado\n---\n# Roadmap\n- [ ] [Primeira](specs/01/SPEC.md)\n');
+  const spec = number => file(`docs/specs/${String(number).padStart(2, '0')}/SPEC.md`, '---\nstatus: aprovado\n---\n# Spec\n');
+  spec(1);
+  spec(26);
+  let report = inspectProject(root).maturity.planning.specs;
+  assert.equal(report.present, true);
+  assert.equal(report.complete, true);
+  assert.deepEqual(report.items.map(item => item.path), ['docs/specs/01/SPEC.md', 'docs/specs/26/SPEC.md']);
+  assert.equal(report.items[0].roadmapState, 'open');
+  for (let number = 25; number >= 2; number--) spec(number);
+  report = inspectProject(root).maturity.planning.specs;
+  assert.equal(report.complete, true);
+  assert.deepEqual(report.items.map(item => item.path), Array.from({ length: 26 }, (_, i) => `docs/specs/${String(i + 1).padStart(2, '0')}/SPEC.md`));
+  assert.ok(report.items.every(item => item.status === 'aprovado'));
+});
+
+test('alterações tardias na pasta de specs invalidam o inventário', t => {
+  for (const mode of ['insert', 'remove']) {
+    {
+      const root = realpathSync(mkdtempSync(join(tmpdir(), 'adk-spec-race-')));
+      t.after(() => rmSync(root, { recursive: true, force: true }));
+      const file = (name, content) => { const target = join(root, name); mkdirSync(dirname(target), { recursive: true }); writeFileSync(target, content); };
+      file('.pbai4devs/state/configuracao/ESTADO.md', '---\npreparacao: concluido\nconfiguracao_tecnica: pendente\ndocumentos:\n  prd: docs/prd.md\n  ux_ui: docs/ux.md\n  design: docs/design.md\n  roadmap: docs/roadmap.md\n  specs: docs/specs\n---\n');
+      for (const name of ['prd', 'ux', 'design']) file(`docs/${name}.md`, '---\nstatus: aprovado\n---\n');
+      file('docs/roadmap.md', '---\nstatus: aprovado\n---\n# Roadmap\n- [ ] [Spec](specs/01/SPEC.md)\n');
+      const content = '---\nstatus: aprovado\n---\n# Spec\n';
+      file('docs/specs/01/SPEC.md', content);
+      if (mode === 'remove') file('docs/specs/02/SPEC.md', content);
+      const original = fs.openSync; let changed = false, result;
+      try {
+        fs.openSync = (...args) => {
+          const name = String(args[0]);
+          if (!changed && name.startsWith(join(root, 'docs/specs') + sep) && basename(name) === 'SPEC.md') {
+            changed = true;
+            if (mode === 'insert') file('docs/specs/02/SPEC.md', content);
+            else rmSync(join(root, 'docs/specs', basename(dirname(name)) === '01' ? '02' : '01'), { recursive: true });
+          }
+          return original(...args);
+        };
+        result = inspectProject(root).maturity.planning.specs;
+      } finally { fs.openSync = original; }
+      assert.equal(changed, true, mode);
+      assert.equal(result.complete, false, mode);
+      assert.deepEqual(result.items, [], mode);
+    }
+  }
+});
+
+test('limite agregado de entradas descarta inventário parcial', t => {
+  const root = mkdtempSync(join(tmpdir(), 'adk-spec-entries-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const file = (name, content) => { const target = join(root, name); mkdirSync(dirname(target), { recursive: true }); writeFileSync(target, content); };
+  file('.pbai4devs/state/configuracao/ESTADO.md', '---\ndocumentos:\n  specs: docs/specs\n---\n');
+  for (let folder = 0; folder < 4; folder++) {
+    file(`docs/specs/${folder}/SPEC.md`, '# Spec\n');
+    for (let index = 0; index < 130; index++) file(`docs/specs/${folder}/nota-${index}.md`, '');
+  }
+  const specs = inspectProject(root).maturity.planning.specs;
+  assert.equal(specs.present, true); assert.equal(specs.complete, false); assert.deepEqual(specs.items, []);
+});
+
+test('alteração de spec já lida invalida o inventário mesmo com o mesmo tamanho', t => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'adk-spec-content-race-')));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const file = (name, content) => { const target = join(root, name); mkdirSync(dirname(target), { recursive: true }); writeFileSync(target, content); };
+  file('.pbai4devs/state/configuracao/ESTADO.md', '---\ndocumentos:\n  specs: docs/specs\n---\n');
+  const content = '---\nstatus: aprovado\n---\n# Spec\n';
+  for (const name of ['01', '02']) file(`docs/specs/${name}/SPEC.md`, content);
+  const original = fs.openSync; let first, changed = false, specs;
+  try {
+    fs.openSync = (...args) => {
+      const name = String(args[0]);
+      if (name.startsWith(join(root, 'docs/specs') + sep) && basename(name) === 'SPEC.md') {
+        if (!first) first = name;
+        else if (name !== first && !changed) { changed = true; writeFileSync(first, content.replace('aprovado', 'rascunho')); }
+      }
+      return original(...args);
+    };
+    specs = inspectProject(root).maturity.planning.specs;
+  } finally { fs.openSync = original; }
+  assert.equal(changed, true);
+  assert.equal(specs.complete, false); assert.deepEqual(specs.items, []);
+});
+
+test('limite agregado de bytes permite o teto e recusa leitura parcial acima dele', t => {
+  const root = mkdtempSync(join(tmpdir(), 'adk-spec-bytes-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const file = (name, content) => { const target = join(root, name); mkdirSync(dirname(target), { recursive: true }); writeFileSync(target, content); };
+  file('.pbai4devs/state/configuracao/ESTADO.md', '---\ndocumentos:\n  specs: docs/specs\n---\n');
+  const content = Buffer.alloc(1024 * 1024, 32); content.write('---\nstatus: aprovado\n---\n# Spec\n');
+  for (let index = 0; index < 16; index++) file(`docs/specs/${String(index).padStart(2, '0')}/SPEC.md`, content);
+  let specs = inspectProject(root).maturity.planning.specs;
+  assert.equal(specs.complete, true); assert.equal(specs.items.length, 16);
+  file('docs/specs/16/SPEC.md', '# Spec\n');
+  specs = inspectProject(root).maturity.planning.specs;
+  assert.equal(specs.complete, false); assert.deepEqual(specs.items, []);
+});
 
 test('identifica repositório sem aplicação e informa estrutura ausente', t => {
   const { run } = fixture(t);

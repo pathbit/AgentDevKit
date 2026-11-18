@@ -6,7 +6,8 @@ description: Instala e atualiza ferramentas locais de agentes para o SO e arquit
 # Preparar ferramentas
 
 Identifique a operação e a seleção pedidas. Confira Node.js 24+ e npm antes
-dos `.mjs`; reutilize o runtime disponível e seu caminho absoluto.
+dos `.mjs`; o mínimo 24 é do Node. Verifique o npm separadamente e reutilize
+o runtime disponível e seu caminho absoluto.
 Com Node 18+, o [bootstrap JavaScript][bootstrap] e `--runtime-only` preparam
 Node 24+; depois execute a operação original. Sem Node/npm, instale primeiro
 pelo mecanismo nativo do SO. Faça o preparo pelo usuário e reutilize o runtime.

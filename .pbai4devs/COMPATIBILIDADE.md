@@ -52,12 +52,14 @@ Os caminhos são relativos à pasta do cliente, exceto onde indicado.
 - Cursor: `skills/grupo/nome/SKILL.md`, `rules/grupo/nome.mdc`,
   `agents/nome.md` e `commands/nome.md`.
 - Copilot: `skills/nome/SKILL.md`, `agents/nome.agent.md`,
-  `instructions/grupo/nome.instructions.md` e
+  `instructions/grupo/nome.instructions.md` para regras globais ou por glob,
+  `rules/grupo/nome/RULE.md` para referências explícitas e
   `prompts/grupo/nome.prompt.md` para Local.
 - OpenCode: `skills/grupo/nome/SKILL.md`, `commands/grupo/nome.md`,
   `agents/grupo/nome.md`; regras como referências.
 - Gemini: `skills/nome/SKILL.md`, `commands/grupo/nome.toml`,
-  `agents/nome.md`; regras como referências.
+  `agents/nome.md`; regras como referências. Skills do projeto exigem pasta
+  confiável no cliente; consulte a [documentação de descoberta][gemini-trust].
 - Antigravity: skills e regras agrupadas, agentes planos registrados nos
   manifestos; comandos como referências. `.agent` é a opção legada.
 - ZCode: `skills/nome/SKILL.md`, comandos diretos; demais tipos são referências.
@@ -79,10 +81,16 @@ MiniMax, Copilot CLI/SDK e DeepSeek usam filhos imediatos. ZCode exige skills
 planas em plugins. Mantemos esses layouts; não presumimos recursão em agentes ou
 comandos quando o fornecedor só documenta arquivos diretos.
 
-Nas versões `0.0.21` e `0.0.30`, regras Copilot geradas sem YAML nativo
-explícito usam `applyTo: '**'` independentemente do `trigger` da origem. Uma
-regra manual ou com glob pode, portanto, alcançar um escopo maior que o
-pretendido. Confira os metadados gerados; o carregamento varia entre clientes.
+Nos pacotes npm publicados `0.0.21` e `0.0.30`, regras Copilot geradas sem
+YAML nativo explícito usam `applyTo: '**'` independentemente do `trigger` da
+origem. Uma regra manual ou com glob pode alcançar escopo maior que o pretendido.
+O comportamento do código local em desenvolvimento é descrito abaixo. Confira
+os metadados gerados; o carregamento varia entre clientes.
+
+Na versão publicada `0.0.21`, a regra Git do Cursor usa `alwaysApply: true`,
+embora a origem indique decisão por relevância. Pelas [regras do Cursor](https://cursor.com/docs/rules),
+isso configura aplicação em todas as sessões. A candidata local alinha o
+metadado; confira a versão instalada antes de confiar no escopo pretendido.
 
 Antigravity busca um nível por padrão. Os arquivos `.agents/skills.json`,
 `rules.json` e `agents.json` registram explicitamente cada referência;
@@ -105,10 +113,51 @@ Em teste local com Copilot CLI `1.0.109`, referências `.claude/rules` manuais
 e com glob também entraram no contexto inicial. Não presuma que os metadados
 da rota Copilot restrinjam as referências vindas de outros clientes.
 
+Ao selecionar um agente personalizado, confirme que o cliente leu sua fonte
+compartilhada: carregar um apontamento não comprova essa leitura. A inclusão
+automática por `@` no Copilot CLI é documentada para arquivos de instruções
+específicos, não para todos os arquivos de agente. Veja as
+[referências de arquivo do Copilot CLI](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-custom-instructions#referencing-other-files).
+
+No [Claude Code](https://code.claude.com/docs/en/memory), apenas `paths` delimita
+uma regra em `.claude/rules`; referências sem esse campo entram no contexto
+inicial. A versão `0.0.21` e uma candidata local anterior geraram apontamentos
+condicionais sem `paths`; nessa candidata, uma sessão carregou regras `manual`,
+`model_decision` e `glob` na inicialização. O sync local agora gera regras
+globais apenas para `always_on`; para `glob`, exige `paths` Claude explícito e
+válido. Regras `manual`, `model_decision` e `glob` sem esse mapeamento ficam
+disponíveis para leitura explícita. Referências legadas não comprovadas são
+preservadas e exigem revisão. A migração e a recuperação concorrente ainda
+precisam de validação completa nas plataformas suportadas.
+
+No Copilot, `always_on` usa `applyTo: '**'` e `glob` conserva o padrão da
+regra. Por padrão, `manual` e `model_decision` ficam em `.github/rules` para
+consulta explícita; não há decisão automática equivalente comprovada. No teste
+local, instruções sem `applyTo` também entraram no contexto inicial.
+O [Copilot CLI](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-custom-instructions)
+não expande referências `@` dentro de `*.instructions.md`; um link para a fonte
+compartilhada também não comprova sua leitura. Em uma prova, o cliente anunciou
+descoberta contextual para um arquivo do glob, mas não houve leitura observada
+da origem. Em outra sessão, o cliente leu a fonte para o arquivo correspondente;
+isso não garante o mesmo comportamento em todas as sessões. Confira a leitura
+quando a aplicação da regra for necessária.
+
+YAML nativo explícito prevalece. Para complementar um arquivo humano, o
+frontmatter precisa ser idêntico ao YAML nativo, com `applyTo` literal entre
+aspas e, opcionalmente, `description` literal entre aspas. Escopo diferente ou
+ambíguo bloqueia a sincronização e preserva os arquivos.
+
+Apontamentos antigos só são removidos com propriedade e integridade
+comprovadas; se estiverem no índice Git, a operação bloqueia sem alterá-lo.
+Instruções antigas editadas ou sem propriedade comprovada permanecem e podem
+continuar ativas; revise-as manualmente.
+
 O instalador gera a seleção e a política em `espelhos.conf`; `sincronizar`
 reconstrói os apontamentos somente com Node e os arquivos do hub instalado.
-`--check` não altera arquivos. `--force` faz backup ignorado ao reparar
-conflitos gerenciados. Recursos e links humanos dos clientes são preservados;
+`--check` não altera arquivos. Ao reparar arquivos gerenciados, `--force` pode
+criar backup local; sua visibilidade ao Git depende dos ignores existentes.
+Conflitos com conteúdo humano continuam bloqueados. Recursos e links humanos
+dos clientes são preservados;
 uma rota preservada não recebe apontamentos novos. No Zod, `.codex/skills`
 continua apontando para suas skills e o Codex recebe o kit em `.agents/skills`.
 Quando a rota principal volta a ficar disponível, apontamentos alternativos
@@ -127,6 +176,7 @@ comprovada. As razões e fontes por adaptador também ficam em
 [cp]: https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/skills
 [opencode]: https://opencode.ai/docs/skills
 [gemini]: https://geminicli.com/docs/cli/skills/
+[gemini-trust]: https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/tutorials/skills-getting-started.md
 [antigravity]: https://antigravity.google/docs/customization-discovery
 [zcode]: https://zcode.z.ai/en/docs/skill
 [kimi]: https://moonshotai.github.io/kimi-code/en/customization/skills

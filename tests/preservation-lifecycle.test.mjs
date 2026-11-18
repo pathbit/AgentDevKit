@@ -1,3 +1,4 @@
+import '../.pbai4devs/scripts/lib/test-git-environment.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -494,7 +495,7 @@ test('catálogos e configuração idênticos não são adotados como gerenciados
   }
 });
 
-for (const path of ['.pbai4devs/.gitignore', '.agents/.gitignore', 'AGENTS.md']) {
+for (const path of ['AGENTS.md']) {
   test(`bloco preexistente idêntico em ${path} não é adotado sem ownership`, t => {
     const source = fixture(t), f = fixture(t);
     source.put('AGENTS.md', '# Regras humanas\n\nManter conteúdo.\n');
@@ -516,6 +517,18 @@ for (const path of ['.pbai4devs/.gitignore', '.agents/.gitignore', 'AGENTS.md'])
     assert.equal(existsSync(join(f.root, state)), false);
   });
 }
+
+for (const path of ['.agents/.gitignore', '.pbai4devs/.gitignore']) test(`ignore preexistente em ${path} é preservado sem ser adotado`, t => {
+  const f = fixture(t);
+  const human = '# BEGIN AGENT IGNORE\n/*\n!/.gitignore\n!/skills/\n# END AGENT IGNORE\n';
+  f.put(path, human); f.git('add', '-f', '--', '.gitignore', path);
+  const index = readFileSync(join(f.root, '.git/index')), exclude = readFileSync(join(f.root, '.git/info/exclude'));
+  f.cli('init', '--agents', 'codex', '--force');
+  const installed = JSON.parse(f.read(state));
+  assert.equal(f.read(path), human); assert.equal(installed.files[path], undefined); assert.equal(installed.blocks[path], undefined);
+  assert.deepEqual(readFileSync(join(f.root, '.git/index')), index);
+  assert.deepEqual(readFileSync(join(f.root, '.git/info/exclude')), exclude);
+});
 
 test('exclusão staged de catálogo bloqueia o plano e informa caminho e operação', t => {
   const f = fixture(t), catalog = '.pbai4devs/catalog.json';

@@ -1,9 +1,10 @@
 #!/usr/bin/env node
-import { copyFileSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { appendFileSync, lstatSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { buildRelease, releaseRoot, sha256 } from './assets.mjs';
+import { nativeGate } from './native-macos-metadata.mjs';
 
 export function sourceOnlyViolations(files, policy) {
   if (policy?.schemaVersion !== 1 || !Array.isArray(policy.adapters)) throw new Error('Política de clientes inválida.');
@@ -16,7 +17,7 @@ export function sourceOnlyViolations(files, policy) {
     const lower = path.toLowerCase(), parts = lower.split('/');
     let reason;
     if (roots.has(parts[0]) || entries.has(lower)) reason = 'apontamento de cliente';
-    else if (parts[0] === '.github' && ['agents', 'skills', 'prompts', 'instructions'].includes(parts[1])) reason = 'recurso gerado do Copilot';
+    else if (parts[0] === '.github' && ['agents', 'skills', 'prompts', 'instructions', 'rules'].includes(parts[1])) reason = 'recurso gerado do Copilot';
     else if (parts[0] === '.pbai4devs' && outputs.has(parts.slice(1).join('/'))) reason = 'catálogo, manifesto ou estado gerado';
     else if (/\.(?:sh|ps1|bat|cmd)$/i.test(path)) reason = 'automação shell própria';
     if (reason) violations.push({ path, reason });
@@ -45,13 +46,18 @@ export function executeNode(root, args, env = process.env) {
 
 // Each named profile is an independent CI job; `portable` runs all locally.
 export const portableProfiles = Object.freeze({
-  'portable-cli': Object.freeze(['cli.test.mjs', 'adapters.test.mjs', 'development-ecosystem.test.mjs', 'security-ecosystem.test.mjs', 'file-modes.test.mjs']),
-  'portable-selection': Object.freeze(['client-selection.test.mjs']),
+  'portable-cli': Object.freeze(['cli.test.mjs', 'adapters.test.mjs', 'development-ecosystem.test.mjs', 'security-ecosystem.test.mjs', 'file-modes.test.mjs', 'runtime-minimum.test.mjs', 'source-integration.test.mjs']),
+  'portable-selection': Object.freeze(['client-selection.test.mjs', 'exact-native-cli.test.mjs', 'agent-sidecar-sync.test.mjs', 'stale-agent-reference.test.mjs', 'overlay-stale-plan.test.mjs', 'codex-derived-reference.test.mjs', 'stage-preview-combined.test.mjs', 'removed-file-diagnostic.test.mjs', 'removed-file-protection.test.mjs', 'removed-overlay.test.mjs', 'migration-tombstone.test.mjs']),
   'portable-selection-codex': Object.freeze(['client-selection-obstructions-codex.test.mjs']),
-  'portable-selection-all': Object.freeze(['client-selection-obstructions-all.test.mjs']),
-  'portable-projects': Object.freeze(['client-ignore.test.mjs', 'native-coexistence.test.mjs', 'oss-preservation.test.mjs', 'project-matrix.test.mjs']),
-  'portable-migration': Object.freeze(['state-migration.test.mjs', 'preservation-lifecycle.test.mjs']),
-  'portable-resources': Object.freeze(['documentation-compatibility.test.mjs', 'github-packages.test.mjs', 'next.test.mjs', 'managed-content.test.mjs', 'managed-content-helper.test.mjs', 'managed-toml.test.mjs', 'managed-preservation.test.mjs', 'release-pipeline.test.mjs', 'release-resilience.test.mjs', 'resource-coverage.test.mjs']),
+  'portable-selection-all-root': Object.freeze(['client-selection-obstructions-all-root.test.mjs']),
+  'portable-selection-all-leaf': Object.freeze(['client-selection-obstructions-all-leaf.test.mjs']),
+  'portable-projects': Object.freeze(['client-ignore.test.mjs', 'diagnostic-collector-safe.test.mjs', 'cleanup-failure.test.mjs', 'concurrent-recovery.test.mjs', 'git-legacy-exclude.test.mjs', 'git-locale.test.mjs', 'hardlink-unknown.test.mjs', 'hardlink-plan.test.mjs', 'makefile-guards.test.mjs', 'native-macos-metadata-gate.test.mjs', 'native-metadata.test.mjs', 'oss-preservation.test.mjs', 'matrix-audit.test.mjs', 'pre-sync-stage-diagnostics.test.mjs']),
+  'portable-projects-git': Object.freeze(['git-configuration-preservation.test.mjs']),
+  'portable-projects-callbacks': Object.freeze(['callback-boundary-isolated.test.mjs']),
+  'portable-projects-matrix': Object.freeze(['native-coexistence.test.mjs', 'project-matrix.test.mjs']),
+  'portable-recovery': Object.freeze(['project-recovery.test.mjs', 'recovery-backup.test.mjs', 'recovery-capture.test.mjs', 'recovery-diagnostics.test.mjs', 'recovery-effects.test.mjs', 'recovery-exclusive.test.mjs', 'recovery-plan-coverage.test.mjs', 'recovery-records.test.mjs', 'recovery-store.test.mjs', 'sync-backup-failure.test.mjs', 'sync-remove-failure.test.mjs', 'sync-logical-order.test.mjs', 'mac-acl-protection.test.mjs', 'mac-acl-plan.test.mjs', 'mac-backup-acl.test.mjs', 'mac-xattr-probe.test.mjs', 'mac-xattr-removal.test.mjs', 'xattr-stage-diagnostics.test.mjs', 'cli-special-mode.test.mjs', 'sync-special-mode.test.mjs', 'sync-temporary-privacy.test.mjs', 'temporary-preservation.test.mjs']),
+  'portable-migration': Object.freeze(['cli-line-endings.test.mjs', 'linux-inplace-metadata-experiment.test.mjs', 'linux-xattr-probe.test.mjs', 'state-migration.test.mjs', 'state-special-mode.test.mjs', 'state-directory-xattr.test.mjs', 'preservation-lifecycle.test.mjs']),
+  'portable-resources': Object.freeze(['json-diagnostics.test.mjs', 'claude-agent-evidence.test.mjs', 'claude-evidence.test.mjs', 'claude-legacy-exact.test.mjs', 'claude-legacy-exact-flow.test.mjs', 'claude-rule-cli.test.mjs', 'claude-rule-scope.test.mjs', 'claude-rule-scope-integration.test.mjs', 'compose-package-smoke.test.mjs', 'copilot-evidence.test.mjs', 'copilot-fleet-evidence.test.mjs', 'documentation-compatibility.test.mjs', 'exact-native-sync.test.mjs', 'github-packages.test.mjs', 'native-client-matrix.test.mjs', 'next.test.mjs', 'managed-content.test.mjs', 'managed-content-helper.test.mjs', 'managed-toml.test.mjs', 'toml-prompt-equivalence.test.mjs', 'toml-composite.test.mjs', 'toml-human-after.test.mjs', 'toml-marker-context.test.mjs', 'gemini-command-fixture.test.mjs', 'gemini-unowned-block.test.mjs', 'gemini-derived-command.test.mjs', 'gemini-derived-diagnostic.test.mjs', 'gemini-toml-staged-lifecycle.test.mjs', 'gemini-reference-body.test.mjs', 'gemini-large-integer.test.mjs', 'gemini-xattr-preservation.test.mjs', 'sync-skill-collision.test.mjs', 'scoped-rule-clients.test.mjs', 'gemini-toml-lifecycle-reader.test.mjs', 'managed-preservation.test.mjs', 'release-pipeline.test.mjs', 'release-resilience.test.mjs', 'resource-coverage.test.mjs']),
   'portable-layout': Object.freeze(['source-layout.test.mjs']),
 });
 
@@ -77,53 +83,110 @@ export function verifyPortableClassification(files, { profiles = portableProfile
   }
 }
 
-// Isolate installation-heavy selection suites from the other project fixtures.
-// Each suite remains classified and is executed exactly once.
+// Run the strict recovery gate first, then isolate installation-heavy selection
+// suites. Each suite remains classified and is executed exactly once.
 export function fullTestGroups(files) {
   const names = files.filter(name => name.endsWith('.test.mjs') && name !== 'distribution.test.mjs').sort();
   const selection = [
     'client-selection.test.mjs',
     'client-selection-obstructions-codex.test.mjs',
-    'client-selection-obstructions-all.test.mjs',
+    'client-selection-obstructions-all-root.test.mjs',
+    'client-selection-obstructions-all-leaf.test.mjs',
   ];
+  const recovery = ['concurrent-recovery.test.mjs'];
+  if (!names.includes(recovery[0])) throw new Error('Suíte de recuperação ausente do perfil completo.');
   if (selection.some(name => !names.includes(name))) throw new Error('Suíte de seleção ausente do perfil completo.');
-  return [selection, names.filter(name => !selection.includes(name))];
+  return [recovery, ...selection.map(name => [name]), names.filter(name => !selection.includes(name) && !recovery.includes(name))];
+}
+
+function checkWorkflowOutput(root, env, outputPath) {
+  if(!outputPath)return;
+  try {
+    const output=lstatSync(outputPath), temp=realpathSync(env.RUNNER_TEMP), real=realpathSync(outputPath);
+    const within=relative(temp,real), project=relative(realpathSync(root),real);
+    const insideProject=project===''||(!isAbsolute(project)&&project!=='..'&&!project.startsWith('..'+sep));
+    if(output.isSymbolicLink()||!output.isFile()||!within||isAbsolute(within)||within==='..'||within.startsWith('..'+sep)||insideProject||/[\r\n]/.test(temp))throw new Error('invalid');
+  } catch {throw new Error('Saída do workflow inválida.');}
 }
 
 export function markVerified(directory, env = process.env) {
-  const path = join(directory, 'package-manifest.json');
-  const manifest = JSON.parse(readFileSync(path, 'utf8'));
-  if (sha256(readFileSync(join(directory, manifest.file))) !== manifest.sha256) throw new Error('O pacote mudou depois da verificação.');
-  manifest.verification = { status: 'passed', profile: 'full', sourceCommit: manifest.sourceCommit, checkedAt: new Date().toISOString() };
-  writeFileSync(path, JSON.stringify(manifest, null, 2) + '\n');
-  const destination = join(env.RUNNER_TEMP || dirname(directory), 'agentdevkit-package');
-  mkdirSync(destination, { recursive: true });
-  for (const file of [manifest.file, 'SHA256SUMS', 'NOTES.txt', 'package-manifest.json']) copyFileSync(join(directory, file), join(destination, file));
-  return destination;
+  const source=lstatSync(directory);
+  if(!source.isDirectory()||source.isSymbolicLink())throw new Error('Diretório de origem inválido.');
+  const readRegular = name => {
+    const path=join(directory,name), info=lstatSync(path);
+    if(info.isSymbolicLink()||!info.isFile())throw new Error('Artefato não regular: '+name);
+    return readFileSync(path);
+  };
+  const manifest=JSON.parse(readRegular('package-manifest.json'));
+  if(!/^\d+\.\d+\.\d+$/.test(manifest.version)||manifest.file!=='agentdevkit-'+manifest.version+'.tgz'||!/^[a-f0-9]{64}$/.test(manifest.sha256))throw new Error('Manifesto inválido.');
+  const archive=readRegular(manifest.file), checksum=readRegular('SHA256SUMS'), notes=readRegular('NOTES.txt');
+  if(sha256(archive)!==manifest.sha256)throw new Error('O pacote mudou depois da verificação.');
+  if(checksum.toString('utf8')!==manifest.sha256+'  '+manifest.file+'\n')throw new Error('O checksum diverge do pacote.');
+  manifest.verification={status:'passed',profile:'full',sourceCommit:manifest.sourceCommit,checkedAt:new Date().toISOString()};
+  const base=env.RUNNER_TEMP||dirname(directory), info=lstatSync(base);
+  if(!info.isDirectory()||info.isSymbolicLink())throw new Error('Diretório temporário inválido.');
+  const within=relative(realpathSync(directory),realpathSync(base));
+  if(within===''||(!isAbsolute(within)&&within!=='..'&&!within.startsWith('..'+sep)))throw new Error('Diretório temporário dentro da saída de origem.');
+  const destination=mkdtempSync(join(base,'agentdevkit-package-'));
+  try {
+    for(const [name,data] of [[manifest.file,archive],['SHA256SUMS',checksum],['NOTES.txt',notes],['package-manifest.json',Buffer.from(JSON.stringify(manifest,null,2)+'\n')]])writeFileSync(join(destination,name),data,{flag:'wx',mode:0o600});
+    if(sha256(readFileSync(join(destination,manifest.file)))!==manifest.sha256)throw new Error('O pacote copiado divergiu.');
+    return destination;
+  } catch(error) {
+    try {rmSync(destination,{recursive:true,force:true});} catch(cleanup) {
+      const code=typeof cleanup.code==='string'&&/^[A-Z][A-Z0-9_]{0,31}$/.test(cleanup.code)?' ('+cleanup.code+')':'';
+      const e=new AggregateError([error,cleanup],'Falha ao limpar staging'+code+': '+destination+'; falha original: '+error.message);
+      e.cause=error;e.preservedPaths=[destination];throw e;
+    }
+    throw error;
+  }
 }
 
-export function runPipeline(profile, { root = releaseRoot, env = process.env, run = executeNode } = {}) {
+export function runPipeline(profile, { root = releaseRoot, env = process.env, run = executeNode, artifactOutput } = {}) {
   if (Number(process.versions.node.split('.')[0]) < 24) throw new Error('Use Node.js 24+.');
   const hub = '.pbai4devs';
   const tests = 'tests';
-  const test = (names, options = []) => run(root, ['--test', ...options, ...names.map(name => `${tests}/${name}`)], env);
+  const test = (names, options = [], testEnv = env) => run(root, ['--test', ...options, ...names.map(name => `${tests}/${name}`)], testEnv);
   if (profile === 'full' || profile === 'portable' || Object.hasOwn(portableProfiles, profile)) {
     verifyPortableClassification(readdirSync(join(root, tests)));
   }
-  const check = () => {
-    guardSourceOnlyGit(root, env);
-    run(root, [`${hub}/scripts/verificar-recursos/SCRIPT.mjs`, '--source-only'], env);
+  const check = (checkEnv = env) => {
+    guardSourceOnlyGit(root, checkEnv);
+    run(root, [`${hub}/scripts/verificar-recursos/SCRIPT.mjs`, '--source-only'], checkEnv);
   };
   if (profile === 'check') { check(); return; }
   if (profile === 'full') {
-    for (const group of fullTestGroups(readdirSync(join(root, tests)))) test(group, ['--test-concurrency=4']);
-    run(root, [`${hub}/scripts/testar-infraestrutura/SCRIPT.mjs`], env);
-    run(root, [`${hub}/scripts/preparar-ferramentas/SCRIPT.mjs`, 'install', 'markdownlint-cli2'], env);
-    check();
-    const artifact = buildRelease(root, { env });
-    run(root, ['--test', `${tests}/distribution.test.mjs`], { ...env, AGENTDEVKIT_TARBALL: artifact.file });
-    const staged = markVerified(artifact.directory, env);
+    // A release must not turn the known recovery TODOs into a passing certificate.
+    // NODE_OPTIONS can silently filter all tests with --test-name-pattern.
+    const reserved = new Set(['NODE_OPTIONS', 'ADK_STRICT_RECOVERY_TEST', 'ADK_STRICT_CLAUDE_SCOPE_TEST']);
+    const strictEnv = Object.fromEntries(Object.entries(env).filter(([key]) => !reserved.has(key.toUpperCase())));
+    strictEnv.ADK_STRICT_RECOVERY_TEST = '1';
+    strictEnv.ADK_STRICT_CLAUDE_SCOPE_TEST = '1';
+    checkWorkflowOutput(root,strictEnv,artifactOutput);
+    for (const group of fullTestGroups(readdirSync(join(root, tests)))) test(group, ['--test-concurrency=4'], strictEnv);
+    run(root, [`${hub}/scripts/preparar-ferramentas/SCRIPT.mjs`, 'install', 'skills'], strictEnv);
+    run(root, ['scripts/release/infrastructure.mjs'], strictEnv);
+    run(root, [`${hub}/scripts/preparar-ferramentas/SCRIPT.mjs`, 'install', 'markdownlint-cli2'], strictEnv);
+    check(strictEnv);
+    const artifact = buildRelease(root, { env: strictEnv });
+    run(root, ['--test', `${tests}/distribution.test.mjs`], { ...strictEnv, AGENTDEVKIT_TARBALL: artifact.file });
+    const staged = markVerified(artifact.directory, strictEnv);
+    if(artifactOutput) {
+      try {
+        checkWorkflowOutput(root,strictEnv,artifactOutput);
+        if(/[\r\n]/.test(staged))throw new Error('Caminho do artefato inválido.');
+        appendFileSync(artifactOutput,'artifact_path='+staged+'\n');
+      } catch(error) {
+        const e=new Error('Falha ao registrar caminho do artefato; cópia preservada: '+staged+'; falha original: '+error.message,{cause:error});
+        e.preservedPaths=[staged];throw e;
+      }
+    }
     console.log(JSON.stringify({ profile, version: artifact.version, sha256: artifact.sha256, staged }));
+    return;
+  }
+  if (profile === 'native-macos-metadata') {
+    verifyPortableClassification(readdirSync(join(root, tests)));
+    console.log(JSON.stringify(nativeGate({ root, env })));
     return;
   }
   if (profile === 'portable') {
@@ -134,7 +197,8 @@ export function runPipeline(profile, { root = releaseRoot, env = process.env, ru
     console.log(`Perfil ${profile}: ${portableProfiles[profile].join(', ')}`);
     test(portableProfiles[profile], ['--test-concurrency=2']);
     if (profile === 'portable-resources') {
-      for (const name of ['preparar-ferramentas', 'sincronizar-agentes', 'verificar-recursos', 'executar-script', 'inspecionar-projeto', 'testar-maturidade', 'verificar-configuracao', 'revisar-entrega']) run(root, ['--test', `${hub}/scripts/${name}/tests/TEST.mjs`], env);
+      run(root, ['scripts/release/infrastructure.mjs', '--native'], env);
+      for (const name of ['preparar-ferramentas', 'sincronizar-agentes', 'verificar-recursos', 'executar-script', 'inspecionar-projeto', 'reunir-contexto-spec', 'testar-maturidade', 'verificar-configuracao', 'revisar-entrega']) run(root, ['--test', `${hub}/scripts/${name}/tests/TEST.mjs`], env);
     }
     return;
   }
@@ -143,10 +207,15 @@ export function runPipeline(profile, { root = releaseRoot, env = process.env, ru
     for (const flag of ['--help', '--version']) run(root, ['bin/agentdevkit.mjs', flag], env);
     return;
   }
-  throw new Error(`Use full, portable, ${Object.keys(portableProfiles).join(', ')}, smoke ou check.`);
+  throw new Error(`Use full, portable, ${Object.keys(portableProfiles).join(', ')}, native-macos-metadata, smoke ou check.`);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  try { runPipeline(process.argv[2]); }
+  try {
+    const extra=process.argv.slice(3);
+    if(extra.length>1 || (extra.length===1 && extra[0]!=='--github-output'))throw new Error('Opções inválidas.');
+    if(extra.length && !process.env.GITHUB_OUTPUT)throw new Error('GITHUB_OUTPUT ausente.');
+    runPipeline(process.argv[2],{artifactOutput:extra.length ? process.env.GITHUB_OUTPUT : undefined});
+  }
   catch (error) { console.error(error.message); process.exitCode = 1; }
 }

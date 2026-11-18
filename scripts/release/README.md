@@ -11,12 +11,27 @@ As notas incluem comandos npx versionados para npm e GitHub Packages,
 autenticação por host e links para instalação e pré-requisitos.
 
 `pipeline.mjs full` verifica produto, infraestrutura, Markdown e o tarball
-exato uma vez. `portable` executa todos os grupos de portabilidade localmente;
+exato uma vez. O perfil prepara o CLI `skills` para testar a integração real
+com uma fixture local. O relatório de infraestrutura registra os testes
+exclusivos de outra plataforma como parciais. O pipeline aceita somente
+as omissões previstas. O perfil `full` verifica os casos Linux e
+`portable-resources` exige aprovação individual dos casos delegados no macOS e
+no Windows. Falhas ou ferramentas ausentes bloqueiam a verificação.
+`portable` executa todos os grupos de portabilidade localmente;
 no CI, `portable-cli`, `portable-selection`, `portable-selection-codex`,
-`portable-selection-all`, `portable-projects`, `portable-migration`,
-`portable-resources` e `portable-layout` rodam em jobs separados no Windows e
-no macOS. Os dois grupos de obstruções testam cinco cenários por seleção;
-o perfil completo executa todas as suítes. `smoke` verifica Node 26.
+`portable-selection-all-root`, `portable-selection-all-leaf`,
+`portable-projects`, `portable-projects-git`, `portable-projects-callbacks`,
+`portable-projects-matrix`,
+`portable-recovery`, `portable-migration`, `portable-resources` e
+`portable-layout` rodam em jobs separados no Windows e no macOS. No Windows,
+`portable-cli` confere se a instalação e o sync direto preservam a DACL de
+arquivos atualizados em NTFS, usando uma regra explícita de leitura na fixture.
+Callbacks isolados e testes de matriz ficam separados para limitar a duração
+de cada job. Os testes Git de maior duração também têm job próprio.
+Os cinco casos de obstrução são preservados; os três casos de raiz e grupo e os
+dois de folha da seleção all ficam em perfis separados. `full` ainda executa
+todas as suítes.
+`smoke` verifica Node 26.
 `check` confere os recursos.
 
 `publish.mjs resolve` localiza um CI de push aprovado do mesmo commit da tag.
@@ -33,3 +48,19 @@ publicação npm; sem ele, usa OIDC. GitHub Packages usa seu próprio token do
 workflow, sem compartilhar credenciais entre os hosts. Nenhum segredo ou
 resultado é versionado.
 Veja [manutenção](../../docs/maintainers/maintenance.md).
+
+O build prepara os arquivos em área temporária e preserva uma saída anterior
+divergente. Uma repetição aceita o mesmo conteúdo, inclusive o manifesto legado
+com marca de verificação no formato reconhecido, sem reescrevê-lo. A marca antiga
+não substitui as verificações da execução atual.
+
+Após verificar o tarball, o perfil completo cria uma cópia marcada em diretório
+exclusivo do runner, sem alterar o manifesto de origem. No CI, a opção explícita
+`--github-output` informa ao passo de upload o caminho dessa cópia; a opção
+exige `GITHUB_OUTPUT` em `RUNNER_TEMP` e fora do projeto. Falhas ou alterações
+no diretório de origem não são resolvidas substituindo arquivos existentes.
+
+Links simbólicos estáticos em `.agent-tests` ou na pasta `release` são
+recusados. Se a limpeza falhar, preserve os caminhos informados e revise os
+resíduos antes de tentar novamente. As verificações não são atômicas contra
+alterações concorrentes nem comprovam ACLs ou atributos estendidos.

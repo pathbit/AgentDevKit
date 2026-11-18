@@ -13,12 +13,21 @@ saída. Reúna dúvidas que alterem esses contratos antes de executar.
 
 Reutilize uma skill para decisões e fluxos completos. Indique os nomes e
 argumentos dos scripts `.mjs` e use `executar-script` com Node.js 24+.
+O seletor direto não exige npm por si só; verifique os pré-requisitos do
+bootstrap e do script alvo separadamente.
 Referencie ferramentas e pastas necessárias; não copie código, binários ou
-instruções. Preserve os argumentos e documentos existentes.
+instruções. Confira os contratos dos scripts e skills referenciados antes de
+restringir argumentos; não declare rejeições que não tenham sido verificadas.
+Confira a saída completa, incluindo mensagens do executor, `stdout`, `stderr`,
+código de saída e efeito de `--raw`; não descreva só a saída do script como se
+fosse toda a saída do comando. `--raw` e `--plan` antes do alvo são opções do
+executor; depois do alvo, são argumentos do script. `--plan` não executa o
+alvo. Documente essa distinção sem proibir opções válidas; não generalize o
+canal de erros além do que foi verificado. Preserve argumentos e documentos.
 
-Registre o prompt nativo em `.github/prompts/` no manifesto quando aplicável;
-ele contém apenas metadados, H1 e o link para a origem. Não prometa importação
-ou execução automática pelo Markdown.
+Quando aplicável, confira o prompt nativo gerado em `.github/prompts/`: ele
+contém apenas metadados, H1 e o link para a origem. O manifesto é gerado; não o
+edite à mão. Não prometa importação ou execução automática pelo Markdown.
 
 Atualize índice/guia, siga as regras de estrutura e qualidade e finalize com
 `sincronizar-agentes`, inclusive após renomear ou remover comandos. Confira os

@@ -1,11 +1,11 @@
+import '../../lib/test-git-environment.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import { synchronize } from '../SCRIPT.mjs';
 import { entrypointReference, mergeManagedContent } from '../../lib/managed-content.mjs';
 import { mergeTomlContent } from '../../lib/managed-toml.mjs';
@@ -102,13 +102,16 @@ for (const path of ['.pbai4devs/.gitignore', '.claude/.gitignore']) for (const f
   test(`bloco ignore editado permanece intacto: ${path}, force=${force}`, t => {
     const root = fixture(t);
     assert.equal(sync(root).exitCode, 0);
+    if (path.startsWith('.claude/')) put(root, path, '# BEGIN AGENT IGNORE\n/cache/\n# END AGENT IGNORE\n');
     const content = get(root, path).toString('utf8').replace('# BEGIN AGENT IGNORE', '# BEGIN AGENT IGNORE\n# Regra humana\n!/conteudo-humano/');
     put(root, path, content);
     git(root, 'add', '-f', '--', path);
-    const before = Object.fromEntries([path, state, '.gitignore', '.git/index'].map(name => [name, get(root, name)]));
-    assert.notEqual(sync(root, { check: true, force }).exitCode, 0);
-    assert.throws(() => sync(root, { force }), /Conteudo proprio preservado/);
+    const before = Object.fromEntries([path, '.gitignore', '.git/index'].map(name => [name, get(root, name)]));
+    sync(root, { check: true, force });
+    const result = sync(root, { force });
+    assert.ok(result.preserved.some(entry => entry.path === path));
     for (const [name, bytes] of Object.entries(before)) assert.deepEqual(get(root, name), bytes, name);
+    assert.equal(sync(root, { check: true, force }).exitCode, 0);
   });
 }
 
@@ -116,18 +119,19 @@ for (const path of ['.pbai4devs/.gitignore', '.claude/.gitignore']) {
   test(`bloco ignore igual sem comprovante não é adotado: ${path}`, t => {
     const root = fixture(t);
     assert.equal(sync(root).exitCode, 0);
+    if (path.startsWith('.claude/')) put(root, path, '# BEGIN AGENT IGNORE\n/cache/\n# END AGENT IGNORE\n');
     const registry = JSON.parse(get(root, state));
     delete registry.blocks[path];
     put(root, state, JSON.stringify(registry, null, 2) + '\n');
     const originalIgnore = get(root, path);
     const result = sync(root, { force: true });
-    assert.ok(result.preserved.some(entry => entry.path === path && entry.reason === 'existing-ignore-block'));
+    assert.ok(result.preserved.some(entry => entry.path === path && entry.reason === 'existing-ignore'));
     assert.equal(JSON.parse(get(root, state)).blocks?.[path], undefined);
     assert.deepEqual(get(root, path), originalIgnore);
     const template = path.startsWith('.pbai4devs/') ? 'shared.ignore' : 'agents.ignore';
     const templatePath = `.pbai4devs/templates/gitignore/${template}`;
     put(root, templatePath, Buffer.concat([get(root, templatePath), Buffer.from('/novo-item/\n')]));
-    assert.throws(() => sync(root, { force: true }), /Conteudo proprio preservado/);
+    sync(root, { force: true });
     assert.deepEqual(get(root, path), originalIgnore);
   });
 }
@@ -193,59 +197,4 @@ test('overlay de configuração inválido não autoriza escrita', t => {
   const before = get(root, state);
   assert.throws(() => sync(root, { force: true }), /Registro de configuracao derivada invalido/);
   assert.deepEqual(get(root, state), before);
-});
-
-test('CLI reconhece catálogos da sincronização direta e preserva atualização de ignore', t => {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), 'adk-cli-sync-ownership-')));
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-  git(root, 'init', '-q');
-  put(root, '.gitignore', 'node_modules/\n');
-  put(root, 'AGENTS.md', '# Instruções existentes\n');
-  put(root, 'staged.txt', 'Conteúdo staged humano.\n');
-  git(root, 'add', '-f', '.gitignore', 'AGENTS.md', 'staged.txt');
-  const initial = Object.fromEntries(['.gitignore', '.git/index', 'staged.txt'].map(path => [path, get(root, path)]));
-  const cliPath = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../bin/agentdevkit.mjs');
-  function runCli(...args) {
-    const result = spawnSync(process.execPath, [cliPath, ...args, '--target', root, '--json'], {
-      cwd: root, env: gitEnvironment(root), encoding: 'utf8', timeout: 90000, maxBuffer: 16 * 1024 * 1024,
-    });
-    let output; try { output = JSON.parse(result.stdout); } catch { assert.fail(`Resposta CLI inválida: ${result.stderr} ${result.stdout}`); }
-    assert.equal(result.status, 0, `${args.join(' ')}: ${result.stderr} ${result.stdout}`);
-    return output;
-  }
-  function direct() {
-    const result = spawnSync(process.execPath, [join(root, '.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs')], {
-      cwd: root, env: gitEnvironment(root), encoding: 'utf8', timeout: 90000,
-    });
-    assert.equal(result.status, 0, result.stderr || result.stdout);
-  }
-  runCli('init', '--agents', 'codex');
-  assert.ok(get(root, 'AGENTS.md').toString('utf8').startsWith('# Instruções existentes\n'));
-  put(root, '.pbai4devs/skills/projeto/human-extra/SKILL.md', '---\nname: human-extra\ndescription: Minha skill.\n---\n\n# Minha skill\n');
-  direct(); direct();
-  assert.equal(runCli('doctor').ok, true);
-  assert.equal(runCli('sync', '--check').ok, true);
-  assert.equal(runCli('update').ok, true);
-  assert.equal(runCli('sync', '--check').ok, true);
-  // Simule uma versão legada que registrou legitimamente este manifesto.
-  const config = '.pbai4devs/espelhos.conf', installed = '.pbai4devs/state/agentdevkit.json';
-  put(root, config, Buffer.concat([get(root, config), Buffer.from('documento|legado-comprovado\n')]));
-  const previous = JSON.parse(get(root, installed));
-  previous.files[config] = digest(get(root, config));
-  put(root, installed, JSON.stringify(previous, null, 2) + '\n');
-  direct();
-  assert.doesNotMatch(get(root, config).toString('utf8'), /documento\|legado-comprovado/);
-  assert.equal(JSON.parse(get(root, state)).config, digest(get(root, config)));
-  assert.equal(runCli('doctor').ok, true);
-  assert.equal(runCli('sync', '--check').ok, true);
-  assert.equal(runCli('update').ok, true);
-  const template = '.pbai4devs/templates/gitignore/shared.ignore';
-  const humanTemplate = Buffer.concat([get(root, template), Buffer.from('\n/artefato-humano/\n')]);
-  put(root, template, humanTemplate);
-  direct();
-  assert.match(get(root, '.pbai4devs/.gitignore').toString('utf8'), /\/artefato-humano\//);
-  assert.equal(runCli('update').ok, true);
-  assert.deepEqual(get(root, template), humanTemplate);
-  assert.equal(runCli('sync', '--check').ok, true);
-  for (const [path, content] of Object.entries(initial)) assert.deepEqual(get(root, path), content, path);
 });

@@ -9,6 +9,9 @@ Inspecione somente este repositório: README, regras, manifests, lockfiles,
 Makefile, Compose, Dockerfiles, exemplos de ambiente e comandos de CI/testes.
 Identifique tecnologia, versões e a forma real de executar; não presuma que a
 estrutura esteja correta nem que tenha sido criada por este agente.
+Confira arquivos ocultos relevantes, como `.gitignore`, antes de afirmar que
+faltam; uma busca que não os exibe não comprova ausência. Diferencie variáveis
+e serviços opcionais dos necessários ao fluxo escolhido, conforme as evidências.
 
 Antes de preparar ferramentas, reutilize a seleção de clientes do pedido ou
 estado do kit. Se faltar, pergunte quais agentes o usuário usa; aplique pela CLI
@@ -17,6 +20,10 @@ Sem resposta disponível, use `all`. Isso não autoriza recriar o projeto.
 
 1. Use `executar-script` com `inspecionar-projeto` e `diagnosticar-ambiente`
    para descobrir estrutura, SO, arquitetura, Docker/Compose e runtimes.
+   Se a consulta ao Docker falhar, relate que ele não foi verificado neste
+   ambiente; falha de acesso ou sandbox não comprova que o daemon está parado.
+   Se acesso à rede não for permitido e o contexto Docker não for conhecido
+   como local, use `diagnosticar-ambiente --no-docker-probe` pelo seletor.
    Confira conectores. Reúna as dúvidas no início: intenção, erro observado,
    serviços externos, credenciais, versões, porta e dados/volumes a preservar.
    Use o [modelo de ambiente](../../../templates/ambiente-local/TEMPLATE.md)

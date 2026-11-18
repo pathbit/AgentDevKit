@@ -530,19 +530,3 @@ test('CLI preserva código do seletor quando alvo não existe', t => {
   assert.doesNotMatch(viaBootstrap.stdout, /node=/);
   assert.equal(existsSync(f.cache), false);
 });
-
-test('diagnóstico real bem-sucedido não garante dependências do alvo', { timeout: 180000 }, t => {
-  const root = mkdtempSync(join(tmpdir(), 'adk-bootstrap-integration-'));
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-  const cli = spawnSync(process.execPath, [join(project, 'bin/agentdevkit.mjs'), 'init', '--agents', 'codex', '--target', root, '--json'], { encoding: 'utf8', timeout: 120000 });
-  assert.equal(cli.status, 0, `${cli.error?.message || ''}\n${cli.stderr}\n${cli.stdout}`);
-  const target = join(root, 'probe.cjs');
-  writeFileSync(target, `const {spawnSync}=require('node:child_process'); const p=spawnSync('adk-tool-nao-existe-197834',[]); console.log('DEPENDENCIA_AUSENTE='+(p.error?.code==='ENOENT')); process.exit(29);\n`);
-  const environment = { ...process.env, PATH: dirname(process.execPath), Path: dirname(process.execPath) };
-  const bootstrap = join(root, '.pbai4devs/scripts/preparar-ferramentas/BOOTSTRAP.mjs');
-  const result = spawnSync(process.execPath, [bootstrap, '--executar', '--no-install', 'probe.cjs'], { cwd: root, env: environment, encoding: 'utf8', timeout: 30000, maxBuffer: 4 * 1024 * 1024 });
-  assert.equal(result.status, 29, `${result.error?.message || ''}\n${result.stderr}\n${result.stdout}`);
-  assert.match(result.stdout, /"tools"\s*:/);
-  assert.match(result.stdout, /runtime=node/);
-  assert.match(result.stdout, /DEPENDENCIA_AUSENTE=true/);
-});

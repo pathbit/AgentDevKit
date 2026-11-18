@@ -8,7 +8,7 @@ const limit = 'O estado não comprova evidências nem impede um agente de escrev
 const blocked = motivo => ({ status: 'bloqueado', motivo, limite: limit });
 
 // Read only the two indicators; never print arbitrary state content.
-export function verifyConfiguration(root = projectRoot) {
+export function verifyConfiguration(root = projectRoot, { preparationOnly = false } = {}) {
   requireNode();
   try {
     root = realpathSync(resolve(root));
@@ -41,8 +41,9 @@ export function verifyConfiguration(root = projectRoot) {
       if (!value) return blocked('estado-invalido');
       values[key] = value.replace(/[ \t]+#.*$/, '').replace(/^['"]|['"]$/g, '');
     }
-    if (!Object.hasOwn(values, 'preparacao') || !Object.hasOwn(values, 'configuracao_tecnica')) return blocked('estado-invalido');
-    if (values.preparacao !== 'concluido' || values.configuracao_tecnica !== 'concluido') return blocked('configuracao-pendente');
+    if (!Object.hasOwn(values, 'preparacao') || !preparationOnly && !Object.hasOwn(values, 'configuracao_tecnica')) return blocked('estado-invalido');
+    if (values.preparacao !== 'concluido') return blocked(preparationOnly ? 'preparacao-pendente' : 'configuracao-pendente');
+    if (!preparationOnly && values.configuracao_tecnica !== 'concluido') return blocked('configuracao-pendente');
     return { status: 'verificar-evidencias', estado: values, limite: limit };
   } catch (error) {
     if (error.code === 'ENOENT' || error.code === 'ENOTDIR') return blocked('estado-ausente');
@@ -51,8 +52,8 @@ export function verifyConfiguration(root = projectRoot) {
 }
 
 export function main(args = process.argv.slice(2)) {
-  if (args.length) throw new Error('Uso: verificar-configuracao sem argumentos.');
-  const report = verifyConfiguration();
+  if (args.length && !(args.length === 1 && args[0] === '--preparacao')) throw new Error('Uso: verificar-configuracao [--preparacao].');
+  const report = verifyConfiguration(projectRoot, { preparationOnly: args.length === 1 });
   console.log(JSON.stringify(report));
   return report.status === 'bloqueado' ? 1 : 0;
 }

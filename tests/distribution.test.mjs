@@ -1,3 +1,4 @@
+import '../.pbai4devs/scripts/lib/test-git-environment.mjs';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
@@ -29,7 +30,7 @@ function snapshot(folder) {
   return entries;
 }
 
-test('pacote real instala, preserva projetos e oferece próximos passos', { timeout: 240000 }, async t => {
+test('pacote real instala, preserva projetos e oferece próximos passos', { timeout: 600000 }, async t => {
   assert.ok(npm, 'Node 24+ com npm é necessário para testar a distribuição.');
   const artifacts = join(root, '.agent-tests'); mkdirSync(artifacts, { recursive: true });
   const work = mkdtempSync(join(artifacts, 'distribuicao com espaços-'));
@@ -73,7 +74,7 @@ test('pacote real instala, preserva projetos e oferece próximos passos', { time
     const unchanged = afterHash === artifactHash;
     if (selected) write(join(root, '.agent-tests/release-artifact-verification.json'), JSON.stringify({
       artifact: tarball, sha256: artifactHash, sha256After: afterHash, unchanged,
-      status: unchanged && outcomes.length === 5 && outcomes.every(item => item.status !== 'failed') ? 'passed' : 'failed',
+      status: unchanged && outcomes.length === 6 && outcomes.every(item => item.status !== 'failed') ? 'passed' : 'failed',
       scenarios: outcomes,
     }, null, 2) + '\n');
     assert.ok(unchanged, 'O artefato selecionado mudou durante a verificação.');
@@ -82,6 +83,7 @@ test('pacote real instala, preserva projetos e oferece próximos passos', { time
   assert.ok(packed.files.some(file => file.path === 'src/cli.mjs'));
   assert.ok(packed.files.some(file => file.path === 'LICENSE'));
   assert.ok(packed.files.some(file => file.path === '.pbai4devs/skills/projeto/proximos-passos/SKILL.md'));
+  assert.ok(!packed.files.some(file => file.path.endsWith('/recovery-capture.mjs')), 'Captura experimental não deve ser distribuída.');
   for (const file of packed.files) {
     assert.doesNotMatch(file.path, /(?:^|\/)(?:\.local|\.cache|node_modules|\.agent-tests|tmp|temp)(?:\/|$)/, file.path);
     assert.ok(!file.path.startsWith('.pbai4devs/adapters/'), file.path);
@@ -127,6 +129,7 @@ test('pacote real instala, preserva projetos e oferece próximos passos', { time
     assert.equal(first.language, 'en'); assert.equal(first.ok, true);
     assert.equal(json(join(target, '.pbai4devs/state/agentdevkit.json')).language, 'en');
     assert.ok(existsSync(join(target, '.pbai4devs/skills/projeto/proximos-passos/SKILL.md')));
+    assert.equal(existsSync(join(target, '.pbai4devs/scripts/lib/recovery-capture.mjs')), false);
     assert.deepEqual(readFileSync(join(target, '.pbai4devs/LICENSE')), canonicalLicense);
     assert.equal(json(join(target, '.pbai4devs/state/agentdevkit.json')).files['.pbai4devs/LICENSE'], digest(join(target, '.pbai4devs/LICENSE')));
     assert.equal(existsSync(join(target, 'docs')), false);
@@ -139,6 +142,34 @@ test('pacote real instala, preserva projetos e oferece próximos passos', { time
     assert.equal(cli(['next', '--target', target]).language, 'en');
     cli(['lang', 'es', '--target', target]);
     assert.equal(cli(['next', '--target', target]).language, 'es');
+  });
+
+  await subtest('testes de infraestrutura instalados funcionam sem a CLI no projeto', () => {
+    const target = join(work, 'projeto vazio');
+    assert.equal(existsSync(join(target, 'bin/agentdevkit.mjs')), false);
+    assert.equal(existsSync(join(target, 'src/next.mjs')), false);
+    const testEnvironment = { ...environment };
+    for (const key of Object.keys(testEnvironment)) {
+      if (['NODE_TEST_CONTEXT', 'NODE_OPTIONS'].includes(key.toUpperCase())) delete testEnvironment[key];
+    }
+    for (const path of [
+      '.pbai4devs/scripts/preparar-ferramentas/tests/bootstrap.test.mjs',
+      '.pbai4devs/scripts/sincronizar-agentes/tests/CATALOG_OWNERSHIP.mjs',
+      '.pbai4devs/scripts/inspecionar-projeto/tests/TEST.mjs',
+      '.pbai4devs/scripts/testar-maturidade/tests/TEST.mjs',
+    ]) {
+      assert.ok(existsSync(join(target, path)), `Suíte instalada ausente: ${path}`);
+      const filters = path.includes('/testar-maturidade/')
+        ? ['--test-name-pattern=entradas simbólicas humanas|fixture ignora artefatos locais'] : [];
+      const result = spawnSync(process.execPath, ['--test', '--test-reporter=tap', ...filters, join(target, path)], {
+        cwd: target, env: testEnvironment, encoding: 'utf8', timeout: 180000, maxBuffer: 8 * 1024 * 1024,
+      });
+      assert.ifError(result.error);
+      assert.equal(result.status, 0, `${path}: ${result.stderr || result.stdout}`);
+      assert.match(result.stdout, /^# tests [1-9][0-9]*\s*$/m, `${path}: nenhuma prova executada`);
+      assert.match(result.stdout, /^# pass [1-9][0-9]*\s*$/m, `${path}: nenhuma prova aprovada`);
+      assert.match(result.stdout, /^# fail 0\s*$/m, `${path}: resumo de falhas ausente`);
+    }
   });
 
   await subtest('projeto existente preserva código, instruções e configurações próprias', () => {

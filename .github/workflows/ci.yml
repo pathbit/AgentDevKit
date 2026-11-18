@@ -14,6 +14,40 @@ permissions:
   contents: read
 
 jobs:
+  minimum-runtime:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            label: Linux / Node 18 / minimum runtime
+          - os: windows-latest
+            label: Windows / Node 18 / minimum runtime
+          - os: macos-15-intel
+            label: macOS / Node 18 / minimum runtime
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24.13.0
+      - name: Record the prepared runtime
+        env:
+          NODE_OPTIONS: ''
+        run: node -e "require('fs').appendFileSync(process.env.GITHUB_ENV, 'ADK_TEST_NODE24=' + process.execPath + String.fromCharCode(10))"
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 18.20.8
+      - name: Verify the declared minimum runtime
+        env:
+          NODE_OPTIONS: ''
+          ADK_EXPECT_NODE18: '1'
+        run: node --test tests/runtime-minimum.test.mjs
+
   verify:
     name: ${{ matrix.label }}
     runs-on: ${{ matrix.os }}
@@ -40,12 +74,32 @@ jobs:
             label: Windows / Node 24 / Codex obstructions
           - os: windows-latest
             node: 24
-            profile: portable-selection-all
-            label: Windows / Node 24 / all-client obstructions
+            profile: portable-selection-all-root
+            label: Windows / Node 24 / all-client root obstructions
+          - os: windows-latest
+            node: 24
+            profile: portable-selection-all-leaf
+            label: Windows / Node 24 / all-client leaf obstructions
           - os: windows-latest
             node: 24
             profile: portable-projects
             label: Windows / Node 24 / projects
+          - os: windows-latest
+            node: 24
+            profile: portable-projects-git
+            label: Windows / Node 24 / Git preservation
+          - os: windows-latest
+            node: 24
+            profile: portable-projects-callbacks
+            label: Windows / Node 24 / isolated callbacks
+          - os: windows-latest
+            node: 24
+            profile: portable-projects-matrix
+            label: Windows / Node 24 / native coexistence and matrix
+          - os: windows-latest
+            node: 24
+            profile: portable-recovery
+            label: Windows / Node 24 / recovery and metadata
           - os: windows-latest
             node: 24
             profile: portable-migration
@@ -72,12 +126,32 @@ jobs:
             label: macOS / Node 24 / Codex obstructions
           - os: macos-15-intel
             node: 24
-            profile: portable-selection-all
-            label: macOS / Node 24 / all-client obstructions
+            profile: portable-selection-all-root
+            label: macOS / Node 24 / all-client root obstructions
+          - os: macos-15-intel
+            node: 24
+            profile: portable-selection-all-leaf
+            label: macOS / Node 24 / all-client leaf obstructions
           - os: macos-15-intel
             node: 24
             profile: portable-projects
             label: macOS / Node 24 / projects
+          - os: macos-15-intel
+            node: 24
+            profile: portable-projects-git
+            label: macOS / Node 24 / Git preservation
+          - os: macos-15-intel
+            node: 24
+            profile: portable-projects-callbacks
+            label: macOS / Node 24 / isolated callbacks
+          - os: macos-15-intel
+            node: 24
+            profile: portable-projects-matrix
+            label: macOS / Node 24 / native coexistence and matrix
+          - os: macos-15-intel
+            node: 24
+            profile: portable-recovery
+            label: macOS / Node 24 / recovery and metadata
           - os: macos-15-intel
             node: 24
             profile: portable-migration
@@ -90,6 +164,10 @@ jobs:
             node: 24
             profile: portable-layout
             label: macOS / Node 24 / layout
+          - os: macos-15-intel
+            node: 24
+            profile: native-macos-metadata
+            label: macOS / Node 24 / native metadata gate
           - os: ubuntu-latest
             node: 26
             profile: smoke
@@ -103,14 +181,23 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
       - run: npm ci --ignore-scripts
+      - name: Install Linux metadata test tools
+        if: runner.os == 'Linux' && matrix.profile == 'full'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y attr acl
       - name: Verify the selected profile
-        run: node scripts/release/pipeline.mjs ${{ matrix.profile }}
+        env:
+          NODE_OPTIONS: ''
+          ADK_REQUIRE_LINUX_XATTR: ${{ runner.os == 'Linux' && matrix.profile == 'full' && '1' || '0' }}
+        run: node scripts/release/pipeline.mjs ${{ matrix.profile }} --github-output
+        id: verify
       - name: Store the verified package
         if: matrix.profile == 'full'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: agentdevkit-${{ github.sha }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/agentdevkit-package/
+          path: ${{ steps.verify.outputs.artifact_path }}
           if-no-files-found: error
           retention-days: 14
           compression-level: 0

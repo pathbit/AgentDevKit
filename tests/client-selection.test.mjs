@@ -1,13 +1,41 @@
+import '../.pbai4devs/scripts/lib/test-git-environment.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, symlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, symlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { main, parseArgs } from '../src/cli.mjs';
 import { applyPlan, inspect, planInstallation } from '../src/install.mjs';
 
 import { fixture, read, state, statePath, put, cli } from './fixtures/client-selection-helpers.mjs';
+
+function ruleSnapshot(root) {
+  const result = [];
+  function visit(relative) {
+    for (const entry of readdirSync(join(root, relative), { withFileTypes: true })) {
+      const path = `${relative}/${entry.name}`, absolute = join(root, path);
+      if (entry.isDirectory()) visit(path);
+      else if (entry.isFile()) result.push([path, readFileSync(absolute).toString('base64'), statSync(absolute).mode & 0o777]);
+      else assert.fail(`Tipo inesperado: ${path}`);
+    }
+  }
+  visit('.claude/rules'); return result.sort((a, b) => a[0].localeCompare(b[0]));
+}
+function gitSnapshot(root) {
+  return Object.fromEntries(['.git/index', '.git/info/exclude', '.git/config', '.git/HEAD', '.gitignore'].map(path => [path, existsSync(join(root, path)) ? readFileSync(join(root, path)) : null]));
+}
+
+const managedClaude = ['.claude/agents/revisor.md', '.claude/commands/preparar-dev.md', '.claude/skills/criar-skill/SKILL.md'];
+const humanClaude = ['.claude/commands/user-note.md', '.claude/skills/user-custom/SKILL.md'];
+function prepareClaudeRetirement(root) {
+  for (const path of managedClaude) assert.ok(existsSync(join(root, path)), `Gerenciado ausente: ${path}`);
+  for (const path of humanClaude) put(root, path, `# Humano: ${path}\n`);
+}
+function verifyClaudeRetirement(root) {
+  for (const path of managedClaude) assert.equal(existsSync(join(root, path)), false, `Gerenciado não retirado: ${path}`);
+  for (const path of humanClaude) assert.equal(read(root, path), `# Humano: ${path}\n`);
+}
 
 test('seleção valida aliases e entradas antes de escrever; consulta é somente leitura', t => {
   assert.deepEqual(parseArgs(['init', '--agents', 'CODEX,claude-code,codex']).clients, ['claude', 'codex']);
@@ -34,14 +62,25 @@ test('claude isolado, dependência do codex e persistência não criam clientes 
   assert.equal(cli(root, ['agents', 'claude,codex']).changed, false);
   cli(root, ['update']); cli(root, ['sync']); cli(root, ['lang', 'es']);
   assert.deepEqual(state(root).clients, ['claude', 'codex']);
-  cli(root, ['clients', 'codex']);
+  prepareClaudeRetirement(root);
+  const rulesBefore = ruleSnapshot(root), gitBefore = gitSnapshot(root);
+  assert.ok(rulesBefore.length);
+  const selected = cli(root, ['clients', 'codex']);
   assert.equal(existsSync(join(root, 'CLAUDE.md')), false);
-  assert.equal(existsSync(join(root, '.claude')), false);
+  assert.deepEqual(ruleSnapshot(root), rulesBefore); assert.deepEqual(gitSnapshot(root), gitBefore);
+  verifyClaudeRetirement(root);
+  assert.deepEqual([...selected.retainedClaudeRules].sort(), rulesBefore.map(item => item[0]).sort());
+  assert.match(selected.warnings.join(' '), /global/i);
   assert.equal(existsSync(join(root, 'GEMINI.md')), false);
   assert.deepEqual(cli(root, ['agents']).clients, ['codex']);
-  assert.equal(cli(root, ['doctor']).ok, true); assert.equal(cli(root, ['sync', '--check']).ok, true);
-  const direct = spawnSync(process.execPath, [join(root, '.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs'), '--check'], { encoding: 'utf8' });
-  assert.equal(direct.status, 0, direct.stdout + direct.stderr);
+  for (const args of [['doctor'], ['sync', '--check']]) {
+    const diagnostic = cli(root, args, 1);
+    assert.deepEqual([...diagnostic.retainedClaudeRules].sort(), rulesBefore.map(item => item[0]).sort());
+    assert.match(diagnostic.warnings.join(' '), /global/i);
+  }
+  const direct = spawnSync(process.execPath, [join(root, '.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs'), '--check'], { cwd: root, encoding: 'utf8' });
+  assert.equal(direct.status, 1, direct.stdout + direct.stderr); assert.match(direct.stdout, /Escopo Claude nao verificado/);
+  assert.deepEqual(ruleSnapshot(root), rulesBefore); assert.deepEqual(gitSnapshot(root), gitBefore);
   assert.equal(existsSync(join(root, '.pbai4devs/tools/skills/.local')), false);
 });
 
@@ -321,7 +360,7 @@ test('desmarcar preserva arquivos com texto humano e remove somente derivados in
   put(root, path, changed);
   put(root, '.claude/skills/unknown/SKILL.md', original);
   put(root, '.claude/skills/custom/SKILL.md', '# User owned\n');
-  put(root, '.claude/.gitignore', `# User ignore\n${read(root, '.claude/.gitignore')}`);
+  put(root, '.claude/.gitignore', '# User ignore\n');
   put(root, 'CLAUDE.md', `# User instructions\n${read(root, 'CLAUDE.md').replace('AGENTS.md', 'CHANGED.md')}`);
   mkdirSync(join(root, '.claude/skills/user-empty'), { recursive: true });
   const before = read(root, statePath);
@@ -334,7 +373,7 @@ test('desmarcar preserva arquivos com texto humano e remove somente derivados in
   assert.equal(read(root, '.claude/skills/unknown/SKILL.md'), original);
   assert.equal(read(root, '.claude/skills/custom/SKILL.md'), '# User owned\n');
   assert.ok(existsSync(join(root, '.claude/skills/user-empty')));
-  assert.equal(read(root, '.claude/.gitignore'), '# User ignore\n\n');
+  assert.equal(read(root, '.claude/.gitignore'), '# User ignore\n');
   assert.match(read(root, 'CLAUDE.md'), /^# User instructions/); assert.doesNotMatch(read(root, 'CLAUDE.md'), /BEGIN AGENTDEVKIT/);
   cli(root, ['sync']); assert.equal(read(root, '.claude/skills/unknown/SKILL.md'), original);
   assert.equal(read(root, path), changed);
@@ -349,9 +388,22 @@ test('estado legado equivale a all e consultas não escrevem migração', t => {
   assert.equal(read(root, statePath), before);
   cli(root, ['update']); assert.deepEqual(state(root).clients, ['all']);
   put(root, '.github/workflows/custom.yml', 'name: user workflow\n');
-  cli(root, ['agents', 'codex']);
-  for (const path of ['.claude', '.opencode', '.cursor', '.gemini', '.agent']) assert.equal(existsSync(join(root, path)), false, path);
+  prepareClaudeRetirement(root);
+  const rulesBefore = ruleSnapshot(root), gitBefore = gitSnapshot(root);
+  assert.ok(rulesBefore.length);
+  const selected = cli(root, ['agents', 'codex']);
+  assert.deepEqual(ruleSnapshot(root), rulesBefore); assert.deepEqual(gitSnapshot(root), gitBefore);
+  verifyClaudeRetirement(root);
+  assert.deepEqual([...selected.retainedClaudeRules].sort(), rulesBefore.map(item => item[0]).sort());
+  assert.match(selected.warnings.join(' '), /global/i);
+  for (const path of ['.opencode', '.cursor', '.gemini', '.agent']) assert.equal(existsSync(join(root, path)), false, path);
   assert.equal(read(root, '.github/workflows/custom.yml'), 'name: user workflow\n');
+  for (const args of [['doctor'], ['sync', '--check']]) {
+    const diagnostic = cli(root, args, 1);
+    assert.deepEqual([...diagnostic.retainedClaudeRules].sort(), rulesBefore.map(item => item[0]).sort());
+    assert.match(diagnostic.warnings.join(' '), /global/i);
+  }
+  assert.deepEqual(ruleSnapshot(root), rulesBefore); assert.deepEqual(gitSnapshot(root), gitBefore);
 });
 
 test('TTY pergunta idioma e clientes; execução semTTY e opções não perguntam', async t => {

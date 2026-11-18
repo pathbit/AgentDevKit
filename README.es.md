@@ -13,8 +13,8 @@ Organiza el trabajo con agentes de código, desde la planificación hasta la
 verificación. Mantén skills, reglas, comandos y perfiles en `.pbai4devs`;
 el kit genera las referencias de cada [cliente compatible][clients].
 El código vive en `src/`, las pruebas del producto en `tests/` y los recursos
-compartidos en `.pbai4devs/`. Las carpetas de clientes se ignoran localmente
-por defecto; cada proyecto puede elegir versionarlas.
+compartidos en `.pbai4devs/`. Las carpetas de clientes pueden aparecer en Git;
+el kit conserva la configuración Git existente.
 
 ## Empezar en tu proyecto
 
@@ -66,8 +66,8 @@ La CLI guarda el idioma `pt`, `en` o `es` por proyecto.
 ## Desarrollar este repositorio
 
 Usa Node.js 24+ con npm. Ejecuta `npm ci --ignore-scripts`, `npm run check`,
-`npm test` y `npm run examples`. Los ejemplos se generan localmente en
-`examples/generated/`; `npm run test:examples` ejecuta los escenarios.
+`npm test` y `npm run examples`. Los ejemplos se generan en una carpeta temporal
+del sistema fuera de Git; `npm run test:examples` ejecuta los escenarios.
 Consulta la [guía de desarrollo](docs/maintainers/development.md) para conocer
 la estructura.
 

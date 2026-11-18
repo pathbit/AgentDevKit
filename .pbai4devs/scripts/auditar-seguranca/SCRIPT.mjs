@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-import { constants, closeSync, existsSync, fstatSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, readlinkSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { constants, closeSync, existsSync, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, readlinkSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
+import { gitPathsOverlap } from '../lib/git-environment.mjs';
 import { isMain, projectRoot, requireNode } from '../lib/runtime.mjs';
 import { ToolManager } from '../preparar-ferramentas/SCRIPT.mjs';
-import { checkLocalIgnore, planLocalIgnore } from '../lib/gitignore.mjs';
 import { validateOsvDatabase } from './database-zip.mjs';
 
 const checks = Object.freeze({ secrets: 'gitleaks', dependencies: 'osv-scanner', sast: 'opengrep' });
@@ -87,18 +87,77 @@ export function sanitizedEnvironment(environment = process.env) {
   const allowed = new Set(['PATH', 'PATHEXT', 'SYSTEMROOT', 'WINDIR', 'COMSPEC', 'TMP', 'TEMP', 'TMPDIR', 'HOME', 'USERPROFILE', 'LOCALAPPDATA', 'LANG', 'LC_ALL', 'TZ', 'NUMBER_OF_PROCESSORS', 'PROCESSOR_ARCHITECTURE']);
   const clean = Object.fromEntries(Object.entries(environment).filter(([key]) => allowed.has(key.toUpperCase())));
   return { ...clean, SEMGREP_ENABLE_VERSION_CHECK: '0', OPENGREP_ENABLE_VERSION_CHECK: '0', SEMGREP_SEND_METRICS: 'off',
-    DISABLE_TELEMETRY: '1', DO_NOT_TRACK: '1', CI: '1', GIT_TERMINAL_PROMPT: '0' };
+    DISABLE_TELEMETRY: '1', DO_NOT_TRACK: '1', CI: '1', GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0',
+    GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'core.fsmonitor', GIT_CONFIG_VALUE_0: 'false' };
 }
 
-function assertIgnored(root, path) {
+function queryGit(root, args, { encoding = 'utf8', input } = {}) {
+  // A different index or worktree would make an ignore check describe another
+  // project. Refuse it explicitly instead of silently discarding the setting.
+  if (Object.entries(process.env).some(([key, value]) => /^(?:GIT_DIR|GIT_WORK_TREE|GIT_COMMON_DIR|GIT_INDEX_FILE|GIT_CEILING_DIRECTORIES|GIT_DISCOVERY_ACROSS_FILESYSTEM|GIT_OBJECT_DIRECTORY|GIT_ALTERNATE_OBJECT_DIRECTORIES|GIT_NAMESPACE)$/i.test(key) && value)) {
+    fail('Ambiente Git redirecionado; remova as variaveis de repositorio ou indice e execute novamente.');
+  }
+  const env = { ...process.env };
+  for (const key of Object.keys(env)) if (/^(?:GIT_OPTIONAL_LOCKS|LC_ALL)$/i.test(key)) delete env[key];
+  env.GIT_OPTIONAL_LOCKS = '0'; env.LC_ALL = 'C';
+  return spawnSync('git', ['-c', 'core.fsmonitor=false', ...args], {
+    cwd: root, env, encoding, input, windowsHide: true, timeout: 30000, maxBuffer: 64 * 1024 * 1024,
+  });
+}
+
+// Git terminates this response with one newline; path names may themselves end
+// in spaces, so trim() would change the repository being verified.
+function gitPath(result) {
+  if (result.status !== 0 || result.error || result.signal || !result.stdout.endsWith('\n')) return null;
+  return result.stdout.slice(0, -1);
+}
+
+export function mayAliasIndexPath(left, right, { root, platform = process.platform } = {}) {
+  const a = left.split('/'), b = right.split('/');
+  for (let i = 0; i < Math.min(a.length, b.length); i++) {
+    if (a[i].normalize('NFD').toLowerCase() === b[i].normalize('NFD').toLowerCase()) continue;
+    // Filesystems can fold Unicode and unusual components beyond JS lowercase.
+    // Reject uncertain aliases; distinguish only ordinary ASCII names.
+    const ordinary = value => /^[a-z0-9_.-]+$/i.test(value) && !value.endsWith('.');
+    // On Windows even an ordinary ASCII name may be an arbitrary 8.3 alias.
+    // A missing entry is distinct from an existing one only when their shared
+    // parent is verified. Check each destination prefix so the helper can
+    // establish that fact for an intermediate component.
+    if (ordinary(a[i]) && ordinary(b[i])) {
+      if (platform !== 'win32') return false;
+      for (let length = 1; length <= b.length; length++) {
+        if (!gitPathsOverlap(left, b.slice(0, length).join('/'), { root, platform, allowMissingTarget: true })) return false;
+      }
+      return true;
+    }
+  }
+  return true;
+}
+
+function assertIgnored(root, path, temporary) {
   const where = portable(relative(root, path));
   if (!where.startsWith('.agent-tests/')) fail('Relatorios devem ficar dentro de .agent-tests.');
-  const git = spawnSync('git', ['rev-parse', '--is-inside-work-tree'], { cwd: root, encoding: 'utf8', windowsHide: true });
-  if (git.status === 0) {
-    const ignored = spawnSync('git', ['-c', 'core.excludesFile=', 'check-ignore', '--no-index', '-q', '--', where], { cwd: root, windowsHide: true });
-    const tracked = spawnSync('git', ['ls-files', '--error-unmatch', '--', where], { cwd: root, stdio: 'ignore', windowsHide: true });
-    if (ignored.status !== 0 || tracked.status === 0) fail('O destino de evidencias precisa estar ignorado e fora do indice Git.');
-  } else if (!checkLocalIgnore(planLocalIgnore(root)).ok) fail('Prepare a protecao local de artefatos antes de auditar.');
+  const git = queryGit(root, ['rev-parse', '--is-inside-work-tree']);
+  if (git.status === 0 && git.stdout.trim() === 'true') {
+    const top = queryGit(root, ['rev-parse', '--show-toplevel']);
+    let repository;
+    try { const value = gitPath(top); if (value !== null) repository = realpathSync(value); } catch { /* Refuse unverifiable worktrees. */ }
+    const inside = repository && relative(repository, root);
+    if (!repository || isAbsolute(inside) || inside === '..' || inside.startsWith(`..${sep}`)) fail('Nao foi possivel confirmar a raiz Git deste projeto.');
+    const ignored = queryGit(root, ['check-ignore', '--no-index', '-q', '--', where]);
+    const work = '.agent-tests/security';
+    const ignoredWork = queryGit(root, ['check-ignore', '--no-index', '-q', '--', `${work}/`]);
+    const tracked = queryGit(repository, ['ls-files', '--cached', '--full-name', '-z'], { encoding: null });
+    const entries = tracked.stdout?.toString('utf8');
+    if (ignored.status !== 0 || ignoredWork.status !== 0 || tracked.status !== 0 || ignored.error || ignoredWork.error || tracked.error || ignored.signal || ignoredWork.signal || tracked.signal || !Buffer.isBuffer(tracked.stdout) || !Buffer.from(entries).equals(tracked.stdout) || (entries && !entries.endsWith('\0'))) fail('O destino de evidencias precisa estar ignorado e fora do indice Git.');
+    const output = portable(relative(repository, path));
+    const workPath = portable(relative(repository, join(root, work)));
+    const tempPath = portable(relative(repository, temporary));
+    const overlaps = entries.split('\0').filter(Boolean).some(name => {
+      return mayAliasIndexPath(name, output, { root: repository }) || (name.split('/').length <= workPath.split('/').length && mayAliasIndexPath(name, workPath, { root: repository })) || mayAliasIndexPath(name, tempPath, { root: repository });
+    });
+    if (overlaps) fail('O destino de evidencias precisa estar ignorado e fora do indice Git.');
+  } else fail('Prepare a protecao local de artefatos antes de auditar.');
 }
 
 function readStable(root, path) {
@@ -115,6 +174,45 @@ function readStable(root, path) {
   } finally { closeSync(descriptor); }
 }
 
+// Ignore local generated examples only when Git confirms both the ignore and
+// an absence of tracked paths. An unreadable or ambiguous index keeps the tree
+// in scope; an explicitly selected generated directory is scanned normally.
+function untrackedIgnoredExamples(root, directory) {
+  try {
+    const local = portable(relative(root, directory));
+    if (local.toLowerCase() !== 'examples/generated') return false;
+    const ignored = queryGit(root, ['-c', 'core.excludesFile=', 'check-ignore', '--no-index', '--verbose', '--stdin', '-z'], { encoding: null, input: `${local}/\0` });
+    if (ignored.error || ignored.signal || ignored.status !== 0 || !Buffer.isBuffer(ignored.stdout)) return false;
+    const ignoredText = ignored.stdout.toString('utf8');
+    if (!Buffer.from(ignoredText, 'utf8').equals(ignored.stdout)) return false;
+    const [source, line, pattern, checked, trailing, ...extra] = ignoredText.split('\0');
+    if (extra.length || trailing !== '' || !/^\d+$/.test(line || '') || !pattern || pattern.startsWith('!')
+      || checked !== `${local}/` || !source || source.split('/').at(-1) !== '.gitignore') return false;
+    const top = gitPath(queryGit(root, ['rev-parse', '--show-toplevel']));
+    if (top === null) return false;
+    const repository = realpathSync(top), candidate = portable(relative(repository, directory));
+    if (!candidate || isAbsolute(candidate) || candidate === '..' || candidate.startsWith('../')) return false;
+    const tracked = queryGit(repository, ['ls-files', '--cached', '--full-name', '-z'], { encoding: null });
+    if (tracked.error || tracked.signal || tracked.status !== 0 || !Buffer.isBuffer(tracked.stdout)) return false;
+    const entries = tracked.stdout.toString('utf8');
+    if (!Buffer.from(entries, 'utf8').equals(tracked.stdout) || (entries && !entries.endsWith('\0'))) return false;
+    const paths = entries.split('\0').filter(Boolean);
+    if (!paths.includes(source)) return false;
+    const sourceFile = safePath(repository, source, { mustExist: true }), sourceInfo = stat(sourceFile);
+    if (!sourceInfo?.isFile() || sourceInfo.isSymbolicLink() || sourceInfo.size > 10 * 1024 * 1024) return false;
+    const indexed = queryGit(repository, ['--literal-pathspecs', 'ls-files', '--stage', '--full-name', '-z', '--', source], { encoding: null });
+    if (indexed.error || indexed.signal || indexed.status !== 0 || !Buffer.isBuffer(indexed.stdout)) return false;
+    const indexText = indexed.stdout.toString('utf8');
+    if (!Buffer.from(indexText, 'utf8').equals(indexed.stdout)) return false;
+    const match = /^(100644|100755) ([a-f0-9]{40}|[a-f0-9]{64}) 0\t([^\0]+)\0$/.exec(indexText);
+    if (!match || match[3] !== source) return false;
+    const blob = queryGit(repository, ['cat-file', 'blob', match[2]], { encoding: null });
+    if (blob.error || blob.signal || blob.status !== 0 || !Buffer.isBuffer(blob.stdout)
+      || !readStable(repository, sourceFile).equals(blob.stdout)) return false;
+    return !paths.some(path => mayAliasIndexPath(path, candidate, { root: repository }));
+  } catch { return false; }
+}
+
 export function snapshotSources(root, target, destination, { maxFiles = 20000, maxFileBytes = 10 * 1024 * 1024, maxTotalBytes = 256 * 1024 * 1024 } = {}) {
   const files = [], entries = [], excluded = []; let bytes = 0;
   const walk = (folder, prefix = '') => {
@@ -124,6 +222,7 @@ export function snapshotSources(root, target, destination, { maxFiles = 20000, m
         ...(info.isSymbolicLink() ? { target: readlinkSync(source) } : {}) });
       if (info.isSymbolicLink()) { excluded.push({ path: key, reason: 'symbolic-link' }); continue; }
       if (info.isDirectory()) {
+        if (untrackedIgnoredExamples(root, source)) { excluded.push({ path: key, reason: 'ignored-generated-examples' }); continue; }
         if (discardedDirectories.has(name.toLowerCase()) || /^\.playwright/i.test(name)) { excluded.push({ path: key, reason: 'generated-directory' }); continue; }
         walk(source, key); continue;
       }
@@ -326,24 +425,38 @@ export class SecurityAudit {
     const contains = (parent, child) => { const part = relative(parent, child); return !isAbsolute(part) && part !== '..' && !part.startsWith(`..${sep}`); };
     if (target !== this.root && (contains(target, workBasePath) || contains(workBasePath, target))) fail('Target conflita com a pasta reservada de evidencias.');
     if (options.includeHistory) {
-      const git = spawnSync('git', ['rev-parse', '--show-toplevel'], { cwd: target, encoding: 'utf8', windowsHide: true });
-      if (git.status !== 0 || realpathSync(git.stdout.trim()) !== target) fail('Historico exige --target na raiz do repositorio Git.');
+      const git = queryGit(target, ['rev-parse', '--show-toplevel']);
+      const top = gitPath(git);
+      if (top === null || realpathSync(top) !== target) fail('Historico exige --target na raiz do repositorio Git.');
     }
     const execution = `${new Date().toISOString().replace(/[^a-z0-9]/gi, '').toLowerCase()}-${randomUUID().slice(0, 8)}`;
     const output = safePath(this.root, options.output || `.agent-tests/security/${execution}/report.json`);
     if (!output.endsWith('.json')) fail('Relatorio exige extensao .json.');
-    assertIgnored(this.root, output); if (stat(output)) fail('Relatorio ja existe; escolha outra execucao.');
-    const workBase = mkdirSafe(this.root, workBasePath);
-    const work = mkdtempSync(join(workBase, '.work-')); const source = mkdirSafe(this.root, join(work, 'source'));
+    const work = join(workBasePath, `.work-${randomUUID()}`);
+    assertIgnored(this.root, output, work); if (stat(output)) fail('Relatorio ja existe; escolha outra execucao.');
+    mkdirSafe(this.root, workBasePath);
+    mkdirSync(work, { mode: 0o700 }); const source = mkdirSafe(this.root, join(work, 'source'));
+    const createdWork = lstatSync(work), canonicalWork = realpathSync(work);
+    const assertWork = () => {
+      try {
+        safePath(this.root, work, { directory: true, mustExist: true });
+        const current = lstatSync(work);
+        if (current.isDirectory() && !current.isSymbolicLink() && current.dev === createdWork.dev && current.ino === createdWork.ino && realpathSync(work) === canonicalWork) return;
+      } catch { /* A removed, replaced or symbolic path is not ours to delete. */ }
+      fail('Pasta temporaria da auditoria foi alterada; conteudo preservado para revisao.');
+    };
+    const invoke = (...args) => { assertWork(); const result = this.invoke(...args); assertWork(); return result; };
     const report = { schemaVersion: 1, mode: 'run', status: 'incomplete', target: portable(relative(this.root, target)) || '.',
       offline: true, execution, generatedAt: new Date().toISOString(), checks: [], findings: [], coverage: null,
       limits: ['Analise do snapshot de arquivos de texto; binarios, links e diretorios gerados nao sao varridos.',
         'Regras SAST proprias cobrem padroes JS/TS selecionados. Scanner nao comprova autorizacao, RLS, regras Firebase ou seguranca total.'] };
     try {
       const inventory = this.snapshot(this.root, target, source);
+      assertWork();
       report.coverage = { files: inventory.files.length, bytes: inventory.bytes, excluded: inventory.excluded,
         sourceDigest: digest(inventory.files.map(file => `${file.path}:${file.sha256}`).join('\n')), inventoryDigest: inventoryDigest(inventory) };
       for (const name of selected) {
+        assertWork();
         const tool = checks[name]; let version;
         try {
           version = this.manager.check(tool).version;
@@ -351,12 +464,12 @@ export class SecurityAudit {
           if (name === 'secrets') {
             const file = join(work, 'gitleaks.json');
             const config = join(work, 'gitleaks.toml'); writeFileSync(config, '[extend]\nuseDefault = true\n', { mode: 0o600 });
-            const result = this.invoke(tool, ['dir', source, '--config', config, '--report-format=json', `--report-path=${file}`, '--redact=100', '--no-banner', '--no-color', '--log-level=error', '--ignore-gitleaks-allow', '--timeout=150'], work);
+            const result = invoke(tool, ['dir', source, '--config', config, '--report-format=json', `--report-path=${file}`, '--redact=100', '--no-banner', '--no-color', '--log-level=error', '--ignore-gitleaks-allow', '--timeout=150'], work);
             if (!stat(file)?.isFile()) fail('Gitleaks nao confirmou o relatorio.');
             parsed = parseGitleaks(readReport(this.root, file), result.status, source, inventory.files.length);
             if (options.includeHistory) {
               const file = join(work, 'history.json');
-              const result = this.invoke(tool, ['git', target, '--config', config, '--report-format=json', `--report-path=${file}`, '--redact=100', '--no-banner', '--no-color', '--log-level=error', '--ignore-gitleaks-allow', '--timeout=150', '--log-opts=--all --no-ext-diff --no-textconv'], work);
+              const result = invoke(tool, ['git', target, '--config', config, '--report-format=json', `--report-path=${file}`, '--redact=100', '--no-banner', '--no-color', '--log-level=error', '--ignore-gitleaks-allow', '--timeout=150', '--log-opts=--all --no-ext-diff --no-textconv'], work);
               if (!stat(file)?.isFile()) fail('Gitleaks nao confirmou o historico.');
               const history = parseGitleaks(readReport(this.root, file), result.status, target, 1);
               parsed.findings.push(...history.findings.map(item => ({ ...item, scope: 'git-history' })));
@@ -370,7 +483,7 @@ export class SecurityAudit {
               try { databases = needed.map(ecosystem => verifyDatabase(this.root, cache, ecosystem)); }
               catch { fail('Base OSV ausente ou alterada; execute update-data para os ecossistemas do projeto.'); }
               const config = join(work, 'osv.toml'), file = join(work, 'osv.json'); writeFileSync(config, '', { mode: 0o600 });
-              const result = this.invoke(tool, ['scan', 'source', '--offline', '--no-resolve', '--no-ignore', '--x-no-default-plugins', '--x-plugins=lockfile,sbom', '--all-packages', '--format=json', `--output-file=${file}`, `--config=${config}`, '-r', source], work);
+              const result = invoke(tool, ['scan', 'source', '--offline', '--no-resolve', '--no-ignore', '--x-no-default-plugins', '--x-plugins=lockfile,sbom', '--all-packages', '--format=json', `--output-file=${file}`, `--config=${config}`, '-r', source], work);
               if (result.status === 128 && !stat(file)) parsed = { status: 'not-applicable', findings: [], scannedPackages: 0,
                 reason: 'OSV nao encontrou pacotes analisaveis no escopo.', databases };
               else {
@@ -381,20 +494,25 @@ export class SecurityAudit {
             }
           } else {
             const rule = safePath(this.root, '.pbai4devs/scripts/auditar-seguranca/rules/javascript.yml', { mustExist: true });
-            const result = this.invoke(tool, ['--disable-version-check', '--no-git-ignore', '--disable-nosem', '--config', rule, '--json', '--error', '--quiet', '--jobs=2', source], work);
+            const result = invoke(tool, ['--disable-version-check', '--no-git-ignore', '--disable-nosem', '--config', rule, '--json', '--error', '--quiet', '--jobs=2', source], work);
             parsed = parseOpengrep(parseJson(result.stdout), result.status, source);
           }
           if (parsed.status === 'not-applicable' && !parsed.reason) parsed.reason = 'Nenhum arquivo ou pacote aplicavel foi confirmado neste escopo.';
           report.checks.push({ check: name, tool, version, ...parsed, findings: parsed.findings.length }); report.findings.push(...parsed.findings);
         } catch (error) { report.checks.push({ check: name, tool, ...(version ? { version } : {}), status: 'not-run', reason: error.publicMessage || 'Analise incompleta. Confira ferramenta, base local e formatos suportados; nenhuma aprovacao foi emitida.' }); }
+        assertWork();
       }
       const finalInventory = this.snapshot(this.root, target, null);
+      assertWork();
       if (inventoryDigest(finalInventory) !== inventoryDigest(inventory)) fail('Inventario ou fontes mudaram durante a analise.');
       report.status = report.checks.some(check => check.status === 'not-run') ? 'incomplete' : report.findings.length ? 'findings'
         : report.checks.some(check => check.status === 'passed') ? 'passed' : 'not-applicable';
     } catch (error) { report.status = 'incomplete'; report.error = error.publicMessage || 'Nao foi possivel concluir o snapshot ou confirmar fontes estaveis.'; }
-    finally { rmSync(work, { recursive: true, force: true }); }
+    // This identity check limits accidental deletion; it cannot make the
+    // following recursive removal atomic against another local process.
+    finally { assertWork(); rmSync(work, { recursive: true, force: true }); }
     report.exitCode = report.status === 'incomplete' ? 2 : report.status === 'findings' ? 1 : 0;
+    assertIgnored(this.root, output, work);
     mkdirSafe(this.root, dirname(output)); writeFileSync(output, `${JSON.stringify(report, null, 2)}\n`, { flag: 'wx', mode: 0o600 });
     return { ...report, report: portable(relative(this.root, output)) };
   }

@@ -65,8 +65,8 @@ function locate(value) {
 export function extractManagedBlock(value) { return locate(value).block; }
 export function managedBlockDigest(value) { const block = extractManagedBlock(value); return block === null ? null : digest(block); }
 
-export function mergeManagedContent(value, body, { expectedHash } = {}) {
-  const current = locate(value), eol = current.text.match(/\r\n|\n|\r/)?.[0] || '\n';
+export function mergeManagedContent(value, body, { expectedHash, eolMode } = {}) {
+  const current = locate(value), eol = current.text.match(eolMode === 'toml' ? /\r\n|\n/ : /\r\n|\n|\r/)?.[0] || '\n';
   const content = managedText(body).trim().replace(/\r\n|\r|\n/g, eol);
   if (!content || content.includes(managedBegin) || content.includes(managedEnd)) fail('Referencia AgentDevKit invalida.');
   const block = `${managedBegin}${eol}${content}${eol}${managedEnd}`;

@@ -1,192 +1,128 @@
-import { extractManagedBlock, managedBlockDigest, managedText, mergeManagedContent, stripManagedContent } from './managed-content.mjs';
+import { extractTomlManagedBlock, locatePrompt } from './managed-toml-parser.mjs';
+import { createHash } from 'node:crypto';
+import { extractManagedBlock, managedText } from './managed-content.mjs';
+import smol from './smol-toml.cjs';
+import { merge as mergeExtended, remove as removeExtended } from './extended.mjs';
+import { updateLegacy, removeLegacy } from './legacy021.mjs';
 
-// Localized editing of Gemini's root prompt; not a general TOML serializer.
-const fail = message => { throw Object.assign(new Error(message), { code: 'E_MANAGED_BLOCK' }); };
-const horizontal = character => character === ' ' || character === '\t';
-const whitespace = character => horizontal(character) || character === '\n' || character === '\r';
-const escapes = { b: '\b', t: '\t', n: '\n', f: '\f', r: '\r', '"': '"', '\\': '\\' };
-
-function scalar(code) {
-  if (code > 0x10ffff || code >= 0xd800 && code <= 0xdfff) fail('Escape Unicode TOML invalido.');
-  return String.fromCodePoint(code);
-}
-
-function stringAt(text, start, key = false) {
-  const quote = text[start];
-  if (!['"', "'"].includes(quote)) fail('O prompt TOML deve ser uma string.');
-  const multiline = text.slice(start, start + 3) === quote.repeat(3);
-  if (key && multiline) fail('Chave TOML multiline nao suportada.');
-  const basic = quote === '"';
-  let position = start + (multiline ? 3 : 1), value = '';
-  if (multiline) {
-    if (text.slice(position, position + 2) === '\r\n') position += 2;
-    else if (text[position] === '\n') position++;
-  }
-  while (position < text.length) {
-    const character = text[position];
-    if (character === quote) {
-      if (!multiline) return { start, end: position + 1, value };
-      let count = 1;
-      while (text[position + count] === quote) count++;
-      if (count >= 3) {
-        if (count > 5) fail('Delimitador TOML ambiguo.');
-        return { start, end: position + count, value: value + quote.repeat(count - 3) };
-      }
-      value += quote.repeat(count); position += count; continue;
-    }
-    if (basic && character === '\\') {
-      const escaped = text[++position];
-      if (multiline && whitespace(escaped)) {
-        let cursor = position, lineBreak = false;
-        while (whitespace(text[cursor])) {
-          if (text[cursor] === '\r') {
-            if (text[cursor + 1] !== '\n') fail('TOML exige LF ou CRLF.');
-            lineBreak = true; cursor += 2;
-          } else { if (text[cursor] === '\n') lineBreak = true; cursor++; }
-        }
-        if (!lineBreak) fail('Continuacao de string TOML invalida.');
-        position = cursor; continue;
-      }
-      if (Object.hasOwn(escapes, escaped)) { value += escapes[escaped]; position++; continue; }
-      if (escaped === 'u' || escaped === 'U') {
-        const width = escaped === 'u' ? 4 : 8, digits = text.slice(position + 1, position + 1 + width);
-        if (!new RegExp(`^[0-9a-fA-F]{${width}}$`).test(digits)) fail('Escape Unicode TOML invalido.');
-        value += scalar(Number.parseInt(digits, 16)); position += width + 1; continue;
-      }
-      fail('Escape TOML nao suportado.');
-    }
-    const code = text.charCodeAt(position);
-    if (code === 0x7f || code < 0x20 && character !== '\t' && !(multiline && ['\r', '\n'].includes(character))) fail('Controle invalido em string TOML.');
-    if (!multiline && ['\r', '\n'].includes(character)) fail('String TOML de uma linha interrompida.');
-    if (character === '\r' && text[position + 1] !== '\n') fail('TOML exige LF ou CRLF.');
-    value += character; position++;
-  }
-  fail('String TOML sem fechamento.');
-}
-
-function keyAt(text, start) {
-  let position = start;
-  const path = [];
-  while (true) {
-    while (horizontal(text[position])) position++;
-    if (['"', "'"].includes(text[position])) {
-      const part = stringAt(text, position, true); path.push(part.value); position = part.end;
-    } else {
-      const part = /^[A-Za-z0-9_-]+/.exec(text.slice(position));
-      if (!part) fail('Chave TOML nao suportada.');
-      path.push(part[0]); position += part[0].length;
-    }
-    while (horizontal(text[position])) position++;
-    if (text[position] !== '.') break;
-    position++;
-  }
-  return { path, end: position };
-}
-
-function valueEnd(text, start) {
-  if (['"', "'"].includes(text[start])) return stringAt(text, start).end;
-  const stack = [];
-  let position = start;
-  while (position < text.length) {
-    const character = text[position];
-    if (['"', "'"].includes(character)) { position = stringAt(text, position).end; continue; }
-    if (character === '#') {
-      if (!stack.length) break;
-      while (position < text.length && !['\r', '\n'].includes(text[position])) position++;
-      continue;
-    }
-    if (['\n', '\r'].includes(character) && !stack.length) break;
-    if (character === '[' || character === '{') stack.push(character);
-    if (character === ']' || character === '}') {
-      if (stack.pop() !== (character === ']' ? '[' : '{')) fail('Valor TOML desbalanceado.');
-    }
-    position++;
-  }
-  if (stack.length || !text.slice(start, position).trim()) fail('Valor TOML incompleto.');
-  return position;
-}
-
-function statementEnd(text, start) {
-  let position = start;
-  while (horizontal(text[position])) position++;
-  if (text[position] === '#') while (position < text.length && !['\r', '\n'].includes(text[position])) position++;
-  if (position < text.length && !['\r', '\n'].includes(text[position])) fail('Texto inesperado apos valor TOML.');
-  if (text[position] === '\r') {
-    if (text[position + 1] !== '\n') fail('TOML exige LF ou CRLF.');
-    return position + 2;
-  }
-  return text[position] === '\n' ? position + 1 : position;
-}
-
-function locatePrompt(input) {
-  let text;
-  try { text = managedText(input); }
-  catch (error) {
-    if (error.code === 'E_MANAGED_BLOCK') throw error;
-    fail('Texto TOML deve ser UTF-8 valido.');
-  }
-  for (const character of text) {
-    const code = character.codePointAt(0);
-    if (code >= 0xd800 && code <= 0xdfff) fail('Unicode TOML invalido.');
-  }
-  let position = text.startsWith('\ufeff') ? 1 : 0, root = true, insertion = text.length, prompt = null, reserved = false;
-  while (position < text.length) {
-    const lineStart = position;
-    while (horizontal(text[position])) position++;
-    if (position === text.length) break;
-    if (text[position] === '#' || ['\r', '\n'].includes(text[position])) { position = statementEnd(text, position); continue; }
-    if (text[position] === '[') {
-      const arrayTable = text[position + 1] === '[';
-      const header = keyAt(text, position + (arrayTable ? 2 : 1));
-      if (text.slice(header.end, header.end + (arrayTable ? 2 : 1)) !== (arrayTable ? ']]' : ']')) fail('Tabela TOML invalida.');
-      if (root) insertion = lineStart;
-      root = false;
-      if (header.path[0] === 'prompt') reserved = true;
-      position = statementEnd(text, header.end + (arrayTable ? 2 : 1)); continue;
-    }
-    const key = keyAt(text, position);
-    if (text[key.end] !== '=') fail('Atribuicao TOML invalida.');
-    position = key.end + 1;
-    while (horizontal(text[position])) position++;
-    if (root && key.path[0] === 'prompt') {
-      if (key.path.length !== 1 || prompt || reserved) fail('Prompt TOML duplicado ou ambiguo.');
-      prompt = stringAt(text, position);
-      position = prompt.end;
-    } else position = valueEnd(text, position);
-    position = statementEnd(text, position);
-  }
-  if (reserved) fail('Prompt TOML ocupa uma tabela; conteudo preservado.');
-  return { text, prompt, insertion };
-}
-
-function encode(value) {
-  return JSON.stringify(value).replace(/\x7f/g, '\\u007F');
-}
-
-export function extractTomlManagedBlock(input) {
-  const { prompt } = locatePrompt(input);
-  return prompt ? extractManagedBlock(prompt.value) : null;
-}
-
+export { extractTomlManagedBlock };
+const sha = value => createHash('sha256').update(value).digest('hex');
+// A digest is an integrity comparison, not proof of identity or authorship.
 export function tomlManagedBlockDigest(input) {
-  const { prompt } = locatePrompt(input);
-  return prompt ? managedBlockDigest(prompt.value) : null;
+  const p = locatePrompt(input), block = extractTomlManagedBlock(input);
+  let parsed;
+  try { parsed = smol.parse(p.text, { integersAsBigInt: true }); } catch { fail('TOML invalido ou nao verificavel; arquivo preservado.'); }
+  if (p.prompt ? parsed.prompt !== p.prompt.value : Object.hasOwn(parsed, 'prompt')) fail('Parsers TOML discordam; arquivo preservado.');
+  const found = p.comments.filter(c => c.text.startsWith('# ADK-TOML-META-V3'));
+  if (!found.length) return block ? sha(block) : null;
+  if (found.length !== 1 || !block || !p.prompt) throw Object.assign(new Error('Metadados TOML não verificados.'), { code: 'E_MANAGED_BLOCK' });
+  const c = found[0], match = /^# ADK-TOML-META-V3 ([A-Za-z0-9_-]+)$/.exec(c.text);
+  if (!match) throw Object.assign(new Error('Metadados TOML não verificados.'), { code: 'E_MANAGED_BLOCK' });
+  const promptLine = p.text.lastIndexOf('\n', p.prompt.start - 1) + 1, eol = p.text.slice(c.end, promptLine);
+  let meta;
+  try { meta = JSON.parse(Buffer.from(match[1], 'base64url').toString('utf8')); }
+  catch { throw Object.assign(new Error('Metadados TOML não verificados.'), { code: 'E_MANAGED_BLOCK' }); }
+  if (!meta || typeof meta !== 'object' || Array.isArray(meta) || !['\n','\r\n'].includes(eol) || meta.v !== 3 || meta.lineEol !== eol || meta.blockHash !== sha(block) || Buffer.from(JSON.stringify(meta)).toString('base64url') !== match[1]) throw Object.assign(new Error('Metadados TOML não verificados.'), { code: 'E_MANAGED_BLOCK' });
+  return sha(JSON.stringify(['agentdevkit-toml-composite-v1', block, c.text + eol]));
 }
-
-export function mergeTomlContent(input, body, options = {}) {
-  const { text, prompt, insertion } = locatePrompt(input);
-  const result = mergeManagedContent(prompt?.value ?? '', body, options);
-  if (prompt && !result.changed) return { ...result, text, changed: false };
-  const eol = text.match(/\r\n|\n/)?.[0] || '\n';
-  const separator = insertion && !/[\r\n]$/.test(text.slice(0, insertion)) ? eol : '';
-  const content = prompt ? text.slice(0, prompt.start) + encode(result.text) + text.slice(prompt.end)
-    : text.slice(0, insertion) + separator + `prompt = ${encode(result.text)}${eol}` + text.slice(insertion);
-  return { ...result, text: content, changed: content !== text };
+const header = /^# ADK-TOML-META-V3 [A-Za-z0-9_-]+$/;
+const marker = '# ADK-TOML-META-V3';
+const fail = message => { throw Object.assign(new Error(message), { code: 'E_MANAGED_BLOCK' }); };
+function translate(run) {
+  try { return run(); }
+  catch (error) {
+    if (error?.code === 'E_PROTOTYPE_CONFLICT') throw Object.assign(new Error(error.message), { code: 'E_MANAGED_BLOCK', cause: error });
+    throw error;
+  }
 }
-
+function isExtended(parsed) {
+  const found = parsed.comments.filter(comment => comment.text.startsWith(marker));
+  if (found.length > 1 || found.some(comment => !header.test(comment.text))) {
+    throw Object.assign(new Error('Metadados TOML ambíguos; preservados para revisão.'), { code: 'E_MANAGED_BLOCK' });
+  }
+  return found.length === 1;
+}
+function output(text, original) {
+  const block = extractTomlManagedBlock(text);
+  return { text, block, sha256: tomlManagedBlockDigest(text), changed: text !== original };
+}
+export function mergeTomlContent(input, body, { expectedHash } = {}) {
+  return translate(() => {
+    const parsed = locatePrompt(input), { text } = parsed, block = extractTomlManagedBlock(text), extended = isExtended(parsed);
+    if (!block) {
+      if (extended || expectedHash) throw Object.assign(new Error('Metadados ou registro TOML sem bloco; preservados para revisão.'), { code: 'E_MANAGED_BLOCK' });
+      const result = mergeExtended(text, body); return output(result.text, text);
+    }
+    if (!expectedHash) throw Object.assign(new Error('Bloco existente sem propriedade comprovada.'), { code: 'E_MANAGED_BLOCK' });
+    if (tomlManagedBlockDigest(text) !== expectedHash) throw Object.assign(new Error('Registro TOML divergente.'), { code: 'E_MANAGED_BLOCK' });
+    const result = extended ? mergeExtended(text, body, sha(block)) : updateLegacy(text, body, expectedHash);
+    return output(result.text, text, result.blockHash);
+  });
+}
 export function stripTomlContent(input, expectedHash) {
-  const { text, prompt } = locatePrompt(input);
-  if (!prompt) return text;
-  const stripped = stripManagedContent(prompt.value, expectedHash);
-  return stripped === prompt.value ? text : text.slice(0, prompt.start) + encode(stripped) + text.slice(prompt.end);
+  return translate(() => {
+    const parsed = locatePrompt(input), { text } = parsed, block = extractTomlManagedBlock(text), extended = isExtended(parsed);
+    if (!block) {
+      if (extended) throw Object.assign(new Error('Metadados TOML sem bloco; preservados para revisão.'), { code: 'E_MANAGED_BLOCK' });
+      if (expectedHash) throw Object.assign(new Error('Bloco ausente; arquivo preservado.'), { code: 'E_MANAGED_BLOCK' });
+      return text;
+    }
+    if (!expectedHash) throw Object.assign(new Error('Bloco existente sem propriedade comprovada.'), { code: 'E_MANAGED_BLOCK' });
+    if (tomlManagedBlockDigest(text) !== expectedHash) throw Object.assign(new Error('Registro TOML divergente.'), { code: 'E_MANAGED_BLOCK' });
+    return extended ? removeExtended(text, sha(block)) : removeLegacy(text, expectedHash).text;
+  });
+}
+
+
+// Equality permits preservation only; it never establishes ownership.
+export function promptMatchesCompleteReference(input, expected) {
+  let text, parsed, prompt;
+  try {
+    text = managedText(input);
+    parsed = smol.parse(text, { integersAsBigInt: true });
+    if (Object.hasOwn(parsed, 'prompt') && typeof parsed.prompt !== 'string') return false;
+    ({ prompt } = locatePrompt(text));
+  } catch { fail('TOML invalido ou nao verificavel; arquivo preservado.'); }
+  if (prompt ? parsed.prompt !== prompt.value : Object.hasOwn(parsed, 'prompt')) {
+    fail('Parsers TOML discordam; arquivo preservado.');
+  }
+  tomlManagedBlockDigest(text);
+  if (!prompt || extractManagedBlock(prompt.value)) return false;
+  return typeof expected === 'string' && prompt.value === expected;
+}
+
+// Keep arguments already supplied by the human prompt; only examine a block
+// after its recorded digest has been verified.
+export function geminiReferenceBody(input, body, expectedHash) {
+  const suffix = '\n\n{{args}}';
+  if (typeof body !== 'string' || !body.endsWith(suffix)) fail('Referencia Gemini invalida.');
+  let text, parsed, prompt;
+  try {
+    text = managedText(input);
+    parsed = smol.parse(text, { integersAsBigInt: true });
+    ({ prompt } = locatePrompt(text));
+  } catch { fail('TOML invalido ou nao verificavel; arquivo preservado.'); }
+  if (prompt ? parsed.prompt !== prompt.value : Object.hasOwn(parsed, 'prompt')) {
+    fail('Parsers TOML discordam; arquivo preservado.');
+  }
+  const actualDigest = tomlManagedBlockDigest(text);
+  if (!prompt) {
+    if (expectedHash) fail('Bloco AgentDevKit ausente; arquivo preservado.');
+    return body;
+  }
+  const block = extractManagedBlock(prompt.value);
+  if (!block) {
+    if (expectedHash) fail('Bloco AgentDevKit ausente; arquivo preservado.');
+    return prompt.value.includes('{{args}}') ? body.slice(0, -suffix.length) : body;
+  }
+  if (!expectedHash || actualDigest !== expectedHash) {
+    fail('Bloco AgentDevKit alterado ou sem propriedade; arquivo preservado.');
+  }
+  const start = prompt.value.indexOf(block);
+  if (start < 0 || start !== prompt.value.lastIndexOf(block)) {
+    fail('Posicao do bloco AgentDevKit ambigua; arquivo preservado.');
+  }
+  const before = prompt.value.slice(0, start);
+  const after = prompt.value.slice(start + block.length);
+  return before.includes('{{args}}') || after.includes('{{args}}') ? body.slice(0, -suffix.length) : body;
 }

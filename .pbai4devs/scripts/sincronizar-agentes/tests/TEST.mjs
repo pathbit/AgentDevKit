@@ -1,12 +1,14 @@
+import '../../lib/test-git-environment.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { synchronize, header, isReference, resourcePath } from '../SCRIPT.mjs';
 import { buildCatalog } from '../../lib/catalog.mjs';
+import { resourceTargets } from '../../testar-maturidade/SCRIPT.mjs';
 import { toolWrapper } from '../../preparar-ferramentas/SCRIPT.mjs';
 import { mergeGitignore, ignoreBegin, ignoreEnd, validateIgnoreClients } from '../../lib/gitignore.mjs';
 import './LOCAL_IGNORE.mjs';
@@ -163,22 +165,44 @@ test('sincroniza somente principais, preserva metadados e usa referências UTF-8
   assert.deepEqual(snapshot(root), before, 'A segunda sincronização deve ser idempotente.');
 });
 
-test('metadados gerados seguem a origem e metadados editados pelo humano permanecem', t => {
-  const root = fixture(t); run(root);
+test('metadados humanos editados bloqueiam sync; fontes sem conflito atualizam', t => {
+  const root = fixture(t);
+  run(root);
+  const editedPath = '.codex/commands/check.md';
+  const human = read(root, editedPath).replace('description: Comando.', 'description: Obsoleto.\nlocal-only: true');
+  write(root, editedPath, human);
   write(root, '.pbai4devs/commands/check/COMMAND.md', '---\nname: check-novo\ndescription: Comando atualizado.\n---\n\n# Comando\n');
   write(root, '.pbai4devs/rules/example/RULE.md', '---\ntrigger: glob\nglobs: "**/*.ts"\ndescription: Regra atualizada.\n---\n\n# Regra\n');
   write(root, '.pbai4devs/agents/revisor/AGENT.md', '---\nname: revisor\ndescription: Perfil atualizado.\n---\n\n# Revisor\n');
-  write(root, '.codex/commands/check.md', read(root, '.codex/commands/check.md').replace('description: Comando.', 'description: Obsoleto.\nlocal-only: true'));
-  assertCheckReadonly(root);
-  run(root);
-  assert.match(read(root, '.codex/commands/check.md'), /description: Obsoleto\.\nlocal-only: true/);
-  assert.match(read(root, '.codex/commands/check.md'), /<!-- BEGIN AGENTDEVKIT -->/);
-  assert.match(read(root, '.codex/rules/example.md'), /trigger: glob\nglobs: "\*\*\/\*\.ts"/);
-  assert.match(read(root, '.codex/agents/revisor.md'), /Perfil atualizado\./);
-  assert.match(read(root, '.opencode/agents/revisor/AGENT.md'), /edit: deny/);
-  assert.match(read(root, '.kimi-code/agents/revisor.md'), /tools: \[Read, Grep, Glob\]/);
-  assert.match(read(root, '.github/instructions/demo.instructions.md'), /applyTo: '\*\*'/);
-  assertCheckReadonly(root, {}, 0);
+  for (const force of [false, true]) {
+    const before = snapshot(root), check = run(root, { check: true, force });
+    assert.notEqual(check.exitCode, 0);
+    assert.ok(check.conflictPaths.includes(editedPath));
+    assert.deepEqual(snapshot(root), before);
+    rejected(root, { force }, /Conteudo proprio preservado/);
+    assert.equal(read(root, editedPath), human);
+  }
+
+  const clean = fixture(t);
+  run(clean);
+  write(clean, '.pbai4devs/commands/check/COMMAND.md', '---\nname: check-novo\ndescription: Comando atualizado.\n---\n\n# Comando\n');
+  write(clean, '.pbai4devs/rules/example/RULE.md', '---\ntrigger: glob\nglobs: "**/*.ts"\ndescription: Regra atualizada.\n---\n\n# Regra\n');
+  write(clean, '.pbai4devs/agents/revisor/AGENT.md', '---\nname: revisor\ndescription: Perfil atualizado.\n---\n\n# Revisor\n');
+  // A fixture escolhe retirar a regra gerada depois da recusa conservadora.
+  const beforeCleanCheck = snapshot(clean), cleanCheck = run(clean, { check: true });
+  assert.notEqual(cleanCheck.exitCode, 0);
+  assert.deepEqual(cleanCheck.conflictPaths, ['.claude/rules/example/RULE.md']);
+  assert.deepEqual(snapshot(clean), beforeCleanCheck);
+  rejected(clean, {}, /Conteudo proprio preservado/);
+  rmSync(join(clean, '.claude/rules/example/RULE.md'));
+  run(clean);
+  assert.match(read(clean, '.codex/commands/check.md'), /Comando atualizado\./);
+  assert.match(read(clean, '.codex/rules/example.md'), /trigger: glob\nglobs: "\*\*\/\*\.ts"/);
+  assert.match(read(clean, '.codex/agents/revisor.md'), /Perfil atualizado\./);
+  assert.match(read(clean, '.opencode/agents/revisor/AGENT.md'), /edit: deny/);
+  assert.match(read(clean, '.kimi-code/agents/revisor.md'), /tools: \[Read, Grep, Glob\]/);
+  assert.match(read(clean, '.github/instructions/demo.instructions.md'), /applyTo: '\*\*'/);
+  assertCheckReadonly(clean, {}, 0);
 });
 
 test('hub unico permite tres novos clientes, regras por inclusao e metadados nativos', t => {
@@ -193,7 +217,7 @@ test('hub unico permite tres novos clientes, regras por inclusao e metadados nat
   run(root);
   for (const client of ['.agents', '.agent', '.gemini']) {
     assert.ok(existsSync(join(root, client, 'skills/demo/SKILL.md')));
-    assert.ok(existsSync(join(root, client, '.gitignore')));
+    assert.equal(existsSync(join(root, client, '.gitignore')), false);
     for (const extra of ['tools', 'scripts', 'templates', 'docs', 'external-skills']) assert.equal(existsSync(join(root, client, extra)), false);
   }
   for (const client of ['.agents', '.agent']) {
@@ -213,32 +237,42 @@ test('hub unico permite tres novos clientes, regras por inclusao e metadados nat
   assert.throws(() => validateIgnoreClients({ '.pbai4devs': {} }));
 });
 
-test('Gemini usa TOML com inclusao relativa ao workspace e argumentos, sem Markdown duplicado', t => {
-  const root = fixture(t);
-  write(root, '.pbai4devs/commands/check/COMMAND.md', '---\ndescription: "Verifica \\"aspas\\" e regras."\n---\n\n# Check\n');
-  write(root, '.gemini/commands/check.md', pointer('../../.pbai4devs/commands/check/COMMAND.md'));
-  recordOwned(root, ['.gemini/commands/check.md']);
-  run(root);
-  const target = '.gemini/commands/check.toml';
-  const text = read(root, target); const lines = text.trimEnd().split('\n');
-  assert.equal(lines[0], '# gerado: sincronizar-agentes');
-  assert.equal(JSON.parse(lines[1].slice('description = '.length)), 'Verifica "aspas" e regras.');
-  assert.equal(JSON.parse(lines[2].slice('prompt = '.length)), '@{.pbai4devs/commands/check/COMMAND.md}\n\n{{args}}');
-  assert.ok(isReference(text)); assert.equal(existsSync(join(root, '.gemini/commands/check.md')), false);
-  write(root, target, text + '# instrucao propria\n');
-  assertCheckReadonly(root);
-  const repaired = run(root, { force: true });
-  assert.ok(repaired.managedBlocks[target]);
-  assert.match(read(root, target), /# instrucao propria/);
-  assert.match(read(root, target), /BEGIN AGENTDEVKIT/);
-  rmSync(join(root, '.pbai4devs/commands/check'), { recursive: true });
-  run(root);
-  const stripped = read(root, target).split('\n');
-  assert.equal(stripped[0], '# gerado: sincronizar-agentes');
-  assert.equal(stripped[1], lines[1]);
-  assert.equal(JSON.parse(stripped[2].slice('prompt = '.length)).trimEnd(), '@{.pbai4devs/commands/check/COMMAND.md}\n\n{{args}}');
-  assert.equal(stripped[3], '# instrucao propria');
-  assert.match(read(root, '.github/workflows/ci.yml'), /workflow-preservado/);
+test('Gemini preserva TOML humano equivalente sem adicionar bloco nem adotar', t => {
+  for (const force of [false, true]) {
+    const root = fixture(t);
+    write(root, '.pbai4devs/commands/check/COMMAND.md', '---\ndescription: "Verifica \\"aspas\\" e regras."\n---\n\n# Check\n');
+    write(root, '.gemini/commands/check.md', pointer('../../.pbai4devs/commands/check/COMMAND.md'));
+    recordOwned(root, ['.gemini/commands/check.md']);
+    run(root);
+    const target = '.gemini/commands/check.toml', text = read(root, target);
+    const lines = text.trimEnd().split('\n');
+    assert.equal(lines[0], '# gerado: sincronizar-agentes');
+    assert.equal(JSON.parse(lines[1].slice('description = '.length)), 'Verifica "aspas" e regras.');
+    assert.equal(JSON.parse(lines[2].slice('prompt = '.length)), '@{.pbai4devs/commands/check/COMMAND.md}\n\n{{args}}');
+    assert.ok(isReference(text));
+    assert.equal(existsSync(join(root, '.gemini/commands/check.md')), false);
+
+    const human = text + '# instrucao propria\n';
+    write(root, target, human);
+    const stateBefore = JSON.parse(read(root, '.pbai4devs/state/derived.json'));
+    const beforeCheck = snapshot(root), check = run(root, { check: true, force });
+    assert.notEqual(check.exitCode, 0);
+    assert.ok(check.preserved.some(item => item.path === target && item.reason === 'existing-prompt-satisfied'));
+    assert.deepEqual(snapshot(root), beforeCheck);
+    const result = run(root, { force });
+    assert.deepEqual(readFileSync(join(root, target)), Buffer.from(human));
+    assert.equal(result.managedBlocks[target], undefined);
+    assert.ok(!result.ownedOutputs.includes(target));
+    const state = JSON.parse(read(root, '.pbai4devs/state/derived.json'));
+    assert.equal(state.blocks?.[target], stateBefore.blocks?.[target]);
+    assert.equal(stateBefore.files?.[target], createHash('sha256').update(text).digest('hex'));
+    assert.equal(state.files?.[target], undefined);
+
+    rmSync(join(root, '.pbai4devs/commands/check'), { recursive: true });
+    run(root);
+    assert.deepEqual(readFileSync(join(root, target)), Buffer.from(human));
+    assert.match(read(root, '.github/workflows/ci.yml'), /workflow-preservado/);
+  }
 });
 
 test('nativos TOML ficam restritos aos comandos Gemini e ponteiros falsos nao sao apagados como gerados', t => {
@@ -257,7 +291,7 @@ test('nativos TOML ficam restritos aos comandos Gemini e ponteiros falsos nao sa
   assert.equal(isReference('---\ndescription: regra\n---\n\n# Regra\n\n@[../../.pbai4devs/rules/demo/RULE.md]\nTexto proprio\n'), false);
 });
 
-test('gera gitignore canonico e de clientes; registro gitignore nao espelha recursos', t => {
+test('gera ignore do kit sem criar ignores de clientes ou ocultar recursos', t => {
   const root = fixture(t, true);
   write(root, source, skill);
   write(root, '.pbai4devs/espelhos.conf', 'agente|.codex|plano\ngitignore|.vscode\n');
@@ -265,59 +299,77 @@ test('gera gitignore canonico e de clientes; registro gitignore nao espelha recu
   write(root, '.vscode/settings.json', '{"preserved":true}\n');
   write(root, '.gitignore', '# Somente regras gerais\n*.tmp\n');
   const result = run(root);
-  assert.equal(result.gitignores, 3);
+  assert.equal(result.gitignores, 1);
   assert.equal(read(root, '.pbai4devs/.gitignore'), `${ignoreBegin}\n${read(root, '.pbai4devs/templates/gitignore/shared.ignore')}${ignoreEnd}\n`);
-  for (const target of ['.codex', '.vscode']) assert.doesNotMatch(read(root, `${target}/.gitignore`), /\{\{ALLOWLIST\}\}/);
-  assert.match(read(root, '.codex/.gitignore'), /!\/skills\//);
-  assert.doesNotMatch(read(root, '.vscode/.gitignore'), /!\/skills/);
-  assert.match(read(root, '.vscode/.gitignore'), /!\/settings\.json/);
+  for (const target of ['.codex', '.vscode']) assert.equal(existsSync(join(root, target, '.gitignore')), false);
   assert.equal(existsSync(join(root, '.vscode/skills')), false);
   assert.equal(read(root, '.vscode/settings.json'), '{"preserved":true}\n');
   assert.equal(read(root, '.gitignore'), '# Somente regras gerais\n*.tmp\n');
   assertCheckReadonly(root, {}, 0);
 });
 
-test('preserva bloco gitignore editado e atualiza bloco conhecido sem perder regras externas', t => {
+test('preserva bloco gitignore de cliente mesmo quando o template muda', t => {
   const root = fixture(t, true); run(root);
   const prefix = '# Regras do usuario\r\n/private-cache/\r\n';
   const suffix = '# Excecao local\r\n!keep.log\r\n';
-  const original = read(root, '.codex/.gitignore');
   const old = `${prefix}${ignoreBegin}\r\n/custom-inside/\r\n${ignoreEnd}\r\n${suffix}`;
   write(root, '.codex/.gitignore', old);
-  assertCheckReadonly(root); assertCheckReadonly(root, { force: true });
-  assert.throws(() => run(root, { force: true }), /Conteudo proprio preservado/);
+  run(root, { force: true });
   assert.equal(read(root, '.codex/.gitignore'), old);
-  write(root, '.codex/.gitignore', `${prefix}${original}${suffix}`);
   write(root, '.pbai4devs/templates/gitignore/agents.ignore', '# Novo padrao\n{{ALLOWLIST}}\n/cache/\n/session/\n');
-  assertCheckReadonly(root);
-  const result = run(root, { force: true });
-  assert.equal(readFileSync(join(result.backupRoot, '.codex/.gitignore'), 'utf8'), `${prefix}${original}${suffix}`);
-  assert.ok(read(root, '.codex/.gitignore').startsWith(prefix));
-  assert.ok(read(root, '.codex/.gitignore').includes('/session/'));
-  assert.ok(readFileSync(join(root, '.codex/.gitignore'), 'utf8').endsWith(suffix));
+  run(root, { force: true });
+  assert.equal(read(root, '.codex/.gitignore'), old);
   assertCheckReadonly(root, {}, 0);
 });
 
-test('adiciona bloco a gitignore proprio, detecta exclusao e mantem idempotencia', t => {
+test('preserva gitignore proprio, detecta exclusao do ignore compartilhado e mantem idempotencia', t => {
   const root = fixture(t, true);
   const custom = '# Local\n/custom/\n!custom/keep'; write(root, '.codex/.gitignore', custom);
-  run(root); assert.ok(read(root, '.codex/.gitignore').startsWith(custom));
+  run(root); assert.equal(read(root, '.codex/.gitignore'), custom);
   const before = snapshot(root); run(root); assert.deepEqual(snapshot(root), before);
   rmSync(join(root, '.pbai4devs/.gitignore')); assertCheckReadonly(root);
   assert.equal(run(root).gitignores, 1); assertCheckReadonly(root, {}, 0);
 });
 
+test('ignores existentes e indice staged sobrevivem a template compartilhado alterado', t => {
+  const root = fixture(t, true);
+  assert.equal(spawnSync('git', ['init', '-q', root]).status, 0);
+  write(root, '.gitignore', '# regra humana\n'); write(root, 'humano.txt', 'conteudo staged\n');
+  assert.equal(spawnSync('git', ['-C', root, 'add', '--', '.gitignore', 'humano.txt']).status, 0);
+  for (const name of ['local.ignore', 'agents.ignore']) {
+    write(root, `.pbai4devs/templates/gitignore/${name}`, readFileSync(join(project, '.pbai4devs/templates/gitignore', name), 'utf8'));
+  }
+  const index = readFileSync(join(root, '.git/index'));
+  const exclude = readFileSync(join(root, '.git/info/exclude'));
+  const projectIgnore = readFileSync(join(root, '.gitignore'));
+  const assertGitPreserved = () => {
+    assert.deepEqual(readFileSync(join(root, '.git/index')), index);
+    assert.deepEqual(readFileSync(join(root, '.git/info/exclude')), exclude);
+    assert.deepEqual(readFileSync(join(root, '.gitignore')), projectIgnore);
+  };
+  run(root, { localIgnores: true }); assertGitPreserved();
+  const shared = readFileSync(join(root, '.pbai4devs/.gitignore'));
+  write(root, '.pbai4devs/templates/gitignore/shared.ignore', '# Modelo alterado\n/novo-cache/\n');
+  const check = run(root, { check: true, localIgnores: true });
+  assert.equal(check.gitignores, 0, 'check nao compara ignore existente ao novo modelo');
+  assertGitPreserved(); assert.deepEqual(readFileSync(join(root, '.pbai4devs/.gitignore')), shared);
+  run(root, { force: true, localIgnores: true });
+  assert.deepEqual(readFileSync(join(root, '.pbai4devs/.gitignore')), shared);
+  assert.equal(existsSync(join(root, '.codex/.gitignore')), false);
+  assertGitPreserved();
+});
+
 test('gitignore recusa marcadores invalidos e fontes ausentes antes de qualquer mutacao', t => {
   for (const text of [ignoreBegin, ignoreEnd, `${ignoreEnd}\n${ignoreBegin}\n`, `${ignoreBegin}\na\n${ignoreEnd}\n${ignoreBegin}\nb\n${ignoreEnd}\n`]) {
     const root = fixture(t, true); write(root, '.codex/.gitignore', text);
-    rejected(root, { force: true }, /Marcadores/);
+    run(root, { force: true }); assert.equal(read(root, '.codex/.gitignore'), text);
   }
   for (const text of ['', `${ignoreBegin}\n/cache/\n${ignoreEnd}\n`]) {
     const root = fixture(t, true); write(root, '.pbai4devs/templates/gitignore/shared.ignore', text);
     rejected(root, { force: true }, /Template/);
   }
   const missing = fixture(t, true); rmSync(join(missing, '.pbai4devs/templates/gitignore/agents.ignore'));
-  rejected(missing, { force: true }, /Template .gitignore ausente/);
+  assert.doesNotThrow(() => run(missing, { force: true }));
   for (const row of ['gitignore|.vscode|extra', 'gitignore|.pbai4devs', 'gitignore|../outside', 'gitignore|.git', 'gitignore|.CODEX']) {
     const root = fixture(t, true); write(root, '.pbai4devs/espelhos.conf', read(root, '.pbai4devs/espelhos.conf') + row + '\n');
     rejected(root, { force: true });
@@ -329,9 +381,11 @@ test('gitignore gerado funciona no Git sem esconder definicoes versionadas', t =
   const git = spawnSync('git', ['init', '-q', root], { encoding: 'utf8' });
   if (git.error?.code === 'ENOENT') { t.skip('Git ausente: prova de regras delegada a integracao.'); return; }
   assert.equal(git.status, 0, git.stderr); run(root);
-  for (const file of ['.pbai4devs/tools/demo/.local/state.json', '.codex/cache/session.json', '.claude/debug.log']) {
+  write(root, '.pbai4devs/tools/demo/.local/state.json', '{}\n');
+  assert.equal(spawnSync('git', ['check-ignore', '--no-index', '.pbai4devs/tools/demo/.local/state.json'], { cwd: root }).status, 0);
+  for (const file of ['.codex/cache/session.json', '.claude/debug.log']) {
     write(root, file, '{}\n');
-    assert.equal(spawnSync('git', ['check-ignore', '--no-index', file], { cwd: root }).status, 0, file);
+    assert.equal(spawnSync('git', ['check-ignore', '--no-index', file], { cwd: root }).status, 1, file);
   }
   for (const file of ['.pbai4devs/tools/demo/TOOL.json', '.pbai4devs/tools/demo/SCRIPT.mjs', '.codex/skills/demo/SKILL.md', '.codex/.gitignore', '.pbai4devs/.gitignore']) {
     assert.equal(spawnSync('git', ['check-ignore', '--no-index', file], { cwd: root }).status, 1, file);
@@ -357,7 +411,7 @@ test('allowlist abre somente configuracoes e diretorios declarados no Git', t =>
     write(root, file, 'fixture\n'); assert.equal(spawnSync('git', ['check-ignore', '--no-index', file], { cwd: root }).status, 1, file);
   }
   for (const file of ['.codex/native/extra.json', '.codex/auth.json', '.vscode/skills/demo/SKILL.md', '.vscode/tasks.json', '.codex/skills/demo/.DS_Store', '.codex/skills/demo/file.swp', '.vscode/snippets/Thumbs.db']) {
-    write(root, file, 'fixture\n'); assert.equal(spawnSync('git', ['check-ignore', '--no-index', file], { cwd: root }).status, 0, file);
+    write(root, file, 'fixture\n'); assert.equal(spawnSync('git', ['check-ignore', '--no-index', file], { cwd: root }).status, /(?:\.DS_Store|\.swp|Thumbs\.db)$/.test(file) ? 0 : 1, file);
   }
   assert.equal(existsSync(join(root, '.codex/clients.json')), false);
 });
@@ -366,7 +420,8 @@ test('allowlist invalida ou token ausente falha antes de mutacoes', t => {
   for (const config of [[], null, { '.pbai4devs': {} }, { '../outside': {} }, { '.codex': [], '.vscode': {} }, { '.codex': { resources: 'false' } }, { '.codex': { allow: null } }, { '.codex': { extra: true } }, { '.codex': {}, '.CODEX': {} }]) assert.throws(() => validateIgnoreClients(config));
   for (const path of ['/absolute', '../outside', 'nested/../outside', './file', 'C:/file', 'back\\slash', 'double//slash', '*', '*.json', '!file', '#file', 'ends ', '']) assert.throws(() => validateIgnoreClients({ '.codex': { allow: [path] } }), /relativo/);
   for (const body of ['{{ALLOWLIST}}\n{{ALLOWLIST}}\n']) {
-    const root = fixture(t, true); write(root, '.pbai4devs/templates/gitignore/agents.ignore', body); rejected(root, { force: true }, /unico/);
+    const root = fixture(t, true); write(root, '.pbai4devs/templates/gitignore/agents.ignore', body); run(root, { force: true });
+    assert.equal(existsSync(join(root, '.codex/.gitignore')), false);
   }
   const root = fixture(t, true); write(root, '.pbai4devs/templates/gitignore/clients.json', '{broken'); rejected(root, { force: true });
 });
@@ -412,33 +467,33 @@ test('skills externas baixadas não entram nos índices; cópias humanas permane
   assertCheckReadonly(root, {}, 0);
 });
 
-test('--force complementa conteúdo editado e preserva recursos humanos', t => {
+test('sync e --force recusam apontamentos editados preservando recursos humanos', t => {
   const root = fixture(t);
   run(root);
-  recordOwned(root, ['.claude/skills/projeto/demo/SKILL.md', '.kimi-code/agents/revisor.md']);
+  const paths = ['.claude/skills/projeto/demo/SKILL.md', '.kimi-code/agents/revisor.md'];
+  recordOwned(root, paths);
   write(root, '.claude/scripts/local.sh', 'script humano\n');
   write(root, '.claude/tools/program.exe', Buffer.from([1, 2, 3]));
   write(root, '.claude/docs/plain.md', '# Documento auxiliar\n');
   write(root, '.claude/skills/local.bin', 'custom\n');
-  write(root, '.claude/skills/projeto/demo/SKILL.md', 'corrompido\n');
-  write(root, '.kimi-code/agents/revisor.md', 'corrompido\n');
+  for (const path of paths) write(root, path, 'corrompido\n');
   write(root, '.github/prompts/edited.prompt.md', pointer() + '\nRevisar [manual](bar).\n');
-  assertCheckReadonly(root);
-  assertCheckReadonly(root, { force: true });
-  const result = run(root, { force: true });
-  for (const path of ['.claude/skills/projeto/demo/SKILL.md', '.kimi-code/agents/revisor.md']) {
-    assert.ok(read(root, path).startsWith('corrompido\n'));
-    assert.ok(result.managedBlocks[path]);
-    assert.ok(!result.ownedOutputs.includes(path));
+  for (const force of [false, true]) {
+    const before = snapshot(root), check = run(root, { check: true, force });
+    assert.notEqual(check.exitCode, 0);
+    for (const path of paths) assert.ok(check.conflictPaths.includes(path));
+    assert.deepEqual(snapshot(root), before);
+    rejected(root, { force }, /Conteudo proprio preservado/);
+    for (const path of paths) assert.equal(read(root, path), 'corrompido\n');
   }
   assert.deepEqual(readFileSync(join(root, '.claude/tools/program.exe')), Buffer.from([1, 2, 3]));
   assert.equal(read(root, '.claude/scripts/local.sh'), 'script humano\n');
   assert.equal(read(root, '.claude/skills/local.bin'), 'custom\n');
   assert.match(read(root, '.github/prompts/edited.prompt.md'), /Revisar \[manual\]/);
+  assert.ok(existsSync(join(root, '.codex/skills/outro/SKILL.md')));
   assert.match(read(root, '.codex/skills/outro/SKILL.md'), /name: outro/);
   assert.match(read(root, '.github/workflows/ci.yml'), /workflow-preservado/);
   assert.match(read(root, '.codex/config.toml'), /config-native-preservada/);
-  assertCheckReadonly(root, {}, 0);
 });
 
 test('atualiza fontes, adiciona clientes, remove recursos e migra agrupado para plano', t => {
@@ -451,6 +506,10 @@ test('atualiza fontes, adiciona clientes, remove recursos e migra agrupado para 
   assert.match(read(root, '.extra/skills/demo/SKILL.md'), /Atualizado/);
   rmSync(join(root, '.pbai4devs/rules/example/RULE.md'));
   write(root, '.pbai4devs/espelhos.conf', read(root, '.pbai4devs/espelhos.conf').replace('agente|.claude\n', 'agente|.claude|plano\n'));
+  assertCheckReadonly(root);
+  rejected(root, { force: true }, /Conteudo proprio preservado/);
+  // A remoção é decisão manual simulada na fixture, não decorrência do hash.
+  rmSync(join(root, '.claude/rules/example/RULE.md'));
   run(root);
   assert.equal(existsSync(join(root, '.claude/skills/projeto/demo/SKILL.md')), false);
   assert.ok(existsSync(join(root, '.claude/skills/projeto')));
@@ -565,16 +624,18 @@ test('registros não regulares são rejeitados sem efeitos', t => {
   rejected(other, { force: true }, /Registro nao e arquivo/);
 });
 
-test('backup recusa raiz simbólica antes de remover conteúdo próprio', t => {
+test('recuperação recusa raiz simbólica com os arquivos do projeto intactos', t => {
   const root = fixture(t);
   run(root);
-  write(root, '.pbai4devs/templates/gitignore/shared.ignore', read(root, '.pbai4devs/templates/gitignore/shared.ignore') + '*.extra-local\n');
+  write(root, source, skill.replace('Exemplo.', 'Exemplo modificado.'));
   write(root, '.claude/scripts/own.sh', 'preservar\n');
   const outside = join(root, 'outside');
   mkdirSync(outside);
-  try { symlinkSync(outside, join(root, '.agent-tests'), 'dir'); }
+  const recoveryRoot = join(root, '.agent-tests');
+  renameSync(recoveryRoot, join(root, 'diario-original-da-fixture'));
+  try { symlinkSync(outside, recoveryRoot, 'dir'); }
   catch (error) { if (['EPERM', 'EACCES'].includes(error.code)) { t.skip('Sistema não permite criar symlinks de teste.'); return; } throw error; }
-  rejected(root, { force: true }, /Link simbolico/);
+  rejected(root, { force: true }, { code: 'E_RECOVERY_STORE', recovery: { status: 'invalid', reason: 'invalid-store' } });
   assert.match(read(root, '.claude/scripts/own.sh'), /preservar/);
   assert.deepEqual(readdirSync(outside), []);
 });
@@ -818,6 +879,50 @@ test('fontes JSON, referências e entradas de scripts inválidas falham antes de
   rejected(root, { force: true }, /SCRIPT|script|ausente/);
 });
 
+test('erro de JSON externo não divulga conteúdo e não altera a fixture', t => {
+  const root = completeCatalogFixture(t);
+  const sentinel = 'SYNTHETIC_SECRET_ALPHA';
+  const path = '.pbai4devs/external-skills/CATALOG.json';
+  write(root, path, sentinel);
+  const before = snapshot(root);
+  for (const operation of [() => buildCatalog(root), () => run(root, { force: true })]) {
+    assert.throws(operation, error => {
+      assert.equal(error.message, `JSON invalido: ${path}`);
+      assert.ok(!error.message.includes('SYNTHETIC'));
+      assert.ok(!String(error.stack).includes('SYNTHETIC'));
+      return true;
+    });
+    assert.deepEqual(snapshot(root), before);
+  }
+  const child = spawnSync(process.execPath, [cli, '--check', '--root', root], { encoding: 'utf8', timeout: 30000 });
+  assert.equal(child.status, 2);
+  assert.equal(child.stderr.trim(), `JSON invalido: ${path}`);
+  assert.ok(!`${child.stdout}${child.stderr}`.includes('SYNTHETIC'));
+  assert.deepEqual(snapshot(root), before);
+});
+
+for (const [path, label] of [
+  ['.pbai4devs/state/agentdevkit.json', 'estado instalado'],
+  ['.pbai4devs/state/derived.json', 'estado derivado'],
+  ['.pbai4devs/templates/gitignore/clients.json', 'configuracao de clientes'],
+]) test(`JSON inválido de ${label} não divulga conteúdo`, t => {
+  const root = fixture(t);
+  write(root, path, 'SYNTHETIC_SECRET_ALPHA');
+  const before = snapshot(root);
+  assert.throws(() => run(root, { force: true }), error => {
+    assert.ok(error instanceof SyntaxError);
+    assert.equal(error.message, `JSON invalido: ${label}`);
+    assert.ok(!String(error.stack).includes('SYNTHETIC'));
+    return true;
+  });
+  assert.deepEqual(snapshot(root), before);
+  const child = spawnSync(process.execPath, [cli, '--check', '--root', root], { encoding: 'utf8', timeout: 30000 });
+  assert.equal(child.status, 2);
+  assert.equal(child.stderr.trim(), `JSON invalido: ${label}`);
+  assert.ok(!`${child.stdout}${child.stderr}`.includes('SYNTHETIC'));
+  assert.deepEqual(snapshot(root), before);
+});
+
 test('descobre principais aninhados sem transformar auxiliares em recursos', t => {
   const root = completeCatalogFixture(t);
   write(root, '.pbai4devs/skills/demo/nested/SKILL.md', '---\nname: nested\ndescription: Skill aninhada.\n---\n\n# Nested\n');
@@ -888,6 +993,214 @@ test('formatos por tipo preservam grupos e geram apenas o formato nativo escolhi
   assert.equal(existsSync(join(root, '.github/commands/projeto/check/COMMAND.md')), false);
   assert.equal(existsSync(join(root, '.cursor/rules/projeto/style/RULE.md')), false);
   assertCheckReadonly(root, {}, 0);
+});
+
+test('Copilot conserva escopo glob e deixa manual e decisão do modelo em referências explícitas', t => {
+  const root = fixture(t, true);
+  write(root, source, skill);
+  for (const [name, fields] of [
+    ['sempre', 'trigger: always_on\ndescription: Sempre.\n'],
+    ['escopo', 'trigger: glob\nglobs: "src/**/*.ts"\ndescription: Tipos.\n'],
+    ['manual', 'trigger: manual\ndescription: Manual.\n'],
+    ['decisao', 'trigger: model_decision\ndescription: Decisão.\n'],
+  ]) write(root, `.pbai4devs/rules/${name}/RULE.md`, `---\n${fields}---\n\n# ${name}\n`);
+  write(root, '.pbai4devs/espelhos.conf', 'agente|.github|agrupado\nformato|.github|rules|instrucoes\nagente|.cursor|agrupado\nformato|.cursor|rules|mdc\nagente|.agents|agrupado\n');
+  run(root);
+  assert.match(read(root, '.github/instructions/sempre.instructions.md'), /applyTo: "\*\*"/);
+  assert.match(read(root, '.github/instructions/escopo.instructions.md'), /applyTo: "src\/\*\*\/\*\.ts"/);
+  for (const name of ['manual', 'decisao']) {
+    assert.equal(existsSync(join(root, `.github/instructions/${name}.instructions.md`)), false);
+    assert.match(read(root, `.github/rules/${name}/RULE.md`), /Leia e siga \[origem\]/);
+    assert.ok(existsSync(join(root, `.agents/rules/${name}/RULE.md`)));
+    assert.ok(existsSync(join(root, `.cursor/rules/${name}.mdc`)));
+    assert.ok(resourceTargets(root, `.pbai4devs/rules/${name}/RULE.md`, 'rules').includes(`.github/rules/${name}/RULE.md`));
+  }
+  assertCheckReadonly(root, {}, 0);
+});
+
+test('Copilot recusa instrução nativa manual sem metadados ao criar um novo arquivo', t => {
+  const root = fixture(t, true);
+  const rule = '.pbai4devs/rules/manual/RULE.md';
+  write(root, rule, '---\ntrigger: manual\ndescription: Manual.\n---\n\n# Manual\n');
+  write(root, '.pbai4devs/espelhos.conf', `agente|.github|agrupado\nformato|.github|rules|instrucoes\nnativo|.github/instructions/manual.instructions.md|${rule}\n`);
+  const before = snapshot(root);
+  assert.throws(() => run(root), /YAML nativo explicito/);
+  assert.deepEqual(snapshot(root), before);
+});
+
+test('Copilot respeita YAML nativo explícito e frontmatter humano', t => {
+  const root = fixture(t, true);
+  write(root, source, skill);
+  const glob = '.pbai4devs/rules/escopo/RULE.md', manual = '.pbai4devs/rules/manual/RULE.md';
+  write(root, glob, '---\ntrigger: glob\nglobs: "src/**/*.ts"\ndescription: Escopo.\n---\n\n# Escopo\n');
+  write(root, manual, '---\ntrigger: manual\ndescription: Manual.\n---\n\n# Manual\n');
+  write(root, '.pbai4devs/rules/escopo/copilot.yaml', '---\napplyTo: "custom/**/*.js"\n---\n');
+  write(root, '.pbai4devs/rules/manual/copilot.yaml', '---\napplyTo: "explicit/**/*.md"\n---\n');
+  const human = '---\napplyTo: "custom/**/*.js"\n---\n\n# Instrução humana\n\nPreservar o texto.\n';
+  write(root, '.github/instructions/escopo.instructions.md', human);
+  write(root, '.pbai4devs/espelhos.conf', [
+    'agente|.github|agrupado', 'formato|.github|rules|instrucoes',
+    `nativo|.github/instructions/escopo.instructions.md|${glob}|.pbai4devs/rules/escopo/copilot.yaml`,
+    `nativo|.github/instructions/manual.instructions.md|${manual}|.pbai4devs/rules/manual/copilot.yaml`,
+  ].join('\n') + '\n');
+  run(root);
+  const result = read(root, '.github/instructions/escopo.instructions.md');
+  assert.ok(result.startsWith(human)); assert.match(result, /BEGIN AGENTDEVKIT/);
+  assert.match(read(root, '.github/instructions/manual.instructions.md'), /applyTo: "explicit\/\*\*\/\*\.md"/);
+  assert.equal(existsSync(join(root, '.github/rules/manual/RULE.md')), false);
+  assertCheckReadonly(root, {}, 0);
+});
+
+test('Copilot preserva colisões humanas ambíguas e só complementa escopo comprovadamente igual', t => {
+  const root = fixture(t, true);
+  const items = [
+    ['global', 'always_on', '', '---\napplyTo: "**"\n---\n\n# Global humano\n', true],
+    ['glob', 'glob', 'globs: "src/**/*.ts"\n', "---\napplyTo: 'src/**/*.ts'\n---\n\n# Glob humano\n", true],
+    ['divergente', 'glob', 'globs: "src/**/*.ts"\n', '---\napplyTo: "**"\n---\n\n# Divergente\n', false],
+    ['sem-yaml', 'glob', 'globs: "src/**/*.ts"\n', '# Sem YAML\n', false],
+    ['duplicado', 'glob', 'globs: "src/**/*.ts"\n', '---\napplyTo: "src/**/*.ts"\napplyTo: "**"\n---\n\n# Duplicado\n', false],
+    ['extra', 'glob', 'globs: "src/**/*.ts"\n', '---\napplyTo: "src/**/*.ts"\nexcludeAgent: "code-review"\n---\n\n# Extra\n', false],
+    ['manual', 'manual', '', '# Manual sem YAML\n', false],
+    ['decisao', 'model_decision', '', '---\napplyTo: "**"\n---\n\n# Decisão humana\n', false],
+  ];
+  const rows = ['agente|.github|agrupado', 'formato|.github|rules|instrucoes'];
+  for (const [name, trigger, fields, content] of items) {
+    const rule = `.pbai4devs/rules/${name}/RULE.md`;
+    write(root, rule, `---\ntrigger: ${trigger}\n${fields}description: Exemplo.\n---\n\n# ${name}\n`);
+    write(root, `.github/instructions/${name}.instructions.md`, content);
+    if (['manual', 'decisao'].includes(name)) rows.push(`nativo|.github/instructions/${name}.instructions.md|${rule}`);
+  }
+  write(root, '.pbai4devs/espelhos.conf', rows.join('\n') + '\n');
+  const messages = [];
+  const result = run(root, { check: true, output: line => messages.push(line) });
+  assert.equal(result.exitCode, 1);
+  for (const [name, , , original, compatible] of items) {
+    const target = `.github/instructions/${name}.instructions.md`;
+    assert.equal(read(root, target), original);
+    if (!compatible) {
+      assert.ok(result.preserved.some(item => item.path === target && item.reason === 'copilot-scope-preserved'));
+    }
+  }
+  assert.ok(messages.some(line => line.includes('Escopo Copilot humano diferente ou ambiguo')));
+  assert.throws(() => run(root, { force: true }), /Conteudo proprio preservado/);
+  for (const [name, , , original] of items) assert.equal(read(root, `.github/instructions/${name}.instructions.md`), original);
+  for (const [name, trigger, fields, original, compatible] of items.filter(item => item[4])) {
+    const separate = fixture(t, true), target = `.github/instructions/${name}.instructions.md`;
+    write(separate, `.pbai4devs/rules/${name}/RULE.md`, `---\ntrigger: ${trigger}\n${fields}description: Exemplo.\n---\n\n# ${name}\n`);
+    write(separate, target, original);
+    write(separate, '.pbai4devs/espelhos.conf', 'agente|.github|agrupado\nformato|.github|rules|instrucoes\n');
+    run(separate);
+    assert.match(read(separate, target), /BEGIN AGENTDEVKIT/);
+    assertCheckReadonly(separate, {}, 0);
+  }
+});
+
+test('Copilot aplica YAML nativo somente quando o frontmatter humano é idêntico', t => {
+  const root = fixture(t, true);
+  const native = '---\napplyTo: "docs/**/*.md"\ndescription: "Regra de projeto"\n---\n';
+  for (const name of ['igual', 'diferente', 'ambiguo', 'sem-escopo']) {
+    write(root, `.pbai4devs/rules/${name}/RULE.md`, `---\ntrigger: manual\ndescription: Exemplo.\n---\n\n# ${name}\n`);
+    write(root, `.pbai4devs/rules/${name}/copilot.yaml`, name === 'ambiguo' ? '---\napplyTo: "docs/**/*.md"\napplyTo: "**"\n---\n' : name === 'sem-escopo' ? '---\ndescription: Manual\n---\n' : native);
+  }
+  const equal = `${native}\n# Humano igual\n`, different = '---\napplyTo: "**"\n---\n\n# Humano diferente\n';
+  write(root, '.github/instructions/igual.instructions.md', equal);
+  write(root, '.github/instructions/diferente.instructions.md', different);
+  const ambiguous = `${read(root, '.pbai4devs/rules/ambiguo/copilot.yaml')}\n# Ambíguo\n`;
+  const noScope = `${read(root, '.pbai4devs/rules/sem-escopo/copilot.yaml')}\n# Sem escopo\n`;
+  write(root, '.github/instructions/ambiguo.instructions.md', ambiguous);
+  write(root, '.github/instructions/sem-escopo.instructions.md', noScope);
+  write(root, '.pbai4devs/espelhos.conf', [
+    'agente|.github|agrupado', 'formato|.github|rules|instrucoes',
+    ...['igual', 'diferente', 'ambiguo', 'sem-escopo'].map(name => `nativo|.github/instructions/${name}.instructions.md|.pbai4devs/rules/${name}/RULE.md|.pbai4devs/rules/${name}/copilot.yaml`),
+  ].join('\n') + '\n');
+  assert.equal(run(root, { check: true }).exitCode, 1);
+  assert.throws(() => run(root, { force: true }), /Conteudo proprio preservado/);
+  assert.equal(read(root, '.github/instructions/igual.instructions.md'), equal);
+  assert.equal(read(root, '.github/instructions/diferente.instructions.md'), different);
+  assert.equal(read(root, '.github/instructions/ambiguo.instructions.md'), ambiguous);
+  assert.equal(read(root, '.github/instructions/sem-escopo.instructions.md'), noScope);
+  const separate = fixture(t, true);
+  write(separate, '.pbai4devs/rules/igual/RULE.md', '---\ntrigger: manual\ndescription: Exemplo.\n---\n\n# igual\n');
+  write(separate, '.pbai4devs/rules/igual/copilot.yaml', native);
+  write(separate, '.github/instructions/igual.instructions.md', equal);
+  write(separate, '.pbai4devs/espelhos.conf', 'agente|.github|agrupado\nformato|.github|rules|instrucoes\nnativo|.github/instructions/igual.instructions.md|.pbai4devs/rules/igual/RULE.md|.pbai4devs/rules/igual/copilot.yaml\n');
+  run(separate);
+  assert.ok(read(separate, '.github/instructions/igual.instructions.md').startsWith(equal));
+  assert.match(read(separate, '.github/instructions/igual.instructions.md'), /BEGIN AGENTDEVKIT/);
+  assertCheckReadonly(separate, {}, 0);
+});
+
+test('Copilot preserva inclusive bloco gerenciado quando o escopo humano muda', t => {
+  const root = fixture(t, true);
+  const target = '.github/instructions/escopo.instructions.md';
+  write(root, '.pbai4devs/rules/escopo/RULE.md', '---\ntrigger: glob\nglobs: "src/**/*.ts"\ndescription: Escopo.\n---\n\n# Escopo\n');
+  write(root, '.pbai4devs/espelhos.conf', 'agente|.github|agrupado\nformato|.github|rules|instrucoes\n');
+  write(root, target, '---\napplyTo: "src/**/*.ts"\n---\n\n# Humano\n');
+  run(root);
+  const changed = read(root, target).replace('src/**/*.ts', '**');
+  write(root, target, changed);
+  const result = run(root, { check: true });
+  assert.equal(result.exitCode, 1);
+  assert.throws(() => run(root, { force: true }), /Conteudo proprio preservado/);
+  assert.equal(read(root, target), changed);
+  assert.ok(result.preserved.some(item => item.path === target && item.reason === 'copilot-scope-preserved'));
+  assertCheckReadonly(root, {}, 1);
+});
+
+test('migração de instrução rastreada bloqueia a transação e preserva índice e arquivo', t => {
+  const root = fixture(t, true);
+  const git = (...args) => {
+    const result = spawnSync('git', args, { cwd: root, encoding: 'utf8', windowsHide: true });
+    assert.equal(result.status, 0, result.stderr); return result.stdout;
+  };
+  git('init', '-q');
+  const rule = '.pbai4devs/rules/demo/RULE.md', old = '.github/instructions/demo.instructions.md';
+  write(root, '.pbai4devs/espelhos.conf', 'agente|.github|agrupado\nformato|.github|rules|instrucoes\n');
+  write(root, rule, '---\ntrigger: glob\nglobs: "src/**/*.ts"\ndescription: Demo.\n---\n\n# Demo\n');
+  run(root);
+  git('add', '-f', old);
+  write(root, rule, '---\ntrigger: manual\ndescription: Demo.\n---\n\n# Demo\n');
+  const index = readFileSync(join(root, '.git/index'));
+  const contents = read(root, old);
+  const planned = run(root, { check: true });
+  assert.equal(planned.exitCode, 1);
+  assert.ok(planned.preserved.some(item => item.path === old && item.reason === 'tracked-stale-file-preserved'));
+  assert.throws(() => run(root, { force: true }), /obsoleto rastreado no indice Git/);
+  assert.deepEqual(readFileSync(join(root, '.git/index')), index);
+  assert.equal(read(root, old), contents);
+  assert.equal(existsSync(join(root, '.github/rules/demo/RULE.md')), false);
+  assert.match(git('status', '--short', '--', old), /^A /);
+});
+
+test('migração Copilot remove apenas referência global comprovadamente gerenciada', t => {
+  const root = fixture(t, true);
+  write(root, source, skill);
+  const rule = '.pbai4devs/rules/manual/RULE.md';
+  write(root, rule, '---\ntrigger: manual\ndescription: Manual.\n---\n\n# Manual\n');
+  write(root, '.pbai4devs/espelhos.conf', 'agente|.github|agrupado\nformato|.github|rules|instrucoes\n');
+  const old = '.github/instructions/manual.instructions.md';
+  write(root, old, `---\napplyTo: '**'\n---\n\n# Manual\n\n${marker}\nLeia e siga [origem](../../.pbai4devs/rules/manual/RULE.md).\n`);
+  recordOwned(root, [old]);
+  assert.equal(run(root, { check: true }).exitCode, 1);
+  run(root);
+  assert.equal(existsSync(join(root, old)), false);
+  assert.ok(existsSync(join(root, '.github/rules/manual/RULE.md')));
+  assertCheckReadonly(root, {}, 0);
+
+  const other = '.github/instructions/extra.instructions.md';
+  const human = `---\napplyTo: '**'\n---\n\n# Manual humano\n\n${marker}\nLeia e siga [origem](../../.pbai4devs/rules/manual/RULE.md).\n`;
+  write(root, other, human);
+  run(root, { force: true });
+  assert.equal(read(root, other), human, 'referência sem ownership deve permanecer');
+  const second = fixture(t, true);
+  write(second, rule, '---\ntrigger: manual\ndescription: Manual.\n---\n\n# Manual\n');
+  write(second, '.pbai4devs/espelhos.conf', 'agente|.github|agrupado\nformato|.github|rules|instrucoes\n');
+  write(second, old, human);
+  recordOwned(second, [old]);
+  write(second, old, human + '\nConteúdo editado por pessoa.\n');
+  const edited = read(second, old);
+  run(second, { force: true });
+  assert.equal(read(second, old), edited, 'referência gerenciada editada deve permanecer');
 });
 
 test('manifestos Antigravity acompanham skills, regras e agentes agrupados', t => {

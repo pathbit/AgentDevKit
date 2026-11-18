@@ -1,6 +1,7 @@
+import '../.pbai4devs/scripts/lib/test-git-environment.mjs';
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,8 +16,9 @@ const clientRoots = [...new Set(policy.adapters.flatMap(adapter => [adapter.root
 const globalDirectory = mkdtempSync(join(tmpdir(), 'agentdevkit-git-config-'));
 const globalConfig = join(globalDirectory, 'config');
 writeFileSync(globalConfig, '');
+mkdirSync(join(globalDirectory, 'xdg'));
 after(() => rmSync(globalDirectory, { recursive: true, force: true }));
-const env = { ...process.env, GIT_OPTIONAL_LOCKS: '0', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: globalConfig };
+const env = { ...process.env, XDG_CONFIG_HOME: join(globalDirectory, 'xdg'), GIT_OPTIONAL_LOCKS: '0', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: globalConfig };
 for (const key of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_COMMON_DIR', 'GIT_INDEX_FILE']) delete env[key];
 
 function fixture(t, { git = true } = {}) {
@@ -58,7 +60,27 @@ function ignored(root, path, extraEnv = {}) {
   return result.status === 0;
 }
 
-test('exclusões locais cobrem clientes; opt-in rastreia arquivos e mantém staged em todo o ciclo', t => {
+test('backup de conteúdo humano pode ficar visível sem alterar ignores ou índice do projeto', t => {
+  const root = fixture(t), human = '# Instruções humanas\n\nMarcador sintético de conteúdo privado.\n', ignore = '# Regras próprias do projeto\n';
+  put(root, 'AGENTS.md', human); put(root, '.gitignore', ignore);
+  chmodSync(join(root, 'AGENTS.md'), 0o640);
+  const originalMode = statSync(join(root, 'AGENTS.md')).mode;
+  command(root, ['add', '--', 'AGENTS.md', '.gitignore']);
+  const beforeIndex = index(root), beforeExclude = readFileSync(join(root, '.git/info/exclude'));
+  const result = cli(root, ['init', '--agents', 'claude']);
+  assert.equal(result.ok, true); assert.equal(typeof result.backup, 'string');
+  const backup = `${result.backup}/AGENTS.md`;
+  assert.deepEqual(read(root, backup), Buffer.from(human));
+  const modeMask = process.platform === 'win32' ? 0o200 : 0o777;
+  assert.equal(statSync(join(root, backup)).mode & modeMask, originalMode & modeMask);
+  assert.equal(ignored(root, backup), false);
+  assert.match(command(root, ['status', '--short', '--untracked-files=all', '--', backup]), /^\?\? /);
+  assert.deepEqual(index(root), beforeIndex);
+  assert.deepEqual(read(root, '.gitignore'), Buffer.from(ignore));
+  assert.deepEqual(readFileSync(join(root, '.git/info/exclude')), beforeExclude);
+});
+
+test('clientes existentes permanecem visíveis e staged é preservado em todo o ciclo', t => {
   const root = fixture(t);
   const ignore = '# Regras da equipe\n/build/\n';
   const original = '{"team":"staged"}\n';
@@ -81,11 +103,11 @@ test('exclusões locais cobrem clientes; opt-in rastreia arquivos e mantém stag
   assert.deepEqual(read(root, '.gitignore'), Buffer.from(ignore));
   assert.deepEqual(read(root, '.claude/settings.json'), Buffer.from(working));
   for (const path of ['.claude/notes.md', '.github/workflows/team.yml', '.vscode/settings.json', '.opencode/team.md']) {
-    assert.equal(ignored(root, path), true, path);
+    assert.equal(ignored(root, path), false, path);
   }
   assert.ok(clientRoots.includes('.github') && clientRoots.includes('.vscode'));
   for (const client of clientRoots) {
-    assert.equal(ignored(root, `${client}/agentdevkit-probe.md`), true, client);
+    assert.equal(ignored(root, `${client}/agentdevkit-probe.md`), false, client);
   }
   assert.match(command(root, ['ls-files', '--stage', '--', '.claude/settings.json']), /\.claude\/settings\.json/);
 
@@ -94,21 +116,23 @@ test('exclusões locais cobrem clientes; opt-in rastreia arquivos e mantém stag
   assert.equal(ignored(root, '.claude/notes.md'), false);
   assert.equal(ignored(root, '.github/workflows/team.yml'), false);
   for (const path of ['.claude/auth.json', '.claude/.env', '.claude/playwright-report/index.html']) {
-    assert.equal(ignored(root, path), true, path);
+    assert.equal(ignored(root, path), false, path);
   }
   command(root, ['add', '--', '.gitignore', '.claude/notes.md', '.github/workflows/team.yml']);
   const selectedIndex = index(root), selectedEntries = command(root, ['ls-files', '--stage', '-z']);
   for (const args of [['update', '--force'], ['sync', '--force'], ['doctor'], ['sync', '--check'], ['init', '--agents', 'claude', '--force']]) {
-    const result = cli(root, args);
-    assert.equal(result.ok, true, args.join(' '));
+    const checking = args[0] === 'doctor' || args.includes('--check');
+    const result = cli(root, args, checking ? 1 : 0);
+    assert.equal(result.ok, !checking, args.join(' '));
+    if (checking) assert.ok(JSON.stringify(result).includes('private-file-visible'));
     assert.deepEqual(index(root), selectedIndex, `${args.join(' ')} altera o índice`);
     assert.equal(command(root, ['ls-files', '--stage', '-z']), selectedEntries);
     assert.deepEqual(read(root, '.gitignore'), Buffer.from(selected));
     assert.deepEqual(read(root, '.claude/settings.json'), Buffer.from(working));
     assert.equal(ignored(root, '.claude/notes.md'), false);
     assert.equal(ignored(root, '.github/workflows/team.yml'), false);
-    assert.equal(ignored(root, '.vscode/settings.json'), true);
-    for (const path of ['.claude/auth.json', '.claude/.env', '.claude/playwright-report/index.html']) assert.equal(ignored(root, path), true, path);
+    assert.equal(ignored(root, '.vscode/settings.json'), false);
+    for (const path of ['.claude/auth.json', '.claude/.env', '.claude/playwright-report/index.html']) assert.equal(ignored(root, path), false, path);
   }
 });
 
@@ -122,7 +146,7 @@ test('seleção de um arquivo exige reabrir pais e regras posteriores prevalecem
 
   // Git não reabre um arquivo cujo diretório pai continua ignorado.
   put(root, '.gitignore', `# Projeto\n!/${selected}\n`);
-  assert.equal(ignored(root, selected), true);
+  assert.equal(ignored(root, selected), false);
   assert.equal(cli(root, ['sync']).ok, true);
 
   // Reabrir os ancestrais e fechar os demais irmãos permite escolher apenas
@@ -159,15 +183,15 @@ test('seleção de um arquivo exige reabrir pais e regras posteriores prevalecem
   assert.equal(command(root, ['ls-files', '--stage', '-z']), entries);
 });
 
-test('exceção ampla que expõe credenciais bloqueia a sincronização mesmo com force', t => {
+test('credenciais expostas são diagnosticadas e regras humanas são preservadas', t => {
   const root = fixture(t);
   put(root, '.gitignore', '# Regras próprias\n');
   put(root, '.github/auth.json', '{"placeholder":true}\n');
   put(root, '.github/playwright-report/index.html', 'artefato\n');
   command(root, ['add', '--', '.gitignore']);
   assert.equal(cli(root, ['init', '--agents', 'claude']).ok, true);
-  assert.equal(ignored(root, '.github/auth.json'), true);
-  assert.equal(ignored(root, '.github/playwright-report/index.html'), true);
+  assert.equal(ignored(root, '.github/auth.json'), false);
+  assert.equal(ignored(root, '.github/playwright-report/index.html'), false);
 
   // A negação ampla do usuário tem precedência sobre info/exclude e expõe
   // privados: o kit deve informar o conflito antes de mudar qualquer estado.
@@ -179,9 +203,10 @@ test('exceção ampla que expõe credenciais bloqueia a sincronização mesmo co
   const exclude = isAbsolute(excludePath) ? excludePath : join(root, excludePath);
   const beforeExclude = readFileSync(exclude), beforeIndex = index(root);
   const beforeState = read(root, '.pbai4devs/state/agentdevkit.json');
-  for (const args of [['sync', '--force'], ['update', '--force']]) {
+  for (const args of [['doctor'], ['sync', '--check']]) {
     const result = cli(root, args, 1);
     assert.equal(result.ok, false, args.join(' '));
+    assert.match(JSON.stringify(result), /private-file-visible/);
     assert.deepEqual(read(root, '.gitignore'), Buffer.from(human));
     assert.deepEqual(index(root), beforeIndex);
     assert.deepEqual(readFileSync(exclude), beforeExclude);
@@ -190,7 +215,7 @@ test('exceção ampla que expõe credenciais bloqueia a sincronização mesmo co
   }
 });
 
-test('projeto sem Git mantém regras existentes e ativa proteção após git init e sync', t => {
+test('projeto sem Git mantém regras existentes após git init e sync', t => {
   const root = fixture(t, { git: false });
   const ignore = '# Ignore da equipe\n/dist/\n';
   put(root, '.gitignore', ignore);
@@ -204,7 +229,7 @@ test('projeto sem Git mantém regras existentes e ativa proteção após git ini
   assert.equal(cli(root, ['sync']).ok, true);
   assert.deepEqual(index(root), before);
   assert.deepEqual(read(root, '.gitignore'), Buffer.from(ignore));
-  assert.equal(ignored(root, '.github/workflows/team.yml'), true);
+  assert.equal(ignored(root, '.github/workflows/team.yml'), false);
 });
 
 test('projeto aninhado respeita o escopo Git e exceções do seu próprio ignore', t => {
@@ -219,15 +244,15 @@ test('projeto aninhado respeita o escopo Git e exceções do seu próprio ignore
   assert.deepEqual(index(root), before);
   assert.equal(ignored(root, '.claude/parent-probe.md'), false, 'outro projeto não é afetado');
   assert.equal(ignored(root, 'apps/nested/.claude/notes.md'), false);
-  assert.equal(ignored(root, 'apps/nested/.github/workflows/team.yml'), true);
+  assert.equal(ignored(root, 'apps/nested/.github/workflows/team.yml'), false);
   assert.equal(cli(target, ['sync', '--check']).ok, true);
   assert.equal(cli(target, ['doctor']).ok, true);
   assert.deepEqual(index(root), before);
 });
 
-test('projeto aninhado em ancestral ignorado informa exceção ineficaz antes de escrever', t => {
+test('projeto aninhado em ancestral ignorado preserva regras e conteúdo humano', t => {
   const root = fixture(t), target = join(root, '.github', 'project');
-  put(root, '.gitignore', '# Projeto pai\n');
+  put(root, '.gitignore', '# Projeto pai\n/.github/\n');
   command(root, ['add', '--', '.gitignore']);
   assert.equal(cli(root, ['init', '--agents', 'copilot']).ok, true);
   const childIgnore = '# Projeto filho\n!/.claude/\n';
@@ -240,20 +265,19 @@ test('projeto aninhado em ancestral ignorado informa exceção ineficaz antes de
   const beforeExclude = readFileSync(exclude), beforeIndex = index(root);
   const parentState = read(root, '.pbai4devs/state/agentdevkit.json');
   for (const args of [['init', '--agents', 'claude', '--dry-run'], ['init', '--agents', 'claude', '--force']]) {
-    const result = cli(target, args, 1);
-    assert.equal(result.ok, false);
-    assert.match(JSON.stringify(result), /ancestral|\.claude|ignora/i);
-    assert.equal(existsSync(join(target, '.pbai4devs')), false);
+    const result = cli(target, args);
+    assert.equal(result.ok, true);
+    assert.equal(existsSync(join(target, '.pbai4devs')), !args.includes('--dry-run'));
     assert.deepEqual(read(target, '.gitignore'), Buffer.from(childIgnore));
     assert.deepEqual(read(target, '.claude/custom.md'), Buffer.from(human));
-    assert.deepEqual(read(root, '.gitignore'), Buffer.from('# Projeto pai\n'));
+    assert.deepEqual(read(root, '.gitignore'), Buffer.from('# Projeto pai\n/.github/\n'));
     assert.deepEqual(read(root, '.pbai4devs/state/agentdevkit.json'), parentState);
     assert.deepEqual(readFileSync(exclude), beforeExclude);
     assert.deepEqual(index(root), beforeIndex);
   }
 });
 
-test('exclusão global temporária de ancestral também bloqueia opt-in ineficaz', t => {
+test('exclusão global temporária de ancestral é preservada', t => {
   const root = fixture(t), target = join(root, 'apps', 'project');
   const configFile = join(root, 'fixture-global.gitconfig');
   const globalIgnore = join(root, 'fixture-global.ignore');
@@ -272,10 +296,9 @@ test('exclusão global temporária de ancestral também bloqueia opt-in ineficaz
   const beforeExclude = readFileSync(exclude), beforeIndex = index(root);
   const globalBefore = readFileSync(configFile), globalIgnoreBefore = readFileSync(globalIgnore);
   for (const args of [['init', '--agents', 'claude', '--dry-run'], ['init', '--agents', 'claude', '--force']]) {
-    const result = cli(target, args, 1, scopedEnv);
-    assert.equal(result.ok, false);
-    assert.match(JSON.stringify(result), /ancestral|\.claude|ignora/i);
-    assert.equal(existsSync(join(target, '.pbai4devs')), false);
+    const result = cli(target, args, 0, scopedEnv);
+    assert.equal(result.ok, true);
+    assert.equal(existsSync(join(target, '.pbai4devs')), !args.includes('--dry-run'));
     assert.deepEqual(read(target, '.gitignore'), Buffer.from(childIgnore));
     assert.deepEqual(read(target, '.claude/custom.md'), Buffer.from(human));
     assert.deepEqual(read(root, '.gitignore'), Buffer.from('# Projeto pai\n'));

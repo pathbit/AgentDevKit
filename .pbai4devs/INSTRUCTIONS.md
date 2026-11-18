@@ -17,6 +17,9 @@ Use os IDs da [compatibilidade](COMPATIBILIDADE.md), sem deduzir o agente pelo
 aplicativo, SO ou pastas. Sem resposta disponível, mantenha a escolha salva ou
 `all`. Registre pela CLI, sem editar hashes do estado manualmente.
 
+Para iniciar produto, siga a ordem abaixo. Para preparar a execução de projeto
+existente, use `preparar-dev` e preserve as decisões já comprovadas.
+
 1. `configurar-projeto`: preparar o trabalho sem iniciar código.
 2. `criar-prd` e `criar-ux-ui`: definir produto e experiência.
 3. `criar-design-doc`: aprovar arquitetura e tecnologia.
@@ -25,6 +28,8 @@ aplicativo, SO ou pastas. Sem resposta disponível, mantenha a escolha salva ou
    não aplicável com justificativa aprovada.
 6. `implementar-spec`: esclarecer dúvidas, aprovar plano, configurar/verificar
    o ambiente, implementar e provar os critérios de aceite.
+
+Para novas funcionalidades, não ofereça pular as aprovações de spec ou plano.
 
 Enquanto configurar os agentes, mantenha apenas modelos. Os documentos reais
 serão preenchidos por perguntas e respostas quando o projeto começar.
@@ -44,9 +49,11 @@ define as perguntas e os arquivos obrigatórios da configuração técnica.
 
 Quando tarefas independentes justificarem, use subagentes disponíveis e
 autorizados: divida contexto, dependências, arquivos exclusivos de escrita e
-provas esperadas. Integre e confira os resultados no agente principal. Sem esse
-recurso, trabalhe em sequência e informe os limites; não apresente a própria
-revisão como independente. Escolha perfis por necessidade, sem impor tecnologia:
+provas esperadas. Integre e confira os resultados no agente principal. Antes de
+encaminhar a próxima ação sugerida, confira a etapa pendente e suas evidências
+com `proximos-passos`; se não puder verificá-las, informe a lacuna e inspecione.
+Sem subagentes, trabalhe em sequência e informe os limites; não apresente a
+própria revisão como independente. Escolha perfis por necessidade, sem impor tecnologia:
 [arquitetura](agents/arquiteto/AGENT.md), [backend](agents/especialista-backend/AGENT.md),
 [frontend](agents/especialista-frontend/AGENT.md), [QA](agents/engenheiro-qa/AGENT.md),
 [segurança](agents/auditor-seguranca/AGENT.md) e
@@ -89,14 +96,11 @@ Só clientes selecionados recebem derivações; uma pasta compartilhada permanec
 quando outro cliente precisa dela. Atualizar ou sincronizar respeita a seleção.
 Somente recursos agênticos têm apontamentos; templates, scripts, tools e estado
 permanecem exclusivamente em `.pbai4devs`.
-O sincronizador mantém a proteção Git das saídas locais e de `.pbai4devs`.
-Use os [modelos de ignore](templates/gitignore/TEMPLATE.md) para alterar a lista
-de fontes e derivados; em Git, os apontamentos usam exclusões locais.
-O `.gitignore` da raiz pertence ao projeto e não é alterado pelo kit.
-Sem Git, a proteção local fica pendente; após `git init`, sincronize antes
-de adicionar arquivos ao índice.
+O kit preserva os ignores existentes, a configuração Git e o índice. Saídas e
+apontamentos podem ficar visíveis; confira o status e use os [modelos de
+ignore](templates/gitignore/TEMPLATE.md) ao decidir regras para o projeto.
 Documentos de produto também ficam fora dos espelhos. O comando `sincronizar`
-reconstrói apontamentos com `--force`; `--check` verifica sem alterações.
+usa a CLI para revisar e aplicar o plano; `--check` verifica sem alterações.
 
 Os [comandos](commands/README.md) são entradas dos casos de uso: diagnóstico,
 preparo local, atualização de ferramentas, sincronização e verificações.

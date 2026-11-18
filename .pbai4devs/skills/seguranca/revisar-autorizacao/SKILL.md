@@ -8,6 +8,9 @@ description: Verifica identidade, permissões por recurso e isolamento entre usu
 Identifique sujeitos, papéis, recursos e operações permitidas. Leia rotas,
 middleware, políticas de dados e testes; não deduza autorização pela interface.
 Se o contrato não existir, reúna as dúvidas antes de propor mudanças.
+Use o idioma salvo no estado do kit. Diferencie comportamento observado de
+impacto potencial e justifique a gravidade pela exposição comprovada; quando
+o uso ou alcance não forem conhecidos, informe essa limitação.
 
 Confira autenticação e autorização no servidor em cada operação sensível,
 incluindo IDs manipuláveis, operações em lote e ações administrativas.

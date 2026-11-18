@@ -150,6 +150,13 @@ node .pbai4devs/scripts/verificar-recursos/SCRIPT.mjs
 ```
 
 O primeiro comando atualiza apontamentos e índices; `--check` só compara.
+Regras Claude `manual` e `model_decision` ficam na origem para leitura explícita.
+Para `glob`, configure `claude.yaml` com `paths` explícitos; não se presume
+que glob de outro cliente seja equivalente. Ao desmarcar Claude, regras antigas
+são preservadas: `doctor` e os dois checks avisam que ainda podem estar ativas.
+A revisão de arquivos desconhecidos continua necessária, inclusive com `--force`.
+Um exemplo com possível link à origem pode gerar aviso conservador: a detecção
+não interpreta todas as construções Markdown nem atribui propriedade ao arquivo.
 O manifesto instalado respeita os clientes escolhidos. Não o substitua por uma
 lista de todos para reparar recursos; altere a seleção pela CLI se necessário.
 Conflitos em arquivos gerenciados exigem revisão. Quando a substituição for

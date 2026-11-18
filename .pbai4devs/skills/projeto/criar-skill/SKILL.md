@@ -17,6 +17,9 @@ reutilize `executar-script` e `verificar-trabalho` em vez de repetir seus fluxos
 Siga a regra de qualidade e informe limitações.
 
 Atualize as referências humanas em `AGENTS.md` e no guia quando mudarem.
-Finalize com `sincronizar-agentes` para gerar os JSON e confira `--check`;
-não edite índices derivados à mão nem replique instruções.
+Finalize com `sincronizar-agentes` para gerar os JSON; execute `--check`
+isoladamente e relate seu código e avisos. Não edite índices derivados à mão
+nem replique instruções.
+Confira os catálogos antes de relatá-los; criação do apontamento não comprova
+descoberta ou execução da skill pelo cliente.
 Apresente a skill para revisão e respeite as aprovações já dadas pelo usuário.

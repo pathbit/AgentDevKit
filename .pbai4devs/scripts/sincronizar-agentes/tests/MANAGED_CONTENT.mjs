@@ -1,3 +1,4 @@
+import '../../lib/test-git-environment.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -14,6 +15,22 @@ const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const read = (root, path) => fs.readFileSync(join(root, path), 'utf8');
 const put = (root, path, text) => { fs.mkdirSync(dirname(join(root, path)), { recursive: true }); fs.writeFileSync(join(root, path), text); };
 const run = (root, options = {}) => synchronize({ root, localIgnores: false, output() {}, ...options });
+function snapshot(root) {
+  const rows = [];
+  function visit(directory, parent = '') {
+    for (const name of fs.readdirSync(directory).sort()) {
+      const path = parent ? parent + '/' + name : name;
+      const file = join(directory, name), info = fs.lstatSync(file);
+      if (info.isSymbolicLink()) rows.push([path, 'link', fs.readlinkSync(file)]);
+      else if (info.isDirectory()) {
+        rows.push([path, 'directory', info.mode & 0o777]);
+        visit(file, path);
+      } else rows.push([path, 'file', info.mode & 0o777, hash(fs.readFileSync(file))]);
+    }
+  }
+  visit(root);
+  return rows;
+}
 function fixture(t) {
   const root = fs.realpathSync(fs.mkdtempSync(join(tmpdir(), 'agentdevkit-mixed-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -56,21 +73,38 @@ test('sync complementa Markdown humano, preserva CRLF/metadados e acompanha só 
   assert.equal(updated.split('<!-- BEGIN AGENTDEVKIT -->').length, 2);
 });
 
-test('sync promove apontamento editado por humano e nunca força um bloco alterado', t => {
+test('sync recusa apontamento editado e nunca força bloco humano alterado', t => {
   const root = fixture(t), path = '.claude/skills/demo/SKILL.md';
   run(root);
   const generated = read(root, path);
   const edited = generated.replace('description: Demo.', 'description: Escolha humana.') + '\nMinhas regras extras.\n';
+  assert.notEqual(edited, generated);
   put(root, path, edited);
-  run(root, { force: true });
-  const mixed = read(root, path);
-  assert.ok(mixed.startsWith(edited));
-  assert.ok(!run(root, { check: true }).ownedOutputs.includes(path));
-  const changed = mixed.replace(extractManagedBlock(mixed), extractManagedBlock(mixed).replace('Leia e siga [origem]', 'Leia [origem humana]'));
-  put(root, path, changed);
+  const before = snapshot(root);
+  for (const force of [false, true]) {
+    const check = run(root, { check: true, force });
+    assert.notEqual(check.exitCode, 0);
+    assert.ok(check.conflictPaths.includes(path));
+    assert.deepEqual(snapshot(root), before);
+    assert.throws(() => run(root, { force }), /Conteudo proprio preservado/);
+    assert.deepEqual(snapshot(root), before);
+    assert.equal(read(root, path), edited);
+  }
+
+  const second = fixture(t), human = '# Minhas instruções humanas\n';
+  put(second, path, human);
+  run(second);
+  const mixed = read(second, path), block = extractManagedBlock(mixed);
+  assert.ok(block);
+  assert.ok(mixed.startsWith(human));
+  const changed = mixed.replace(block, block.replace('Leia e siga [origem]', 'Leia [origem humana]'));
+  assert.notEqual(changed, mixed);
+  put(second, path, changed);
+  const beforeChanged = snapshot(second);
   for (const options of [{}, { force: true }, { check: true }]) {
-    assert.throws(() => run(root, options), { code: 'E_MANAGED_BLOCK' });
-    assert.equal(read(root, path), changed);
+    assert.throws(() => run(second, options), { code: 'E_MANAGED_BLOCK' });
+    assert.deepEqual(snapshot(second), beforeChanged);
+    assert.equal(read(second, path), changed);
   }
 });
 
@@ -215,21 +249,29 @@ test('destino nativo customizado mantém compatibilidade e complementa o arquivo
   assert.equal(run(root, { check: true }).exitCode, 0);
 });
 
-test('alteração apenas no YAML não pode ser apagada como wrapper integralmente gerado', t => {
-  for (const stale of [false, true]) {
+test('alteração humana no YAML é preservada com e sem origem, inclusive force', t => {
+  for (const stale of [false, true]) for (const force of [false, true]) {
     const root = fixture(t), path = '.claude/skills/demo/SKILL.md';
     run(root);
-    const human = read(root, path).replace('description: Demo.', 'description: Metadado humano.');
+    const generated = read(root, path);
+    const human = generated.replace('description: Demo.', 'description: Metadado humano.');
+    assert.notEqual(human, generated);
     put(root, path, human);
     if (stale) fs.rmSync(join(root, '.pbai4devs/skills/old/demo'), { recursive: true });
-    const result = run(root, { force: true });
-    assert.ok(read(root, path).startsWith(human));
-    assert.ok(!result.ownedOutputs.includes(path));
-    if (stale) assert.equal(read(root, path), human);
-    else assert.ok(result.managedBlocks[path]);
-    assert.equal(run(root, { check: true }).exitCode, 0);
-    run(root, { force: true });
-    assert.ok(read(root, path).startsWith(human));
+    const before = snapshot(root);
+    const check = run(root, { check: true, force });
+    assert.notEqual(check.exitCode, 0);
+    assert.deepEqual(snapshot(root), before);
+    if (!stale) {
+      assert.ok(check.conflictPaths.includes(path));
+      assert.throws(() => run(root, { force }), /Conteudo proprio preservado/);
+      assert.deepEqual(snapshot(root), before);
+    } else {
+      assert.ok(check.preserved.some(item => item.path === path && item.reason === 'edited-generated-file'));
+      const result = run(root, { force });
+      assert.ok(!result.ownedOutputs.includes(path));
+    }
+    assert.equal(read(root, path), human);
   }
 });
 
@@ -277,10 +319,11 @@ test('arquivo humano criado durante planejamento não é substituído por saída
     });
     syncBuiltinESMExports();
     try {
-      assert.throws(() => run(root, { force: true }), /Arquivo mudou apos planejar/);
+      if (path === '.claude/.gitignore') run(root, { force: true });
+      else assert.throws(() => run(root, { force: true }), /Arquivo mudou apos planejar/);
       assert.equal(injected, true, path);
       assert.equal(read(root, path), human, path);
-      assert.ok(!fs.existsSync(join(root, '.pbai4devs/catalog.json')), path);
+      if (path !== '.claude/.gitignore') assert.ok(!fs.existsSync(join(root, '.pbai4devs/catalog.json')), path);
     } finally {
       t.mock.restoreAll(); syncBuiltinESMExports();
     }

@@ -1,3 +1,4 @@
+import '../../.pbai4devs/scripts/lib/test-git-environment.mjs';
 import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';

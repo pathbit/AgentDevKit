@@ -48,7 +48,7 @@ são guardados como artifacts, sem binários ou fontes das fixtures.
 
 `npm run verify` executa o perfil completo. `ci:portable` e `ci:smoke`
 executam os demais perfis localmente. `npm run test:examples` verifica os
-cenários em `examples/generated/` quando a mudança afeta a geração.
+cenários em uma pasta temporária fora de Git quando a mudança afeta a geração.
 A [contribuição](../../CONTRIBUTING.md) explica os checks durante o
 desenvolvimento.
 
@@ -76,6 +76,10 @@ nada. Nunca versione o tarball ou seus relatórios.
 1. Atualize versão e lockfile, changelog, exemplos e escopo da entrega.
 2. Conclua testes, documentação e revisão independente.
 3. Envie o commit à branch principal e acompanhe o CI e a release.
+
+O perfil completo exige os testes estritos de recuperação concorrente. Enquanto
+eles falharem, não há artefato certificado para publicação; consulte o
+[roadmap](../product/roadmap.md) e os [testes](../../tests/README.md).
 
 Após toda a matriz de CI passar, a automação cria a tag `v<versão>` no
 commit verificado e inicia o workflow de release. Um push sem mudança de versão

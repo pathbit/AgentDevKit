@@ -1,3 +1,4 @@
+import '../.pbai4devs/scripts/lib/test-git-environment.mjs';
 import test from 'node:test';
 import fs from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
@@ -8,6 +9,9 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { applyPlan, planInstallation } from '../src/install.mjs';
+import { collectErrorDiagnostics } from '../.pbai4devs/scripts/lib/error-reporting.mjs';
+import { inspectProjectRecovery } from '../.pbai4devs/scripts/lib/project-recovery.mjs';
+import { verifyRecoveryBackup } from '../.pbai4devs/scripts/lib/recovery-backup.mjs';
 
 const repository = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const bin = join(repository, 'bin/agentdevkit.mjs');
@@ -93,6 +97,23 @@ test('migra estado legado preservando dados humanos, seleção, índice e ignore
   assert.equal(cli(root, ['update']).changed, false);
   assert.equal(git(root, 'ls-files', '--stage', '-z'), f.index);
   assert.deepEqual(read(root, '.gitignore'), f.ignore);
+});
+
+test('atualização nativa após migração aceita estado legado staged ausente sem alterar o índice', { timeout: 120000 }, t => {
+  const f = fixture(t), { root } = f;
+  const index = readFileSync(join(root, '.git/index'));
+  const config = readFileSync(join(root, '.git/config'));
+  const migration = planInstallation({ target: root, mode: 'update' });
+  assert.equal(applyPlan(migration).changed, true);
+  assert.equal(existsSync(join(root, oldRoot)), false);
+  assert.match(git(root, 'ls-files', '--stage', '-z'), /\.pbai4devs\/estado\/configuracao\/ESTADO\.md\0/);
+  const next = planInstallation({ target: root, mode: 'update' });
+  assert.equal(next.canApply, true);
+  assert.deepEqual(next.changes, []);
+  assert.deepEqual(read(root, `${newRoot}/configuracao/ESTADO.md`), f.config);
+  assert.deepEqual(read(root, `${newRoot}/outros/minhas-notas.txt`), f.custom);
+  assert.deepEqual(readFileSync(join(root, '.git/index')), index);
+  assert.deepEqual(readFileSync(join(root, '.git/config')), config);
 });
 
 test('conflito entre pastas legada e atual não substitui dados nem altera o índice, mesmo com force', t => {
@@ -386,24 +407,93 @@ test('alteração concorrente em arquivo legado invalida o plano sem substituí-
   assert.equal(git(root, 'ls-files', '--stage', '-z'), f.index);
 });
 
-test('falha durante aplicação reverte arquivos migrados e mantém índice e ignore', t => {
-  const f = fixture(t), { root } = f;
-  const manifest = read(root, `${oldRoot}/agentdevkit.json`);
-  const plan = planInstallation({ target: root, mode: 'update' });
-  assert.equal(plan.canApply, true, JSON.stringify(plan.conflicts));
-  assert.ok(plan.changes.some(change => change.path.startsWith(`${newRoot}/`)));
-  const failure = new Error('injected migration write failure');
-  plan.changes.push({ path: 'injected-failure.txt', action: 'create', beforeHash: null,
-    get content() { throw failure; } });
-  assert.throws(() => applyPlan(plan), error => error === failure);
-  assert.deepEqual(read(root, `${oldRoot}/agentdevkit.json`), manifest);
-  assert.deepEqual(read(root, `${oldRoot}/configuracao/ESTADO.md`), f.config);
-  assert.deepEqual(read(root, `${oldRoot}/outros/minhas-notas.txt`), f.custom);
-  assert.deepEqual(read(root, `${oldRoot}/derived.json`), f.derived);
-  assert.equal(existsSync(join(root, `${newRoot}/agentdevkit.json`)), false);
-  assert.deepEqual(read(root, '.gitignore'), f.ignore);
-  assert.equal(git(root, 'ls-files', '--stage', '-z'), f.index);
-});
+function migrationState(root) {
+  const snapshot = {};
+  function visit(path) {
+    const location = join(root, path);
+    const entry = fs.lstatSync(location, { bigint: true });
+    const { dev, ino, mode, mtimeNs, ctimeNs } = entry;
+    snapshot[path] = { dev, ino, mode, mtimeNs, ctimeNs };
+    if (entry.isDirectory()) {
+      for (const name of fs.readdirSync(location).sort()) visit(`${path}/${name}`);
+    } else {
+      assert.equal(entry.isFile(), true, path);
+      snapshot[path].bytes = readFileSync(location);
+    }
+  }
+  for (const path of [oldRoot, newRoot]) if (existsSync(join(root, path))) visit(path);
+  return snapshot;
+}
+
+for (const [moment, removeFirst, concurrent] of [
+  ['antes da primeira remoção', false, false],
+  ['depois da remoção do estado legado', true, false],
+  ['depois da remoção com recriação humana', true, true],
+]) {
+  test(`falha ${moment} preserva a migração parcial e a cópia de recuperação`, { timeout: 120000 }, t => {
+    const f = fixture(t), { root } = f, oldManifest = `${oldRoot}/agentdevkit.json`;
+    const original = migrationState(root);
+    const preserved = ['.git/index', '.git/config', '.git/info/exclude', '.gitignore', 'AGENTS.md', 'README.md'];
+    const preservedBytes = preserved.map(path => read(root, path));
+    const plan = planInstallation({ target: root, mode: 'update' });
+    assert.equal(plan.canApply, true, JSON.stringify(plan.conflicts));
+    const legacy = plan.changes.find(change => change.action === 'remove'
+      && (removeFirst ? change.path === oldManifest : change.path.startsWith(oldRoot + '/')));
+    assert.ok(legacy);
+    const location = join(root, legacy.path);
+    const remove = fs.rmSync, human = Buffer.from('Estado humano concorrente.\n');
+    const failure = Object.assign(new Error('falha sintética de remoção'), { code: 'EIO' });
+    let atFailure;
+    t.mock.method(fs, 'rmSync', (path, ...args) => {
+      if (!atFailure && path === location) {
+        if (removeFirst) remove(path, ...args);
+        if (concurrent) writeFileSync(path, human, { flag: 'wx' });
+        atFailure = migrationState(root);
+        throw failure;
+      }
+      return remove(path, ...args);
+    });
+    syncBuiltinESMExports();
+    try { assert.throws(() => applyPlan(plan), error => error === failure && error.code === 'EIO'); }
+    finally { t.mock.restoreAll(); syncBuiltinESMExports(); }
+    assert.ok(atFailure, 'o erro deve ser injetado na remoção legada');
+
+    assert.deepEqual(migrationState(root), atFailure);
+    assert.deepEqual(read(root, `${newRoot}/configuracao/ESTADO.md`), f.config);
+    assert.deepEqual(read(root, `${newRoot}/outros/minhas-notas.txt`), f.custom);
+    assert.deepEqual(read(root, `${newRoot}/derived.json`), f.derived);
+    if (concurrent) assert.deepEqual(readFileSync(location), human);
+    else if (removeFirst) assert.equal(existsSync(location), false);
+    else {
+      for (const path of Object.keys(original)) assert.deepEqual(atFailure[path], original[path], path);
+    }
+    const pending = inspectProjectRecovery(root);
+    assert.equal(pending.status, 'pending');
+    assert.equal(failure.recovery.id, pending.id);
+    const diagnostics = collectErrorDiagnostics(failure);
+    assert.equal(diagnostics.possiblePartial, true);
+    assert.ok(diagnostics.preservedPaths.includes(legacy.path));
+    assert.ok(diagnostics.preservedPaths.includes(pending.backup));
+    verifyRecoveryBackup(pending.backup, pending.backupManifest);
+    const backup = JSON.parse(read(pending.backup, 'manifest.json'));
+    for (const [path, { bytes, mode }] of Object.entries(original)) {
+      if (bytes === undefined) continue;
+      const entry = backup.entries.find(candidate => candidate.path === path);
+      assert.equal(entry?.action, 'remove', path);
+      assert.equal(entry.mode, Number(mode & 0o777n), path);
+      assert.deepEqual(read(pending.backup, `blobs/${entry.blob}`), bytes, path);
+    }
+
+    assert.throws(() => applyPlan(plan), { code: 'E_RECOVERY_PENDING' });
+    assert.deepEqual(migrationState(root), atFailure);
+    const resolved = cli(root, ['recovery', 'resolve', String(pending.generation), pending.id]);
+    assert.equal(resolved.recovery.terminal, 'resolved');
+    assert.deepEqual(migrationState(root), atFailure);
+    assert.deepEqual(preserved.map(path => read(root, path)), preservedBytes);
+    assert.equal(git(root, 'ls-files', '--stage', '-z'), f.index);
+    verifyRecoveryBackup(pending.backup, pending.backupManifest);
+  });
+}
 
 
 test('alteração concorrente na cópia migrada impede remoção da origem', t => {

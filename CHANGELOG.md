@@ -4,6 +4,27 @@ description: Alterações verificáveis por versão do AgentDevKit.
 
 # Changelog
 
+## Não lançado
+
+- Registra operações de instalação e sync em um diário local. Após uma falha,
+  preserva o estado parcial, indica a cópia anterior e exige revisão para
+  retomar as alterações.
+- Prepara substituições no estágio privado da operação e verifica se o volume
+  permite publicar os arquivos. As verificações de metadados incluem os
+  atributos estendidos no Linux e as permissões de arquivos no Windows.
+- A revisão de segurança prioriza as correções pela exposição e pelo impacto,
+  cita a evidência de cada achado e registra verificações pendentes.
+- Confere os blobs staged do arquivo e dos atributos Git antes de aceitar uma
+  referência gerenciada que difere apenas por CRLF; não executa filtros locais.
+- Corrige a identificação de projetos sem Git quando as mensagens locais do
+  Git estão traduzidas; erros e interrupções continuam bloqueando a operação.
+- Preserva comandos Gemini existentes com bloco sem propriedade comprovada e
+  permite instalar os demais recursos sem adotar esse arquivo.
+- Evita repetir a referência quando um prompt Gemini existente corresponde
+  integralmente ao gerado, preservando o arquivo sem reivindicar propriedade.
+- Mantém `{{args}}` coerente entre a CLI e o sync direto em comandos Gemini
+  compartilhados, sem duplicar o marcador presente no texto humano.
+
 ## 0.0.30 — 2026-11-14
 
 - Melhora a detecção de Node e npm com preloads que escrevem na saída, sem

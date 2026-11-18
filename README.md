@@ -32,6 +32,9 @@ Linux. Na pasta do seu projeto, instale pelo **npm público**, sem login:
 npx @pathbit/agentdevkit init
 ```
 
+Para pnpm, Yarn ou Bun, veja as alternativas no
+[guia de instalação](docs/guides/installation.md).
+
 Ou use **GitHub Packages**, após [autenticar no GitHub][github-install]:
 
 ```console
@@ -83,7 +86,8 @@ npm test
 npm run examples
 ```
 
-Os exemplos aparecem em `examples/generated/`. Para testar todos os cenários,
+Os exemplos ficam em uma pasta temporária fora de Git, informada pelo comando.
+Para testar todos os cenários,
 use `npm run test:examples`; para verificar o pacote, `npm run verify`.
 O [guia de desenvolvimento](docs/maintainers/development.md) explica a árvore
 e os comandos.

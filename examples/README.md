@@ -4,6 +4,87 @@ description: Exemplos locais dos agentes e dos estágios de um projeto.
 
 # Exemplos
 
+## Instalação em projetos sintéticos
+
+Estas receitas usam Git, Node.js 24+ e um tarball local criado da cópia atual do
+AgentDevKit. O pacote aceita Node.js 18+; com Node 18–23, o launcher pode precisar
+preparar Node 24 antes da execução. Para este exemplo offline, use Node 24+; veja
+os [pré-requisitos](../docs/guides/prerequisites.md).
+
+Use diretórios temporários fora de qualquer repositório Git. As receitas mostram
+a instalação e a consulta ao próximo passo, sem simular aprovação de produto; não
+as execute em um projeto real. Use um shell POSIX. As receitas foram verificadas
+no macOS; a execução no Windows com Git Bash ainda não foi validada.
+
+Na raiz do AgentDevKit, crie uma pasta temporária para o pacote e use o caminho
+impresso no comando seguinte:
+
+```sh
+node -e "const f=require('node:fs'),o=require('node:os'),p=require('node:path');console.log(f.mkdtempSync(p.join(o.tmpdir(),'adk-pacote-')))"
+npm pack --offline --ignore-scripts --pack-destination "<pasta-do-pacote>"
+```
+
+Substitua `<pacote-local.tgz>` abaixo pelo caminho absoluto do arquivo gerado.
+O tarball pode conter mudanças locais ainda não publicadas; estas receitas não
+comprovam o comportamento da versão publicada. O modo offline limita o npm,
+mas não impede acesso à rede por outros processos. Para a instalação pública,
+consulte o [guia de instalação](../docs/guides/installation.md).
+
+### Projeto novo
+
+Crie outra pasta temporária com o primeiro comando e entre no caminho impresso.
+Confirme que ela está fora de qualquer repositório Git antes de inicializá-la:
+
+```sh
+node -e "const f=require('node:fs'),o=require('node:os'),p=require('node:path');console.log(f.mkdtempSync(p.join(o.tmpdir(),'adk-novo-')))"
+cd "<pasta-do-projeto-novo>"
+git init
+npm exec --offline --yes --package "<pacote-local.tgz>" -- \
+  agentdevkit init --agents codex,claude --lang pt --yes
+npm exec --offline --yes --package "<pacote-local.tgz>" -- \
+  agentdevkit next --intent product --lang pt --json
+```
+
+Consulte a skill indicada no campo `next` e responda às perguntas para preparar
+o projeto e definir o produto. A instalação não cria PRD nem aprova decisões.
+
+### Projeto existente
+
+Crie outra pasta temporária, confirme que está fora de qualquer repositório Git,
+entre nela e gere apenas os arquivos fictícios:
+
+```sh
+node -e "const f=require('node:fs'),o=require('node:os'),p=require('node:path');console.log(f.mkdtempSync(p.join(o.tmpdir(),'adk-existente-')))"
+cd "<pasta-do-projeto-existente>"
+git init
+node -e "const f=require('node:fs');\
+f.mkdirSync('.claude');\
+f.writeFileSync('AGENTS.md',\
+'# Instruções existentes\n\nRegra sintética preservada.\n');\
+f.writeFileSync('.claude/settings.json',\
+JSON.stringify({env:{EXEMPLO:'local'}},null,2)+'\n');\
+f.writeFileSync('.gitignore','cache-do-projeto/\n');\
+f.writeFileSync('exemplo.txt','conteúdo preparado\n')"
+git add -- exemplo.txt
+git diff --cached -- exemplo.txt
+npm exec --offline --yes --package "<pacote-local.tgz>" -- \
+  agentdevkit init --agents codex,claude --lang pt --yes
+npm exec --offline --yes --package "<pacote-local.tgz>" -- \
+  agentdevkit next --intent run --lang pt --json
+git diff --cached -- exemplo.txt
+```
+
+Confira `AGENTS.md`, `.claude/settings.json` e `.gitignore` na pasta
+sintética e compare as duas saídas de `git diff --cached`. A orientação humana
+deve continuar presente, mesmo se o kit acrescentar um bloco ao `AGENTS.md`;
+as outras configurações e o conteúdo preparado devem ser preservados. Use a
+skill indicada em `next` para a etapa pendente e, ao preparar a execução de um
+projeto existente, siga `preparar-dev`.
+
+Os comandos geram pastas novas e não removem exemplos anteriores. O código de
+aplicações e os dados desses projetos são fictícios e não fazem parte do Git do
+AgentDevKit.
+
 ## Dois projetos do zero, com três specs
 
 Os exemplos criam uma API HTTP de tarefas em memória e uma calculadora de
@@ -21,9 +102,19 @@ node tests/example-workflows.mjs
 O comando instala a versão pública do `@pathbit/agentdevkit` indicada no
 `package.json` deste repositório, com os
 clientes Codex, Claude e Copilot em dois projetos Git novos. Cria uma pasta
-exclusiva em `examples/generated/workflows-*` e informa o caminho do relatório.
+exclusiva no diretório temporário do sistema, fora de Git, e informa o caminho
+do relatório.
 Nenhuma pasta anterior é apagada. Para testar outra versão publicada, passe o
 número da versão como argumento.
+
+Para validar um tarball local sem consultar o registry npm, use
+`node tests/example-workflows.mjs 0.0.30 --tarball /caminho/pacote.tgz`.
+Informe a versão exata do tarball; sem versão, usa a de `package.json`.
+O modo offline do npm não bloqueia rede de outros processos. `--output` aceita
+uma pasta nova com pai existente, fora de Git ou em `tmp/`, `temp/`,
+`.agent-tests/` e `examples/generated/` da origem, desde que ignorada e sem
+arquivos staged. `git add -f` ou mudanças concorrentes nas regras de ignore
+podem versionar os exemplos.
 
 1. Abra `REPORT.json` na pasta informada e escolha `api-tarefas` ou
    `cli-calculadora`.
@@ -36,16 +127,20 @@ número da versão como argumento.
 
 A API é exercitada em uma porta local temporária pelos testes; ela não persiste
 dados e não é um serviço pronto para produção. O código do gerador é versionado;
-projetos, caches e relatórios gerados são ignorados pelo Git do AgentDevKit.
+por padrão, projetos, caches e relatórios ficam fora do checkout do AgentDevKit.
 
 ### Reproduzir manualmente com um agente
 
-Na raiz do AgentDevKit, crie uma pasta ainda inexistente e instale o kit nela:
+Crie uma pasta temporária fora de qualquer repositório Git e entre nela. O comando
+abaixo imprime um caminho novo; use `cd` com o caminho retornado:
 
 ```sh
-mkdir -p examples/generated
-mkdir examples/generated/minha-api
-cd examples/generated/minha-api
+node -e "const fs=require('node:fs'),os=require('node:os'),p=require('node:path');console.log(fs.mkdtempSync(p.join(os.tmpdir(),'agentdevkit-manual-')))"
+```
+
+Confirme que a pasta escolhida não pertence a um repositório Git e execute:
+
+```sh
 git init
 npm init -y
 npx --yes @pathbit/agentdevkit init --agents codex,claude,copilot --lang pt --yes
@@ -91,7 +186,7 @@ npm run test:examples
 ```
 
 O primeiro comando prepara oito projetos; o segundo prepara e testa outros
-oito em uma pasta nova. Cada comando informa o caminho da execução.
+oito em uma pasta temporária nova fora de Git. Cada comando informa o caminho.
 Para executar apenas um cenário:
 
 ```sh
@@ -101,21 +196,17 @@ npm run test:examples -- --case somente-agentes
 As cópias mostram os clientes selecionados na origem e seus apontamentos:
 
 ```text
-examples/
-├── README.md                    guia versionado
-├── .gitignore                   ignora generated/
-└── generated/                   saídas locais
-    └── maturity-<id>/           uma execução independente
-        ├── README.md            índice dos cenários
-        ├── REPORT.json          prepared, passed ou failed
-        └── somente-agentes/
-            ├── .pbai4devs/      recursos compartilhados
-            ├── .claude/         apontamentos do Claude
-            ├── .codex/          apontamentos do Codex
-            ├── .cursor/         apontamentos do Cursor
-            ├── .github/         apontamentos do Copilot
-            ├── .vscode/         configuração do editor
-            └── .opencode/       apontamentos do OpenCode
+<pasta temporária>/agentdevkit-maturity-<id>/
+├── README.md                    índice dos cenários
+├── REPORT.json                  prepared, passed ou failed
+└── somente-agentes/
+    ├── .pbai4devs/              recursos compartilhados
+    ├── .claude/                 apontamentos do Claude
+    ├── .codex/                  apontamentos do Codex
+    ├── .cursor/                 apontamentos do Cursor
+    ├── .github/                 apontamentos do Copilot
+    ├── .vscode/                 configuração do editor
+    └── .opencode/               apontamentos do OpenCode
 ```
 
 Com todos os clientes selecionados, também aparecem `.agents`, `.agent`,

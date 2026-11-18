@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { requireNode, isMain } from '../lib/runtime.mjs';
 import { stateDirectory } from '../lib/state-path.mjs';
+import { parseProjectMetadata } from '../lib/project-metadata.mjs';
 
 const repository = fs.realpathSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..'));
 const defaultAgents = ['.agents', '.agent', '.gemini', '.claude', '.codex', '.cursor', '.github', '.opencode'];
@@ -49,13 +50,15 @@ function pathIdentity(root, file = '') {
       if (part) current = path.join(current, part);
       const item = fs.lstatSync(current);
       if (item.isSymbolicLink() || (index < parts.length && !item.isDirectory())) return null;
-      result.push({ dev: item.dev, ino: item.ino, mode: item.mode, size: item.size, directory: item.isDirectory() });
+      result.push({ dev: item.dev, ino: item.ino, mode: item.mode, size: item.size, mtimeMs: item.mtimeMs, ctimeMs: item.ctimeMs, directory: item.isDirectory() });
     }
     return result;
   } catch { return null; }
 }
 const sameIdentity = (left, right) => left && right && left.length === right.length
   && left.every((item, index) => item.dev === right[index].dev && item.ino === right[index].ino && item.mode === right[index].mode);
+const sameVersion = (left, right) => sameIdentity(left, right) && left.at(-1).size === right.at(-1).size
+  && left.at(-1).mtimeMs === right.at(-1).mtimeMs && left.at(-1).ctimeMs === right.at(-1).ctimeMs;
 
 function boundedEntries(folder, limit, verify = () => true) {
   const handle = fs.opendirSync(folder), entries = [];
@@ -70,22 +73,25 @@ function boundedEntries(folder, limit, verify = () => true) {
   } finally { handle.closeSync(); }
 }
 
-function stableDirectory(root, directory, limit) {
+function stableDirectory(root, directory, limit, checkContents = false) {
   const identity = pathIdentity(root, directory);
   if (!identity?.at(-1).directory) return { entries: [], truncated: true, changed: true, verify: () => false };
-  const verify = () => sameIdentity(identity, pathIdentity(root, directory));
+  const verify = () => {
+    const current = pathIdentity(root, directory);
+    return checkContents ? sameVersion(identity, current) : sameIdentity(identity, current);
+  };
   return { ...boundedEntries(path.join(root, directory), limit, verify), verify };
 }
 
-function metadata(root, file) {
-  const empty = { fields: {}, documents: {}, text: null };
+function metadata(root, file, maxBytes = 1024 * 1024) {
+  const empty = { fields: {}, documents: {}, text: null, bytes: 0 };
   const identity = () => pathIdentity(root, file);
-  let descriptor, text;
+  let descriptor, text, bytes, verifiedIdentity;
   try {
     const name = path.join(root, file), ancestors = identity();
     if (!ancestors || !sameIdentity(ancestors, identity())) return empty;
     const before = ancestors.at(-1);
-    if (before.size > 1024 * 1024) return empty;
+    if (before.size > maxBytes) return empty;
     descriptor = fs.openSync(name, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0));
     const opened = fs.fstatSync(descriptor);
     if (!opened.isFile() || opened.dev !== before.dev || opened.ino !== before.ino || opened.size !== before.size || !sameIdentity(ancestors, identity())) return empty;
@@ -96,46 +102,17 @@ function metadata(root, file) {
       length += count;
     }
     const after = fs.fstatSync(descriptor);
-    if (length !== opened.size || after.size !== opened.size || after.mtimeMs !== opened.mtimeMs || after.ctimeMs !== opened.ctimeMs || !sameIdentity(ancestors, identity())) return empty;
-    text = buffer.subarray(0, length).toString('utf8').replaceAll('\r', '');
+    verifiedIdentity = identity();
+    if (length !== opened.size || after.size !== opened.size || after.mtimeMs !== opened.mtimeMs || after.ctimeMs !== opened.ctimeMs || !sameVersion(ancestors, verifiedIdentity)) return empty;
+    bytes = length;
+    text = buffer.subarray(0, length).toString('utf8').replaceAll('\r\n', '\n');
   } catch { return empty; }
   finally { if (descriptor !== undefined) fs.closeSync(descriptor); }
-  const header = text.match(/^---\n([\s\S]*?)\n---(?:\n|$)/)?.[1];
-  const result = { fields: {}, documents: {}, text }; if (!header) return result;
-  let documents = false, invalidDocuments = false;
-  const seen = new Set(), duplicates = new Set(), seenDocuments = new Set(), duplicateDocuments = new Set();
-  const scalar = raw => {
-    const value = raw.trim();
-    if (!value || ['null', '~'].includes(value)) return null;
-    if (value.startsWith('"')) { try { return JSON.parse(value); } catch { return null; } }
-    return value.startsWith("'") && value.endsWith("'") ? value.slice(1, -1).replaceAll("''", "'") : value;
-  };
-  for (const line of header.split('\n')) {
-    if (!line.trim() || /^\s*#/.test(line)) continue;
-    const top = line.match(/^(?:([\p{L}_][\p{L}\p{N}_.-]*)|"([^"\n]+)"|'([^'\n]+)'):\s*(.*)$/u);
-    if (top) {
-      const key = top[1] || top[2] || top[3];
-      if (key.includes('\\')) return { ...empty, text };
-      if (seen.has(key)) duplicates.add(key);
-      seen.add(key); result.fields[key] = duplicates.has(key) ? null : scalar(top[4]);
-      if (key === 'documentos' && duplicates.has(key)) { invalidDocuments = true; result.documents = {}; }
-      documents = key === 'documentos' && !invalidDocuments && (!top[4].trim() || ['null', '~'].includes(top[4].trim()));
-    } else if (!/^\s/.test(line)) return { ...empty, text };
-    else if (documents) {
-      const item = line.match(/^  (?:([\p{L}_][\p{L}\p{N}_.-]*)|"([^"\n]+)"|'([^'\n]+)'):\s*(.*)$/u);
-      if (item) {
-        const key = item[1] || item[2] || item[3];
-        if (key.includes('\\')) { invalidDocuments = true; result.documents = {}; documents = false; continue; }
-        if (seenDocuments.has(key)) duplicateDocuments.add(key);
-        seenDocuments.add(key); result.documents[key] = duplicateDocuments.has(key) ? null : scalar(item[4]);
-      } else if (/^  \S/.test(line)) { invalidDocuments = true; result.documents = {}; documents = false; }
-    }
-  }
-  return result;
+  return { ...parseProjectMetadata(text), text, bytes, identity: verifiedIdentity };
 }
 
-// The configured specs directory contains <slug>/SPEC.md. Refuse ambiguous
-// layouts instead of guessing which increment or declared status to use.
+// The configured specs directory contains <slug>/SPEC.md. Inventory valid
+// entries without selecting an increment; refuse incomplete or unsafe layouts.
 function configuredSpecs(root, directory) {
   const result = { path: directory, present: false, complete: false, items: [] };
   if (!directory) return result;
@@ -152,11 +129,13 @@ function configuredSpecs(root, directory) {
   }
   result.present = true;
   const incomplete = () => { result.items = []; return result; };
-  let scanned = 0;
+  let scanned = 0, bytes = 0;
+  const maxBytes = 16 * 1024 * 1024, verifiers = [];
   function entriesAt(folder) {
     const relative = normalize(path.relative(root, folder));
-    const result = stableDirectory(root, relative, Math.min(200, 500 - scanned));
+    const result = stableDirectory(root, relative, Math.min(200, 500 - scanned), true);
     scanned += result.entries.length;
+    verifiers.push(result.verify);
     return result.truncated ? null : result.entries;
   }
   try {
@@ -174,12 +153,14 @@ function configuredSpecs(root, directory) {
       if (names.length !== 1 || !names[0].isFile() || names[0].isSymbolicLink()) return incomplete();
       const file = `${folder}/${names[0].name}`;
       if (!present(root, file, false)) return incomplete();
-      const document = metadata(root, file);
+      const document = metadata(root, file, Math.min(1024 * 1024, maxBytes - bytes));
       if (document.text === null) return incomplete();
+      bytes += document.bytes;
+      verifiers.push(() => sameVersion(document.identity, pathIdentity(root, file)));
       result.items.push({ path: file, status: ['rascunho', 'pendente', 'aprovado'].includes(document.fields.status) ? document.fields.status : null });
-      if (result.items.length > 1) return incomplete();
     }
-    if (!present(root, directory, true)) return incomplete();
+    if (!present(root, directory, true) || !verifiers.every(verify => verify())) return incomplete();
+    result.items.sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
     result.complete = true;
   } catch { return incomplete(); }
   return result;

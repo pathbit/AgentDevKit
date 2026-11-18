@@ -278,15 +278,21 @@ export function prepareReview({ root = projectRoot, id, execution = new Date().t
   return { file, report };
 }
 
+function readReviewJson(file, label) {
+  const text = readFileSync(file, 'utf8');
+  try { return JSON.parse(text); }
+  catch { throw new SyntaxError(`JSON invalido: ${label}.`); }
+}
+
 function validateReview(file, { root = projectRoot, requireSeal = true } = {}) {
   requireNode(); root = repository(root);
   const reportPath = pathInRoot(root, file);
-  const report = JSON.parse(readFileSync(join(root, reportPath), 'utf8'));
+  const report = readReviewJson(join(root, reportPath), 'relatorio de revisao');
   if (report.version !== 1 || !slug.test(report.reference || '') || !slug.test(report.execution || '')) fail('Cabecalho de revisao invalido.');
   const prefix = `.agent-tests/${report.reference}/${report.execution}`;
   artifact(root, reportPath, prefix, true);
   const baselineFile = artifact(root, `${prefix}/baseline.json`, prefix, true);
-  const baseline = JSON.parse(readFileSync(join(root, baselineFile), 'utf8'));
+  const baseline = readReviewJson(join(root, baselineFile), 'baseline de revisao');
   if (report.baseline?.file !== baselineFile || report.baseline.sha256 !== digest(join(root, baselineFile)) ||
       baseline.reference !== report.reference || baseline.execution !== report.execution || baseline.spec !== report.spec ||
       JSON.stringify(baseline.snapshot) !== JSON.stringify(report.snapshot)) fail('Baseline gerada diverge do relatorio; preserve os metadados e refaca o preparo.');
@@ -330,10 +336,10 @@ function validateReview(file, { root = projectRoot, requireSeal = true } = {}) {
   if (requireSeal) {
     if (!existsSync(join(root, prefix, 'seal.json'))) fail('Revisao nao selada; conclua a revisao independente e execute seal.');
     const sealPath = artifact(root, `${prefix}/seal.json`, prefix, true);
-    const recorded = JSON.parse(readFileSync(join(root, sealPath), 'utf8'));
+    const recorded = readReviewJson(join(root, sealPath), 'selo de revisao');
     if (JSON.stringify(recorded) !== JSON.stringify(seal)) fail('Relatorio, baseline ou evidencia alterados apos selar a revisao.');
   }
-  return { root, prefix, seal, snapshot: state, result: { status: 'passed', report: reportPath, criteria: ids.size, documents: docs.size } };
+  return { root, prefix, seal, snapshot: state, result: { status: 'passed', reviewVerification: 'not-verified', report: reportPath, criteria: ids.size, documents: docs.size } };
 }
 
 export function checkReview(file, { root = projectRoot } = {}) { return validateReview(file, { root, requireSeal: true }).result; }
@@ -378,7 +384,7 @@ export function checkCommit(reports, { root = projectRoot } = {}) {
   }
   for (const file of reports) validateReview(file, { root, requireSeal: true });
   if (head(root) !== baselineHead || staged() !== before) fail('HEAD ou indice preparado mudou durante a verificacao.');
-  return { status: 'passed', head: baselineHead, reports: reports.length, staged: paths.size, stagedSha256: createHash('sha256').update(before).digest('hex') };
+  return { status: 'passed', reviewVerification: 'not-verified', head: baselineHead, reports: reports.length, staged: paths.size, stagedSha256: createHash('sha256').update(before).digest('hex') };
 }
 
 // This deliberately permits only a fast-forward and regular non-executable
@@ -446,7 +452,7 @@ export function checkMerge(reports, destination, { root = projectRoot } = {}) {
   if (git(root, ['symbolic-ref', '--quiet', 'HEAD']).stdout.trim() !== sourceRef || resolveCommit(sourceRef) !== source || resolveCommit(destination) !== target || head(root) !== source) fail('Origem ou destino mudou durante a verificacao.');
   for (const file of reports) validateReview(file, { root, requireSeal: true });
   if (git(root, ['symbolic-ref', '--quiet', 'HEAD']).stdout.trim() !== sourceRef || resolveCommit(sourceRef) !== source || resolveCommit(destination) !== target || head(root) !== source) fail('Origem ou destino mudou durante a verificacao.');
-  return { status: 'passed', sourceRef, source, destination, target, changes: changes.size, reports: reports.length, mode: 'fast-forward' };
+  return { status: 'passed', reviewVerification: 'not-verified', sourceRef, source, destination, target, changes: changes.size, reports: reports.length, mode: 'fast-forward' };
 }
 
 export function sealReview(file, options) {

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto';
-import { chmodSync, copyFileSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
@@ -104,6 +104,59 @@ function validatePaths(paths) {
   if (paths.some(path => /(^|\/)(?:\.git|\.agent-tests|node_modules|\.local|\.cache|tmp|temp)(\/|$)/i.test(path) || /(^|\/)\.playwright/i.test(path) || /^(?:tests|scripts\/release|examples)\//.test(path))) throw new Error('Pacote inclui artefatos locais ou arquivos exclusivos de desenvolvimento.');
 }
 
+// These checks cover static paths, not concurrent replacement of an ancestor.
+function releaseParent(root, canonical) {
+  let current=root;
+  for(const name of ['.agent-tests','release']) {
+    current=join(current,name);
+    let info;
+    try {info=lstatSync(current)} catch(error) {
+      if(error.code!=='ENOENT')throw error;
+      mkdirSync(current);info=lstatSync(current);
+    }
+    if(info.isSymbolicLink()||!info.isDirectory())throw new Error('Diretório de release inválido: '+current);
+    const within=relative(canonical,realpathSync(current));
+    if(within==='..'||within.startsWith('..'+sep)||isAbsolute(within))throw new Error('Diretório de release fora do projeto: '+current);
+  }
+  return current;
+}
+
+function cleanupPrivate(path, primary) {
+  try {rmSync(path,{recursive:true,force:true})}
+  catch(cleanup) {
+    const code=typeof cleanup.code==='string'&&/^[A-Z][A-Z0-9_]{0,31}$/.test(cleanup.code)?' ('+cleanup.code+')':'';
+    const e=new AggregateError(primary?[primary,cleanup]:[cleanup],'Falha ao limpar área temporária'+code+': '+path+(primary?'; falha original: '+primary.message:''));
+    e.cause=primary||cleanup;e.cleanupFailure=true;e.preservedPaths=[path];throw e;
+  }
+  if(primary)throw primary;
+}
+
+// Existing output is read-only. Matching bytes do not establish ownership.
+function sameRelease(existing, generated) {
+  const a=lstatSync(existing), b=lstatSync(generated);
+  if (!a.isDirectory() || a.isSymbolicLink() || !b.isDirectory() || b.isSymbolicLink()) return false;
+  const left=readdirSync(existing).sort(), right=readdirSync(generated).sort();
+  if(JSON.stringify(left)!==JSON.stringify(right))return false;
+  for(const name of left) {
+    const a=join(existing,name), b=join(generated,name), x=lstatSync(a), y=lstatSync(b);
+    if(!x.isFile()||x.isSymbolicLink()||!y.isFile()||y.isSymbolicLink()||(x.mode&0o7777)!==(y.mode&0o7777))return false;
+    if((name!=='package-manifest.json'&&x.size!==y.size)||(name==='package-manifest.json'&&x.size>y.size+1024))return false;
+    const old=readFileSync(a), fresh=readFileSync(b);
+    if(old.equals(fresh))continue;
+    if(name!=='package-manifest.json')return false;
+    let prev, current;try{prev=JSON.parse(old);current=JSON.parse(fresh)}catch{return false}
+    const v=prev.verification;
+    if(!v||typeof v!=='object'||Array.isArray(v)
+      ||JSON.stringify(Object.keys(v).sort())!==JSON.stringify(['checkedAt','profile','sourceCommit','status'])
+      ||v.status!=='passed'||v.profile!=='full'||v.sourceCommit!==current.sourceCommit||typeof v.checkedAt!=='string')return false;
+    try { if(new Date(v.checkedAt).toISOString()!==v.checkedAt)return false; } catch { return false; }
+    // Exact encoding rejects duplicate keys, edits, formatting changes and unknown fields.
+    current.verification=v;
+    if(!old.equals(Buffer.from(JSON.stringify(current,null,2)+'\n')))return false;
+  }
+  return true;
+}
+
 export function buildRelease(root = releaseRoot, { env = process.env } = {}) {
   if (Number(process.versions.node.split('.')[0]) < 24) throw new Error('Use Node.js 24+.');
   root = resolve(root);
@@ -131,9 +184,12 @@ export function buildRelease(root = releaseRoot, { env = process.env } = {}) {
   const originalPaths = listed.files.map(item => item.path);
   validatePaths(originalPaths);
   const canonical = realpathSync(root);
-  const stage = mkdtempSync(join(tmpdir(), 'agentdevkit-package-'));
   let result;
-  const output = join(root, '.agent-tests', 'release', pkg.version);
+  const finalOutput = join(releaseParent(root, canonical), pkg.version);
+  const output = mkdtempSync(join(dirname(finalOutput), '.release-staging-'));
+  try {
+  const stage = mkdtempSync(join(tmpdir(), 'agentdevkit-package-'));
+  let stageError;
   try {
     for (const path of originalPaths) {
       const source = join(root, path), destination = join(stage, path);
@@ -154,7 +210,8 @@ export function buildRelease(root = releaseRoot, { env = process.env } = {}) {
     result = pack(stage, ['--pack-destination', output]);
     validatePaths(result.files.map(item => item.path));
     if (JSON.stringify([...originalPaths].sort()) !== JSON.stringify(result.files.map(item => item.path).sort())) throw new Error('O inventário mudou durante o empacotamento.');
-  } finally { rmSync(stage, { recursive: true, force: true }); }
+  } catch(error) { stageError=error; }
+  cleanupPrivate(stage,stageError);
   const paths = result.files.map(item => item.path);
   const file = join(output, `agentdevkit-${pkg.version}.tgz`);
   const generated = join(output, basename(result.filename));
@@ -181,7 +238,17 @@ export function buildRelease(root = releaseRoot, { env = process.env } = {}) {
     },
   };
   writeFileSync(join(output, 'package-manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
-  return { version: pkg.version, file, sha256: digest, files: paths.length, directory: output };
+  let exists=true;
+  try { lstatSync(finalOutput); } catch(error) { if(error.code!=='ENOENT')throw error; exists=false; }
+  if(exists) {
+    if(!sameRelease(finalOutput,output))throw new Error('Saída anterior divergente: preservada.');
+    cleanupPrivate(output);
+  } else renameSync(output,finalOutput);
+  return { version: pkg.version, file:join(finalOutput,basename(file)), sha256:digest, files:paths.length, directory:finalOutput };
+  } catch(error) {
+    if(error.cleanupFailure) { if(!error.preservedPaths.includes(output))error.preservedPaths.push(output);error.message += '; área preservada: '+output;throw error; }
+    cleanupPrivate(output,error);
+  }
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

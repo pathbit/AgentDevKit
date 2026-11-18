@@ -12,7 +12,7 @@ Use [executar-script](../../skills/projeto/executar-script/SKILL.md), nesta orde
 `preparar-ferramentas check base`. O comando não instala nem corrige arquivos.
 Se os apontamentos divergirem, informe o caso [sincronizar](../sincronizar/COMMAND.md).
 Ao alterar catálogos, sincronização ou instalação, execute também
-`testar-maturidade run` e confira os cenários em `examples/generated/`.
+`testar-maturidade run` e confira os cenários na pasta temporária informada.
 
 Saída: passou, falhou ou não verificado por etapa, com evidências em
 `.agent-tests/`. Falhas, testes ignorados ou ferramentas ausentes não aprovam

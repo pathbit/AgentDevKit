@@ -6,7 +6,8 @@ description: Identifica ferramentas instaladas e executa scripts pelo interpreta
 # Executar script
 
 Com Node 18+ e npm, use o bootstrap para preparar Node 24+, diagnosticar e
-executar o script solicitado, nessa ordem:
+executar o script solicitado, nessa ordem. O mínimo 24 é do Node; verifique
+o npm separadamente e informe sua versão somente quando medida:
 
 ```sh
 node .pbai4devs/scripts/preparar-ferramentas/BOOTSTRAP.mjs --executar <script> [argumentos...]

@@ -1,5 +1,7 @@
+import '../.pbai4devs/scripts/lib/test-git-environment.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -7,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { applyPlan, planInstallation } from '../src/install.mjs';
+import { verifyRecoveryBackup } from '../.pbai4devs/scripts/lib/recovery-backup.mjs';
 import { stripManagedContent } from '../.pbai4devs/scripts/lib/managed-content.mjs';
 
 const project = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -50,7 +53,7 @@ test('consumidor recebe recursos sem código do gerador e preserva entrada human
   assert.ok(existsSync(join(root, '.pbai4devs/skills/projeto/configurar-projeto/SKILL.md')));
   assert.equal(Object.hasOwn(JSON.parse(read(root, statePath)).files, 'AGENTS.md'), false);
   assert.equal(spawnSync('git', ['-C', root, 'check-ignore', '-q', 'AGENTS.md']).status, 1);
-  assert.equal(spawnSync('git', ['-C', root, 'check-ignore', '-q', 'CLAUDE.md']).status, 0);
+  assert.equal(spawnSync('git', ['-C', root, 'check-ignore', '-q', 'CLAUDE.md']).status, 1);
 });
 
 test('init transporta licença canônica sem alterar licença humana e sync a preserva', t => {
@@ -72,7 +75,7 @@ test('init transporta licença canônica sem alterar licença humana e sync a pr
   assert.equal(spawnSync('git', ['-C', root, 'check-ignore', '--no-index', '-q', '.pbai4devs/LICENSE']).status, 1);
 });
 
-test('instalação em Git vazio ignora artefatos sem modificar README, licença ou evidência rastreada', t => {
+test('instalação em Git vazio preserva README, licença, índice e evidencia visibilidade', t => {
   const root = fixture(t), readme = '# Produto existente\n', license = 'Licença do produto\r\n';
   write(root, 'README.md', readme); write(root, 'LICENSE', license);
   write(root, '.agent-tests/human.txt', 'evidência própria\n');
@@ -82,7 +85,7 @@ test('instalação em Git vazio ignora artefatos sem modificar README, licença 
   cli(root, ['init', '--agents', 'claude']);
   const exclude = read(root, '.git/info/exclude');
   for (const path of ['.agent-tests/x', 'tmp/x', 'deep/TEMP/x', '.PlAyWrIgHt-McP/x', 'nested/Playwright-report/x', 'test-results/x', 'sub/TESTRESULTS/x']) {
-    assert.equal(git(root, 'check-ignore', '--no-index', path).trim(), path);
+    assert.equal(spawnSync('git', ['-C', root, 'check-ignore', '--no-index', path]).status, 1, path);
   }
   assert.equal(read(root, 'README.md'), readme); assert.equal(read(root, 'LICENSE'), license);
   assert.equal(git(root, 'ls-files', '.agent-tests/human.txt').trim(), '.agent-tests/human.txt');
@@ -90,20 +93,20 @@ test('instalação em Git vazio ignora artefatos sem modificar README, licença 
   assert.deepEqual(cli(root, ['sync', '--check'], 1).localIgnore.trackedOutputs, ['.agent-tests/human.txt']);
   assert.equal(cli(root, ['init', '--agents', 'claude']).changed, false);
   assert.equal(read(root, '.git/info/exclude'), exclude);
-  write(root, '.git/info/exclude', exclude.replace(/\n# Resultados e arquivos temporarios\n[\s\S]*?(?=# END AGENTDEVKIT LOCAL)/, '\n'));
-  assert.ok(cli(root, ['doctor'], 1).issues.some(issue => issue.code === 'local-ignore'));
+  assert.ok(cli(root, ['doctor'], 1).issues.some(issue => issue.code === 'tracked-local-output'));
   assert.equal(cli(root, ['sync', '--check'], 1).ok, false);
   cli(root, ['sync']);
   assert.equal(read(root, '.git/info/exclude'), exclude);
 });
 
-test('negação humana de artefatos impede init mesmo com force', t => {
+test('negação humana de artefatos é preservada mesmo com force', t => {
   const root = fixture(t), human = '!/.agent-tests/**\n'; write(root, '.gitignore', human);
   const exclude = read(root, '.git/info/exclude');
   for (const option of ['--dry-run', '--force']) {
-    const result = cli(root, ['init', '--agents', 'claude', option], 1);
-    assert.ok(result.conflicts.some(path => path.startsWith('.agent-tests/')));
-    assert.equal(existsSync(join(root, '.pbai4devs')), false);
+    const result = cli(root, ['init', '--agents', 'claude', option]);
+    assert.equal(result.ok, true);
+    assert.ok(result.localIgnore.pending.some(item => item.code === 'artifact-unprotected'));
+    assert.equal(existsSync(join(root, '.pbai4devs')), option !== '--dry-run');
     assert.equal(read(root, '.gitignore'), human); assert.equal(read(root, '.git/info/exclude'), exclude);
   }
 });
@@ -115,14 +118,14 @@ test('sem Git mantém ignore raiz, informa pendência e protege após sincroniza
   write(root, 'README.md', '# Meu produto\n'); write(root, 'LICENSE', 'Minha licença\n');
   const installed = cli(root, ['init', '--agents', 'claude']);
   assert.equal(installed.localIgnore.status, 'no-git');
-  assert.ok(installed.warnings.some(warning => /git init/.test(warning)));
+  assert.ok(installed.warnings.some(warning => /inicializar Git/.test(warning)));
   assert.equal(read(root, '.gitignore'), human);
   assert.equal(cli(root, ['doctor'], 1).ok, false);
   assert.equal(cli(root, ['sync', '--check'], 1).ok, false);
   git(root, 'init', '--quiet'); cli(root, ['sync']);
   assert.equal(read(root, '.gitignore'), human);
   for (const path of ['.agent-tests/x', 'nested/TmP/x', '.PLAYWRIGHT-MCP/x', 'sub/playwright-report/x', 'test-results/x']) {
-    assert.equal(git(root, 'check-ignore', '--no-index', path).trim(), path);
+    assert.equal(spawnSync('git', ['-C', root, 'check-ignore', '--no-index', path]).status, 1, path);
   }
   assert.equal(read(root, 'README.md'), '# Meu produto\n'); assert.equal(read(root, 'LICENSE'), 'Minha licença\n');
 });
@@ -218,7 +221,7 @@ test('migração atualiza somente bloco legado de uma entrada humana rastreada',
   assert.equal(spawnSync('git', ['-C', root, 'check-ignore', '--no-index', '-q', 'AGENTS.md']).status, 1);
 });
 
-test('mudança concorrente nas exclusões falha antes de alterar arquivos ou índice', t => {
+test('mudança concorrente nas exclusões é preservada sem alterar arquivos ou índice', t => {
   const root = fixture(t); cli(root, ['init', '--agents', 'claude']);
   const derived = '.claude/skills/configurar-projeto/SKILL.md';
   git(root, 'add', '-f', derived);
@@ -227,20 +230,20 @@ test('mudança concorrente nas exclusões falha antes de alterar arquivos ou ín
   const preview = cli(root, ['update', '--dry-run']);
   assert.deepEqual(preview.untrackedPaths, []);
   assert.equal(preview.localIgnore.status, 'git');
-  assert.deepEqual(preview.localIgnore.edits, [{ path: exclude, action: 'update' }]);
+  assert.deepEqual(preview.localIgnore.edits, []);
   const plan = planInstallation({ target: root, mode: 'update' });
   assert.equal(plan.changes.length, 0);
   const index = git(root, 'ls-files', '--stage', '-z');
   const state = read(root, statePath), content = read(root, derived);
   writeFileSync(exclude, '# concurrent human exclusion\n');
-  assert.throws(() => applyPlan(plan), /Exclusao alterada apos planejar/);
+  assert.doesNotThrow(() => applyPlan(plan));
   assert.equal(git(root, 'ls-files', '--stage', '-z'), index);
   assert.equal(read(root, statePath), state);
   assert.equal(read(root, derived), content);
   assert.equal(readFileSync(exclude, 'utf8'), '# concurrent human exclusion\n');
 });
 
-test('falha de escrita restaura arquivos e preserva entradas staged concorrentes', t => {
+test('falha de escrita preserva arquivos já publicados, backup e entradas staged concorrentes', t => {
   const root = fixture(t); cli(root, ['init', '--agents', 'claude']);
   const derived = '.claude/skills/configurar-projeto/SKILL.md';
   write(root, 'human.txt', 'human staged before operation\n');
@@ -249,25 +252,44 @@ test('falha de escrita restaura arquivos e preserva entradas staged concorrentes
   const plan = planInstallation({ target: root, mode: 'lang', language: 'en' });
   const snapshots = new Map(plan.changes.map(change => [change.path, existsSync(join(root, change.path)) ? read(root, change.path) : null]));
   assert.ok(plan.changes.length > 0);
+  const published = new Map();
   plan.changes.push({ path: 'fault.txt', action: 'create', beforeHash: null,
     get content() {
       assert.equal(git(root, 'ls-files', derived), `${derived}\n`);
       write(root, 'concurrent.txt', 'concurrent staged content\n');
       git(root, 'add', '-f', 'concurrent.txt');
+      for (const path of snapshots.keys()) {
+        const file = join(root, path);
+        published.set(path, existsSync(file) ? { bytes: readFileSync(file), identity: fs.lstatSync(file, { bigint: true }) } : null);
+      }
       throw new Error('injected write failure');
     },
   });
-  assert.throws(() => applyPlan(plan), /injected write failure/);
+  let failure;
+  assert.throws(() => applyPlan(plan), error => { failure = error; return /injected write failure/.test(error.message); });
+  assert.equal(failure.operationMayBePartial, true);
+  verifyRecoveryBackup(failure.recovery.backup, failure.recovery.backupManifest);
+  const { entries } = JSON.parse(readFileSync(join(failure.recovery.backup, 'manifest.json')));
+  const originals = new Map(entries.map(entry => [entry.path, entry]));
+  assert.equal(cli(root, ['recovery']).recovery.id, failure.recovery.id);
+  assert.equal(cli(root, ['update'], 1).error.code, 'E_RECOVERY_PENDING');
   for (const [path, content] of snapshots) {
-    if (content === null) assert.equal(existsSync(join(root, path)), false, path);
-    else assert.equal(read(root, path), content, path);
+    const entry = originals.get(path), observed = published.get(path), file = join(root, path);
+    if (content === null) assert.equal(entry.type, 'absent', path);
+    else assert.equal(readFileSync(join(failure.recovery.backup, 'blobs', entry.blob), 'utf8'), content, path);
+    if (observed === null) assert.equal(existsSync(file), false, path);
+    else {
+      const current = fs.lstatSync(file, { bigint: true });
+      assert.deepEqual(readFileSync(file), observed.bytes, path);
+      assert.equal(current.ino, observed.identity.ino, path); assert.equal(current.mode, observed.identity.mode, path);
+    }
   }
   assert.equal(git(root, 'ls-files', '--stage', derived), record);
   assert.equal(git(root, 'show', ':human.txt'), 'human staged before operation\n');
   assert.equal(git(root, 'show', ':concurrent.txt'), 'concurrent staged content\n');
 });
 
-test('falha de escrita de exclusão sem alterações de arquivos preserva o índice', t => {
+test('plano antigo de escrita de exclusão é recusado e preserva o índice', t => {
   const root = fixture(t); cli(root, ['init', '--agents', 'claude']);
   const derived = '.claude/skills/configurar-projeto/SKILL.md';
   git(root, 'add', '-f', derived);
@@ -277,44 +299,41 @@ test('falha de escrita de exclusão sem alterações de arquivos preserva o índ
   assert.equal(plan.changes.length, 0);
   assert.deepEqual(plan.untrack.paths, []);
   const index = git(root, 'ls-files', '--stage', '-z');
-  Object.defineProperty(plan.localIgnore.edits[0], 'after', { get() { throw new Error('injected exclusion write failure'); } });
-  assert.throws(() => applyPlan(plan), /injected exclusion write failure/);
+  plan.localIgnore.edits.push({ path: exclude, before: '# initial exclusion\n', after: 'indevido\n' });
+  assert.throws(() => applyPlan(plan), /desabilitado/);
   assert.equal(git(root, 'ls-files', '--stage', '-z'), index);
   assert.equal(readFileSync(exclude, 'utf8'), '# initial exclusion\n');
 });
 
-test('regra humana que inclui entrada gerada bloqueia init antes de criar recursos', t => {
+test('regra humana que inclui entrada gerada é preservada durante init', t => {
   const root = fixture(t), human = '!/AGENTS.md\n';
   write(root, '.gitignore', human);
   const exclude = resolve(root, git(root, 'rev-parse', '--git-path', 'info/exclude').trim());
   const original = readFileSync(exclude, 'utf8');
   for (const args of [['--dry-run'], ['--force']]) {
-    const result = cli(root, ['init', '--agents', 'claude', ...args], 1);
-    assert.ok(result.conflicts.includes('AGENTS.md'));
-    assert.ok(result.localIgnore.missing.includes('AGENTS.md'));
-    assert.equal(existsSync(join(root, '.pbai4devs')), false);
-    assert.equal(existsSync(join(root, '.claude')), false);
+    const result = cli(root, ['init', '--agents', 'claude', ...args]);
+    assert.ok(result.localIgnore.pending.some(item => item.code === 'output-visible' && item.path === 'AGENTS.md'));
+    assert.equal(existsSync(join(root, '.pbai4devs')), !args.includes('--dry-run'));
     assert.equal(read(root, '.gitignore'), human);
     assert.equal(readFileSync(exclude, 'utf8'), original);
   }
 });
 
-test('doctor e sync detectam entrada não ignorada sem sobrescrever regra humana', t => {
+test('doctor e sync avisam sobre entrada visível sem sobrescrever regra humana', t => {
   const root = fixture(t); cli(root, ['init', '--agents', 'claude']);
   const human = '!/AGENTS.md\n', original = read(root, 'AGENTS.md');
   write(root, '.gitignore', human);
-  const doctor = cli(root, ['doctor'], 1);
-  assert.ok(doctor.issues.some(issue => issue.code === 'unignored' && issue.path === 'AGENTS.md'));
+  const doctor = cli(root, ['doctor']);
+  assert.ok(doctor.localIgnore.pending.some(item => item.code === 'output-visible' && item.path === 'AGENTS.md'));
   for (const args of [['sync', '--check'], ['update', '--force']]) {
-    const result = cli(root, args, 1);
-    assert.ok(result.conflicts.includes('AGENTS.md'));
-    assert.ok(result.localIgnore.missing.includes('AGENTS.md'));
+    const result = cli(root, args);
+    assert.ok(result.localIgnore.pending.some(item => item.code === 'output-visible' && item.path === 'AGENTS.md'));
   }
   assert.equal(read(root, '.gitignore'), human);
   assert.equal(read(root, 'AGENTS.md'), original);
 });
 
-test('upgrade substitui somente exclusões legadas com ownership comprovado', t => {
+test('upgrade preserva exclusões legadas com ownership comprovado', t => {
   const root = fixture(t); cli(root, ['init', '--agents', 'claude']);
   const state = JSON.parse(read(root, statePath));
   const ignores = {
@@ -328,10 +347,10 @@ test('upgrade substitui somente exclusões legadas com ownership comprovado', t 
   const result = cli(root, ['update']);
   assert.deepEqual(result.localIgnore.missing, []);
   assert.equal(cli(root, ['doctor']).ok, true);
-  for (const path of ['.claude/.gitignore', '.pbai4devs/catalog.json']) assert.equal(spawnSync('git', ['-C', root, 'check-ignore', '--no-index', '-q', path]).status, 0, path);
+  for (const [path, block] of Object.entries(ignores)) assert.equal(read(root, path), `${block}\n`);
 });
 
-test('ownership legado não isenta negações humanas fora do bloco nem blocos alterados', t => {
+test('ownership legado preserva negações humanas fora do bloco e blocos alterados', t => {
   const root = fixture(t); cli(root, ['init', '--agents', 'claude']);
   const path = '.pbai4devs/.gitignore';
   const block = '# BEGIN AGENT IGNORE\n!/catalog.json\n# END AGENT IGNORE';
@@ -339,11 +358,10 @@ test('ownership legado não isenta negações humanas fora do bloco nem blocos a
   write(root, statePath, JSON.stringify(state, null, 2) + '\n');
   const human = `${block}\n!/catalog.json\n`;
   write(root, path, human);
-  const denied = cli(root, ['update', '--force'], 1);
-  assert.ok(denied.localIgnore.missing.includes('.pbai4devs/catalog.json'));
+  cli(root, ['update', '--force']);
   assert.equal(read(root, path), human);
   write(root, path, block.replace('!/catalog.json', '!/skills.json') + '\n');
-  const modified = read(root, path), changed = cli(root, ['update', '--force'], 1);
-  assert.ok(changed.localIgnore?.missing.includes('.pbai4devs/skills.json') || changed.error?.detail.includes(path));
+  const modified = read(root, path), result = cli(root, ['update', '--force'], 1);
+  assert.ok(result.conflicts.includes(path));
   assert.equal(read(root, path), modified);
 });

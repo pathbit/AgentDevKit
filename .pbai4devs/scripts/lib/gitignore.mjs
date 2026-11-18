@@ -1,5 +1,6 @@
-import { createHash, randomUUID } from 'node:crypto';
-import { chmodSync, closeSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { safeGitEnvironment, assertUnredirectedGitEnvironment, gitOutputLines, gitPathKey, gitPathsOverlap, ordinaryGitComponent, possibleWindowsShortName } from './git-environment.mjs';
+import { lstatSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, posix, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -10,16 +11,20 @@ export const ignoreEnd = '# END AGENT IGNORE';
 
 const outputDirectories = new Set(['.git', '.agent-tests', '.cache', 'node_modules', '__pycache__', 'opencode-loop', 'sessions', 'logs', 'testresults', 'test-results', 'blob-report', 'tmp', 'temp']);
 const localFiles = new Set(['auth.json', 'credentials.json', 'history.jsonl', '.ds_store', 'thumbs.db', 'desktop.ini']);
+const acceptedVisibility = new Set(['artifact-unprotected', 'artifact-coverage-unverified', 'output-visible']);
+export const isBlockingLocalIgnore = item => !acceptedVisibility.has(item.code);
 
 // Mesmos nomes de saídas locais ignoradas; não exclui fixtures/cache nem arquivos .template.
 export function isGeneratedOutput(path, directory = false) {
   const parts = path.replaceAll('\\', '/').split('/');
+  const sharedSource = parts[0]?.toLowerCase() === '.pbai4devs';
+  const downloadedSource = ['tools', 'external-skills'].includes(parts[1]?.toLowerCase());
   return parts.some((part, index) => {
     const name = part.toLowerCase();
     const folder = index < parts.length - 1 || directory;
     const localFile = localFiles.has(name) || /\.(?:log|swp|swo)$|~$|^\._/.test(name) || /\.local\.(?:jsonc?|toml|ya?ml)$/.test(name);
     const secretEnv = /^\.env(?:\.|$)/.test(name) && !/^\.env\.(?:example|sample|template|.*\.example)$/.test(part);
-    return /^\.playwright/.test(name) || (folder && (outputDirectories.has(name) || name.startsWith('playwright'))) || (!folder && (localFile || secretEnv));
+    return /^\.playwright/.test(name) || (folder && (outputDirectories.has(name) || name === '.local' && (!sharedSource || downloadedSource) || name.startsWith('playwright'))) || (!folder && (localFile || secretEnv));
   });
 }
 
@@ -99,9 +104,24 @@ function localBlock(current, first, last, body) {
 }
 
 function gitCommand(root, args, input, encoding = 'utf8') {
-  const env = { ...process.env };
-  for (const key of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_COMMON_DIR', 'GIT_INDEX_FILE']) delete env[key];
-  return spawnSync('git', [...(['ls-files', 'rm'].includes(args[0]) ? ['--literal-pathspecs'] : []), '-C', root, ...args], { input, encoding, env, windowsHide: true, maxBuffer: 16 * 1024 * 1024 });
+  const env = safeGitEnvironment();
+  // Git diagnostics are parsed internally; do not depend on the caller's locale.
+  env.LC_ALL = 'C';
+  env.LANGUAGE = 'C';
+  return spawnSync('git', [...(['ls-files', 'rm'].includes(args[0]) ? ['--literal-pathspecs'] : []), '-C', root, '-c', 'core.fsmonitor=false', ...args], { input, encoding, env, windowsHide: true, maxBuffer: 16 * 1024 * 1024 });
+}
+
+export function noGitRepository(root, result) {
+  if (result.signal) return false;
+  const unavailable = result.error?.code === 'ENOENT';
+  const notRepository = !result.error && result.status === 128
+    && /not a git repository/i.test(String(result.stderr || ''));
+  if (!unavailable && !notRepository) return false;
+  // A failed Git probe must never hide a repository or linked worktree.
+  for (let current = resolve(root); ; current = dirname(current)) {
+    if (localStat(join(current, '.git'))) return false;
+    if (dirname(current) === current) return true;
+  }
 }
 
 // Compare exact bytes first. Only accept Git's plain text CRLF conversion when
@@ -259,22 +279,35 @@ function visibleArtifactProbes(root, location, patterns) {
 function visiblePrivateProbes(root, location, clientRoots) {
   const listed = gitCommand(location.top, ['--literal-pathspecs', '-c', 'core.excludesFile=', 'ls-files', '--others', '--exclude-standard', '-z', '--', location.prefix ? `${location.prefix}/` : '.']);
   if (listed.error || listed.status !== 0) throw new Error(listed.error?.message || listed.stderr || 'Falha ao conferir arquivos privados.');
-  const prefix = location.prefix ? `${location.prefix}/` : '', roots = new Set(clientRoots);
+  const prefix = location.prefix ? `${location.prefix}/` : '', roots = [...clientRoots, '.pbai4devs'];
+  const clientMatches = part => roots.some(client => gitPathsOverlap(client, part, { root }));
   const probes = new Set(listed.stdout.split('\0').filter(path => path.startsWith(prefix)).map(path => path.slice(prefix.length))
-    .filter(path => roots.has(path.split('/')[0]) && isGeneratedOutput(path) && safeIgnoreProbe(root, path)));
+    .filter(path => clientMatches(path.split('/')[0]) && isGeneratedOutput(path) && safeIgnoreProbe(root, path)));
   const ignore = join(root, '.gitignore'), item = localStat(ignore);
   if (item?.isFile() && !item.isSymbolicLink()) for (const line of readFileSync(ignore, 'utf8').replace(/^\uFEFF/, '').split(/\r?\n/)) {
     if (!line.startsWith('!') || line.length === 1) continue;
     const rule = line.slice(1), directory = rule.endsWith('/');
     const witness = rule.replace(/^\//, '').replace(/\*\*\//g, '').replace(/\[([^\]]+)\]/g, (_m, letters) => letters[0]).replace(/\*/g, '').replace(/\?/g, 'x').replace(/\/$/, '');
     if (!witness || /[\\\x00-\x1f]/.test(witness)) continue;
-    const candidates = roots.has(witness.split('/')[0]) ? [witness] : [...roots].map(client => `${client}/${witness}`);
+    const candidates = clientMatches(witness.split('/')[0]) ? [witness] : roots.map(client => `${client}/${witness}`);
     for (const path of candidates) {
       const probe = checkedOutput(directory ? `${path}/.agentdevkit-ignore-probe` : path);
       if (isGeneratedOutput(path, directory) && safeIgnoreProbe(root, probe)) probes.add(probe);
     }
   }
   return [...probes];
+}
+
+// A generic extension exception is ordinary project configuration. Existing
+// private files still go through Git's effective ignore checks separately.
+function genericFileException(rule, file, root, clientRoots, artifacts) {
+  const parts = rule.replace(/^\//, '').split('/'), leaf = parts.pop();
+  const extension = /^\*\.([a-z0-9_-]+)$/i.exec(leaf)?.[1];
+  if (!extension || parts.some(part => /[*?\[\]\\]/.test(part) && !['*', '**'].includes(part))) return false;
+  const base = portable(relative(root, dirname(file)));
+  const scope = [...base.split('/'), ...parts].filter(part => part && part !== '.' && part !== '..' && part !== '*' && part !== '**');
+  if (scope.some(part => part === '.pbai4devs' || clientRoots.some(client => gitPathsOverlap(client, part, { root })))) return false;
+  return !scope.some((part, index) => isGeneratedOutput(part, true) || artifactPath(scope.slice(0, index + 1).join('/'), artifacts, true));
 }
 
 // Wildcard negations may expose files that do not exist yet. Inspect client
@@ -326,6 +359,7 @@ function ambiguousExceptions(root, location, clientRoots, artifacts) {
         if (file !== rootIgnore && isGeneratedOutput(portable(relative(root, join(dirname(file), rule))), rule.endsWith('/'))) conflicts.push(portable(relative(root, file)) + ': ' + line);
         continue;
       }
+      if (genericFileException(rule, file, root, clientRoots, artifacts)) continue;
       conflicts.push(portable(relative(root, file)) + ': ' + line);
     }
   }
@@ -339,11 +373,11 @@ function localIgnoreSource(location, source) {
   return basename(path) === '.gitignore' && !isAbsolute(inside) && inside !== '..' && !inside.startsWith(`..${sep}`);
 }
 
-function ignoreMatches(location, probes) {
+function ignoreMatches(location, probes, { useGlobal = false } = {}) {
   const root = join(location.top, location.prefix);
   if (probes.some(path => !safeIgnoreProbe(root, path))) throw new Error('Probe atravessa caminho simbolico.');
   const paths = probes.map(path => location.prefix ? `${location.prefix}/${path}` : path);
-  const result = gitCommand(location.top, ['-c', 'core.excludesFile=', 'check-ignore', '--verbose', '--no-index', '--stdin', '-z'], paths.join('\0') + '\0');
+  const result = gitCommand(location.top, [...(useGlobal ? [] : ['-c', 'core.excludesFile=']), 'check-ignore', '--verbose', '--no-index', '--stdin', '-z'], paths.join('\0') + '\0');
   if (result.error || ![0, 1].includes(result.status)) throw new Error(result.error?.message || result.stderr || 'Falha ao conferir exclusoes Git.');
   const values = result.stdout.split('\0'), matches = new Map();
   for (let index = 0; index + 3 < values.length; index += 4) matches.set(values[index + 3], { source: values[index], line: Number(values[index + 1]), pattern: values[index + 2] });
@@ -375,6 +409,7 @@ function localRoot(value) {
 
 // Os padrões vêm do hub; apenas os nomes concretos dos derivados são calculados.
 export function planLocalIgnore(root, { outputs = [], templateRoot } = {}) {
+  assertUnredirectedGitEnvironment();
   const resolved = localRoot(root); root = resolved.root;
   const localTemplate = join(root, '.pbai4devs/templates/gitignore/local.ignore');
   const templateFile = checkedLocalPath(templateRoot ? join(templateRoot, '.pbai4devs/templates/gitignore/local.ignore') : localStat(localTemplate) ? localTemplate : fileURLToPath(new URL('../../templates/gitignore/local.ignore', import.meta.url)));
@@ -385,7 +420,10 @@ export function planLocalIgnore(root, { outputs = [], templateRoot } = {}) {
   // Client roots are ignored locally. Projects can explicitly opt in to a
   // complete client with a literal negation in their own root .gitignore.
   const localPolicy = join(templateRoot || root, '.pbai4devs/templates/clients/ADAPTERS.json');
-  const policy = JSON.parse(readFileSync(checkedLocalPath(localStat(localPolicy) ? localPolicy : fileURLToPath(new URL('../../templates/clients/ADAPTERS.json', import.meta.url))), 'utf8'));
+  const policyText = readFileSync(checkedLocalPath(localStat(localPolicy) ? localPolicy : fileURLToPath(new URL('../../templates/clients/ADAPTERS.json', import.meta.url))), 'utf8');
+  let policy;
+  try { policy = JSON.parse(policyText); }
+  catch { throw new SyntaxError('JSON invalido: configuracao de adaptadores.'); }
   const clientRoots = [...new Set(policy.adapters.flatMap(adapter => [adapter.root, ...(adapter.extraRoots || [])]))];
   if (clientRoots.some(path => typeof path !== 'string' || !/^\.[a-z0-9][a-z0-9-]*$/.test(path) || ['.git', '.pbai4devs', '.agent-tests'].includes(path))) throw new Error('Raiz de cliente invalida para exclusao.');
   const roots = [...clientRoots];
@@ -395,9 +433,9 @@ export function planLocalIgnore(root, { outputs = [], templateRoot } = {}) {
     .filter(path => !roots.some(client => path === client || path.startsWith(`${client}/`))).sort();
   const info = gitCommand(resolved.parent, ['rev-parse', '--show-toplevel', '--git-path', 'info/exclude']);
   let location = null;
-  if (info.status === 0) {
-    const [reportedTop, reportedExclude] = info.stdout.trimEnd().split(/\r?\n/);
-    if (!reportedTop || !reportedExclude) throw new Error('Localizacao Git invalida.');
+  if (!info.error && info.status === 0 && !info.signal) {
+    const lines = gitOutputLines(info.stdout), [reportedTop, reportedExclude] = lines;
+    if (lines.length !== 2 || !reportedTop || !reportedExclude) throw new Error('Localizacao Git invalida.');
     const exclude = resolve(resolved.parent, reportedExclude);
     const top = canonicalExisting(reportedTop);
     const prefix = relative(top, root);
@@ -405,7 +443,7 @@ export function planLocalIgnore(root, { outputs = [], templateRoot } = {}) {
     checkedLocalPath(exclude);
     const canonicalExclude = localStat(exclude) ? canonicalExisting(exclude) : join(localRoot(dirname(exclude)).root, basename(exclude));
     location = { top, exclude: checkedLocalPath(canonicalExclude), prefix: portable(prefix) };
-  } else if (info.error && info.error.code !== 'ENOENT' || !info.error && !/not a git repository/i.test(info.stderr || '')) {
+  } else if (!noGitRepository(resolved.parent, info)) {
     throw new Error(`Nao foi possivel localizar Git: ${info.error?.message || info.stderr}`);
   }
   const id = createHash('sha256').update(root).digest('hex').slice(0, 16);
@@ -422,40 +460,29 @@ export function planLocalIgnore(root, { outputs = [], templateRoot } = {}) {
     const match = optMatches.matches.get(optMatches.paths[index]);
     return !match || match.pattern.startsWith('!');
   });
-  const first = `# BEGIN AGENTDEVKIT LOCAL ${id}`, last = `# END AGENTDEVKIT LOCAL ${id}`;
-  const fixed = template.replace('{{ROOTS}}', roots.map(path => `/${path}/`).join('\n')).replace('{{OUTPUTS}}', paths.filter(path => !roots.some(root => path === root || path.startsWith(root + '/'))).map(path => `/${escapePattern(path)}`).join('\n'))
-    + '\n# Estado privado dos clientes\n' + privateClients.rules.join('\n') + '\n'
-    + '\n# Resultados e arquivos temporarios\n' + artifacts.map(pattern => `/${pattern}`).join('\n') + '\n';
-  const body = fixed.split(/\r?\n/).map(line => {
-    if (!location?.prefix) return line;
-    if (line.startsWith('!/')) return `!/${escapePattern(location.prefix)}${line.slice(1)}`;
-    return line.startsWith('/') ? `/${escapePattern(location.prefix)}${line}` : line;
-  }).join('\n');
-  const target = location?.exclude;
-  const before = target ? localRead(target) : null, after = target ? localBlock(before, first, last, body) : null;
-  const edits = before === after ? [] : [{ path: target, before, after, beforeMode: localMode(target) }];
-  const probes = [...paths, ...rootProbes(root, roots.filter(client => !optedRoots.includes(client)))];
-  const existingPrivate = privateClients.probes.filter(path => localStat(join(root, path.split('/')[0]))?.isDirectory() && safeIgnoreProbe(root, path));
-  const artifactPaths = [...new Set([...artifactProbes(root, artifacts), ...existingPrivate, ...(location ? [...visibleArtifactProbes(root, location, artifacts), ...visiblePrivateProbes(root, location, clientRoots)] : [])])];
-  if (location && !before?.includes(first)) {
-    const ignored = ignoreMatches(location, [...probes, ...artifactPaths].filter(path => safeIgnoreProbe(root, path)));
-    if (ignored.paths.every(path => { const match = ignored.matches.get(path); return match && !match.pattern.startsWith('!') && localIgnoreSource(location, match.source); })) edits.length = 0;
-  }
-  const prefix = location?.prefix ? `${location.prefix}/` : '';
-  const tracked = location ? gitCommand(location.top, ['ls-files', '-z']).stdout.split('\0').filter(path => {
-    if (!path.startsWith(prefix)) return false;
-    const local = path.slice(prefix.length);
-    // Git ignore never untracks existing files. Report private data and test
-    // artifacts, but don't flag legitimate already-tracked project content.
-    return artifactPath(local, artifacts) || clientRoots.includes(local.split('/')[0]) && isGeneratedOutput(local);
-  }).map(path => path.slice(prefix.length)) : [];
-  return { root, status: location ? 'git' : 'no-git', location, paths, outputPaths, roots, requestedRoots, optedRoots, clientRoots, artifactPatterns: artifacts, artifactProbes: artifactPaths, privateProbes: privateClients.probes, edits, trackedOutputs: tracked, first, last };
+  const listed = location ? gitCommand(location.top, ['ls-files', '-z'], undefined, null) : null;
+  if (listed && (listed.error || listed.status !== 0)) throw new Error(listed.error?.message || listed.stderr || 'Falha ao consultar indice Git.');
+  const privateRoots = [...clientRoots, '.pbai4devs'];
+  let indexed = '';
+  try { if (listed) indexed = new TextDecoder('utf-8', { fatal: true }).decode(listed.stdout); }
+  catch { throw new Error('Indice Git contem caminho nao UTF-8; alteracoes recusadas.'); }
+  const prefixParts = location?.prefix ? location.prefix.split('/') : [];
+  const trackedOutputs = listed ? indexed.split('\0').filter(Boolean).flatMap(path => {
+    const parts = path.split('/');
+    if (parts.length <= prefixParts.length || prefixParts.some((_part, index) => !gitPathsOverlap(prefixParts.slice(0, index + 1).join('/'), parts.slice(0, index + 1).join('/'), { root: location.top }))) return [];
+    const local = parts.slice(prefixParts.length).join('/');
+    const reported = parts.slice(0, prefixParts.length).join('/') === (location?.prefix || '') ? local : path;
+    return artifactPath(local, artifacts) || privateRoots.some(client => gitPathsOverlap(client, parts[prefixParts.length], { root })) && isGeneratedOutput(local) ? [reported] : [];
+  }) : [];
+  return { root, status: location ? 'git' : 'no-git', worktreeScope: Boolean(location), worktreeLocation: location,
+    location: null, clientRoots, optedRoots, artifacts, edits: [], protectedOutputs: [], protectedHashes: {},
+    unprotectedOutputs: outputPaths, trackedOutputs };
+
 }
 
 export function checkLocalIgnore(plan, { replacedBlocks = [] } = {}) {
-  const missing = [];
-  if (plan.location) missing.push(...((plan.requestedRoots || []).length ? ignoredProjectAncestors(plan.location) : []), ...ambiguousExceptions(plan.root, plan.location, plan.clientRoots || [], plan.artifactPatterns || []));
-  const replacements = replacedBlocks.map(item => {
+  assertUnredirectedGitEnvironment();
+  replacedBlocks.forEach(item => {
     const path = canonicalExisting(checkedLocalPath(resolve(item.path))), inside = relative(localRoot(plan.root).root, path);
     if (isAbsolute(inside) || inside === '..' || inside.startsWith(`..${sep}`) || !Number.isInteger(item.firstLine) || !Number.isInteger(item.lastLine) || item.firstLine < 1 || item.lastLine < item.firstLine || !/^[a-f0-9]{64}$/.test(item.sha256)) throw new Error('Faixa de ignore gerenciado invalida.');
     const content = readFileSync(checkedLocalPath(path), 'utf8');
@@ -464,187 +491,145 @@ export function checkLocalIgnore(plan, { replacedBlocks = [] } = {}) {
     const first = lines[item.firstLine - 1], last = lines[item.lastLine - 1];
     const block = content.slice(first.index, last.index + last[0].replace(/[\r\n]+$/, '').length);
     if (createHash('sha256').update(block).digest('hex') !== item.sha256) throw new Error('Bloco de ignore mudou antes da verificacao.');
-    return { ...item, path };
+
   });
-  if (plan.location && (plan.paths.length || plan.artifactProbes?.length)) {
-    missing.push(...new Set([...plan.paths, ...(plan.outputPaths || [])].filter(path => !safeIgnoreProbe(plan.root, path))));
-    const privateProbes = (plan.privateProbes || []).filter(path => localStat(join(plan.root, path.split('/')[0]))?.isDirectory() && safeIgnoreProbe(plan.root, path));
-    const probes = [...new Set([...plan.paths, ...rootProbes(plan.root, (plan.roots || []).filter(client => !(plan.optedRoots || []).includes(client))), ...(plan.artifactProbes || []), ...privateProbes,
-      ...(plan.artifactPatterns ? visibleArtifactProbes(plan.root, plan.location, plan.artifactPatterns) : []),
-      ...visiblePrivateProbes(plan.root, plan.location, plan.clientRoots || [])])].filter(path => safeIgnoreProbe(plan.root, path));
-    const { paths: relativePaths, matches } = ignoreMatches(plan.location, probes);
-    for (let index = 0; index < relativePaths.length; index++) {
-      const match = matches.get(relativePaths[index]);
-      const negative = match?.pattern.startsWith('!');
-      const local = match && localIgnoreSource(plan.location, match.source);
-      const humanOverride = negative && local && /(?:^|[\\/])\.gitignore$/.test(match.source);
-      const replaced = negative && replacements.some(item => item.path === canonicalExisting(resolve(plan.location.top, match.source)) && match.line >= item.firstLine && match.line <= item.lastLine);
-      if (!replaced && ((!plan.edits.length && (!match || negative || !local)) || humanOverride)) missing.push(probes[index]);
+  if (!plan.worktreeLocation) return { ok: false, status: plan.status, missing: [], pending: [], trackedOutputs: plan.trackedOutputs, changed: 0 };
+    const pending = [];
+    const choices = plan.artifacts.map(pattern => ({ pattern, probes: artifactProbes(plan.root, [pattern]) }));
+    const existing = visibleArtifactProbes(plan.root, plan.worktreeLocation, plan.artifacts);
+    const privateFiles = visiblePrivateProbes(plan.root, plan.worktreeLocation, plan.clientRoots);
+    const outputProbes = plan.unprotectedOutputs.filter(path => safeIgnoreProbe(plan.root, path));
+    for (const path of plan.unprotectedOutputs) if (!safeIgnoreProbe(plan.root, path)) pending.push({ code: 'output-unavailable', path });
+    const probes = [...new Set([...choices.flatMap(choice => choice.probes), ...existing, ...privateFiles, ...outputProbes])];
+    const checks = probes.length ? ignoreMatches(plan.worktreeLocation, probes) : { paths: [], matches: new Map() };
+    const projectIgnore = join(plan.root, '.gitignore'), projectIgnoreStat = localStat(projectIgnore);
+    const explicitPatterns = projectIgnoreStat?.isFile() && !projectIgnoreStat.isSymbolicLink()
+      ? new Set(readFileSync(projectIgnore, 'utf8').split(/\r?\n/)) : new Set();
+    const unignored = new Set(probes.filter((_path, index) => {
+      const match = checks.matches.get(checks.paths[index]);
+      return !match || match.pattern.startsWith('!');
+    }));
+    for (const choice of choices) {
+      const sample = choice.probes.find(path => unignored.has(path)) ?? existing.find(path => unignored.has(path) && artifactPath(path, [choice.pattern]));
+      if (sample) pending.push({ code: 'artifact-unprotected', path: sample, pattern: choice.pattern });
+      else if (!explicitPatterns.has(choice.pattern)) pending.push({ code: 'artifact-coverage-unverified', path: choice.pattern, pattern: choice.pattern });
     }
-  }
-  return { ok: plan.status === 'git' && plan.edits.length === 0 && missing.length === 0 && plan.trackedOutputs.length === 0, status: plan.status, missing, trackedOutputs: plan.trackedOutputs, changed: plan.edits.length };
+    for (const path of outputProbes) if (unignored.has(path)) pending.push({ code: 'output-visible', path });
+    const privateChecks = privateFiles.length ? ignoreMatches(plan.worktreeLocation, privateFiles, { useGlobal: true }) : { paths: [], matches: new Map() };
+    for (const [index, path] of privateFiles.entries()) {
+      const match = privateChecks.matches.get(privateChecks.paths[index]);
+      if (!match || match.pattern.startsWith('!')) pending.push({ code: 'private-file-visible', path });
+    }
+    for (const path of ambiguousExceptions(plan.root, plan.worktreeLocation, plan.clientRoots, plan.artifacts)) pending.push({ code: 'ignore-ambiguous', path });
+    const currentShared = localRead(checkedLocalPath(plan.worktreeLocation.exclude)) ?? '';
+    if (/^# BEGIN AGENTDEVKIT LOCAL [a-f0-9]{16}\r?$/m.test(currentShared.replace(/^\uFEFF/, ''))) pending.push({ code: 'shared-ignore-legacy', path: plan.worktreeLocation.exclude });
+  return { ok: !plan.trackedOutputs.length && !pending.some(isBlockingLocalIgnore), status: plan.status, missing: [], pending, trackedOutputs: plan.trackedOutputs, changed: 0 };
 }
 
 export function assertLocalIgnoreUnchanged(plan) {
-  for (const edit of plan.edits) {
-    checkedLocalPath(edit.path);
-    if (localRead(edit.path) !== edit.before || Object.hasOwn(edit, 'beforeMode') && localMode(edit.path) !== edit.beforeMode) throw new Error(`Exclusao alterada apos planejar: ${edit.path}`);
-  }
+  assertUnredirectedGitEnvironment();
+  if (!Array.isArray(plan.edits) || plan.edits.length) throw new Error('Alterar exclusoes Git foi desabilitado; arquivos preservados.');
 }
 
-function atomicLocalWrite(path, content, mode, published, beforePublish) {
-  const temporary = `${path}.agentdevkit-${randomUUID()}`;
-  try {
-    writeFileSync(temporary, content, { flag: 'wx' });
-    if (mode !== null && mode !== undefined) chmodSync(temporary, mode);
-    const writtenMode = localMode(temporary);
-    beforePublish?.();
-    renameSync(temporary, path);
-    published?.(writtenMode);
-  } finally { rmSync(temporary, { force: true }); }
-}
-
-export function applyLocalIgnore(plan) {
+export function applyLocalIgnore(plan, { validate } = {}) {
   assertLocalIgnoreUnchanged(plan);
-  const before = checkLocalIgnore(plan);
-  if (before.missing.length) throw new Error(`Regras humanas reabrem derivados locais: ${before.missing.join(', ')}`);
-  const written = [];
-  try {
-    for (const edit of plan.edits) {
-      mkdirSync(dirname(edit.path), { recursive: true });
-      atomicLocalWrite(edit.path, edit.after, edit.beforeMode, mode => written.push({ edit, mode }), () => {
-        checkedLocalPath(edit.path);
-        if (localRead(edit.path) !== edit.before || localMode(edit.path) !== edit.beforeMode) throw new Error(`Exclusao alterada antes de publicar; conteudo preservado: ${edit.path}`);
-      });
-    }
-    const verified = checkLocalIgnore({ ...plan, edits: [], trackedOutputs: [] });
-    if (verified.missing.length) throw new Error(`Regras humanas reabrem derivados locais: ${verified.missing.join(', ')}`);
-  } catch (error) {
-    const rollbackErrors = [];
-    for (const { edit, mode } of written.reverse()) {
-      try {
-        if (localRead(edit.path) !== edit.after || localMode(edit.path) !== mode) continue;
-        const checkPublished = () => {
-          checkedLocalPath(edit.path);
-          if (localRead(edit.path) !== edit.after || localMode(edit.path) !== mode) throw new Error(`Exclusao alterada durante rollback; conteudo preservado: ${edit.path}`);
-        };
-        if (edit.before === null) { checkPublished(); rmSync(edit.path, { force: true }); }
-        else atomicLocalWrite(edit.path, edit.before, edit.beforeMode, undefined, checkPublished);
-      } catch (failure) { rollbackErrors.push(failure); }
-    }
-    if (rollbackErrors.length) throw new AggregateError([error, ...rollbackErrors], `${error.message}; rollback incompleto: ${rollbackErrors.map(failure => failure.message).join('; ')}`, { cause: error });
-    throw error;
-  }
-  return { status: plan.status, changed: plan.edits.length, trackedOutputs: plan.trackedOutputs };
+  const checked = checkLocalIgnore(plan);
+  validate?.();
+  return { status: plan.status, changed: 0, trackedOutputs: plan.trackedOutputs, pending: checked.pending };
 }
 
-export function planUntrack(root, expectedHashes = {}) {
+export function planUntrack(root, expectedHashes = {}, { gitlinkBoundaries = [] } = {}) {
+  assertUnredirectedGitEnvironment();
   root = localRoot(root).root;
   const candidates = Object.keys(expectedHashes).map(checkedOutput).sort();
+  const boundaries = gitlinkBoundaries.map(checkedOutput);
   for (const hash of Object.values(expectedHashes)) if (!/^[a-f0-9]{64}$/.test(hash)) throw new Error('Hash de ownership invalido para desindexar.');
-  if (!candidates.length || !localStat(root)) return { root, paths: [], hashes: {}, index: '', conflicts: [] };
-  const result = gitCommand(root, ['ls-files', '--stage', '-z']);
-  if (result.status !== 0) {
-    if (result.error?.code === 'ENOENT' || /not a git repository/i.test(result.stderr || '')) {
-      // Fail closed if a repository exists even when Git cannot be launched.
-      let directory = root;
-      while (true) {
-        if (localStat(join(directory, '.git'))) throw new Error('Nao foi possivel consultar o Git deste projeto; indice e arquivos preservados.');
-        const parent = dirname(directory);
-        if (parent === directory) break;
-        directory = parent;
-      }
-      return { root, paths: [], hashes: {}, index: '', conflicts: [] };
-    }
+  if ((!candidates.length && !boundaries.length) || !localStat(root)) return { root, paths: [], hashes: {}, index: '', conflicts: [], ...(boundaries.length ? { gitlinkConflicts: [] } : {}) };
+  const topResult = gitCommand(root, ['rev-parse', '--show-toplevel']);
+  if (topResult.error || topResult.status !== 0 || topResult.signal) {
+    if (noGitRepository(root, topResult)) return { root, paths: [], hashes: {}, index: '', conflicts: [] };
+    throw new Error(topResult.error?.message || topResult.stderr || 'Falha ao localizar repositorio Git.');
+  }
+  const topLines = topResult.status === 0 ? gitOutputLines(topResult.stdout) : [];
+  if (topResult.status === 0 && (topLines.length !== 1 || !topLines[0])) throw new Error('Localizacao Git invalida.');
+  const top = topResult.status === 0 ? canonicalExisting(topLines[0]) : root;
+  const local = relative(top, root);
+  if (isAbsolute(local) || local === '..' || local.startsWith(`..${sep}`)) throw new Error('Projeto fora da arvore Git.');
+  const rootPrefix = topResult.status === 0 ? portable(local) : '';
+  const rootParts = rootPrefix ? rootPrefix.split('/') : [];
+  const result = gitCommand(top, ['ls-files', '--stage', '-z'], undefined, null);
+  if (result.error || result.status !== 0 || result.signal) {
     throw new Error(result.error?.message || result.stderr || 'Falha ao ler indice Git.');
   }
   const conflicts = [];
-  const records = result.stdout.split('\0').filter(Boolean);
-  const folded = new Map();
-  for (const path of candidates) folded.set(path.toLowerCase(), [...(folded.get(path.toLowerCase()) || []), path]);
+  let indexText;
+  try { indexText = new TextDecoder('utf-8', { fatal: true }).decode(result.stdout); }
+  catch { throw new Error('Indice Git contem caminho nao UTF-8; alteracoes recusadas.'); }
+  const records = indexText.split('\0').filter(Boolean);
+  const gitlinkConflicts = new Set(); let gitlinkCoversRoot = false;
+  for (const record of records) {
+    const tab = record.indexOf('\t');
+    if (tab < 0 || !/^160000 [a-f0-9]+ [0-3]$/.test(record.slice(0, tab))) continue;
+    const indexed = record.slice(tab + 1);
+    if (rootPrefix && indexed.split('/').length <= rootParts.length && gitPathsOverlap(indexed, rootPrefix, { root: top, allowMissingTarget: true })) gitlinkCoversRoot = true;
+    for (const boundary of boundaries) {
+      const full = rootPrefix ? `${rootPrefix}/${boundary}` : boundary;
+      if (gitPathsOverlap(indexed, full, { root: top, allowMissingTarget: true })) gitlinkConflicts.add(boundary);
+    }
+  }
+  if (gitlinkCoversRoot) conflicts.push(...candidates);
+  const folded = new Map(), prefixes = new Map();
+  for (const path of candidates) {
+    const key = gitPathKey(path);
+    folded.set(key, [...(folded.get(key) || []), path]);
+    const parts = key.split('/');
+    for (let count = 1; count <= parts.length; count++) {
+      const parent = parts.slice(0, count).join('/');
+      prefixes.set(parent, [...(prefixes.get(parent) || []), path]);
+    }
+  }
+  const uncertain = part => !ordinaryGitComponent(part) || process.platform === 'win32' && possibleWindowsShortName(part);
+  const uncertainCandidates = candidates.filter(path => path.split('/').some(uncertain));
   const matches = new Map();
   for (const record of records) {
-    const position = record.indexOf('\t'), path = record.slice(position + 1);
+    const position = record.indexOf('\t'), indexedPath = record.slice(position + 1), indexedParts = indexedPath.split('/');
     if (position < 0) continue;
-    for (const candidate of folded.get(path.toLowerCase()) || []) {
-      matches.set(candidate, [...(matches.get(candidate) || []), record]);
+    if (indexedParts.length <= rootParts.length || rootParts.some((_part, index) => !gitPathsOverlap(rootParts.slice(0, index + 1).join('/'), indexedParts.slice(0, index + 1).join('/'), { root: top }))) continue;
+    const path = indexedParts.slice(rootParts.length).join('/');
+    const key = gitPathKey(path), parts = key.split('/'), related = new Set(prefixes.get(key) || []);
+    for (let count = 1; count < parts.length; count++) for (const candidate of folded.get(parts.slice(0, count).join('/')) || []) related.add(candidate);
+    const possible = path.split('/').some(uncertain) ? candidates : uncertainCandidates;
+    for (const candidate of possible) if (gitPathsOverlap(path, candidate, { root, allowMissingTarget: true })) related.add(candidate);
+    for (const candidate of related) {
+      matches.set(candidate, [...(matches.get(candidate) || []), { record, path, prefixExact: indexedParts.slice(0, rootParts.length).join('/') === rootPrefix }]);
     }
   }
   const paths = [...matches.keys()].filter(path => {
     const file = checkedLocalPath(join(root, path));
     const entries = matches.get(path);
-    const match = entries.length === 1 && entries[0].match(/^\d+ ([a-f0-9]+) 0\t/);
+    const match = entries.length === 1 && entries[0].record.match(/^\d+ ([a-f0-9]+) 0\t/);
     const blob = match ? gitCommand(root, ['cat-file', 'blob', match[1]], undefined, null) : null;
     const data = localStat(file) ? readFileSync(file) : null;
     const owned = data && createHash('sha256').update(data).digest('hex') === expectedHashes[path];
-    const indexOwned = entries[0]?.slice(entries[0].indexOf('\t') + 1) === path && blob?.status === 0 && data && indexContentMatches(root, path, data, blob.stdout);
+    const indexOwned = entries[0]?.prefixExact && entries[0]?.path === path && blob?.status === 0 && data && indexContentMatches(root, path, data, blob.stdout);
     if (!owned || !indexOwned) conflicts.push(path);
     return owned && indexOwned;
   });
-  const selected = new Set(paths);
-  const index = records.filter(record => selected.has(record.slice(record.indexOf('\t') + 1))).join('\0');
-  return { root, paths, hashes: Object.fromEntries(paths.map(path => [path, expectedHashes[path]])), index, conflicts };
+  // Records are relative to the Git root, while paths are relative to the
+  // project. Retain the matched records rather than comparing those names.
+  const selectedRecords = new Set(paths.flatMap(path => matches.get(path).map(entry => entry.record)));
+  const index = records.filter(record => selectedRecords.has(record)).join('\0');
+  return { root, paths, hashes: Object.fromEntries(paths.map(path => [path, expectedHashes[path]])), index, conflicts: [...new Set(conflicts)], ...(boundaries.length ? { gitlinkConflicts: [...gitlinkConflicts] } : {}) };
 }
 
 export function applyUntrack(plan) {
-  if (plan.conflicts?.length) throw new Error(`Indice contem alteracoes nao pertencentes ao kit: ${plan.conflicts.join(', ')}`);
-  if (!plan.paths.length) return { removed: [] };
-  const current = planUntrack(plan.root, plan.hashes);
-  if (current.index !== plan.index || current.paths.length !== plan.paths.length) throw new Error('Ownership ou indice mudou antes de desindexar.');
-  const location = gitCommand(plan.root, ['rev-parse', '--show-toplevel']);
-  if (location.status !== 0 || location.error) throw new Error('Nao foi possivel localizar a raiz Git para desindexar.');
-  const top = canonicalExisting(location.stdout.trimEnd()), prefix = portable(relative(top, localRoot(plan.root).root));
-  const paths = plan.paths.map(path => prefix ? `${prefix}/${path}` : path);
-  const result = gitCommand(top, ['rm', '--cached', '--pathspec-from-file=-', '--pathspec-file-nul'], paths.join('\0') + '\0');
-  if (result.status !== 0 || result.error) throw new Error(result.error?.message || result.stderr || 'Falha ao desindexar derivados.');
-  return { removed: [...plan.paths] };
+  if (plan?.paths?.length || plan?.conflicts?.length) throw new Error('Alterar o indice Git foi desabilitado; indice preservado.');
+  return { removed: [] };
 }
 
-// Reconstitui apenas entradas removidas; o índice atual e alterações concorrentes
-// permanecem. O lock é do próprio Git e o trabalho ocorre numa cópia desse índice.
 export function restoreUntrack(plan) {
-  if (!plan?.paths?.length) return { restored: [], preserved: [] };
-  const located = gitCommand(plan.root, ['rev-parse', '--show-toplevel', '--git-path', 'index']);
-  if (located.status !== 0 || located.error) throw new Error('Nao foi possivel localizar o indice para rollback.');
-  const [reportedTop, relativeIndex] = located.stdout.trimEnd().split(/\r?\n/);
-  const reportedIndex = resolve(plan.root, relativeIndex);
-  checkedLocalPath(reportedIndex);
-  const top = canonicalExisting(reportedTop), indexPath = canonicalExisting(reportedIndex);
-  checkedLocalPath(indexPath);
-  if (!localStat(indexPath)) throw new Error('Indice ausente; rollback automatico recusado.');
-  const lock = `${indexPath}.lock`;
-  let descriptor, acquired = false;
-  try {
-    descriptor = openSync(lock, 'wx');
-    acquired = true;
-    writeFileSync(descriptor, readFileSync(indexPath));
-    const current = gitCommand(plan.root, ['ls-files', '--stage', '-z']);
-    if (current.status !== 0 || current.error) throw new Error('Nao foi possivel ler indice atual para rollback.');
-    const existing = new Set(current.stdout.split('\0').filter(Boolean).map(record => record.slice(record.indexOf('\t') + 1)));
-    const entries = plan.index.split('\0').filter(Boolean);
-    const selected = new Set(plan.paths), restored = [], preserved = [];
-    const prefix = portable(relative(top, localRoot(plan.root).root));
-    const records = [];
-    for (const record of entries) {
-      const at = record.indexOf('\t'), path = record.slice(at + 1);
-      if (!selected.has(path)) continue;
-      if (existing.has(path)) { preserved.push(path); continue; }
-      restored.push(path);
-      records.push(record.slice(0, at + 1) + (prefix ? `${prefix}/${path}` : path));
-    }
-    if (!records.length) return { restored, preserved };
-    const env = { ...process.env };
-    for (const key of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_COMMON_DIR', 'GIT_INDEX_FILE']) delete env[key];
-    env.GIT_INDEX_FILE = lock;
-    const result = spawnSync('git', ['-C', top, 'update-index', '-z', '--index-info'], { input: records.join('\0') + '\0', encoding: 'utf8', env, windowsHide: true, timeout: 20000 });
-    if (result.status !== 0 || result.error) throw new Error(result.error?.message || result.stderr || 'Rollback do indice falhou.');
-    closeSync(descriptor); descriptor = undefined;
-    renameSync(lock, indexPath);
-    return { restored, preserved };
-  } finally {
-    if (descriptor !== undefined) closeSync(descriptor);
-    if (acquired) rmSync(lock, { force: true });
-  }
+  if (plan?.paths?.length) throw new Error('Alterar o indice Git foi desabilitado; indice preservado.');
+  return { restored: [], preserved: [] };
 }
 
 export function mergeGitignore(current, template) {

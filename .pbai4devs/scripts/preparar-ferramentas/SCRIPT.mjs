@@ -10,7 +10,10 @@ import { validateNativeDownload, nativeRelease, validateNativeRelease, installNa
 
 const registry = 'https://registry.npmjs.org/';
 const versionPattern = /^\d+\.\d+\.\d+(?:-[\w.-]+)?$/;
-const json = file => JSON.parse(readFileSync(file, 'utf8'));
+const json = (file, label = 'arquivo local') => {
+  const text = readFileSync(file, 'utf8');
+  try { return JSON.parse(text); } catch { throw new SyntaxError(`JSON invalido (${label}).`); }
+};
 const fail = (message, exitCode) => { const error = new Error(message); if (Number.isInteger(exitCode)) error.exitCode = exitCode; throw error; };
 const failureCode = error => Number.isInteger(error?.exitCode) && error.exitCode > 0 ? error.exitCode : 1;
 
@@ -138,7 +141,7 @@ export function loadCatalog(root = projectRoot) {
     if (!lstatSync(folder).isDirectory()) continue;
     const file = sourcePath(root, join('.pbai4devs/tools', item.name, 'TOOL.json'));
     if (!existsSync(file) || !lstatSync(file).isFile()) fail(`TOOL.json ausente ou invalido: ${item.name}`);
-    const entry = validateToolConfig(item.name, json(file));
+    const entry = validateToolConfig(item.name, json(file, 'TOOL.json'));
     const script = sourcePath(root, join('.pbai4devs/tools', item.name, entry.scripts.entry));
     if (!existsSync(script) || !lstatSync(script).isFile()) fail(`Script ausente ou invalido: ${item.name}/${entry.scripts.entry}`);
     if (readFileSync(script, 'utf8').replace(/\r\n?/g, '\n') !== toolWrapper(item.name)) fail(`Apontamento de ferramenta divergente: ${item.name}; use toolWrapper(nome).`);
@@ -171,7 +174,7 @@ function npmCli(runtime, environment) {
 }
 
 export function binaryInvocation(prefix, name, args = [], binaryName = name.split('/').at(-1), node = process.execPath) {
-  const base = join(prefix, 'node_modules', name); const pkg = json(join(base, 'package.json'));
+  const base = join(prefix, 'node_modules', name); const pkg = json(join(base, 'package.json'), 'package.json');
   const bin = typeof pkg.bin === 'string' ? pkg.bin : pkg.bin?.[binaryName];
   if (typeof bin !== 'string' || !bin || bin.includes('\0')) fail(`Executavel ausente ou invalido: ${name}`);
   const binary = resolve(base, bin); const traversal = relative(base, binary);
@@ -251,7 +254,7 @@ async function prepareExecutables(prefix, entry, platform, pkg, lock, fetchOptio
       try { lstatSync(directory); } catch (error) { if (error.code === 'ENOENT') continue; throw error; }
       const optionalRoot = realpathSync(directory);
       if (!within(realpathSync(join(prefix, 'node_modules')), optionalRoot)) fail(`Pacote opcional fora de node_modules: ${item.package}`);
-      const manifest = json(join(optionalRoot, 'package.json'));
+      const manifest = json(join(optionalRoot, 'package.json'), 'package.json');
       const record = lock.packages?.[`node_modules/${item.package}`];
       const official = await fetchOptional(item.package, version);
       const tarball = new URL(official.dist?.tarball);
@@ -359,7 +362,7 @@ export class ToolManager {
     const base = existsSync(join(local, 'CURRENT.json')) ? local : legacy;
     const file = join(base, 'CURRENT.json');
     if (!existsSync(file)) fail(`Ferramenta ausente: ${name}; execute install ${name}.`);
-    const info = json(file);
+    const info = json(file, 'CURRENT.json');
     if (info.name !== name || info.platform !== this.target || !versionPattern.test(info.version || '')) fail(`Instalacao incompativel: ${name}`);
     const prefix = storagePath(this.root, join(base, 'versions', `${info.version}-${this.target}`), 'directory');
     return { ...info, layout: base === local ? 'local' : 'legacy', prefix };
@@ -370,7 +373,7 @@ export class ToolManager {
       const receipt = checkNative(info.prefix, entry, this.target);
       if (receipt.version !== info.version || receipt.binarySha256 !== info.binarySha256) fail(`Versao local divergente: ${name}`);
     } else {
-      const pkg = json(join(info.prefix, 'node_modules', entry.download.package, 'package.json'));
+      const pkg = json(join(info.prefix, 'node_modules', entry.download.package, 'package.json'), 'package.json');
       if (pkg.name !== entry.download.package || pkg.version !== info.version) fail(`Versao local divergente: ${name}`);
     }
     execute(info.prefix, entry, entry.probe, true, entry.probeInput, toolEnvironment(entry, this.local(name), runtime), runtime);
@@ -431,7 +434,7 @@ export class ToolManager {
       if (!lstatSync(lock).isDirectory()) return { state: 'indeterminate', lock };
       const ownerFile = sourcePath(this.root, join(lock, 'owner.json'));
       if (!lstatSync(ownerFile).isFile()) return { state: 'indeterminate', lock };
-      const owner = json(ownerFile);
+      const owner = json(ownerFile, 'owner.json');
       if (!Number.isSafeInteger(owner?.pid) || owner.pid <= 0 || owner.pid > 2147483647 || owner.hostname !== hostname()) return { state: 'indeterminate', lock };
       try { process.kill(owner.pid, 0); return { state: 'active', lock, pid: owner.pid }; }
       catch (error) { return { state: error.code === 'ESRCH' ? 'stale' : 'indeterminate', lock, pid: owner.pid }; }
@@ -490,7 +493,7 @@ export class ToolManager {
       let receipt;
       if (entry.download.provider === 'github-release') receipt = checkNative(stage, entry, this.target);
       else {
-        const pkg = json(join(stage, 'node_modules', entry.download.package, 'package.json')); const lock = json(join(stage, 'package-lock.json'));
+        const pkg = json(join(stage, 'node_modules', entry.download.package, 'package.json'), 'package.json'); const lock = json(join(stage, 'package-lock.json'), 'package-lock.json');
         if (pkg.name !== entry.download.package || pkg.version !== release.version || lock.packages?.[`node_modules/${entry.download.package}`]?.integrity !== release.dist.integrity) fail('Pacote instalado nao corresponde ao registro.');
         await prepareExecutables(stage, entry, this.target, pkg, lock, this.fetchOptional);
       }

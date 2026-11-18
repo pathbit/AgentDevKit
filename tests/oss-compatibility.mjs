@@ -3,10 +3,12 @@
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
+import { gitPathsOverlap } from '../.pbai4devs/scripts/lib/git-environment.mjs';
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, readlinkSync, realpathSync, writeFileSync } from 'node:fs';
 import { delimiter, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { findNpmCli } from '../.pbai4devs/scripts/lib/npm.mjs';
+import { createExampleOutput } from '../.pbai4devs/scripts/testar-maturidade/SCRIPT.mjs';
 
 const repositoryRoot = realpathSync.native(resolve(dirname(fileURLToPath(import.meta.url)), '..'));
 const hash = content => createHash('sha256').update(content).digest('hex');
@@ -16,6 +18,12 @@ const registry = 'https://registry.npmjs.org';
 const put = (path, text) => { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, text); };
 const json = path => JSON.parse(readFileSync(path, 'utf8'));
 const info = path => { try { return lstatSync(path); } catch (error) { if (error.code === 'ENOENT') return null; throw error; } };
+const expectedProjectIssues = projectId => projectId === 'ef6' ? [
+  ...['.agents', '.agent', '.claude', '.codex', '.cursor', '.github', '.vscode', '.opencode', '.gemini', '.zcode', '.kimi-code', '.kimi', '.minimax', '.mimocode', '.dsh']
+    .map(root => ({ code: 'private-file-visible', path: `${root}/.Cache/.agentdevkit-ignore-probe` })),
+  { code: 'ignore-ambiguous', path: '.gitignore: !**/[Pp]ackages/build/' },
+  { code: 'ignore-ambiguous', path: '.gitignore: !*.[Cc]ache/' },
+] : [];
 
 function parse(args) {
   const options = { version: json(join(repositoryRoot, 'package.json')).version };
@@ -50,23 +58,74 @@ function projects(options) {
   return selected;
 }
 
-function outputDirectory(requested) {
-  const path = resolve(repositoryRoot, requested || `tmp/oss-compatibility/${new Date().toISOString().replace(/[:.]/g, '-')}-${randomUUID().slice(0, 8)}`);
-  const rel = portable(relative(repositoryRoot, path));
+// Filesystems may fold Unicode or unusual names differently from JavaScript.
+// Treat ambiguous components as potential aliases instead of risking a staged
+// file that is absent from the worktree.
+export function mayAliasPath(left, right, { root, platform = process.platform } = {}) {
+  const a = left.split('/'), b = right.split('/');
+  for (let index = 0; index < Math.min(a.length, b.length); index++) {
+    if (a[index].normalize('NFD').toLowerCase() === b[index].normalize('NFD').toLowerCase()) continue;
+    const ordinary = part => /^[a-z0-9_.-]+$/i.test(part) && !part.endsWith('.');
+    // On Windows even an ordinary ASCII name may be an arbitrary 8.3 alias.
+    // A missing output ancestor is distinct only when the indexed entry exists
+    // and the shared parent is verified. Check each destination prefix so the
+    // existing helper can establish that fact for an intermediate component.
+    if (ordinary(a[index]) && ordinary(b[index])) {
+      if (platform !== 'win32') return false;
+      for (let length = 1; length <= b.length; length++) {
+        if (!gitPathsOverlap(left, b.slice(0, length).join('/'), { root, platform, allowMissingTarget: true })) return false;
+      }
+      return true;
+    }
+  }
+  return true;
+}
+
+function outputDirectory(requested, { root = repositoryRoot, environment = process.env } = {}) {
+  root = realpathSync.native(root);
+  const path = resolve(root, requested || `tmp/oss-compatibility/${new Date().toISOString().replace(/[:.]/g, '-')}-${randomUUID().slice(0, 8)}`);
+  const rel = portable(relative(root, path));
   assert.ok(rel.startsWith('tmp/') && rel !== 'tmp/' && !isAbsolute(rel), '--output deve ficar dentro de tmp/ do repositório.');
-  let current = repositoryRoot;
+  let current = root;
   for (const part of rel.split('/')) {
     current = join(current, part);
     const item = info(current);
     assert.ok(!item || item.isDirectory() && !item.isSymbolicLink(), 'Saída não pode atravessar arquivos ou links.');
   }
   assert.ok(!existsSync(path), 'A pasta de saída já existe; use uma execução nova.');
-  const top = spawnSync('git', ['-C', repositoryRoot, 'rev-parse', '--show-toplevel'], { encoding: 'utf8' });
+  assert.ok(!Object.entries(environment).some(([key, value]) => /^(?:GIT_DIR|GIT_WORK_TREE|GIT_COMMON_DIR|GIT_INDEX_FILE|GIT_CEILING_DIRECTORIES|GIT_DISCOVERY_ACROSS_FILESYSTEM|GIT_OBJECT_DIRECTORY|GIT_ALTERNATE_OBJECT_DIRECTORIES|GIT_NAMESPACE)$/i.test(key) && value), 'Saída local não permite repositório ou índice Git redirecionado.');
+  const env = { ...environment };
+  for (const key of Object.keys(env)) if (/^GIT_OPTIONAL_LOCKS$/i.test(key)) delete env[key];
+  env.GIT_OPTIONAL_LOCKS = '0';
+  const git = (args, options = {}) => {
+    const result = spawnSync('git', ['-c', 'core.fsmonitor=false', '-C', root, ...args], {
+      env, timeout: 30000, maxBuffer: 64 * 1024 * 1024, windowsHide: true, shell: false, ...options,
+    });
+    assert.ok(!result.error && !result.signal, 'Não foi possível verificar o Git da saída.');
+    return result;
+  };
+  const top = git(['rev-parse', '--show-toplevel'], { encoding: 'utf8' });
   assert.equal(top.status, 0, 'Execute a partir de um checkout Git do AgentDevKit.');
-  assert.equal(realpathSync.native(top.stdout.trim()), repositoryRoot, 'O Git encontrado não pertence ao AgentDevKit.');
-  const ignored = spawnSync('git', ['-c', 'core.excludesFile=', '-C', repositoryRoot, 'check-ignore', '--no-index', '-q', '--', rel + '/projects/probe'], { encoding: 'utf8' });
+  let topName = top.stdout.endsWith('\n') ? top.stdout.slice(0, -1) : top.stdout;
+  if (process.platform === 'win32' && topName.endsWith('\r')) topName = topName.slice(0, -1);
+  assert.equal(realpathSync.native(topName), root, 'O Git encontrado não pertence ao AgentDevKit.');
+  const target = `${rel}/`;
+  const ignored = git(['check-ignore', '--no-index', '--verbose', '-z', '--stdin'], { input: `${target}\0`, encoding: 'utf8' });
   assert.equal(ignored.status, 0, 'A saída deve estar ignorada pelo Git antes de clonar.');
+  const match = ignored.stdout.split('\0');
+  assert.ok(match.length === 5 && match[4] === '' && match[0] && /^[1-9]\d*$/.test(match[1]) && match[2] && !match[2].startsWith('!') && match[3] === target, 'Resposta Git inválida ao verificar ignore.');
+  const indexed = git(['ls-files', '--cached', '-z']);
+  assert.equal(indexed.status, 0, 'Não foi possível verificar o índice Git.');
+  let names;
+  try { names = new TextDecoder('utf-8', { fatal: true }).decode(indexed.stdout); }
+  catch { throw new Error('Índice Git contém caminhos que não podem ser verificados.'); }
+  assert.ok(!names || names.endsWith('\0'), 'Resposta Git inválida ao verificar índice.');
+  assert.ok(!names.split('\0').filter(Boolean).some(name => mayAliasPath(name, rel, { root })), 'A saída conflita com arquivo staged ou caminho ambíguo no índice Git.');
   return path;
+}
+
+function prepareOutput(path, root = repositoryRoot) {
+  return createExampleOutput({ sourceRoot: root, outputRoot: path });
 }
 
 function environment(output) {
@@ -76,12 +135,13 @@ function environment(output) {
   put(join(output, 'npmrc'), `@pathbit:registry=${registry}\n`);
   put(join(output, 'empty-config'), '');
   mkdirSync(join(output, 'empty-hooks'));
+  mkdirSync(join(output, 'xdg-config'));
   const pathKey = Object.keys(env).find(key => key.toLowerCase() === 'path') || 'PATH';
   env[pathKey] = `${dirname(process.execPath)}${delimiter}${env[pathKey] || ''}`;
   return { ...env, npm_config_registry: registry, npm_config_userconfig: join(output, 'npmrc'),
     npm_config_globalconfig: join(output, 'empty-config'), npm_config_cache: join(output, 'npm-cache'),
     npm_config_ignore_scripts: 'true', npm_config_offline: 'false', npm_config_audit: 'false', npm_config_fund: 'false',
-    GIT_CONFIG_GLOBAL: join(output, 'empty-config'), GIT_CONFIG_SYSTEM: join(output, 'empty-config'), GIT_CONFIG_NOSYSTEM: '1',
+    XDG_CONFIG_HOME: join(output, 'xdg-config'), GIT_CONFIG_GLOBAL: join(output, 'empty-config'), GIT_CONFIG_SYSTEM: join(output, 'empty-config'), GIT_CONFIG_NOSYSTEM: '1',
     GIT_TERMINAL_PROMPT: '0', GIT_ALLOW_PROTOCOL: 'https', GIT_OPTIONAL_LOCKS: '0' };
 }
 
@@ -180,7 +240,45 @@ function checkHumanExcludeBytes(root, original) {
   validateGitSnapshotPaths(root);
   const path = join(root, '.git/info/exclude'), item = info(path);
   assert.ok(item?.isFile() && !item.isSymbolicLink(), 'Exclusões locais humanas foram removidas ou substituídas.');
-  assert.ok(readFileSync(path).subarray(0, original.length).equals(original), 'Exclusões locais humanas foram alteradas.');
+  assert.ok(readFileSync(path).equals(original), 'Exclusões locais humanas foram alteradas.');
+}
+
+export function classifyIgnoreStatus(path, status) {
+  assert.ok(status === 0 || status === 1, `Falha ao consultar ignore de ${path}: git=${status}.`);
+  return { path, ignored: status === 0, status };
+}
+
+export function checkExcludeOrigin(text) {
+  assert.match(text, /^\.git\/info\/exclude:[1-9]\d*:\/oss-human-private\/\toss-human-private\/probe\r?\n$/, 'Regra humana de exclusão não foi a regra efetiva.');
+}
+
+export function checkDoctorIssues(value, privatePath, ignored, extraIssues = []) {
+  const expected = [...(ignored ? [] : [{ code: 'private-file-visible', path: privatePath }]), ...extraIssues];
+  assert.deepEqual(value.issues, expected, 'Diagnóstico apresentou problemas ausentes ou inesperados.');
+}
+
+export function checkSyncIssues(value, privatePath, ignored, extraIssues = []) {
+  assert.ok(Array.isArray(value.localIgnore?.pending), 'Diagnóstico sync ausente.');
+  const blocking = value.localIgnore.pending.filter(item => !['artifact-unprotected', 'artifact-coverage-unverified', 'output-visible'].includes(item.code));
+  const expected = [...(ignored ? [] : [{ code: 'private-file-visible', path: privatePath }]), ...extraIssues];
+  assert.deepEqual(blocking, expected, 'Sync apresentou problemas ausentes ou inesperados.');
+  assert.deepEqual(value.conflicts, [], 'Sync apresentou conflitos.');
+  assert.deepEqual(value.localIgnore.trackedOutputs, [], 'Sync detectou artefatos rastreados.');
+}
+
+export function checkStandaloneSync(text, value) {
+  assert.ok(Array.isArray(value?.localIgnore?.pending), 'Diagnóstico JSON necessário para validar o resumo textual.');
+  const pending = value.localIgnore.pending;
+  const blocking = pending.filter(item => !['artifact-unprotected', 'artifact-coverage-unverified', 'output-visible'].includes(item.code));
+  const summary = `0 desatualizadas; 0 obsoletas; 0 conflitos; 0 origens nativas ausentes; 0 documentos antigos; 0 indices derivados; 0 gitignores; ${blocking.length} exclusoes locais.`;
+  assert.equal(text.split(/\r?\n/)[0], summary, 'Resumo do sync independente indica alterações ou problemas inesperados.');
+  const displayed = [...blocking, ...pending.filter(item => !blocking.includes(item))].slice(0, 12);
+  const expectedLines = displayed.map(item => `${blocking.includes(item) ? 'Pendente' : 'Aviso'}: ${item.code}: ${item.path}`);
+  const actualLines = text.split(/\r?\n/).filter(line => /^(?:Pendente|Aviso): /.test(line));
+  assert.deepEqual(actualLines, expectedLines, 'Prévia de pendências inesperada no sync independente.');
+  const truncations = text.split(/\r?\n/).filter(line => /^\+\d+; use agentdevkit sync --check --json para detalhes\.$/.test(line));
+  const expectedTruncations = pending.length > 12 ? [`+${pending.length - 12}; use agentdevkit sync --check --json para detalhes.`] : [];
+  assert.deepEqual(truncations, expectedTruncations, 'Contagem de pendências omitidas diverge do JSON completo.');
 }
 
 function gitSnapshot(root, git) {
@@ -196,7 +294,10 @@ function gitSnapshot(root, git) {
     stagedDiff: git('diff', '--cached', '--binary', '--no-ext-diff', '--no-color'),
     remotes: git('config', '--get-regexp', '^remote\\..*\\.(url|pushurl)$'),
     configSha256: hash(readFileSync(join(root, '.git/config'))),
-    exclude: info(join(root, '.git/info/exclude')) ? hash(readFileSync(join(root, '.git/info/exclude'))) : null };
+    exclude: info(join(root, '.git/info/exclude')) ? hash(readFileSync(join(root, '.git/info/exclude'))) : null,
+    indexMode: info(indexPath) ? info(indexPath).mode & 0o777 : null,
+    configMode: info(join(root, '.git/config')).mode & 0o777,
+    excludeMode: info(join(root, '.git/info/exclude')) ? info(join(root, '.git/info/exclude')).mode & 0o777 : null };
   assert.equal(indexHash(), indexSha256, 'Consulta Git alterou os bytes do índice.');
   return { ...snapshot, indexSha256 };
 }
@@ -334,6 +435,9 @@ function checkOriginals(root, baseline, git) {
   if (baseline.excludeOriginal !== undefined) {
     checkHumanExcludeBytes(root, Buffer.from(baseline.excludeOriginal, 'base64'));
   }
+  for (const field of ['exclude', 'indexMode', 'configMode', 'excludeMode']) {
+    if (Object.hasOwn(baseline.git, field)) assert.equal(now[field], baseline.git[field], `Git ${field} alterado.`);
+  }
 }
 
 // A human edit turns a previously managed file into user-owned content. The
@@ -399,7 +503,7 @@ function testProject(project, options, output, env, npm) {
     put(excludePath, excludeOriginal);
     const checkHumanExclude = () => {
       validateGitSnapshotPaths(directory);
-      git('check-ignore', '--no-index', '--quiet', '--', 'oss-human-private/probe');
+      checkExcludeOrigin(git('check-ignore', '--no-index', '--verbose', '--', 'oss-human-private/probe'));
     };
     checkHumanExclude();
     const trackedPaths = git('ls-files', '-z').split('\0').filter(Boolean);
@@ -459,17 +563,20 @@ function testProject(project, options, output, env, npm) {
       checkHumanExcludeBytes(directory, excludeOriginal);
       checkHumanExclude();
     };
-    const protectedCli = (name, args) => {
-      const before = workspace(directory), outcome = cli(name, args);
+    const protectedCli = (name, args, expected = 0) => {
+      const before = workspace(directory), outcome = cli(name, args, expected);
       verifyLinks(before, outcome);
+      checkOriginals(directory, baseline, git);
       return outcome;
     };
-    const protectedRun = (name, args) => {
+    const protectedRun = (name, args, expected = 0) => {
       const before = workspace(directory);
-      run(name, process.execPath, args, directory);
+      const text = run(name, process.execPath, args, directory, expected);
       // O script standalone não retorna um plano estruturado; exija que as
       // árvores dos alvos permaneçam estáveis nas chamadas desta prova.
       verifyLinks(before, { plan: [], preserved: [] });
+      checkOriginals(directory, baseline, git);
+      return text;
     };
     verifyLinks(dryBefore.workspace, installed, ['README.md', ...(project.clients.some(client => ['all', 'claude'].includes(client)) ? ['CLAUDE.md'] : [])]);
     if (project.clients.includes('all') || project.clients.includes('codex')) {
@@ -480,15 +587,63 @@ function testProject(project, options, output, env, npm) {
     for (const path of ['.agent-tests/probe', 'tmp/probe', '.PlAyWrIgHt-McP/probe', 'playwright-report/probe', 'test-results/probe']) {
       run('ignore-check', 'git', [...gitPrefix, 'check-ignore', '--no-index', '--quiet', '--', path], output, null);
       const status = commands.at(-1).status;
+      const observation = classifyIgnoreStatus(path, status);
       const match = status === 0 ? '' : run('ignore-diagnostic', 'git', [...gitPrefix, 'check-ignore', '--no-index', '--verbose', '--', path], output, null);
-      result.ignoreChecks.push({ path, ignored: status === 0, status, match: match.trim() });
-      if (status !== 0) result.failures.push(`Artefato local não ignorado: ${path} (git=${status}).`);
+      result.ignoreChecks.push({ ...observation, match: match.trim() });
     }
-    checked('artifact-ignore-checks', result.failures.length ? 'failed' : 'passed');
-    cli('doctor', ['doctor', '--target', directory]);
-    protectedCli('sync-check', ['sync', '--check', '--target', directory]); checked('doctor-and-sync');
-    protectedRun('standalone-sync-check', ['.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs', '--check']);
-    run('installed-resource-check', process.execPath, ['.pbai4devs/scripts/verificar-recursos/SCRIPT.mjs'], directory);
+    checked('artifact-ignore-observed');
+    const privateObservation = () => {
+      run('private-ignore-check', 'git', ['-c', `core.hooksPath=${join(output, 'empty-hooks')}`, '-C', directory, 'check-ignore', '--no-index', '--quiet', '--', nativeConfig], output, null);
+      return classifyIgnoreStatus(nativeConfig, commands.at(-1).status);
+    };
+    const extraIssues = expectedProjectIssues(project.id);
+    for (const issue of extraIssues) {
+      if (issue.code === 'private-file-visible' && issue.path.endsWith('/.agentdevkit-ignore-probe')) {
+        assert.equal(info(join(directory, issue.path)), null, `Sonda diagnostica nao deve existir: ${issue.path}`);
+        run('expected-diagnostic-probe-ignore-check', 'git', [...gitPrefix, 'check-ignore', '--no-index', '--quiet', '--', issue.path], output, null);
+        assert.equal(commands.at(-1).status, 1, `Sonda nao ignorada divergiu do diagnostico: ${issue.path}`);
+      } else if (issue.code === 'ignore-ambiguous') {
+        const match = issue.path.match(/^\.gitignore: (.*)$/);
+        assert.ok(match, `Origem de regra ambigua inesperada: ${issue.path}`);
+        const lines = readFileSync(join(directory, '.gitignore'), 'utf8').split(/\r?\n/);
+        assert.ok(lines.includes(match[1]), `Regra de origem ausente: ${issue.path}`);
+      } else assert.fail(`Diagnostico de projeto nao suportado: ${JSON.stringify(issue)}`);
+    }
+    const doctor = name => {
+      const observation = privateObservation();
+      const expectedExit = !observation.ignored || extraIssues.length ? 1 : 0;
+      const outcome = cli(name, ['doctor', '--target', directory], expectedExit);
+      checkDoctorIssues(outcome, nativeConfig, observation.ignored, extraIssues);
+      checkOriginals(directory, baseline, git);
+      return outcome;
+    };
+    const syncCheck = name => {
+      const observation = privateObservation();
+      const expectedExit = !observation.ignored || extraIssues.length ? 1 : 0;
+      const outcome = protectedCli(name, ['sync', '--check', '--target', directory], expectedExit);
+      checkSyncIssues(outcome, nativeConfig, observation.ignored, extraIssues);
+      return outcome;
+    };
+    const doctorOutcome = doctor('doctor');
+    const syncOutcome = syncCheck('sync-check');
+    const expectedBlocking = [...(privateObservation().ignored ? [] : [{ code: 'private-file-visible', path: nativeConfig }]), ...extraIssues];
+    const requiresAttention = expectedBlocking.length > 0;
+    result.diagnostics = { status: requiresAttention ? 'attention-required' : 'healthy', doctorOk: doctorOutcome.ok, syncOk: syncOutcome.ok, expectedBlocking };
+    checked(requiresAttention ? 'doctor-and-sync-known-diagnostics' : 'doctor-and-sync', requiresAttention ? 'attention-required' : 'passed');
+    const observation = privateObservation();
+    const expectedExit = !observation.ignored || extraIssues.length ? 1 : 0;
+    const standaloneCheck = protectedRun('standalone-sync-check', ['.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs', '--check'], expectedExit);
+    checkStandaloneSync(standaloneCheck, syncOutcome);
+    run('installed-resource-check', process.execPath, ['.pbai4devs/scripts/verificar-recursos/SCRIPT.mjs'], directory, expectedExit);
+    if (expectedExit !== 0) {
+      const stderr = readFileSync(join(evidence, commands.at(-1).stderr), 'utf8');
+      checkStandaloneSync(stderr, syncOutcome);
+      // The normal verifier stops at sync when private data is visible. Sync
+      // was checked above; separately execute the remaining resource checks.
+      const script = 'import { verifyResources } from "./.pbai4devs/scripts/verificar-recursos/SCRIPT.mjs"; const result = verifyResources({root: process.cwd(), synchronize() {}}); if (!Array.isArray(result.messages) || !result.messages.includes("recursos=passed")) throw Error("Verificação de recursos incompleta"); for (const message of result.messages) console.log(message);';
+      run('installed-resource-check-after-sync-diagnostic', process.execPath, ['--input-type=module', '-e', script], directory);
+      result.resourceCheck = 'sync-private-block-then-resource-check';
+    } else result.resourceCheck = 'normal';
     checkOriginals(directory, baseline, git); checked('standalone-sync-preserves-agents');
     const stable = workspace(directory);
     protectedCli('init-repeat', init); protectedCli('update-repeat', ['update', '--target', directory, '--yes']);
@@ -502,10 +657,12 @@ function testProject(project, options, output, env, npm) {
     assert.ok(!existsSync(join(directory, skillPath)), 'Skill de teste já existe.');
     const skill = `---\nname: oss-user-${project.id}\ndescription: User-owned OSS compatibility fixture.\n---\n\n# OSS user skill\n\nPreserve this user-owned resource.\n`;
     writeClone(directory, skillPath, skill);
+    baseline.files[skillPath] = fileSnapshot(directory, skillPath);
+    put(join(evidence, 'baseline.json'), JSON.stringify(baseline, null, 2) + '\n');
     protectedCli('update-user-skill', ['update', '--target', directory, '--yes']);
     assert.equal(readFileSync(join(directory, skillPath), 'utf8'), skill);
-    cli('doctor-user-skill', ['doctor', '--target', directory]);
-    protectedCli('sync-user-skill', ['sync', '--check', '--target', directory]);
+    doctor('doctor-user-skill');
+    syncCheck('sync-user-skill');
     checkOriginals(directory, baseline, git); checked('user-skill-preserved');
     const managed = '.pbai4devs/rules/qualidade/RULE.md', original = readFileSync(join(directory, managed));
     const beforeState = stateJson(directory, statePath);
@@ -521,8 +678,8 @@ function testProject(project, options, output, env, npm) {
       assert.equal(repeat.changed, false, 'Repetição alterou a instalação com edição humana.');
       assert.deepEqual(workspace(directory), after, 'Repetição alterou arquivos preservados ou estado.');
       assert.deepEqual(gitSnapshot(directory, git), afterGit, 'Repetição alterou o Git.');
-      cli('doctor-human-edit', ['doctor', '--target', directory]);
-      protectedCli('sync-human-edit', ['sync', '--check', '--target', directory]);
+      doctor('doctor-human-edit');
+      syncCheck('sync-human-edit');
     } finally { writeClone(directory, managed, original); }
     assert.deepEqual(readFileSync(join(directory, managed)), original, 'Arquivo da fixture não foi restaurado.');
     checkOriginals(directory, baseline, git); checked('human-edit-preserved-and-restored');
@@ -559,27 +716,36 @@ export function main(args = process.argv.slice(2)) {
     assert.ok(options.tarball.endsWith('.tgz') && item?.isFile() && !item.isSymbolicLink(), '--tarball exige arquivo .tgz regular.');
     options.packageSource = { kind: 'local-tarball', path: options.tarball, sha256: hash(readFileSync(options.tarball)), expectedVersion: options.version };
   } else options.packageSource = { kind: 'public-registry', registry, package: `@pathbit/agentdevkit@${options.version}`, expectedVersion: options.version };
-  mkdirSync(output, { recursive: true });
+  const prepared = prepareOutput(output);
+  prepared.verifyOutput();
   const env = environment(output);
-  const results = selected.map(project => testProject(project, options, output, env, npm));
+  const results = selected.map(project => {
+    prepared.verifyOutput();
+    const result = testProject(project, options, output, env, npm);
+    prepared.verifyOutput();
+    return result;
+  });
   let archiveUnchanged = true;
   if (options.tarball) try { archiveUnchanged = hash(readFileSync(options.tarball)) === options.packageSource.sha256; }
   catch { archiveUnchanged = false; }
-  const report = { status: archiveUnchanged && results.every(result => result.status === 'passed') ? 'passed' : 'failed', version: options.version,
+  const report = { status: archiveUnchanged && results.every(result => result.status === 'passed') ? 'passed' : 'failed',
+    health: results.some(result => result.diagnostics?.status === 'attention-required') ? 'attention-required' : 'healthy', version: options.version,
     packageSource: { ...options.packageSource, ...(options.tarball ? { unchanged: archiveUnchanged } : {}) },
     node: process.version, platform: process.platform, arch: process.arch, output, results,
     limits: ['Somente compatibilidade de instalação do kit; aplicações, builds e serviços não foram executados.',
       'Sem push, alteração de remotes após o clone, configuração global ou credenciais npm.',
       'Links para a raiz do projeto têm identidade, plano e ownership verificados, mas não toda a árvore de destino.',
+      'status=passed valida preservação e comportamento esperado; consulte health e results[].diagnostics para pendências do projeto.',
       'Resultados limitados aos commits, clientes, sistema operacional e runtime registrados.'] };
+  prepared.verifyOutput();
   put(join(output, 'REPORT.json'), JSON.stringify(report, null, 2) + '\n');
-  console.log(JSON.stringify({ status: report.status, projects: results.length, report: join(output, 'REPORT.json') }));
+  console.log(JSON.stringify({ status: report.status, health: report.health, projects: results.length, report: join(output, 'REPORT.json') }));
   return report.status === 'passed' ? 0 : 1;
 }
 
 // Shared by the opt-in documentation exercise; no helper runs on import.
 export {
-  parse as parseCompatibilityArgs, outputDirectory, environment, recorder,
+  parse as parseCompatibilityArgs, outputDirectory, prepareOutput, environment, recorder,
   fileSnapshot, stateJson, workspace, gitSnapshot, checkHumanExcludeBytes, linkedDirectoryPaths, checkOriginals, checkNativeOwnership, checkPreservedLinks, checkPreservedManagedEdit, parseCliResult, info, put, json, hash, portable,
   repositoryRoot, registry,
 };

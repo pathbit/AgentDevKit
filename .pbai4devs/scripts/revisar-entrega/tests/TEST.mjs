@@ -1,9 +1,10 @@
+import '../../lib/test-git-environment.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { checkCommit, checkMerge, checkReview, prepareReview, sealReview, specCriteria } from '../SCRIPT.mjs';
 import { projectRoot } from '../../lib/runtime.mjs';
 
@@ -38,11 +39,60 @@ function approved(t, options = {}, setup = () => {}, seal = true) {
 
 test('aprova relatorio completo e liga spec, documentos e evidencias ignoradas', t => {
   const f = approved(t);
-  assert.equal(checkReview(f.file, { root: f.root }).status, 'passed');
+  const result = checkReview(f.file, { root: f.root });
+  assert.equal(result.status, 'passed');
+  assert.equal(result.reviewVerification, 'not-verified');
+  assert.equal(sealReview(f.file, { root: f.root }).reviewVerification, 'not-verified');
   assert.equal(f.report.validation.length, 2);
   assert.ok(f.report.snapshot.files.some(item => item.path === 'README.md'));
   assert.ok(f.report.snapshot.files.some(item => item.path === 'spec.md'));
   assert.equal(f.git('ls-files', '--', '.agent-tests').trim(), '');
+});
+
+for (const [part, label] of [
+  ['report', 'relatorio de revisao'],
+  ['baseline', 'baseline de revisao'],
+  ['seal', 'selo de revisao'],
+]) test(`JSON malformado em ${part} nao expõe conteúdo na API nem na CLI`, t => {
+  const f = approved(t, {}, f => {
+    f.git('add', '--', 'README.md');
+    const scripts = join(f.root, '.pbai4devs/scripts');
+    cpSync(join(projectRoot, '.pbai4devs/scripts/lib'), join(scripts, 'lib'), { recursive: true });
+    mkdirSync(join(scripts, 'revisar-entrega'), { recursive: true });
+    cpSync(join(projectRoot, '.pbai4devs/scripts/revisar-entrega/SCRIPT.mjs'), join(scripts, 'revisar-entrega/SCRIPT.mjs'));
+  });
+  const location = part === 'report' ? f.file : `.agent-tests/mudanca/exec-1/${part}.json`;
+  const marker = 'SYNTHETIC_PRIVATE_MARKER';
+  f.put(location, `${marker} malformed`);
+  const before = readFileSync(join(f.root, location));
+  const index = readFileSync(join(f.root, '.git/index'));
+  const human = readFileSync(join(f.root, 'README.md'));
+  assert.throws(() => checkReview(f.file, { root: f.root }), error => {
+    assert.ok(error instanceof SyntaxError);
+    assert.equal(error.message, `JSON invalido: ${label}.`);
+    assert.ok(!String(error.stack).includes(marker));
+    return true;
+  });
+  const result = spawnSync(process.execPath, [join(f.root, '.pbai4devs/scripts/revisar-entrega/SCRIPT.mjs'), 'check', f.file], {
+    cwd: f.root, encoding: 'utf8', timeout: 30000,
+  });
+  assert.equal(result.error, undefined);
+  assert.equal(result.signal, null);
+  assert.equal(result.status, 1);
+  assert.equal(result.stderr.trim(), `JSON invalido: ${label}.`);
+  assert.ok(!`${result.stdout}${result.stderr}`.includes(marker));
+  assert.deepEqual(readFileSync(join(f.root, location)), before);
+  assert.deepEqual(readFileSync(join(f.root, '.git/index')), index);
+  assert.deepEqual(readFileSync(join(f.root, 'README.md')), human);
+});
+
+test('relatório ausente mantém erro de leitura ENOENT', t => {
+  const f = fixture(t);
+  assert.throws(() => checkReview('.agent-tests/ausente.json', { root: f.root }), error => {
+    assert.equal(error.code, 'ENOENT');
+    assert.ok(!(error instanceof SyntaxError));
+    return true;
+  });
 });
 
 test('instrucoes existentes entram na revisao e mudancas posteriores invalidam o selo', async t => {
@@ -183,7 +233,9 @@ test('prepare, seal, check e check-commit preservam indice com stat defasado', t
   f.put(made.file, JSON.stringify(made.report));
   assert.equal(preserved(() => sealReview(made.file, { root: f.root })).status, 'passed');
   assert.equal(preserved(() => checkReview(made.file, { root: f.root })).status, 'passed');
-  assert.equal(preserved(() => checkCommit([made.file], { root: f.root })).status, 'passed');
+  const commitCheck = preserved(() => checkCommit([made.file], { root: f.root }));
+  assert.equal(commitCheck.status, 'passed');
+  assert.equal(commitCheck.reviewVerification, 'not-verified');
 });
 
 test('coleta automatica inclui staged cancelado e ambas pontas de renomeacao', async t => {
@@ -411,7 +463,9 @@ test('check-commit na CLI aplica a mesma protecao de staged extra', t => {
   for (const file of [script, runtime]) { mkdirSync(dirname(join(f.root, file)), { recursive: true }); cpSync(join(projectRoot, file), join(f.root, file)); }
   const args = [join(f.root, script), 'check-commit', f.file];
   let run = spawnSync(process.execPath, args, { cwd: f.root, encoding: 'utf8' });
-  assert.equal(run.status, 0, run.stderr); assert.equal(JSON.parse(run.stdout).status, 'passed');
+  assert.equal(run.status, 0, run.stderr);
+  const result = JSON.parse(run.stdout);
+  assert.equal(result.status, 'passed'); assert.equal(result.reviewVerification, 'not-verified');
   f.put('extra.txt', 'preparado\n'); f.git('add', 'extra.txt');
   const index = readFileSync(join(f.root, '.git/index'));
   run = spawnSync(process.execPath, args, { cwd: f.root, encoding: 'utf8' });
@@ -459,6 +513,48 @@ test('check-commit rejeita modo executavel staged apos o selo', t => {
   const index = readFileSync(join(f.root, '.git/index'));
   assert.throws(() => checkCommit([f.file], { root: f.root }), /modo preparado nao comprovado: src\/main\.mjs/);
   assert.deepEqual(readFileSync(join(f.root, '.git/index')), index);
+});
+
+test('fixtures isolam Git externo herdado antes de criar commits', t => {
+  const external = fixture(t);
+  external.git('add', '.');
+  external.git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid',
+    '-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=/dev/null', 'commit', '-q', '-m', 'test: base');
+  external.put('src/main.mjs', 'conteudo humano staged\n');
+  external.git('add', 'src/main.mjs');
+  const marker = join(external.root, 'fsmonitor-ran');
+  const injected = {};
+  if (process.platform !== 'win32') {
+    const quote = value => `'${value.replaceAll("'", "'\\''")}'`;
+    const hook = join(external.root, 'fsmonitor.sh');
+    writeFileSync(hook, `#!/bin/sh\nprintf triggered > ${quote(marker)}\n`);
+    Object.assign(injected, { GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'core.fsmonitor', GIT_CONFIG_VALUE_0: `sh ${quote(hook)}` });
+    const probe = spawnSync('git', ['ls-files'], { cwd: external.root, env: { ...process.env, ...injected }, encoding: 'utf8' });
+    assert.equal(probe.status, 0, probe.stderr);
+    assert.ok(existsSync(marker), 'O fsmonitor sintético precisa executar no controle.');
+    rmSync(marker);
+  }
+  const index = join(external.root, '.git/index');
+  const before = {
+    head: external.git('rev-parse', 'HEAD'),
+    index: readFileSync(index),
+    config: readFileSync(join(external.root, '.git/config')),
+    staged: external.git('diff', '--cached', '--binary'),
+  };
+  const env = { ...process.env, ...injected, GIT_DIR: join(external.root, '.git'), GIT_WORK_TREE: external.root, GIT_INDEX_FILE: index };
+  for (const key of Object.keys(env)) if (/^NODE_TEST_CONTEXT$/i.test(key)) delete env[key];
+  const run = spawnSync(process.execPath, ['--test', '--test-reporter=tap', '--test-name-pattern=^check-commit rejeita modo executavel staged apos o selo$', fileURLToPath(import.meta.url)], {
+    env, encoding: 'utf8', timeout: 90000, windowsHide: true,
+  });
+  assert.equal(run.status, 0, `${run.stdout || ''}${run.stderr || ''}${run.error || ''}`);
+  assert.match(run.stdout, /^ok 1 - check-commit rejeita modo executavel staged apos o selo\r?$/m);
+  assert.match(run.stdout, /^# tests 1\r?$/m);
+  assert.match(run.stdout, /^# pass 1\r?$/m);
+  assert.equal(external.git('rev-parse', 'HEAD'), before.head);
+  assert.deepEqual(readFileSync(index), before.index);
+  assert.deepEqual(readFileSync(join(external.root, '.git/config')), before.config);
+  assert.equal(external.git('diff', '--cached', '--binary'), before.staged);
+  assert.equal(existsSync(marker), false, 'O fsmonitor externo não deve executar durante a fixture.');
 });
 
 test('gate rejeita blob transformado por clean filter sem executar filtro na verificacao', t => {
@@ -736,7 +832,7 @@ test('check-merge prova fast-forward completo sem alterar indice ou arquivos hum
   f.put('human.txt', 'staged humano\n'); f.git('add', 'human.txt'); f.put('human.txt', 'alteracao humana\n');
   const index = readFileSync(join(f.root, '.git/index')), human = readFileSync(join(f.root, 'human.txt'));
   const result = checkMerge([f.file], 'refs/heads/main', { root: f.root });
-  assert.equal(result.status, 'passed'); assert.equal(result.mode, 'fast-forward'); assert.equal(result.changes, 3);
+  assert.equal(result.status, 'passed'); assert.equal(result.reviewVerification, 'not-verified'); assert.equal(result.mode, 'fast-forward'); assert.equal(result.changes, 3);
   assert.equal(result.source, f.git('rev-parse', 'HEAD').trim()); assert.equal(result.target, f.git('rev-parse', 'main').trim());
   assert.deepEqual(readFileSync(join(f.root, '.git/index')), index); assert.deepEqual(readFileSync(join(f.root, 'human.txt')), human);
 });
@@ -747,7 +843,9 @@ test('check-merge funciona na CLI e rejeita relatorio duplicado por alias', t =>
   for (const file of [script, runtime]) { mkdirSync(dirname(join(f.root, file)), { recursive: true }); cpSync(join(projectRoot, file), join(f.root, file)); }
   const args = [join(f.root, script), 'check-merge', '--destino', 'refs/heads/main', f.file];
   const run = spawnSync(process.execPath, args, { cwd: f.root, encoding: 'utf8' });
-  assert.equal(run.status, 0, run.stderr); assert.equal(JSON.parse(run.stdout).status, 'passed');
+  assert.equal(run.status, 0, run.stderr);
+  const result = JSON.parse(run.stdout);
+  assert.equal(result.status, 'passed'); assert.equal(result.reviewVerification, 'not-verified');
   assert.throws(() => checkMerge([f.file, `./${f.file}`], 'refs/heads/main', { root: f.root }), /sem repeticao/);
 });
 

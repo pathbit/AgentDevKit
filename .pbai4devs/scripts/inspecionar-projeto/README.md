@@ -16,6 +16,12 @@ Na maturidade, o roadmap e as specs são consultados nos caminhos configurados;
 status são declarações e um vínculo local não comprova aprovação ou revisão.
 Uma lista de specs ambígua ou incompleta não autoriza escolher um incremento;
 o estado do vínculo no roadmap também é apenas uma indicação para consulta.
+O inventário de specs lê no máximo 200 entradas por pasta, 500 entradas no
+total, 1 MiB por spec e 16 MiB de specs no total. Se um limite for excedido,
+for detectada mudança em uma pasta ou spec durante a leitura ou um caminho não
+puder ser verificado, a lista é descartada e marcada incompleta. A detecção usa
+identidade e metadados do sistema de arquivos; não é atômica e não garante
+detectar todas as alterações simultâneas ou revertidas durante a inspeção.
 
 Links simbólicos são listados como opacos, sem ler seus destinos. Conteúdo dos
 documentos e valores de configuração não aparecem no relatório. `scan` e

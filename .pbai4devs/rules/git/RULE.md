@@ -8,9 +8,9 @@ description: Aplique ao consultar, preparar, integrar ou publicar alterações G
 Em consultas sem alterações, defina `GIT_OPTIONAL_LOCKS=0` no ambiente do
 subprocesso para reduzir atualizações opcionais. Isso não garante a preservação
 exata do índice: até `git diff` pode atualizá-lo. Quando essa preservação for
-exigida, use apenas métodos comprovadamente seguros para o repositório ou
-informe a limitação. A variável não substitui as travas necessárias para
-operações que alteram o Git.
+exigida, use apenas métodos comprovadamente seguros para o repositório; sem
+eles, não execute a consulta e informe a limitação. A variável não substitui
+as travas necessárias para operações que alteram o Git.
 
 Use Conventional Commits (`tipo(escopo): descrição`, escopo opcional), inclusive
 em checkpoints e merges; destaque mudanças incompatíveis com `!` ou

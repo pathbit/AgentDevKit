@@ -15,28 +15,57 @@ node --test .pbai4devs/scripts/testar-maturidade/tests/TEST.mjs
 ```
 
 `prepare` só gera as cópias; `run` gera e executa. Cada execução cria uma nova
-pasta `examples/generated/maturity-*` e informa seu caminho no console. Por
-padrão são oito cenários: agentes, descoberta, planejamento, aplicação inicial,
-configurada, manutenção, legado e monorepo com caminhos em português. Use
+pasta exclusiva no diretório temporário do sistema e informa seu caminho no
+console. Por padrão são oito cenários: agentes, descoberta, planejamento,
+aplicação inicial, configurada, manutenção, legado e monorepo com caminhos em
+português. Use
 `--case` para executar apenas um.
 
 O harness copia recursos e configurações reais; exclui pacotes, caches, logs,
 resultados de testes, Playwright e pastas temporárias em qualquer caixa,
 `.git` e nomes conhecidos de credenciais/overrides locais. Não faz varredura
-semântica de segredos. A API também aceita `tmp/examples/` para compatibilidade
-e descendentes de `.agent-tests/`. Um destino explícito deve ser inexistente;
-execuções e projetos anteriores não são substituídos nem removidos. Cada
+semântica de segredos. Use `--output <caminho-novo>` para escolher outra pasta
+inexistente com pai existente. Na origem, são aceitos `tmp/`, `temp/`,
+`.agent-tests/` ou `examples/generated/` somente quando o Git confirma o ignore
+e não há arquivos do destino no índice. Fora da origem, use uma pasta fora de
+qualquer repositório. Se o temporário padrão estiver dentro de Git ou se não for
+possível consultar o Git, a execução falha antes de copiar. Um destino deve
+ser novo; execuções e projetos anteriores não são substituídos nem removidos. Cada
 exemplo recebe Git local, sem commits nem identidade alterada. O diretório
-gerado contém um ignore próprio, inclusive em projetos consumidores. Se a
+gerado contém um ignore próprio como proteção adicional. Se a
 preparação falhar, o índice da nova execução permanece em `preparing`.
-O gerador verifica links e identidade da saída antes e depois das etapas, mas
-isso não é uma proteção atômica. Um processo concorrente com permissão para
-trocar diretórios ainda pode redirecionar uma escrita entre as verificações;
-execute-o em uma área sem esse acesso concorrente.
+Os processos dos cenários não herdam variáveis `GIT_*` do usuário; isso evita
+que o Git do exemplo use outro diretório ou índice indicado pelo ambiente. O
+fsmonitor fica desativado nas consultas e nos processos dos cenários, sem
+alterar a configuração Git do usuário.
+Para saída local, a consulta respeita a configuração efetiva de ignore, mas
+recusa variáveis que selecionem outro repositório ou índice. O índice inteiro é
+examinado: nomes Unicode ou especiais potencialmente equivalentes bloqueiam a
+saída quando não é possível provar que são diferentes, inclusive em sistemas de
+arquivos com regras desconhecidas. Isso pode bloquear nomes que seriam distintos;
+use a saída temporária padrão nesse caso. Índices cuja resposta exceda 64 MiB
+também são recusados em vez de supor que não há conflitos.
+Na API, `prepareExamples({ initializeGit: false })` também funciona sem Git
+para saída fora da origem: nesse caso a verificação usa apenas os marcadores
+`.git` e a estrutura de repositórios bare nos diretórios ancestrais. Variáveis
+`GIT_DIR` e `GIT_WORK_TREE` definidas fazem a execução falhar; um usuário ainda
+pode apontar comandos Git diretamente para qualquer pasta. Escolha um
+temporário privado fora de qualquer repositório. Saídas na origem continuam
+exigindo Git para comprovar o ignore e consultar o índice.
+O gerador verifica links, ausência de Git e identidade da saída antes e depois
+das etapas, mas isso não é uma proteção atômica. Um processo concorrente com
+permissão para mover diretórios ou iniciar Git na saída ainda pode redirecionar
+uma escrita ou versioná-la entre verificações. Em saída local, alterar o ignore
+ou executar `git add -f` também pode versionar os exemplos. Use uma área
+temporária privada, sem acesso concorrente; a pasta é criada com modo 0700
+quando o SO o suporta.
 O hub `.pbai4devs` e os clientes registrados são copiados, incluindo comandos
 nativos em TOML. Sem manifesto local, os templates definem os clientes em
-memória, respeitando a seleção salva. `.vscode` exige registro. Apenas as entradas
-`AGENTS.md`, `CLAUDE.md` e `GEMINI.md` presentes na origem são incluídas na raiz.
+memória, respeitando a seleção salva. `.vscode` exige registro. As entradas
+regulares `AGENTS.md`, `CLAUDE.md` e `GEMINI.md` presentes na origem são copiadas
+para a raiz. Quando uma delas é um link simbólico, a cópia não segue o destino:
+ela omite a entrada original e registra seu nome em `omittedEntrypoints` no
+relatório. A preparação da fixture pode gerar uma entrada própria depois.
 Os templates substituem somente entradas com blocos gerenciados válidos;
 entradas próprias ou editadas são preservadas. Sem estado de instalação,
 as entradas existentes são copiadas sem presumir propriedade do kit.
@@ -63,3 +92,5 @@ certifica produção, Docker, interface visual ou outro sistema operacional.
 
 Índice e relatório ficam em `README.md` e `REPORT.json` na pasta informada.
 Logs e provas ficam em `.agent-tests/` dentro de cada exemplo, todos ignorados.
+Cada fixture cria `.agent-tests/.gitignore` para proteger esses artefatos sem
+alterar o `.gitignore` copiado do projeto.

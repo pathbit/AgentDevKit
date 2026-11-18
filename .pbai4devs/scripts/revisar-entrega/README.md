@@ -46,5 +46,6 @@ Uma deleção staged com arquivo ainda presente e ignorado é registrada como
 arquivo, no ignore ou nessa ação do índice invalidam a revisão. Diferenças
 entre índice e conteúdo testado continuam bloqueadas, inclusive com `--scope`.
 O script confere o registro; a revisão semântica continua sendo responsabilidade
-do agente revisor. Veja a skill
+do revisor. As saídas bem-sucedidas incluem `reviewVerification: "not-verified"`:
+o script não autentica o revisor nem confirma que a revisão ocorreu. Veja a skill
 [atualizar-documentacao](../../skills/projeto/atualizar-documentacao/SKILL.md).
