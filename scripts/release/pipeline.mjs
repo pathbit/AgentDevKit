@@ -47,7 +47,13 @@ export function executeNode(root, args, env = process.env) {
 // Each named profile is an independent CI job; `portable` runs all locally.
 export const portableProfiles = Object.freeze({
   'portable-cli': Object.freeze(['cli.test.mjs', 'adapters.test.mjs', 'development-ecosystem.test.mjs', 'security-ecosystem.test.mjs', 'file-modes.test.mjs', 'runtime-minimum.test.mjs', 'source-integration.test.mjs']),
-  'portable-selection': Object.freeze(['client-selection.test.mjs', 'exact-native-cli.test.mjs', 'agent-sidecar-sync.test.mjs', 'stale-agent-reference.test.mjs', 'overlay-stale-plan.test.mjs', 'codex-derived-reference.test.mjs', 'stage-preview-combined.test.mjs', 'removed-file-diagnostic.test.mjs', 'removed-file-protection.test.mjs', 'removed-overlay.test.mjs', 'migration-tombstone.test.mjs']),
+  'portable-selection': Object.freeze(['client-selection.test.mjs']),
+  'portable-selection-lifecycle': Object.freeze([
+    'exact-native-cli.test.mjs', 'agent-sidecar-sync.test.mjs', 'stale-agent-reference.test.mjs',
+    'overlay-stale-plan.test.mjs', 'codex-derived-reference.test.mjs', 'stage-preview-combined.test.mjs',
+    'removed-file-diagnostic.test.mjs', 'removed-file-protection.test.mjs', 'removed-overlay.test.mjs',
+    'migration-tombstone.test.mjs',
+  ]),
   'portable-selection-codex': Object.freeze(['client-selection-obstructions-codex.test.mjs']),
   'portable-selection-all-root': Object.freeze(['client-selection-obstructions-all-root.test.mjs']),
   'portable-selection-all-leaf': Object.freeze(['client-selection-obstructions-all-leaf.test.mjs']),
@@ -55,9 +61,38 @@ export const portableProfiles = Object.freeze({
   'portable-projects-git': Object.freeze(['git-configuration-preservation.test.mjs']),
   'portable-projects-callbacks': Object.freeze(['callback-boundary-isolated.test.mjs']),
   'portable-projects-matrix': Object.freeze(['native-coexistence.test.mjs', 'project-matrix.test.mjs']),
-  'portable-recovery': Object.freeze(['project-recovery.test.mjs', 'recovery-backup.test.mjs', 'recovery-capture.test.mjs', 'recovery-diagnostics.test.mjs', 'recovery-effects.test.mjs', 'recovery-exclusive.test.mjs', 'recovery-plan-coverage.test.mjs', 'recovery-records.test.mjs', 'recovery-store.test.mjs', 'sync-backup-failure.test.mjs', 'sync-remove-failure.test.mjs', 'sync-logical-order.test.mjs', 'mac-acl-protection.test.mjs', 'mac-acl-plan.test.mjs', 'mac-backup-acl.test.mjs', 'mac-xattr-probe.test.mjs', 'mac-xattr-removal.test.mjs', 'xattr-stage-diagnostics.test.mjs', 'cli-special-mode.test.mjs', 'sync-special-mode.test.mjs', 'sync-temporary-privacy.test.mjs', 'temporary-preservation.test.mjs']),
+  'portable-recovery': Object.freeze([
+    'project-recovery.test.mjs', 'recovery-backup.test.mjs', 'recovery-capture.test.mjs',
+    'recovery-diagnostics.test.mjs', 'recovery-effects.test.mjs', 'recovery-exclusive.test.mjs',
+    'recovery-plan-coverage.test.mjs', 'recovery-records.test.mjs', 'recovery-store.test.mjs',
+    'sync-backup-failure.test.mjs', 'sync-remove-failure.test.mjs', 'sync-logical-order.test.mjs',
+  ]),
+  'portable-recovery-metadata': Object.freeze([
+    'mac-acl-protection.test.mjs', 'mac-acl-plan.test.mjs', 'mac-backup-acl.test.mjs',
+    'mac-xattr-probe.test.mjs', 'mac-xattr-removal.test.mjs', 'xattr-stage-diagnostics.test.mjs',
+    'cli-special-mode.test.mjs', 'sync-special-mode.test.mjs', 'sync-temporary-privacy.test.mjs',
+    'temporary-preservation.test.mjs',
+  ]),
   'portable-migration': Object.freeze(['cli-line-endings.test.mjs', 'linux-inplace-metadata-experiment.test.mjs', 'linux-xattr-probe.test.mjs', 'state-migration.test.mjs', 'state-special-mode.test.mjs', 'state-directory-xattr.test.mjs', 'preservation-lifecycle.test.mjs']),
-  'portable-resources': Object.freeze(['json-diagnostics.test.mjs', 'claude-agent-evidence.test.mjs', 'claude-evidence.test.mjs', 'claude-legacy-exact.test.mjs', 'claude-legacy-exact-flow.test.mjs', 'claude-rule-cli.test.mjs', 'claude-rule-scope.test.mjs', 'claude-rule-scope-integration.test.mjs', 'compose-package-smoke.test.mjs', 'copilot-evidence.test.mjs', 'copilot-fleet-evidence.test.mjs', 'documentation-compatibility.test.mjs', 'exact-native-sync.test.mjs', 'github-packages.test.mjs', 'native-client-matrix.test.mjs', 'next.test.mjs', 'managed-content.test.mjs', 'managed-content-helper.test.mjs', 'managed-toml.test.mjs', 'toml-prompt-equivalence.test.mjs', 'toml-composite.test.mjs', 'toml-human-after.test.mjs', 'toml-marker-context.test.mjs', 'gemini-command-fixture.test.mjs', 'gemini-unowned-block.test.mjs', 'gemini-derived-command.test.mjs', 'gemini-derived-diagnostic.test.mjs', 'gemini-toml-staged-lifecycle.test.mjs', 'gemini-reference-body.test.mjs', 'gemini-large-integer.test.mjs', 'gemini-xattr-preservation.test.mjs', 'sync-skill-collision.test.mjs', 'scoped-rule-clients.test.mjs', 'gemini-toml-lifecycle-reader.test.mjs', 'managed-preservation.test.mjs', 'release-pipeline.test.mjs', 'release-resilience.test.mjs', 'resource-coverage.test.mjs']),
+  'portable-resources': Object.freeze([
+    'json-diagnostics.test.mjs', 'compose-package-smoke.test.mjs', 'documentation-compatibility.test.mjs',
+    'github-packages.test.mjs', 'next.test.mjs', 'release-pipeline.test.mjs',
+    'release-resilience.test.mjs', 'resource-coverage.test.mjs',
+  ]),
+  'portable-resources-clients': Object.freeze([
+    'claude-agent-evidence.test.mjs', 'claude-evidence.test.mjs', 'claude-legacy-exact.test.mjs',
+    'claude-legacy-exact-flow.test.mjs', 'claude-rule-cli.test.mjs', 'claude-rule-scope.test.mjs',
+    'claude-rule-scope-integration.test.mjs', 'copilot-evidence.test.mjs', 'copilot-fleet-evidence.test.mjs',
+    'exact-native-sync.test.mjs', 'native-client-matrix.test.mjs', 'scoped-rule-clients.test.mjs',
+  ]),
+  'portable-resources-managed': Object.freeze([
+    'managed-content.test.mjs', 'managed-content-helper.test.mjs', 'managed-toml.test.mjs',
+    'toml-prompt-equivalence.test.mjs', 'toml-composite.test.mjs', 'toml-human-after.test.mjs',
+    'toml-marker-context.test.mjs', 'gemini-command-fixture.test.mjs', 'gemini-unowned-block.test.mjs',
+    'gemini-derived-command.test.mjs', 'gemini-derived-diagnostic.test.mjs', 'gemini-toml-staged-lifecycle.test.mjs',
+    'gemini-reference-body.test.mjs', 'gemini-large-integer.test.mjs', 'gemini-xattr-preservation.test.mjs',
+    'sync-skill-collision.test.mjs', 'gemini-toml-lifecycle-reader.test.mjs', 'managed-preservation.test.mjs',
+  ]),
   'portable-layout': Object.freeze(['source-layout.test.mjs']),
 });
 

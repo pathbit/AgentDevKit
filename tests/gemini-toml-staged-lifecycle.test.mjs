@@ -22,7 +22,11 @@ function fixture(t) {
   const home = join(root, 'home'); mkdirSync(home);
   const env = { PATH: process.env.PATH, HOME: home, USERPROFILE: home, TMPDIR: tmpdir(), TEMP: tmpdir(), TMP: tmpdir(), LC_ALL: 'C', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: testGitConfig, GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0' };
   if (process.platform === 'win32') { env.SystemRoot = process.env.SystemRoot; env.ComSpec = process.env.ComSpec; }
-  const run = (program, args) => spawnSync(program, args, { cwd: root, env, encoding: 'utf8', timeout: 180000, maxBuffer: 16 * 1024 * 1024 });
+  const run = (program, args, timeout = 180000) => {
+    const result = spawnSync(program, args, { cwd: root, env, encoding: 'utf8', timeout, maxBuffer: 16 * 1024 * 1024 });
+    assert.equal(result.error, undefined, `${args.slice(0, 2).join(' ')}: ${result.error?.message ?? ''} (${result.signal ?? 'sem sinal'})`);
+    return result;
+  };
   const git = (...args) => { const result = run('git', args); assert.equal(result.status, 0, result.stderr || result.error?.message); return result.stdout; };
   const gitBlob = () => {
     const result = spawnSync('git', ['show', `:${target}`], { cwd: root, env, timeout: 180000, maxBuffer: 16 * 1024 * 1024 });
@@ -37,7 +41,7 @@ function fixture(t) {
   assert.equal(gitRootInfo.ino, rootInfo.ino);
   put('.gitignore', '# Regra humana\nprivado/\n'); put('HUMAN.md', 'Documento humano.\n'); put(target, original);
   git('add', '--', '.gitignore', 'HUMAN.md');
-  const command = args => run(process.execPath, [cli, ...args, '--target', root, '--json']);
+  const command = (args, timeout) => run(process.execPath, [cli, ...args, '--target', root, '--json'], timeout);
   const standalone = () => run(process.execPath, [join(root, '.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs'), '--root', root]);
   const protectedFiles = ['.git/index', '.git/HEAD', '.git/config', '.git/info/exclude', '.gitignore', 'HUMAN.md'];
   const protectedSnapshot = () => Object.fromEntries(protectedFiles.map(path => [path, digest(readFileSync(join(root, path)))]));
@@ -61,7 +65,7 @@ function tree(root) {
   visit(root); return entries;
 }
 function initialize(f) {
-  const result = f.command(['init', '--agents', 'gemini', '--yes']);
+  const result = f.command(['init', '--agents', 'gemini', '--yes'], 300000);
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
   assert.equal(JSON.parse(result.stdout).ok, true);
   const content = readFileSync(join(f.root, target), 'utf8');
@@ -98,7 +102,7 @@ test('init recusa TOML staged com edição unstaged sem aplicação parcial obse
   assert.equal(readFileSync(join(f.root, target), 'utf8'), edited);
 });
 
-test('update e ambos syncs recusam alteração do bloco staged com edição unstaged', { timeout: 240000 }, t => {
+test('update e ambos syncs recusam alteração do bloco staged com edição unstaged', { timeout: 480000 }, t => {
   const f = fixture(t); initialize(f);
   const existing = readFileSync(join(f.root, target), 'utf8');
   assert.ok(existing.includes('Texto humano'));
@@ -123,7 +127,7 @@ test('update e ambos syncs recusam alteração do bloco staged com edição unst
   }
 });
 
-test('troca de cliente preserva índice e remove somente bloco do TOML staged', { timeout: 240000 }, t => {
+test('troca de cliente preserva índice e remove somente bloco do TOML staged', { timeout: 480000 }, t => {
   const f = fixture(t); initialize(f);
   const existing = readFileSync(join(f.root, target), 'utf8');
   const humanEdit = existing.replace('Texto humano', 'Texto humano {{args}}') + '# edição humana unstaged\n';

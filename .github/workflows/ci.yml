@@ -70,6 +70,10 @@ jobs:
             label: Windows / Node 24 / client selection
           - os: windows-latest
             node: 24
+            profile: portable-selection-lifecycle
+            label: Windows / Node 24 / client lifecycle
+          - os: windows-latest
+            node: 24
             profile: portable-selection-codex
             label: Windows / Node 24 / Codex obstructions
           - os: windows-latest
@@ -102,12 +106,24 @@ jobs:
             label: Windows / Node 24 / recovery and metadata
           - os: windows-latest
             node: 24
+            profile: portable-recovery-metadata
+            label: Windows / Node 24 / recovery metadata and staging
+          - os: windows-latest
+            node: 24
             profile: portable-migration
             label: Windows / Node 24 / migration and preservation
           - os: windows-latest
             node: 24
             profile: portable-resources
             label: Windows / Node 24 / resources
+          - os: windows-latest
+            node: 24
+            profile: portable-resources-clients
+            label: Windows / Node 24 / client resources
+          - os: windows-latest
+            node: 24
+            profile: portable-resources-managed
+            label: Windows / Node 24 / managed resources
           - os: windows-latest
             node: 24
             profile: portable-layout
@@ -120,6 +136,10 @@ jobs:
             node: 24
             profile: portable-selection
             label: macOS / Node 24 / client selection
+          - os: macos-15-intel
+            node: 24
+            profile: portable-selection-lifecycle
+            label: macOS / Node 24 / client lifecycle
           - os: macos-15-intel
             node: 24
             profile: portable-selection-codex
@@ -154,12 +174,24 @@ jobs:
             label: macOS / Node 24 / recovery and metadata
           - os: macos-15-intel
             node: 24
+            profile: portable-recovery-metadata
+            label: macOS / Node 24 / recovery metadata and staging
+          - os: macos-15-intel
+            node: 24
             profile: portable-migration
             label: macOS / Node 24 / migration and preservation
           - os: macos-15-intel
             node: 24
             profile: portable-resources
             label: macOS / Node 24 / resources
+          - os: macos-15-intel
+            node: 24
+            profile: portable-resources-clients
+            label: macOS / Node 24 / client resources
+          - os: macos-15-intel
+            node: 24
+            profile: portable-resources-managed
+            label: macOS / Node 24 / managed resources
           - os: macos-15-intel
             node: 24
             profile: portable-layout

@@ -18,12 +18,13 @@ as omissões previstas. O perfil `full` verifica os casos Linux e
 `portable-resources` exige aprovação individual dos casos delegados no macOS e
 no Windows. Falhas ou ferramentas ausentes bloqueiam a verificação.
 `portable` executa todos os grupos de portabilidade localmente;
-no CI, `portable-cli`, `portable-selection`, `portable-selection-codex`,
-`portable-selection-all-root`, `portable-selection-all-leaf`,
+no CI, `portable-cli`, `portable-selection`, `portable-selection-lifecycle`,
+`portable-selection-codex`, `portable-selection-all-root`, `portable-selection-all-leaf`,
 `portable-projects`, `portable-projects-git`, `portable-projects-callbacks`,
 `portable-projects-matrix`,
-`portable-recovery`, `portable-migration`, `portable-resources` e
-`portable-layout` rodam em jobs separados no Windows e no macOS. No Windows,
+`portable-recovery`, `portable-recovery-metadata`, `portable-migration`,
+`portable-resources`, `portable-resources-clients`, `portable-resources-managed`
+e `portable-layout` rodam em jobs separados no Windows e no macOS. No Windows,
 `portable-cli` confere se a instalação e o sync direto preservam a DACL de
 arquivos atualizados em NTFS, usando uma regra explícita de leitura na fixture.
 Callbacks isolados e testes de matriz ficam separados para limitar a duração
