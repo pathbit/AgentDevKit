@@ -41,18 +41,19 @@ function ntfsDacl(file, addReadRule = false) {
     '$section = [Security.AccessControl.AccessControlSections]::Access',
   ];
   if (addReadRule) script.push(
-    '$acl = Get-Acl -LiteralPath $file',
+    '$acl = [IO.File]::GetAccessControl($file, $section)',
     '$original = $acl.GetSecurityDescriptorSddlForm($section)',
     '$userSid = [Security.Principal.WindowsIdentity]::GetCurrent().User',
     "$rule = [Security.AccessControl.FileSystemAccessRule]::new($userSid, 'ReadAttributes', 'Allow')",
     '$acl.AddAccessRule($rule)',
-    'Set-Acl -LiteralPath $file -AclObject $acl',
+    '[IO.File]::SetAccessControl($file, $acl)',
   );
-  script.push('$descriptor = (Get-Acl -LiteralPath $file).GetSecurityDescriptorSddlForm($section)');
+  script.push('$descriptor = ([IO.File]::GetAccessControl($file, $section)).GetSecurityDescriptorSddlForm($section)');
   if (addReadRule) script.push("if ($descriptor -eq $original) { throw 'A regra explícita da fixture não foi adicionada.' }");
   script.push('$descriptor');
-  const result = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script.join('\n')], {
-    encoding: 'utf8', timeout: 30000, env: { ...process.env, ADK_TEST_ACL_FILE: file },
+  const powershell = join(process.env.SystemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+  const result = spawnSync(powershell, ['-NoProfile', '-NonInteractive', '-Command', script.join('\n')], {
+    encoding: 'utf8', timeout: 60000, env: { ...process.env, ADK_TEST_ACL_FILE: file },
   });
   assert.equal(result.status, 0, result.error?.message || result.stderr);
   const descriptor = result.stdout.trim();
@@ -110,6 +111,7 @@ test('Windows: remoção preserva arquivo com um fluxo NTFS adicional', windowsA
   const stream = file + ':fixture', extra = 'conteúdo adicional';
   writeFileSync(file, original);
   ntfsDacl(file);
+  assert.doesNotThrow(() => checkWindowsFileChanges([{ path: file, displayPath: path, update: false }]));
   writeFileSync(stream, extra);
   const plan = { target: root, canApply: true, language: 'pt', localIgnore: { edits: [] }, retiredRoots: [],
     changes: [{ path, action: 'remove', content: null, beforeHash: digest(original) }] };
