@@ -48,24 +48,31 @@ test('CLI reconhece catálogos da sincronização direta e preserva ignore exist
   git(root, 'add', '-f', '.gitignore', 'AGENTS.md', 'staged.txt');
   const initial = Object.fromEntries(['.gitignore', '.git/index', 'staged.txt'].map(path => [path, get(root, path)]));
   const cliPath = join(project, 'bin/agentdevkit.mjs');
+  // Windows also performs the native metadata preflight before applying writes.
+  const childTimeout = process.platform === 'win32' ? 240000 : 90000;
   function runCli(...args) {
     const result = spawnSync(process.execPath, [cliPath, ...args, '--target', root, '--json'], {
-      cwd: root, env: gitEnvironment(root), encoding: 'utf8', timeout: 90000, maxBuffer: 16 * 1024 * 1024,
+      cwd: root, env: gitEnvironment(root), encoding: 'utf8', timeout: childTimeout, maxBuffer: 16 * 1024 * 1024,
     });
-    let output; try { output = JSON.parse(result.stdout); } catch { assert.fail(`Resposta CLI inválida: ${result.stderr} ${result.stdout}`); }
-    assert.equal(result.status, 0, `${args.join(' ')}: ${result.stderr} ${result.stdout}`);
-    return output;
+    const details = `${args.join(' ')}: ${result.error?.message || result.signal || ''}\n${result.stderr}\n${result.stdout}`;
+    assert.equal(result.status, 0, details);
+    try {
+      return JSON.parse(result.stdout);
+    } catch {
+      assert.fail(`Resposta CLI inválida: ${details}`);
+    }
   }
-  function direct() {
+  function direct(stage) {
     const result = spawnSync(process.execPath, [join(root, '.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs')], {
-      cwd: root, env: gitEnvironment(root), encoding: 'utf8', timeout: 90000,
+      cwd: root, env: gitEnvironment(root), encoding: 'utf8', timeout: childTimeout,
     });
-    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.equal(result.status, 0, `${stage}: ${result.error?.message || result.signal || ''}\n${result.stderr}\n${result.stdout}`);
   }
   runCli('init', '--agents', 'codex');
   assert.ok(get(root, 'AGENTS.md').toString('utf8').startsWith('# Instruções existentes\n'));
   put(root, '.pbai4devs/skills/projeto/human-extra/SKILL.md', '---\nname: human-extra\ndescription: Minha skill.\n---\n\n# Minha skill\n');
-  direct(); direct();
+  direct('skill humana');
+  direct('sincronização repetida');
   assert.equal(runCli('doctor').ok, true);
   assert.equal(runCli('sync', '--check').ok, true);
   assert.equal(runCli('update').ok, true);
@@ -76,7 +83,7 @@ test('CLI reconhece catálogos da sincronização direta e preserva ignore exist
   const previous = JSON.parse(get(root, installed));
   previous.files[config] = digest(get(root, config));
   put(root, installed, JSON.stringify(previous, null, 2) + '\n');
-  direct();
+  direct('manifesto legado');
   assert.doesNotMatch(get(root, config).toString('utf8'), /documento\|legado-comprovado/);
   assert.equal(JSON.parse(get(root, state)).config, digest(get(root, config)));
   assert.equal(runCli('doctor').ok, true);
@@ -86,7 +93,7 @@ test('CLI reconhece catálogos da sincronização direta e preserva ignore exist
   const previousIgnore = get(root, '.pbai4devs/.gitignore');
   const humanTemplate = Buffer.concat([get(root, template), Buffer.from('\n/artefato-humano/\n')]);
   put(root, template, humanTemplate);
-  direct();
+  direct('modelo de ignore humano');
   assert.deepEqual(get(root, '.pbai4devs/.gitignore'), previousIgnore);
   assert.equal(runCli('update').ok, true);
   assert.deepEqual(get(root, template), humanTemplate);

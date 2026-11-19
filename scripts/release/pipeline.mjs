@@ -46,7 +46,8 @@ export function executeNode(root, args, env = process.env) {
 
 // Each named profile is an independent CI job; `portable` runs all locally.
 export const portableProfiles = Object.freeze({
-  'portable-cli': Object.freeze(['cli.test.mjs', 'adapters.test.mjs', 'development-ecosystem.test.mjs', 'security-ecosystem.test.mjs', 'file-modes.test.mjs', 'runtime-minimum.test.mjs', 'source-integration.test.mjs']),
+  'portable-cli': Object.freeze(['cli.test.mjs', 'adapters.test.mjs', 'development-ecosystem.test.mjs', 'security-ecosystem.test.mjs', 'file-modes.test.mjs', 'runtime-minimum.test.mjs']),
+  'portable-source-integration': Object.freeze(['source-integration.test.mjs']),
   'portable-selection': Object.freeze(['client-selection.test.mjs']),
   'portable-selection-lifecycle': Object.freeze([
     'exact-native-cli.test.mjs', 'agent-sidecar-sync.test.mjs', 'stale-agent-reference.test.mjs',

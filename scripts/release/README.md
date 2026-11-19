@@ -18,7 +18,8 @@ as omissões previstas. O perfil `full` verifica os casos Linux e
 `portable-resources` exige aprovação individual dos casos delegados no macOS e
 no Windows. Falhas ou ferramentas ausentes bloqueiam a verificação.
 `portable` executa todos os grupos de portabilidade localmente;
-no CI, `portable-cli`, `portable-selection`, `portable-selection-lifecycle`,
+no CI, `portable-cli`, `portable-source-integration`, `portable-selection`,
+`portable-selection-lifecycle`,
 `portable-selection-codex`, `portable-selection-all-root`, `portable-selection-all-leaf`,
 `portable-projects`, `portable-projects-git`, `portable-projects-callbacks`,
 `portable-projects-matrix`,
@@ -31,6 +32,8 @@ perfis de sync executam os sete módulos do ponto de entrada `tests/TEST.mjs`
 do sincronizador. No Windows,
 `portable-cli` confere se a instalação e o sync direto preservam a DACL de
 arquivos atualizados em NTFS, usando uma regra explícita de leitura na fixture.
+`portable-source-integration` isola o teste de convergência entre a CLI e a
+sincronização direta, incluindo a preservação do ignore e do índice Git.
 Callbacks isolados e testes de matriz ficam separados para limitar a duração
 de cada job. Os testes Git de maior duração também têm job próprio. O pipeline
 limita cada processo a 40 minutos. O job de verificação tem até 60 minutos para
