@@ -4,7 +4,7 @@ description: Alterações verificáveis por versão do AgentDevKit.
 
 # Changelog
 
-## Não lançado
+## 0.0.31
 
 - Registra operações de instalação e sync em um diário local. Após uma falha,
   preserva o estado parcial, indica a cópia anterior e exige revisão para
