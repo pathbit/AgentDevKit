@@ -12,6 +12,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
 
 const bin = resolve('bin/agentdevkit.mjs');
+const cliTimeout = process.platform === 'win32' ? 240000 : 120000;
 const legacy = '.claude/rules/git/RULE.md';
 const pointer = '---\ntrigger: model_decision\ndescription: Git.\n---\n\n# Git\n\n<!-- gerado: sincronizar-agentes -->\nLeia e siga [origem](../../../.pbai4devs/rules/git/RULE.md).\n';
 const sha = data => createHash('sha256').update(data).digest('hex');
@@ -32,8 +33,9 @@ function fixture(t) {
   return root;
 }
 function cli(root, ...args) {
-  const result = spawnSync(process.execPath, [bin, ...args, '--target', root, '--json'], { encoding: 'utf8', timeout: 120000, maxBuffer: 8 * 1024 * 1024 });
-  assert.ok(!result.error, result.error?.message); let body;
+  const result = spawnSync(process.execPath, [bin, ...args, '--target', root, '--json'], { encoding: 'utf8', timeout: cliTimeout, maxBuffer: 8 * 1024 * 1024 });
+  assert.equal(result.error, undefined, `${args.join(' ')}: ${result.error?.message || ''}\n${result.stderr}\n${result.stdout}`);
+  let body;
   try { body = JSON.parse(result.stdout); } catch { assert.fail(result.stdout + result.stderr); }
   return { status: result.status, body };
 }

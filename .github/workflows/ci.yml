@@ -126,6 +126,10 @@ jobs:
             label: Windows / Node 24 / client resources
           - os: windows-latest
             node: 24
+            profile: portable-claude-rule-cli
+            label: Windows / Node 24 / Claude rule CLI
+          - os: windows-latest
+            node: 24
             profile: portable-resources-managed
             label: Windows / Node 24 / managed resources
           - os: windows-latest
@@ -216,6 +220,10 @@ jobs:
             node: 24
             profile: portable-resources-clients
             label: macOS / Node 24 / client resources
+          - os: macos-15-intel
+            node: 24
+            profile: portable-claude-rule-cli
+            label: macOS / Node 24 / Claude rule CLI
           - os: macos-15-intel
             node: 24
             profile: portable-resources-managed

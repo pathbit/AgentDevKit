@@ -24,7 +24,8 @@ no CI, `portable-cli`, `portable-source-integration`, `portable-selection`,
 `portable-projects`, `portable-projects-git`, `portable-projects-callbacks`,
 `portable-projects-matrix`,
 `portable-recovery`, `portable-recovery-metadata`, `portable-migration`,
-`portable-resources`, `portable-resources-clients`, `portable-resources-managed`,
+`portable-resources`, `portable-resources-clients`, `portable-claude-rule-cli`,
+`portable-resources-managed`,
 `portable-resources-gemini`, `portable-resources-gemini-staged`,
 `portable-sync-core`, `portable-sync-ownership`, `portable-sync-preservation`
 e `portable-layout` rodam em jobs separados no Windows e no macOS. Os três

@@ -82,10 +82,11 @@ export const portableProfiles = Object.freeze({
   ]),
   'portable-resources-clients': Object.freeze([
     'claude-agent-evidence.test.mjs', 'claude-evidence.test.mjs', 'claude-legacy-exact.test.mjs',
-    'claude-legacy-exact-flow.test.mjs', 'claude-rule-cli.test.mjs', 'claude-rule-scope.test.mjs',
+    'claude-legacy-exact-flow.test.mjs', 'claude-rule-scope.test.mjs',
     'claude-rule-scope-integration.test.mjs', 'copilot-evidence.test.mjs', 'copilot-fleet-evidence.test.mjs',
     'exact-native-sync.test.mjs', 'native-client-matrix.test.mjs', 'scoped-rule-clients.test.mjs',
   ]),
+  'portable-claude-rule-cli': Object.freeze(['claude-rule-cli.test.mjs']),
   'portable-resources-managed': Object.freeze([
     'managed-content.test.mjs', 'managed-content-helper.test.mjs', 'managed-toml.test.mjs',
     'toml-prompt-equivalence.test.mjs', 'toml-composite.test.mjs', 'toml-human-after.test.mjs',
