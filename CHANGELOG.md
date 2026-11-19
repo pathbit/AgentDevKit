@@ -6,6 +6,8 @@ description: Alterações verificáveis por versão do AgentDevKit.
 
 ## 0.0.31
 
+- No Windows, seleciona uma versão do Node com a correção de remoção em
+  caminhos Unicode. O mínimo na série LTS 24 é 24.13.1.
 - Registra operações de instalação e sync em um diário local. Após uma falha,
   preserva o estado parcial, indica a cópia anterior e exige revisão para
   retomar as alterações.

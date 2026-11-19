@@ -6,7 +6,7 @@ import { delimiter, dirname, isAbsolute, join, relative, resolve, sep } from 'no
 import { spawnSync } from 'node:child_process';
 import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
-import { findExecutable, projectRoot } from '../lib/runtime.mjs';
+import { findExecutable, isSupportedNodeVersion, projectRoot, windowsNode24Minimum } from '../lib/runtime.mjs';
 import { npmCandidates } from '../lib/npm.mjs';
 
 const versionPattern = /^\d+\.\d+\.\d+$/;
@@ -79,7 +79,7 @@ function probe(node, minimum, run, environment, diagnostics, platform) {
     if (!info || typeof info !== 'object' || typeof info.node !== 'string' ||
         typeof info.bun !== 'boolean' || !versionPattern.test(info.version) ||
         realpathSync(info.node) !== realpathSync(node)) throw new Error('invalid probe');
-    return !info.bun && versionPattern.test(info.version) && Number(info.version.split('.')[0]) >= minimum ? info : null;
+    return !info.bun && isSupportedNodeVersion(info.version, minimum, platform) ? info : null;
   } catch { diagnostics.invalidProbe = true; return null; }
 }
 
@@ -178,7 +178,12 @@ export async function ensureRuntime({ root = projectRoot, minimum = 24, node = p
     if (found) { const npm = npmFor(executable, run, environment, platform, diagnostics, true); if (npm) return { node: executable, npm, version: found.version, source: 'cache' }; }
   }
   checkProbeFailure(diagnostics);
-  if (!allowDownload) failure('Node.js 24+ e npm nao encontrados; prepare o runtime antes de continuar.');
+  const windows = platform === 'win32' ? ` No Windows, use Node.js LTS ${windowsNode24Minimum}+ ou 26+.` : '';
+  if (!allowDownload) failure(`Node.js 24+ e npm nao encontrados; prepare o runtime antes de continuar.${windows}`);
+  if (process.platform === 'win32' && Number(process.versions.node.split('.')[0]) >= 23 && !isSupportedNodeVersion(process.versions.node)) {
+    // Installing a replacement from this process would use its affected rmSync.
+    failure(`Atualize o Node.js pelo gerenciador do sistema para a versão LTS ${windowsNode24Minimum}+ ou 26+.`);
+  }
   const tar = findExecutable('tar', environment, platform);
   if (!tar) failure('Instale tar pelo gerenciador do SO para extrair o Node local.');
   mkdirSync(cache, { recursive: true });

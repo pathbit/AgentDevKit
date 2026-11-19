@@ -12,6 +12,7 @@ import { findExecutable } from '../../lib/runtime.mjs';
 
 const project = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
 const tar = findExecutable('tar');
+const fixtureVersion = '24.13.1';
 const nodeOption = (kind, path) => `--${kind}=${JSON.stringify(kind === 'import' ? pathToFileURL(path).href : path)}`;
 function preflight(node, args, environment, expected = 0) {
   const result = spawnSync(node, args, { env: environment, encoding: 'utf8', timeout: 30000,
@@ -35,7 +36,7 @@ function fixture(t) {
   t.after(() => rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));
   const platform = process.platform, arch = process.arch;
   const key = platform === 'win32' ? `win-${arch}` : `${platform}-${arch}`;
-  const top = `node-v24.1.2-${key}`, extension = platform === 'win32' ? 'zip' : 'tar.gz';
+  const top = `node-v${fixtureVersion}-${key}`, extension = platform === 'win32' ? 'zip' : 'tar.gz';
   const bundle = join(root, top); mkdirSync(bundle);
   const write = (path, content) => { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, content); };
   write(join(bundle, platform === 'win32' ? 'node.exe' : 'bin/node'), 'fixture-node');
@@ -54,11 +55,11 @@ function fixture(t) {
     if (args[1] === '--version') return { status: existsSync(args[0]) && readFileSync(args[0], 'utf8') === 'fixture-npm' ? 0 : 1, stdout: '11.0.0\n' };
     if (args[0] === '-p') {
       if (!file.startsWith(root + sep) || !existsSync(file) || readFileSync(file, 'utf8') !== 'fixture-node') return { status: 1, stdout: '' };
-      return { status: 0, stdout: JSON.stringify({ version: '24.1.2', node: file, bun: false }) };
+      return { status: 0, stdout: JSON.stringify({ version: fixtureVersion, node: file, bun: false }) };
     }
     if (args[0] === '-e') {
       if (!file.startsWith(root + sep) || !existsSync(file) || readFileSync(file, 'utf8') !== 'fixture-node') return { status: 1, stdout: '' };
-      return { status: 0, output: [null, null, null, JSON.stringify({ version: '24.1.2', node: file, bun: false })] };
+      return { status: 0, output: [null, null, null, JSON.stringify({ version: fixtureVersion, node: file, bun: false })] };
     }
     return spawnSync(file, args, options);
   };
@@ -70,7 +71,7 @@ function fixture(t) {
 
 test('bootstrap Node extrai arquivo real, verifica npm e reutiliza cache sem rede', async t => {
   const f = fixture(t), runtime = await ensureRuntime(f.options);
-  assert.equal(runtime.source, 'download'); assert.equal(runtime.version, '24.1.2'); assert.equal(f.calls(), 2);
+  assert.equal(runtime.source, 'download'); assert.equal(runtime.version, fixtureVersion); assert.equal(f.calls(), 2);
   assert.ok(existsSync(runtime.node)); assert.ok(existsSync(runtime.npm));
   const cached = await ensureRuntime({ ...f.options, download: async () => { throw new Error('Network must not run'); } });
   assert.equal(cached.source, 'cache'); assert.equal(cached.node, runtime.node);
@@ -79,14 +80,49 @@ test('bootstrap Node extrai arquivo real, verifica npm e reutiliza cache sem red
 
 test('checksum, manifesto ambíguo e download falho não promovem runtime', async t => {
   for (const kind of ['checksum', 'manifest', 'download']) await t.test(kind, async subtest => {
-    const f = fixture(subtest), previous = join(f.cache, 'v24.1.2'); mkdirSync(previous, { recursive: true }); writeFileSync(join(previous, 'preserved'), 'original');
-    if (kind === 'checksum') f.setManifest(`${'0'.repeat(64)}  node-v24.1.2-${f.key}.${process.platform === 'win32' ? 'zip' : 'tar.gz'}\n`);
+    const f = fixture(subtest), previous = join(f.cache, `v${fixtureVersion}`); mkdirSync(previous, { recursive: true }); writeFileSync(join(previous, 'preserved'), 'original');
+    if (kind === 'checksum') f.setManifest(`${'0'.repeat(64)}  node-v${fixtureVersion}-${f.key}.${process.platform === 'win32' ? 'zip' : 'tar.gz'}\n`);
     if (kind === 'manifest') f.setManifest('no matching official archive\n');
     const options = kind === 'download' ? { ...f.options, download: async () => { throw new Error('offline'); } } : f.options;
     await assert.rejects(ensureRuntime(options), /SHA-256|indisponivel|offline/);
     assert.equal(readFileSync(join(previous, 'preserved'), 'utf8'), 'original');
     assert.ok(readdirSync(f.cache).every(name => !name.startsWith('.stage.')));
   });
+});
+
+test('bootstrap Windows ignora Node afetado e usa somente um runtime corrigido no cache', async t => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'adk-windows-runtime-')));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const current = join(root, 'node.exe');
+  writeFileSync(current, 'fixture');
+  const cache = join(root, '.pbai4devs/tools/.cache/runtime/node/win-x64');
+  const create = version => {
+    const directory = join(cache, `v${version}`);
+    const npm = join(directory, 'node_modules/npm/bin/npm-cli.js');
+    mkdirSync(dirname(npm), { recursive: true });
+    writeFileSync(npm, 'fixture');
+    const node = join(directory, 'node.exe');
+    writeFileSync(node, 'fixture');
+    return node;
+  };
+  const affected = create('24.13.0');
+  const options = {
+    root, node: current, platform: 'win32', arch: 'x64', allowDownload: false,
+    environment: { NODE_OPTIONS: '', PATH: '' },
+    run(file, args) {
+      if (args[0] === '-p') {
+        const version = [current, affected].includes(file) ? '24.13.0' : fixtureVersion;
+        return { status: 0, stdout: JSON.stringify({ version, node: file, bun: false }) };
+      }
+      assert.equal(args[1], '--version');
+      return { status: 0, stdout: '11.0.0\n' };
+    },
+  };
+  await assert.rejects(ensureRuntime(options), /24\.13\.1/);
+  const supported = create(fixtureVersion);
+  const result = await ensureRuntime(options);
+  assert.equal(result.source, 'cache');
+  assert.equal(result.node, supported);
 });
 
 test('validação recusa nomes fora da distribuição antes da extração', () => {

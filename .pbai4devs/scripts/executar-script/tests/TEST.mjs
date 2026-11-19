@@ -27,7 +27,7 @@ function fixture(t) {
 }
 
 test('Node 24 e necessario e nao ha tentativa de runtime alternativo', () => {
-  assert.doesNotThrow(() => requireNode(24, '24.0.0'));
+  assert.doesNotThrow(() => requireNode(24, '24.0.0', 'linux'));
   assert.throws(() => requireNode(24, '22.22.0'), /Node.js >=24/);
 });
 

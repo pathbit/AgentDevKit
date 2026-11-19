@@ -11,8 +11,9 @@ O pacote traz o gerador e as fontes compartilhadas. A instalação prepara
 
 Prepare [Node.js 24+ com npm e npx](prerequisites.md) no Windows, macOS ou Linux.
 O guia inclui instalação manual e como pedir ao agente para preparar a máquina.
-Git é opcional para instalar o kit. Com Node 18–23 existente, o launcher pode
-preparar Node 24 localmente usando `tar`; veja o [bootstrap][bootstrap].
+Git é opcional para instalar o kit. O launcher aceita Node 18 para preparar
+um runtime local usando `tar`. Veja o [bootstrap][bootstrap] para as regras
+de seleção e cache no Windows.
 
 ## Instalar
 

@@ -5,6 +5,10 @@ description: Recuperação de Node.js por JavaScript sem instalação global.
 # Preparar o runtime
 
 O inicializador usa Node.js 18+ para preparar Node.js 24+ e npm locais.
+No Windows, ele seleciona uma versão com a correção de remoção em caminhos
+Unicode. Use Node.js LTS 24.13.1+ ou 26+. Se o próprio processo do bootstrap
+for de uma versão afetada, ele pode usar um runtime compatível no cache.
+Caso contrário, atualize o Node pelo gerenciador do sistema.
 Se Node/npm estiverem totalmente ausentes, o agente deve instalá-los pelo
 gerenciador do sistema operacional antes de executar JavaScript ou npx.
 

@@ -138,7 +138,8 @@ syncBuiltinESMExports();
 
 test('requisito comum recusa Node antigo e procura executaveis sem shell', t => {
   assert.throws(() => requireNode(24, '22.22.0'), /Node.js >=24/);
-  assert.doesNotThrow(() => requireNode(24, '24.13.0'));
+  assert.doesNotThrow(() => requireNode(24, '24.13.0', 'linux'));
+  assert.throws(() => requireNode(24, '24.13.0', 'win32'), /24\.13\.1/);
   const output = join(projectRoot, '.agent-tests'); mkdirSync(output, { recursive: true });
   const root = mkdtempSync(join(output, 'runtime-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));

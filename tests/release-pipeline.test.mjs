@@ -313,7 +313,7 @@ test('matriz roda cada grupo portátil exatamente uma vez em cada SO e falhas bl
   assert.ok(minimumBody, 'Job de runtime mínimo ausente');
   const minimumSystems = [...minimumBody.matchAll(/- os:\s*(\S+)/g)].map(match => match[1]).sort();
   assert.deepEqual(minimumSystems, ['macos-15-intel', 'ubuntu-latest', 'windows-latest']);
-  assert.deepEqual([...minimumBody.matchAll(/node-version:\s*([\d.]+)/g)].map(match => match[1]), ['24.13.0', '18.20.8']);
+  assert.deepEqual([...minimumBody.matchAll(/node-version:\s*([\d.]+)/g)].map(match => match[1]), ['24.13.1', '18.20.8']);
   assert.match(minimumBody, /ADK_TEST_NODE24=/);
   assert.match(minimumBody, /ADK_EXPECT_NODE18:\s*'1'/);
   assert.match(minimumBody, /node --test tests\/runtime-minimum\.test\.mjs/);

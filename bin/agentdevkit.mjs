@@ -4,6 +4,7 @@ import { realpathSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ensureRuntime, environmentWithNode } from '../.pbai4devs/scripts/preparar-ferramentas/BOOTSTRAP.mjs';
+import { isSupportedNodeVersion, windowsNode24Minimum } from '../.pbai4devs/scripts/lib/runtime.mjs';
 
 const file = fileURLToPath(import.meta.url);
 export async function run(argv = process.argv.slice(2), options = {}) {
@@ -20,7 +21,7 @@ export async function run(argv = process.argv.slice(2), options = {}) {
   }
   const locale = String((terminalOption ? '' : languageArgument) || selectedLanguage).toLowerCase();
   const language = locale === 'en' ? 'en' : locale === 'es' ? 'es' : 'pt';
-  if (!(options.bun ?? process.versions.bun) && Number(version.split('.')[0]) >= 24) {
+  if (!(options.bun ?? process.versions.bun) && isSupportedNodeVersion(version)) {
     let main;
     try { ({ main } = await import('../src/cli.mjs')); }
     catch (error) {
@@ -41,8 +42,9 @@ export async function run(argv = process.argv.slice(2), options = {}) {
     if (result.error) throw result.error;
     return result.status ?? 1;
   } catch (cause) { error = cause; }
-  const message = language === 'en' ? 'Could not prepare Node.js 24+.' : language === 'es' ? 'No se pudo preparar Node.js 24+.' : 'Não foi possível preparar Node.js 24+.';
-  const next = [{ command: 'https://nodejs.org/en/download', label: 'Node.js 24+' }];
+  const runtime = process.platform === 'win32' ? `Node.js ${windowsNode24Minimum}+ (LTS)` : 'Node.js 24+';
+  const message = language === 'en' ? `Could not prepare ${runtime}.` : language === 'es' ? `No se pudo preparar ${runtime}.` : `Não foi possível preparar ${runtime}.`;
+  const next = [{ command: 'https://nodejs.org/en/download', label: runtime }];
   const output = options.stdout || process.stdout;
   if (globalArgs.includes('--json')) output.write(`${JSON.stringify({ ok: false, command: 'runtime', language, message, detail: error?.message, next })}\n`);
   else output.write(`${message}\n\n[ ${language === 'en' ? 'Next step' : language === 'es' ? 'Próximo paso' : 'Próximo passo'} ]\n  > ${next[0].command}\n`);

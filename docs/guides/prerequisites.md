@@ -26,6 +26,11 @@ têm instalações separadas.
 
 ## Windows
 
+Use **Node.js 24.13.1 ou posterior na série 24 LTS**, ou Node.js LTS 26 ou
+posterior. Essas séries incluem a correção de remoção em caminhos Windows
+com acentos. Confira a versão antes de executar o kit.
+[Notas do Node.js 24.13.1][node-unicode].
+
 No PowerShell, com [WinGet][winget] disponível:
 
 ```powershell
@@ -33,7 +38,7 @@ winget install --id OpenJS.NodeJS.LTS --exact --source winget
 ```
 
 Sem WinGet, abra o [download oficial do Node.js][node], selecione uma versão
-LTS 24 ou superior e use o instalador Windows `.msi` da sua arquitetura.
+LTS compatível e use o instalador Windows `.msi` da sua arquitetura.
 Mantenha npm e a inclusão no PATH habilitados. Feche e reabra o terminal;
 no VS Code, reabra também o terminal integrado. Repita os três comandos acima.
 
@@ -92,9 +97,10 @@ Você também pode pedir no aplicativo ou terminal do seu agente:
 > GitHub Packages e os agentes que usarei neste projeto.
 
 O agente precisa de acesso ao terminal, à rede e das permissões de instalação
-do sistema. Sem Node/npm, o `npx` ainda não pode executar o kit. Com Node
-18–23 existente, o launcher pode preparar Node 24 localmente; prefira atualizar
-o ambiente para Node 24+ antes de começar.
+do sistema. Sem Node/npm, o `npx` ainda não pode executar o kit. O launcher
+aceita Node 18 para preparar um runtime local. Versões afetadas no Windows
+podem reutilizar um cache compatível. Para instalar um runtime a partir de
+uma dessas versões, use o gerenciador do sistema.
 
 O [bootstrap do kit][bootstrap] usa `tar` nativo quando precisa baixar um
 runtime, verifica o checksum e não altera o PATH permanentemente.
@@ -117,6 +123,7 @@ da tarefa em [ferramentas e testes](tools-and-testing.md).
 [Wiki](../README.md) · [Instalar o kit](installation.md)
 
 [node]: https://nodejs.org/en/download
+[node-unicode]: https://nodejs.org/en/blog/release/v24.13.1
 [winget]: https://learn.microsoft.com/en-us/windows/package-manager/winget/install
 [brew]: https://formulae.brew.sh/formula/node@24
 [nvm]: https://github.com/nvm-sh/nvm#installing-and-updating
