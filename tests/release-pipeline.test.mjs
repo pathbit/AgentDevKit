@@ -181,17 +181,36 @@ test('perfis portáteis cobrem cada suíte uma vez e o comando local executa tod
   }
   const syncDir = '.pbai4devs/scripts/sincronizar-agentes/tests';
   const syncModules = Object.values(portableSyncProfiles).flat();
-  assert.equal(new Set(syncModules).size, syncModules.length);
+  const distinctSyncModules = [...new Set(syncModules)];
+  assert.equal(syncModules.length, distinctSyncModules.length + 1);
+  assert.equal(syncModules.filter(file => file === 'BASE.mjs').length, 2);
   const aggregate = readFileSync(join(root, syncDir, 'TEST.mjs'), 'utf8');
   const imported = [...aggregate.matchAll(/^import '\.\/([^']+)';$/gm)].map(match => match[1]);
-  assert.deepEqual(syncModules.toSorted(), imported.toSorted());
-  assert.deepEqual(syncModules.toSorted(), readdirSync(join(root, syncDir)).filter(file => file.endsWith('.mjs') && file !== 'TEST.mjs').sort());
+  assert.deepEqual(distinctSyncModules.toSorted(), imported.toSorted());
+  assert.deepEqual(distinctSyncModules.toSorted(), readdirSync(join(root, syncDir)).filter(file => file.endsWith('.mjs') && file !== 'TEST.mjs').sort());
+  const syncFilters = new Map();
   for (const [profile, files] of Object.entries(portableSyncProfiles)) {
     const group = [];
     runPipeline(profile, { root, env: {}, run(_root, args) { group.push(args); } });
-    assert.deepEqual(group, [['--test', '--test-concurrency=2', ...files.map(file => `${syncDir}/${file}`)]]);
+    const command = ['--test', '--test-concurrency=2', ...files.map(file => `${syncDir}/${file}`)];
+    if (files.includes('BASE.mjs')) {
+      assert.equal(group.length, 1);
+      syncFilters.set(profile, group[0][2]);
+      assert.deepEqual(group[0].toSpliced(2, 1), command);
+    } else {
+      assert.deepEqual(group, [command]);
+    }
     calls.push(...group);
   }
+  const excludePrefix = '--test-skip-pattern=';
+  const excluded = syncFilters.get('portable-sync-core');
+  assert.ok(excluded.startsWith(excludePrefix));
+  const pattern = excluded.slice(excludePrefix.length);
+  assert.equal(syncFilters.get('portable-sync-core-updates'), `--test-name-pattern=${pattern}`);
+  const syncCore = readFileSync(join(root, syncDir, 'BASE.mjs'), 'utf8');
+  const testNames = [...syncCore.matchAll(/^test\('([^']+)'/gm)].map(match => match[1]);
+  const updateCase = new RegExp(pattern);
+  assert.equal(testNames.filter(name => updateCase.test(name)).length, 4);
   const individual = calls.splice(0);
   runPipeline('portable', options);
   assert.deepEqual(calls, individual);

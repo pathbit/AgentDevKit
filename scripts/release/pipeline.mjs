@@ -107,8 +107,21 @@ export const portableProfiles = Object.freeze({
 
 export const portableSyncProfiles = Object.freeze({
   'portable-sync-core': Object.freeze(['BASE.mjs']),
+  'portable-sync-core-updates': Object.freeze(['BASE.mjs']),
   'portable-sync-ownership': Object.freeze(['HUMAN_OWNERSHIP.mjs', 'COEXISTENCE.mjs', 'MANAGED_CONTENT.mjs', 'CATALOG_OWNERSHIP.mjs']),
   'portable-sync-preservation': Object.freeze(['LOCAL_IGNORE.mjs', 'PRESERVATION.mjs']),
+});
+// These four cases accounted for half the Windows runtime in the completed CI run.
+const syncCoreUpdates = [
+  'metadados humanos editados bloqueiam sync; fontes sem conflito atualizam',
+  'atualiza fontes, adiciona clientes, remove recursos e migra agrupado para plano',
+  'gera manifesto e entradas sem estado e atualiza apenas entradas integralmente próprias',
+  'manifestos Antigravity acompanham skills, regras e agentes agrupados',
+].join('|');
+const syncCorePattern = `^(?:${syncCoreUpdates})$`;
+const portableSyncFilters = Object.freeze({
+  'portable-sync-core': `--test-skip-pattern=${syncCorePattern}`,
+  'portable-sync-core-updates': `--test-name-pattern=${syncCorePattern}`,
 });
 const portableProfileNames = [...Object.keys(portableProfiles), ...Object.keys(portableSyncProfiles)];
 
@@ -248,8 +261,9 @@ export function runPipeline(profile, { root = releaseRoot, env = process.env, ru
   const portableArgs = ['--test-concurrency=2', ...reporter];
   if (Object.hasOwn(portableSyncProfiles, profile)) {
     const files = portableSyncProfiles[profile];
+    const filters = Object.hasOwn(portableSyncFilters, profile) ? [portableSyncFilters[profile]] : [];
     console.log(`Perfil ${profile}: ${files.join(', ')}`);
-    run(root, ['--test', ...portableArgs, ...files.map(file => `${hub}/scripts/sincronizar-agentes/tests/${file}`)], env);
+    run(root, ['--test', ...portableArgs, ...filters, ...files.map(file => `${hub}/scripts/sincronizar-agentes/tests/${file}`)], env);
     return;
   }
   if (Object.hasOwn(portableProfiles, profile)) {

@@ -28,10 +28,11 @@ no CI, `portable-cli`, `portable-source-integration`, `portable-selection`,
 `portable-resources-managed`, `portable-managed-content`,
 `portable-managed-lifecycle`, `portable-managed-protection`,
 `portable-resources-gemini`, `portable-resources-gemini-staged`,
-`portable-sync-core`, `portable-sync-ownership`, `portable-sync-preservation`
-e `portable-layout` rodam em jobs separados no Windows e no macOS. Os três
-perfis de sync executam os sete módulos do ponto de entrada `tests/TEST.mjs`
-do sincronizador. No Windows,
+`portable-sync-core`, `portable-sync-core-updates`, `portable-sync-ownership`,
+`portable-sync-preservation` e `portable-layout` rodam em jobs separados no
+Windows e no macOS. Os quatro perfis de sync executam os sete módulos do
+ponto de entrada `tests/TEST.mjs` do sincronizador. Os dois perfis de núcleo
+usam filtros complementares no mesmo módulo. No Windows,
 `portable-cli` confere se a instalação e o sync direto preservam a DACL de
 arquivos atualizados em NTFS, usando uma regra explícita de leitura na fixture.
 `portable-source-integration` isola o teste de convergência entre a CLI e a

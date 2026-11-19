@@ -158,6 +158,10 @@ jobs:
             label: Windows / Node 24 / sync core scripts
           - os: windows-latest
             node: 24
+            profile: portable-sync-core-updates
+            label: Windows / Node 24 / sync core updates
+          - os: windows-latest
+            node: 24
             profile: portable-sync-ownership
             label: Windows / Node 24 / sync ownership scripts
           - os: windows-latest
@@ -264,6 +268,10 @@ jobs:
             node: 24
             profile: portable-sync-core
             label: macOS / Node 24 / sync core scripts
+          - os: macos-15-intel
+            node: 24
+            profile: portable-sync-core-updates
+            label: macOS / Node 24 / sync core updates
           - os: macos-15-intel
             node: 24
             profile: portable-sync-ownership
