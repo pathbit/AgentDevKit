@@ -14,14 +14,21 @@ import { applyPlan, planInstallation } from '../src/install.mjs';
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const cli = join(repo, 'bin/agentdevkit.mjs');
 const node24 = Number(process.versions.node.split('.')[0]) >= 24 && !process.versions.bun;
+const cliTimeout = process.platform === 'win32' ? 240000 : 120000;
 
-test('CLI preserva referência CRLF já satisfeita sem duplicar bloco ou alterar índice', { skip: !node24, timeout: 180000 }, t => {
+test('CLI preserva referência CRLF já satisfeita sem duplicar bloco ou alterar índice', { skip: !node24, timeout: process.platform === 'win32' ? 900000 : 180000 }, t => {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'adk-cli-eol-')));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const env = { ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^GIT_/i.test(key))), GIT_CONFIG_GLOBAL: testGitConfig, GIT_CONFIG_NOSYSTEM: '1', GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0' };
-  const run = (program, args) => spawnSync(program, args, { cwd: root, env, encoding: 'utf8', timeout: 120000, maxBuffer: 8 * 1024 * 1024 });
+  const run = (program, args, timeout = 120000) => spawnSync(program, args, { cwd: root, env, encoding: 'utf8', timeout, maxBuffer: 8 * 1024 * 1024 });
   const git = (...args) => { const r = run('git', args); assert.equal(r.status, 0, r.stderr); };
-  const command = (...args) => { const r = run(process.execPath, [cli, ...args, '--target', root, '--json']); assert.equal(r.error, undefined); assert.equal(r.signal, null); return { ...r, result: JSON.parse(r.stdout) }; };
+  const command = (...args) => {
+    const result = run(process.execPath, [cli, ...args, '--target', root, '--json'], cliTimeout);
+    const details = `${args.join(' ')}: ${result.error?.message || result.signal || ''}\n${result.stderr}\n${result.stdout}`;
+    assert.equal(result.error, undefined, details);
+    assert.equal(result.signal, null, details);
+    return { ...result, result: JSON.parse(result.stdout) };
+  };
   git('init', '-q', '--template=');
   writeFileSync(join(root, '.gitignore'), '# fixture\n');
   git('add', '.gitignore');

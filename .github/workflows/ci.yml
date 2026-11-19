@@ -118,6 +118,10 @@ jobs:
             label: Windows / Node 24 / migration and preservation
           - os: windows-latest
             node: 24
+            profile: portable-cli-line-endings
+            label: Windows / Node 24 / CRLF preservation
+          - os: windows-latest
+            node: 24
             profile: portable-resources
             label: Windows / Node 24 / resources
           - os: windows-latest
@@ -228,6 +232,10 @@ jobs:
             node: 24
             profile: portable-migration
             label: macOS / Node 24 / migration and preservation
+          - os: macos-15-intel
+            node: 24
+            profile: portable-cli-line-endings
+            label: macOS / Node 24 / CRLF preservation
           - os: macos-15-intel
             node: 24
             profile: portable-resources

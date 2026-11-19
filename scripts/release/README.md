@@ -24,6 +24,7 @@ no CI, `portable-cli`, `portable-source-integration`, `portable-selection`,
 `portable-projects`, `portable-projects-git`, `portable-projects-callbacks`,
 `portable-projects-matrix`,
 `portable-recovery`, `portable-recovery-metadata`, `portable-migration`,
+`portable-cli-line-endings`,
 `portable-resources`, `portable-resources-clients`, `portable-claude-rule-cli`,
 `portable-resources-managed`, `portable-managed-content`,
 `portable-managed-lifecycle`, `portable-managed-protection`,
@@ -40,8 +41,9 @@ sincronização direta, incluindo a preservação do ignore e do índice Git.
 Os testes de conteúdo gerenciado, ciclo de vida e proteção de alterações
 humanas compartilham a fixture e executam em jobs dedicados.
 Callbacks isolados e testes de matriz ficam separados para limitar a duração
-de cada job. Os testes Git de maior duração também têm job próprio. O pipeline
-limita cada processo a 40 minutos. O job de verificação tem até 60 minutos para
+de cada job. Os testes Git de maior duração e a preservação de CRLF têm jobs
+próprios. O pipeline limita cada processo a 50 minutos no Windows e 40 nos
+demais sistemas. O job de verificação tem até 60 minutos para
 executar todos os seus passos. Os perfis portáteis usam a saída TAP no Actions
 para registrar falhas conforme os testes terminam.
 Os cinco casos de obstrução são preservados; os três casos de raiz e grupo e os

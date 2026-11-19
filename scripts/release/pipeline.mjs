@@ -34,7 +34,7 @@ export function guardSourceOnlyGit(root, environment = process.env) {
   return { files: listed.stdout.split('\0').filter(Boolean).length };
 }
 
-export const nodeProcessTimeoutMs = 40 * 60 * 1000;
+export const nodeProcessTimeoutMs = (process.platform === 'win32' ? 50 : 40) * 60 * 1000;
 
 export function executeNode(root, args, env = process.env) {
   const childEnv = { ...env }; delete childEnv.NODE_TEST_CONTEXT;
@@ -74,7 +74,8 @@ export const portableProfiles = Object.freeze({
     'cli-special-mode.test.mjs', 'sync-special-mode.test.mjs', 'sync-temporary-privacy.test.mjs',
     'temporary-preservation.test.mjs',
   ]),
-  'portable-migration': Object.freeze(['cli-line-endings.test.mjs', 'linux-inplace-metadata-experiment.test.mjs', 'linux-xattr-probe.test.mjs', 'state-migration.test.mjs', 'state-special-mode.test.mjs', 'state-directory-xattr.test.mjs', 'preservation-lifecycle.test.mjs']),
+  'portable-migration': Object.freeze(['linux-inplace-metadata-experiment.test.mjs', 'linux-xattr-probe.test.mjs', 'state-migration.test.mjs', 'state-special-mode.test.mjs', 'state-directory-xattr.test.mjs', 'preservation-lifecycle.test.mjs']),
+  'portable-cli-line-endings': Object.freeze(['cli-line-endings.test.mjs']),
   'portable-resources': Object.freeze([
     'json-diagnostics.test.mjs', 'compose-package-smoke.test.mjs', 'documentation-compatibility.test.mjs',
     'github-packages.test.mjs', 'next.test.mjs', 'release-pipeline.test.mjs',
