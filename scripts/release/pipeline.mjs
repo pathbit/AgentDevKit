@@ -88,10 +88,13 @@ export const portableProfiles = Object.freeze({
   ]),
   'portable-claude-rule-cli': Object.freeze(['claude-rule-cli.test.mjs']),
   'portable-resources-managed': Object.freeze([
-    'managed-content.test.mjs', 'managed-content-helper.test.mjs', 'managed-toml.test.mjs',
+    'managed-content-helper.test.mjs', 'managed-toml.test.mjs',
     'toml-prompt-equivalence.test.mjs', 'toml-composite.test.mjs', 'toml-human-after.test.mjs',
     'toml-marker-context.test.mjs', 'sync-skill-collision.test.mjs', 'managed-preservation.test.mjs',
   ]),
+  'portable-managed-content': Object.freeze(['managed-content.test.mjs']),
+  'portable-managed-lifecycle': Object.freeze(['managed-content-lifecycle.test.mjs']),
+  'portable-managed-protection': Object.freeze(['managed-content-protection.test.mjs']),
   'portable-resources-gemini': Object.freeze([
     'gemini-command-fixture.test.mjs', 'gemini-unowned-block.test.mjs',
     'gemini-derived-command.test.mjs', 'gemini-derived-diagnostic.test.mjs',

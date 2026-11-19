@@ -134,6 +134,18 @@ jobs:
             label: Windows / Node 24 / managed resources
           - os: windows-latest
             node: 24
+            profile: portable-managed-content
+            label: Windows / Node 24 / managed content
+          - os: windows-latest
+            node: 24
+            profile: portable-managed-lifecycle
+            label: Windows / Node 24 / managed content lifecycle
+          - os: windows-latest
+            node: 24
+            profile: portable-managed-protection
+            label: Windows / Node 24 / managed content protection
+          - os: windows-latest
+            node: 24
             profile: portable-resources-gemini
             label: Windows / Node 24 / Gemini resources
           - os: windows-latest
@@ -228,6 +240,18 @@ jobs:
             node: 24
             profile: portable-resources-managed
             label: macOS / Node 24 / managed resources
+          - os: macos-15-intel
+            node: 24
+            profile: portable-managed-content
+            label: macOS / Node 24 / managed content
+          - os: macos-15-intel
+            node: 24
+            profile: portable-managed-lifecycle
+            label: macOS / Node 24 / managed content lifecycle
+          - os: macos-15-intel
+            node: 24
+            profile: portable-managed-protection
+            label: macOS / Node 24 / managed content protection
           - os: macos-15-intel
             node: 24
             profile: portable-resources-gemini

@@ -25,7 +25,8 @@ no CI, `portable-cli`, `portable-source-integration`, `portable-selection`,
 `portable-projects-matrix`,
 `portable-recovery`, `portable-recovery-metadata`, `portable-migration`,
 `portable-resources`, `portable-resources-clients`, `portable-claude-rule-cli`,
-`portable-resources-managed`,
+`portable-resources-managed`, `portable-managed-content`,
+`portable-managed-lifecycle`, `portable-managed-protection`,
 `portable-resources-gemini`, `portable-resources-gemini-staged`,
 `portable-sync-core`, `portable-sync-ownership`, `portable-sync-preservation`
 e `portable-layout` rodam em jobs separados no Windows e no macOS. Os três
@@ -35,6 +36,8 @@ do sincronizador. No Windows,
 arquivos atualizados em NTFS, usando uma regra explícita de leitura na fixture.
 `portable-source-integration` isola o teste de convergência entre a CLI e a
 sincronização direta, incluindo a preservação do ignore e do índice Git.
+Os testes de conteúdo gerenciado, ciclo de vida e proteção de alterações
+humanas compartilham a fixture e executam em jobs dedicados.
 Callbacks isolados e testes de matriz ficam separados para limitar a duração
 de cada job. Os testes Git de maior duração também têm job próprio. O pipeline
 limita cada processo a 40 minutos. O job de verificação tem até 60 minutos para
