@@ -463,6 +463,12 @@ test('bootstrap automatico preserva argumentos e status sem instalar ferramentas
 });
 
 test('falha no bootstrap respeita idioma e separador de argumentos', async () => {
+  const runtime = process.platform === 'win32' ? 'Node.js 24.13.1+ (LTS)' : 'Node.js 24+';
+  const messages = {
+    pt: `Não foi possível preparar ${runtime}.`,
+    en: `Could not prepare ${runtime}.`,
+    es: `No se pudo preparar ${runtime}.`,
+  };
   for (const [args, language, json] of [
     [['init', '--target', 'en', '--lang', 'es', '--json'], 'es', true],
     [['init', '--lang', 'en', '--lang', 'ES', '--json'], 'es', true],
@@ -474,7 +480,13 @@ test('falha no bootstrap respeita idioma e separador de argumentos', async () =>
     let output = '';
     const status = await run(args, { nodeVersion: '22.0.0', ensureRuntime: async () => { throw new Error('offline'); }, stdout: { write: value => { output += value; } } });
     assert.equal(status, 1);
-    if (json) assert.equal(JSON.parse(output).language, language);
-    else assert.match(output, /^Não foi possível preparar Node\.js 24\+\./);
+    if (json) {
+      const diagnostic = JSON.parse(output);
+      assert.equal(diagnostic.language, language);
+      assert.equal(diagnostic.message, messages[language]);
+      assert.equal(diagnostic.next[0].label, runtime);
+    } else {
+      assert.equal(output.split('\n', 1)[0], messages[language]);
+    }
   }
 });
