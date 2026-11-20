@@ -1,6 +1,6 @@
 ---
 trigger: always_on
-description: Configuração técnica de projetos novos e preservação do ambiente local existente.
+description: Estrutura mínima e ambiente local dos projetos com Docker Compose.
 ---
 
 # Ambiente local
