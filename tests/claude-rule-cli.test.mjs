@@ -18,6 +18,20 @@ const pointer = '---\ntrigger: model_decision\ndescription: Git.\n---\n\n# Git\n
 const sha = data => createHash('sha256').update(data).digest('hex');
 const put = (root, file, data) => { mkdirSync(dirname(join(root, file)), { recursive: true }); writeFileSync(join(root, file), data); };
 const read = (root, file) => readFileSync(join(root, file));
+function linkDirectory(target, path) {
+  if (process.platform === 'win32') symlinkSync(resolve(dirname(path), target), path, 'junction');
+  else symlinkSync(target, path, 'dir');
+}
+function linkFile(t, target, path) {
+  try {
+    symlinkSync(target, path, 'file');
+    return true;
+  } catch (error) {
+    if (process.platform !== 'win32' || !['EPERM', 'EACCES'].includes(error.code)) throw error;
+    t.skip('O Windows não concedeu permissão para criar o symlink de arquivo da fixture.');
+    return false;
+  }
+}
 function git(root, ...args) {
   const result = spawnSync('git', ['-C', root, ...args], { encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr); return result.stdout;
@@ -223,12 +237,12 @@ test('seleção preserva regra antiga substituída, modo e índice e mantém dia
 });
 
 test('seleção detecta symlink de regra preservado preservando o alvo', t => {
-  if (process.platform === 'win32') return t.skip('sem premissa de permissão para criar symlink');
   const root = fixture(t); init(root);
   const external = mkdtempSync(join(tmpdir(), 'adk-claude-external-'));
   t.after(() => rmSync(external, { recursive: true, force: true }));
   const sentinel = join(external, 'sentinel.md'); writeFileSync(sentinel, '# Conteúdo humano externo\n');
-  const alt = '.claude/rules/human-link.md'; symlinkSync(sentinel, join(root, alt));
+  const alt = '.claude/rules/human-link.md';
+  if (!linkFile(t, sentinel, join(root, alt))) return;
   const before = protectedGit(root), identity = lstatSync(join(root, alt), { bigint: true });
   const selection = cli(root, 'agents', 'codex');
   assert.equal(selection.status, 0, JSON.stringify(selection.body));
@@ -241,12 +255,11 @@ test('seleção detecta symlink de regra preservado preservando o alvo', t => {
 });
 
 test('cliente desmarcado com ancestral simbólico é considerado não verificado', t => {
-  if (process.platform === 'win32') return t.skip('sem premissa de permissão para criar symlink');
   const root = fixture(t), external = mkdtempSync(join(tmpdir(), 'adk-claude-external-root-'));
   t.after(() => rmSync(external, { recursive: true, force: true }));
   assert.equal(cli(root, 'init', '--agents', 'codex').status, 0);
   writeFileSync(join(external, 'sentinel.md'), '# Externo\n');
-  symlinkSync(external, join(root, '.claude'));
+  linkDirectory(external, join(root, '.claude'));
   const before = protectedGit(root), link = lstatSync(join(root, '.claude'), { bigint: true });
   const result = cli(root, 'sync', '--check');
   assert.equal(result.status, 1, JSON.stringify(result.body));
@@ -344,11 +357,10 @@ test('sync direto --check aprova ausência de legado Claude após instalar somen
 });
 
 test('init preserva link de rules e checks sinalizam escopo desconhecido preservando o alvo', t => {
-  if (process.platform === 'win32') return t.skip('sem premissa de permissão para criar symlink');
   const root = fixture(t), external = mkdtempSync(join(tmpdir(), 'adk-claude-rule-boundary-'));
   t.after(() => rmSync(external, { recursive: true, force: true }));
   const sentinel = join(external, 'sentinel.md'); writeFileSync(sentinel, '# Externo\n');
-  mkdirSync(join(root, '.claude'), { recursive: true }); symlinkSync(external, join(root, '.claude/rules'));
+  mkdirSync(join(root, '.claude'), { recursive: true }); linkDirectory(external, join(root, '.claude/rules'));
   const before = protectedGit(root), link = lstatSync(join(root, '.claude/rules'), { bigint: true });
   const initial = cli(root, 'init', '--agents', 'claude'); assert.equal(initial.status, 0, JSON.stringify(initial.body));
   assert.ok(initial.body.retainedClaudeRules.length); assert.ok(initial.body.scopeOmissions.every(x => x.status === 'activation-unverified'));
@@ -364,14 +376,13 @@ test('init preserva link de rules e checks sinalizam escopo desconhecido preserv
 });
 
 test('doctor e preview identificam link simbólico em regra preservada sem ler o destino', t => {
-  if (process.platform === 'win32') return t.skip('sem premissa de permissão para criar symlink');
   const root = fixture(t), external = mkdtempSync(join(tmpdir(), 'adk-claude-symlink-reason-'));
   t.after(() => rmSync(external, { recursive: true, force: true }));
   init(root);
   const sentinel = join(external, 'sentinel.md');
   writeFileSync(sentinel, 'conteúdo externo\n');
   mkdirSync(dirname(join(root, legacy)), { recursive: true });
-  symlinkSync(sentinel, join(root, legacy));
+  if (!linkFile(t, sentinel, join(root, legacy))) return;
   const before = protectedGit(root), state = read(root, '.pbai4devs/state/agentdevkit.json');
   const link = lstatSync(join(root, legacy), { bigint: true });
   for (const args of [['doctor'], ['update', '--dry-run'], ['update', '--dry-run', '--force'], ['update'], ['update', '--force']]) {
@@ -431,7 +442,6 @@ test('init preserva diretório humano no nome de regra Claude', t => {
 });
 
 for (const record of ['files', 'blocks']) test(`regra Claude com registro ${record} recusa link simbólico sem alterar destino`, { timeout: 180000 }, t => {
-  if (process.platform === 'win32') return t.skip('sem premissa de permissão para criar symlink');
   const root = fixture(t), external = mkdtempSync(join(tmpdir(), 'adk-claude-claimed-link-'));
   t.after(() => rmSync(external, { recursive: true, force: true }));
   init(root); addOwnedLegacy(root);
@@ -439,7 +449,8 @@ for (const record of ['files', 'blocks']) test(`regra Claude com registro ${reco
   if (record === 'blocks') { state.blocks[legacy] = state.files[legacy]; delete state.files[legacy]; }
   put(root, statePath, JSON.stringify(state, null, 2) + '\n');
   const sentinel = join(external, 'sentinel.md'), target = join(root, legacy);
-  writeFileSync(sentinel, 'conteúdo externo\n'); rmSync(target); symlinkSync(sentinel, target);
+  writeFileSync(sentinel, 'conteúdo externo\n'); rmSync(target);
+  if (!linkFile(t, sentinel, target)) return;
   const before = protectedGit(root), stateBefore = read(root, statePath), link = lstatSync(target, { bigint: true });
   for (const args of [['doctor'], ['update', '--dry-run']]) {
     const result = cli(root, ...args);
@@ -478,7 +489,6 @@ test('doctor preserva categoria de erro duplo sem expor conteúdo da falha', asy
 });
 
 test('sync direto com apenas regra global sinaliza rules simbólico cíclico, externo ou pendente', t => {
-  if (process.platform === 'win32') return t.skip('sem premissa de permissão para criar symlink');
   for (const kind of ['cycle', 'external', 'dangling']) {
     const root = fixture(t), outside = mkdtempSync(join(tmpdir(), 'adk-claude-only-global-'));
     t.after(() => rmSync(outside, { recursive: true, force: true }));
@@ -489,7 +499,7 @@ test('sync direto com apenas regra global sinaliza rules simbólico cíclico, ex
     put(root, '.pbai4devs/rules/demo/RULE.md', '---\ntrigger: always_on\ndescription: Regra.\n---\n\n# Regra\n');
     put(root, '.pbai4devs/espelhos.conf', 'agente|.claude|agrupado\n');
     mkdirSync(join(root, '.claude'), { recursive: true });
-    symlinkSync(kind === 'cycle' ? 'rules' : kind === 'external' ? outside : 'missing', join(root, '.claude/rules'));
+    linkDirectory(kind === 'cycle' ? 'rules' : kind === 'external' ? outside : 'missing', join(root, '.claude/rules'));
     const before = protectedGit(root), link = lstatSync(join(root, '.claude/rules'), { bigint: true });
     let output = [];
     const applied = synchronize({ root, localIgnores: false, generateEntrypoints: false, output: line => output.push(line) });
@@ -504,11 +514,10 @@ test('sync direto com apenas regra global sinaliza rules simbólico cíclico, ex
 });
 
 test('somente always_on ou glob explícito detecta link interno ou raiz em init e checks', { timeout: 120000 }, t => {
-  if (process.platform === 'win32') return t.skip('sem premissa de permissão para criar symlink');
   const bundle = mkdtempSync(join(tmpdir(), 'adk-claude-only-always-package-'));
   t.after(() => rmSync(bundle, { recursive: true, force: true }));
   for (const folder of ['.pbai4devs', 'src', 'bin']) fs.cpSync(resolve(folder), join(bundle, folder), {
-    recursive: true, filter: source => !source.split('/').some(part => ['.agent-tests', '.local', 'state', 'estado'].includes(part)),
+    recursive: true, filter: source => !source.split(sep).some(part => ['.agent-tests', '.local', 'state', 'estado'].includes(part)),
   });
   fs.copyFileSync(resolve('package.json'), join(bundle, 'package.json'));
   fs.copyFileSync(resolve('LICENSE'), join(bundle, 'LICENSE'));
@@ -535,7 +544,7 @@ test('somente always_on ou glob explícito detecta link interno ou raiz em init 
     const target = kind === 'root-cycle' ? 'rules' : kind === 'root-dangling' ? 'missing' : outside;
     const fileBoundary = kind.endsWith('-file');
     if (fileBoundary) put(root, linkPath, '# Arquivo humano\n');
-    else symlinkSync(target, join(root, linkPath));
+    else linkDirectory(target, join(root, linkPath));
     if (kind === 'root-file') git(root, 'add', '-f', '--', linkPath);
     const identity = lstatSync(join(root, linkPath), { bigint: true }), before = protectedGit(root);
     const initial = invoke(root, 'init', '--agents', 'claude'); assert.equal(initial.status, 0, JSON.stringify(initial.body));
@@ -554,12 +563,11 @@ test('somente always_on ou glob explícito detecta link interno ou raiz em init 
 });
 
 test('pacote integral detecta link interno de regra Claude global em init e checks', t => {
-  if (process.platform === 'win32') return t.skip('sem premissa de permissão para criar symlink');
   const root = fixture(t), outside = mkdtempSync(join(tmpdir(), 'adk-claude-stock-external-'));
   t.after(() => rmSync(outside, { recursive: true, force: true }));
   const sentinel = join(outside, 'sentinel.md'); writeFileSync(sentinel, '# Exterior\n');
   mkdirSync(join(root, '.claude/rules'), { recursive: true });
-  const link = '.claude/rules/seguranca'; symlinkSync(outside, join(root, link));
+  const link = '.claude/rules/seguranca'; linkDirectory(outside, join(root, link));
   const before = protectedGit(root), identity = lstatSync(join(root, link), { bigint: true });
   const initial = cli(root, 'init', '--agents', 'claude'); assert.equal(initial.status, 0, JSON.stringify(initial.body));
   assert.ok(initial.body.retainedClaudeRules.includes(link));

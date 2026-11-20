@@ -195,7 +195,8 @@ test('CLI preserva arquivo de outro proprietário antes de instalar', {
   chownTree(root); fs.chownSync(join(root, 'AGENTS.md'), 0, gid); chmodSync(join(root, 'AGENTS.md'), 0o040);
   for (const extra of [[], ['--force']]) {
     const child = spawnSync(process.execPath, [join(repository, 'bin/agentdevkit.mjs'), 'init', '--agents', 'codex', '--target', root, '--json', ...extra], { uid, gid, encoding: 'utf8', timeout: 120000 });
-    assert.equal(child.status, 1, child.stderr);
+    assert.equal(child.status, 1, child.error?.message || child.stderr);
+    assert.ok(child.stdout.trim(), child.stderr || 'A CLI não escreveu o diagnóstico JSON.');
     const result = JSON.parse(child.stdout);
     assert.equal(result.error?.code, 'E_PROTECTED_METADATA');
     assert.equal(result.error?.metadataReason, 'file-owner-different');

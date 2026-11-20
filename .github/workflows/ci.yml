@@ -316,7 +316,15 @@ jobs:
           sudo apt-get install -y attr acl
       - name: Verify Linux ownership with real UID changes
         if: runner.os == 'Linux' && matrix.profile == 'full'
-        run: sudo -- "$(command -v node)" scripts/release/pipeline.mjs native-linux-ownership
+        shell: bash
+        run: |
+          node_path=$(command -v node)
+          source_dir=$(mktemp -d /tmp/agentdevkit-uid.XXXXXX)
+          trap 'rm -rf -- "$source_dir"' EXIT
+          git archive HEAD | tar -x -C "$source_dir"
+          chmod 0755 "$source_dir"
+          cd "$source_dir"
+          sudo -- "$node_path" scripts/release/pipeline.mjs native-linux-ownership
       - name: Verify the selected profile
         env:
           NODE_OPTIONS: ''
