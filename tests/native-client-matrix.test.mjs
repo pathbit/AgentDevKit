@@ -96,7 +96,7 @@ test('OpenCode exige conteúdo exato do perfil instalado para o mesmo id', t => 
   assert.equal(discovery('opencode', 'agents', agent, JSON.stringify([{ id:'revisor-outro', name:'revisor', system:body }]), project), false);
 });
 
-test('catálogo inválido produz relatório de erro', { skip: Number(process.versions.node.split('.')[0]) < 24 }, t => {
+test('catálogo inválido produz relatório de erro', { skip: Number(process.versions.node.split('.')[0]) < 24 ? 'A matriz nativa requer Node.js 24 ou superior.' : false }, t => {
   const root = mkdtempSync(join(tmpdir(), 'native-invalid-')); t.after(() => rmSync(root, { recursive: true, force: true }));
   const pkg = join(root, 'package'); mkdirSync(join(pkg, 'bin'), { recursive: true });
   writeFileSync(join(pkg, 'package.json'), JSON.stringify({ name: '@pathbit/agentdevkit', version: '1.2.3' }));
@@ -106,7 +106,7 @@ test('catálogo inválido produz relatório de erro', { skip: Number(process.ver
   assert.equal(result.status, 1, result.stderr); const summary = JSON.parse(result.stdout), report = JSON.parse(readFileSync(summary.report));
   assert.equal(summary.failed, true); assert.match(report.error, /Política ou inventário das fontes/); assert.deepEqual(report.rows, []);
 });
-test('falhas de catálogo instalado e fixture produzem casos e todas as linhas', { skip: Number(process.versions.node.split('.')[0]) < 24, timeout: 120000 }, t => {
+test('falhas de catálogo instalado e fixture produzem casos e todas as linhas', { skip: Number(process.versions.node.split('.')[0]) < 24 ? 'A matriz nativa requer Node.js 24 ou superior.' : false, timeout: 120000 }, t => {
   const root = mkdtempSync(join(tmpdir(), 'native-errors-')); t.after(() => rmSync(root, { recursive: true, force: true }));
   const pkg = join(root, 'package'); mkdirSync(join(pkg, 'bin'), { recursive: true });
   const sourceRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');

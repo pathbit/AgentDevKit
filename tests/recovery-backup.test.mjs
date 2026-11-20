@@ -11,7 +11,11 @@ import { prepareRecoveryBackup, verifyRecoveryBackup } from '../.pbai4devs/scrip
 import { inspectRecoveryJournal, reserveRecovery, beginRecovery } from '../.pbai4devs/scripts/lib/recovery-store.mjs';
 import { assertPrivateRecoveryPaths, createPrivateRecoveryDirectory } from '../.pbai4devs/scripts/lib/recovery-privacy.mjs';
 
-const test = process.platform === 'win32' ? nodeTest.skip : nodeTest;
+function test(name, options, run) {
+  const skip = process.platform === 'win32' ? 'As fixtures legadas de backup usam modos POSIX. O armazenamento privado no Windows exige configuração de DACL.' : false;
+  if (typeof options === 'function') return nodeTest(name, { skip }, options);
+  return nodeTest(name, { ...options, skip: options.skip || skip }, run);
+}
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const code = expected => error => error?.code === expected;
 function fixture(t) {
@@ -50,7 +54,7 @@ test('backup preserva bytes, ausências, diretórios e modos no manifesto', t =>
   assert.equal(fs.readFileSync(publicFile, 'utf8'), 'conteúdo humano');
 });
 
-test('entradas inválidas, getters e aliases falham antes de escrever', t => {
+nodeTest('entradas inválidas, getters e aliases falham antes de escrever', t => {
   const root = fixture(t); let invoked = false;
   const getter = { action: 'update', type: 'file', mode: 0o600, data: Buffer.from('x'), get path() { invoked = true; throw Error('segredo'); } };
   const valid = { path: 'arquivo', action: 'update', type: 'file', mode: 0o600, data: Buffer.from('x') };
@@ -156,7 +160,9 @@ test('umask que remove acesso do dono deixa resíduo e interrompe preparo', t =>
   assert.equal(fs.existsSync(join(root, 'manifest.json')), false);
 });
 
-test('pasta e cópia com proprietário diferente são recusadas', { skip: typeof process.geteuid !== 'function' }, t => {
+test('pasta e cópia com proprietário diferente são recusadas', {
+  skip: typeof process.geteuid !== 'function' ? 'A comparação de proprietário exige o UID efetivo POSIX.' : false,
+}, t => {
   const root = fixture(t), lstat = fs.lstatSync;
   const forged = info => new Proxy(info, { get(target, key, receiver) {
     if (key === 'uid') return typeof target.uid === 'bigint' ? target.uid + 1n : target.uid + 1;
@@ -229,12 +235,17 @@ for (const alteration of ['blob externo', 'ordem', 'campo extra', 'hash inválid
   assert.throws(() => verifyRecoveryBackup(root, sha(bytes)), error => error.code === 'E_RECOVERY_BACKUP_INVALID' && !JSON.stringify(error).includes('sintético'));
 });
 
-test('hardlink em cópia é recusado sem alterar o segundo nome', t => {
-  const root = fixture(t), external = fixture(t), result = prepareRecoveryBackup(root, snapshots());
+nodeTest('hardlink em cópia é recusado sem alterar o segundo nome', t => {
+  const root = join(fixture(t), 'backup'), external = fixture(t);
+  createPrivateRecoveryDirectory(root);
+  const result = prepareRecoveryBackup(root, snapshots());
+  assert.deepEqual(verifyRecoveryBackup(root, result.manifest), result);
   const source = join(root, 'blobs', '00000001.bin'), other = join(external, 'outro');
   fs.linkSync(source, other);
+  assert.equal(fs.statSync(source).nlink, 2);
   const before = fs.readFileSync(other);
   assert.throws(() => verifyRecoveryBackup(root, result.manifest), code('E_RECOVERY_BACKUP_INVALID'));
+  assert.deepEqual(fs.readFileSync(source), before);
   assert.deepEqual(fs.readFileSync(other), before);
 });
 
@@ -385,7 +396,9 @@ nodeTest('criação exclusiva e backup verificável preservam diretório preexis
   assert.equal(fs.readFileSync(publicFile, 'utf8'), 'conteúdo humano');
 });
 
-nodeTest('Windows recusa backup com permissão concedida a todos antes de gravar', { skip: process.platform !== 'win32' }, t => {
+nodeTest('Windows recusa backup com permissão concedida a todos antes de gravar', {
+  skip: process.platform !== 'win32' ? 'A fixture exerce a proteção por DACL do Windows.' : false,
+}, t => {
   const parent = fixture(t), root = join(parent, 'fixture acl');
   createPrivateRecoveryDirectory(root);
   const powershell = join(process.env.SystemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
@@ -406,7 +419,9 @@ nodeTest('Windows recusa backup com permissão concedida a todos antes de gravar
   assert.deepEqual(fs.readdirSync(root), []);
 });
 
-nodeTest('macOS recusa ACL herdada em pasta privada 0700 antes de gravar dados', { skip: process.platform !== 'darwin' }, t => {
+nodeTest('macOS recusa ACL herdada em pasta privada 0700 antes de gravar dados', {
+  skip: process.platform !== 'darwin' ? 'A fixture usa ACL herdada configurada com chmod +a do macOS.' : false,
+}, t => {
   const parent = fixture(t), backup = join(parent, 'cópia'), journal = join(parent, 'diário');
   const access = 'everyone allow readattr,readsecurity,file_inherit,directory_inherit';
   assert.equal(spawnSync('/bin/chmod', ['+a', access, parent]).status, 0);
@@ -422,7 +437,9 @@ nodeTest('macOS recusa ACL herdada em pasta privada 0700 antes de gravar dados',
   assert.deepEqual(fs.readdirSync(join(journal, 'staging')), []);
 });
 
-nodeTest('macOS recusa ACL acrescentada em blob ou registro privado', { skip: process.platform !== 'darwin' }, t => {
+nodeTest('macOS recusa ACL acrescentada em blob ou registro privado', {
+  skip: process.platform !== 'darwin' ? 'A fixture acrescenta uma ACL com chmod +a do macOS.' : false,
+}, t => {
   const backup = fixture(t), journal = fixture(t), saved = prepareRecoveryBackup(backup, snapshots());
   const blob = join(backup, 'blobs', '00000001.bin');
   assert.equal(spawnSync('/bin/chmod', ['+a', 'everyone allow readattr', blob]).status, 0);

@@ -1,74 +1,53 @@
 ---
 name: configurar-projeto
-description: Prepara um projeto e configura a tecnologia após decidir o produto.
+description: Organiza a preparação do produto e, após as aprovações, comprova a configuração técnica.
 ---
 
 # Configurar projeto
 
-Inspecione somente este repositório. Se a intenção for rodar ou reparar um
-projeto existente na máquina, use `preparar-dev`; não reinicie seu planejamento.
-Enquanto o usuário configurar apenas os agentes, mantenha modelos em
-`.pbai4devs/templates/`, sem criar produto, `docs/` ou aplicação.
-Antes das ferramentas, confira a seleção de clientes no pedido ou estado do kit.
-Se faltar, pergunte quais usa e aplique pela CLI com `--agents` ou `agents`.
-Não deduza pelo aplicativo, SO ou pastas; sem resposta disponível, use `all`.
-Depois, siga `instalar-ferramentas`: confira Node/npm antes dos scripts, prepare
-as ferramentas e rode o diagnóstico. Isso não escolhe a stack da aplicação.
+Inspecione somente este repositório. Para rodar ou reparar projeto existente,
+use `preparar-dev`. Enquanto o usuário configurar só os agentes, mantenha modelos
+em `.pbai4devs/templates/`. Ao configurar o kit, use os clientes do pedido ou
+do estado. Se faltar seleção, pergunte e aplique `--agents` ou `agents`
+pela CLI. Sem resposta disponível, use `all` para a seleção de clientes.
+Confira Node e npm e prepare somente as ferramentas necessárias à tarefa.
 
-## Preparar o projeto
+## Preparar o produto
 
-Antes de criar estado ou documentos, faça o inventário de `atualizar-documentacao`.
-Mapeie os documentos já existentes aos seus papéis, sem reiniciar o produto.
-Reúna dúvidas no início e aproveite decisões existentes. Quando o projeto
-começar, crie ou retome `.pbai4devs/state/configuracao/ESTADO.md` pelo modelo.
-Combine os arquivos `prd`, `ux_ui`, `design`, `roadmap` e diretórios `releases`,
-`specs`, `tarefas` e documentos de apoio aplicáveis. Crie/evolua o README
-da raiz pelos [modelos da fase](../../../templates/README.md), preservando os
-fatos existentes; cada pasta de documentos terá seu README. Registre evidências
-da preparação e encaminhe a
-`criar-prd` → `criar-ux-ui` → `criar-design-doc` → roadmap → spec.
-Não escolha stack nem inicialize código antes dessas decisões.
+Faça o inventário com `atualizar-documentacao`. Quando o produto começar,
+reaproveite decisões e documentos. Crie ou retome
+`.pbai4devs/state/configuracao/ESTADO.md` pelo modelo e combine onde ficam
+PRD, UX/UI, design, roadmap, releases, specs, tarefas e documentos de apoio.
+Evolua READMEs pelos [modelos da fase](../../../templates/README.md).
+Registre provas da preparação e encaminhe a primeira etapa pendente com
+`proximos-passos`. A escolha da stack acontece no design.
 
 ## Configurar a tecnologia
 
-Exija PRD, design e spec aprovados; UX/UI aprovado ou não aplicável com
-justificativa aprovada. Siga o plano aprovado em `implementar-spec`, respeitando
-aprovações já dadas.
+Exija PRD, design, spec e plano aprovados. UX/UI exige aprovação ou justificativa
+de não aplicação aprovada. Preserve aprovações existentes e siga o plano.
+Decisões materiais faltantes voltam ao design.
 
-1. Use `executar-script` com `inspecionar-projeto` e `diagnosticar-ambiente`
-   para identificar estrutura, SO, arquitetura e ferramentas.
-   Se a consulta ao Docker falhar, informe que ele não foi verificado; uma
-   falha de acesso ou sandbox não prova que o daemon está parado.
-   Se rede não for permitida e o contexto Docker não for conhecido como local,
-   use `diagnosticar-ambiente --no-docker-probe` pelo seletor.
-   Reúna as perguntas do [modelo de ambiente][ambiente]
-   antes de instalar. Decisões materiais faltantes voltam ao design.
-2. Prepare as ferramentas definidas em `.pbai4devs/tools/<nome>/TOOL.json` com
-   `preparar-ferramentas`; confira versões e compatibilidade com SO/arquitetura.
-   Reutilize instalações e lockfiles; não repita init nem troque a stack.
-3. Aplique a [estrutura e o ambiente obrigatórios][estrutura], preenchendo os
-   modelos de Makefile, Compose e dockerignore. Configure os serviços de
-   infraestrutura necessários, healthchecks, portas, volumes e comandos.
-   Antes de concluir a configuração, não implemente código da aplicação;
-   `src/` e `tests/` podem existir vazios ou conter apenas configuração.
-4. Configure VS Code e recomende EditorConfig, sem regras conflitantes.
-   Termine `.gitignore` com o modelo CUSTOM IGNORE e os padrões da tecnologia;
-   confirme que templates, scripts, testes e fixtures continuam versionáveis.
-5. Documente versões, estrutura, setup, comandos, origem do template/init e
-   decisões no README/estado. Use `atualizar-documentacao` para contribuição,
-   configuração e ADRs aplicáveis. Preserve arquivos e convenções existentes.
-6. Use `verificar-trabalho`: valide runtime, configuração Compose e saúde dos
-   serviços de infraestrutura necessários; confira a estrutura com
-   `inspecionar-projeto --check`. Se Docker ou outra dependência obrigatória
-   estiver inacessível, mantenha a configuração pendente e informe a prova
-   faltante. Sem aplicação, registre build, saúde e fluxo dela como pendentes;
-   não os reporte como aprovados. Com aplicação existente, prove o fluxo real
-   conforme seu tipo. Marque `configuracao_tecnica: concluido` somente com
-   evidência da configuração prévia e dos serviços aplicáveis.
+- Use [diagnosticar](../../../commands/diagnosticar/COMMAND.md).
+  Se a consulta ao Docker falhar, relate **não verificado**. Sem rede permitida
+  e sem contexto Docker comprovadamente local, use `--no-docker-probe`.
+  Complete lacunas com as perguntas do [modelo de ambiente][ambiente].
+- Prepare ferramentas compatíveis com SO e arquitetura via `preparar-ferramentas`.
+  Reutilize instalações, stack e lockfiles. Aplique a [estrutura obrigatória][estrutura]
+  para Makefile, Compose, dockerignore, serviços, healthchecks, portas e volumes.
+  Preserve ou configure o `.editorconfig` exigido pela estrutura. Configure
+  VS Code quando adotado e complete o ignore com padrões da stack. Confira
+  que fontes, scripts, testes e fixtures sejam versionáveis.
+- Documente versões, estrutura, comandos e origem do template ou init.
+  Verifique runtime, Compose, saúde da infraestrutura e
+  `inspecionar-projeto --check` com `verificar-trabalho`. Registre
+  `configuracao_tecnica: concluido` só com prova das dependências e serviços
+  obrigatórios. Antes disso, mantenha o código da aplicação fora da etapa.
+  Se já houver aplicação, prove o fluxo real. Se ainda não houver, mantenha
+  build, saúde e fluxo dela pendentes.
 
-Após alterações técnicas, conclua `revisar-entrega`. Sincronize apontamentos
-somente quando recursos dos agentes forem alterados. Para verificá-los, use
-`node .pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs --check`.
+Após mudanças técnicas, conclua `revisar-entrega`. Sincronize e confira
+`--check` somente quando recursos agênticos mudarem.
 
 [ambiente]: ../../../templates/ambiente-local/TEMPLATE.md
 [estrutura]: ../../../rules/ambiente-local/RULE.md

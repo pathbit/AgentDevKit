@@ -1,34 +1,22 @@
 ---
 name: implementar-backend
-description: Implementa mudanças de backend com contratos, dados e provas de comportamento.
+description: Altera APIs, serviços ou persistência com provas dos contratos e da autorização.
 ---
 
 # Implementar backend
 
-Siga o escopo aprovado, os contratos e a stack existentes. Para uma spec, leia
-[implementar-spec](../../specs/implementar-spec/SKILL.md) e consulte
-`proximos-passos` para identificar o primeiro pré-requisito pendente antes de
-propor o plano. Confirme spec e plano aprovados e, antes de alterar código, execute
-`node .pbai4devs/scripts/executar-script/SCRIPT.mjs verificar-configuracao`.
-Se o estado estiver ausente, inválido ou pendente, ou faltar prova obrigatória,
-pare e informe o responsável. Saída zero ainda exige conferir as evidências.
-Respeite essa ordem sem reiniciar o fluxo nem pedir novamente aprovações já dadas.
+Em tarefa coberta por uma spec, siga os pré-requisitos, o plano e o gate de
+configuração de [implementar-spec](../../specs/implementar-spec/SKILL.md), mesmo
+para correções pontuais. Em correção avulsa autorizada, siga o escopo, as decisões
+e a stack existentes. Acione `preparar-dev` se precisar preparar o ambiente.
 
-Em correção avulsa autorizada de projeto existente, preserve suas decisões e
-use `preparar-dev` quando necessário, sem inventar spec ou estado. Uma tarefa
-que cite uma spec ou esteja coberta por seu escopo é tarefa de spec, mesmo
-sendo correção pontual; não a trate como avulsa. Esclareça dúvidas sobre
-entradas, saídas, persistência, compatibilidade e falhas antes de decidir.
-Altere somente o escopo atribuído.
+Esclareça lacunas sobre entradas, saídas, dados, compatibilidade e falhas.
+Valide entradas, autorização por recurso e isolamento de dados. Avalie
+concorrência, repetição, limites, timeout, migração e recuperação conforme o
+risco. Confirme os limites dos quais a segurança depende antes de implementar.
+Preserve os contratos legítimos e proteja segredos nos logs.
 
-Verifique validação de entrada, autorização por recurso e isolamento de dados.
-Considere limites, concorrência, repetição, timeout, migração e recuperação
-quando se aplicarem. Esclareça limites ausentes antes de introduzir restrições;
-se a segurança depender deles, interrompa e solicite uma decisão. Não registre
-segredos. Reutilize convenções e ferramentas
-do projeto sem presumir banco, framework ou serviço externo.
-
-Prove casos normais e negativos por testes automatizados e, quando aplicável,
-por chamadas reais à API com dados isolados. Mocks não comprovam integrações
-que não foram executadas. Versione testes; mantenha resultados locais ignorados.
-Relate critérios, comandos, observações e dependências não verificadas.
+Prove casos normais e negativos com testes e, quando aplicável, chamadas reais
+à API com dados isolados. Declare integrações cobertas apenas por mocks ou
+ainda pendentes. Use [verificar-trabalho](../../projeto/verificar-trabalho/SKILL.md)
+para registrar evidências por critério.

@@ -12,6 +12,7 @@ Ele inventaria e lê o material, propõe complementos por caminho, atualiza
 somente fatos confirmados e verifica links e exemplos. Scripts passam por
 [executar-script](../../skills/projeto/executar-script/SKILL.md).
 
-Saída: decisões por documento, alterações revisáveis e provas locais.
-Não substitua conteúdo humano por templates. Encaminhe a revisão pelo
-[gate de entrega](../revisar-entrega/COMMAND.md).
+Saída: decisões por documento, diff e provas locais para o agente principal.
+Se já houver entrega ou revisão em andamento, devolva o resultado a esse
+fluxo. Para uma tarefa avulsa de documentação, use o
+[gate de entrega](../revisar-entrega/COMMAND.md) para a revisão independente.

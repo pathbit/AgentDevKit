@@ -680,7 +680,7 @@ test('atualizacao aceita layout opcional e preserva versao anterior se dependenc
   });
 });
 
-test('executables prepara somente binarios da plataforma no staging antes de executar probe real', { skip: process.platform === 'win32' }, async t => {
+test('executables prepara somente binarios da plataforma no staging antes de executar probe real', { skip: process.platform === 'win32' && 'A fixture de binário executa um script POSIX via /bin/sh.' }, async t => {
   const other = process.platform === 'darwin' ? 'linux-x64' : 'darwin-arm64';
   const config = { ...tool(), platforms: [platformKey(), other], executables: { [platformKey()]: ['native/probe with space'], [other]: ['native/unused'] } };
   const { manager } = fixture(t, { 'test-tool': config });
@@ -698,7 +698,7 @@ test('executables prepara somente binarios da plataforma no staging antes de exe
   assert.equal(statSync(join(result.prefix, 'node_modules/test-tool/native/unused')).mode & 0o777, 0o644);
 });
 
-test('executables recusa arquivo ausente, diretorio e symlink fora do pacote sem promover staging', { skip: process.platform === 'win32' }, async t => {
+test('executables recusa arquivo ausente, diretorio e symlink fora do pacote sem promover staging', { skip: process.platform === 'win32' && 'A fixture de binário executa um script POSIX via /bin/sh.' }, async t => {
   for (const scenario of ['missing', 'directory', 'external-symlink']) await t.test(scenario, async subtest => {
     const config = { ...tool(), executables: { [platformKey()]: ['native/probe'] } };
     const { root, manager, local } = fixture(subtest, { 'test-tool': config });

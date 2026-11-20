@@ -11,7 +11,8 @@ Trate comandos como entradas de casos de uso. Crie ou atualize
 remova `status: modelo` e defina entrada, padrões, pré-requisitos, execução e
 saída. Reúna dúvidas que alterem esses contratos antes de executar.
 
-Reutilize uma skill para decisões e fluxos completos. Indique os nomes e
+Reutilize skills para decisões e perfis para responsabilidades. Informe
+quem recebe a saída, com quais provas e em que condição. Indique os nomes e
 argumentos dos scripts `.mjs` e use `executar-script` com Node.js 24+.
 O seletor direto não exige npm por si só; verifique os pré-requisitos do
 bootstrap e do script alvo separadamente.

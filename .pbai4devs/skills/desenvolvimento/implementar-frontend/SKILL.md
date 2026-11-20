@@ -1,32 +1,20 @@
 ---
 name: implementar-frontend
-description: Implementa interfaces web conforme a spec, o design e as provas de uso.
+description: Altera interfaces web conforme o design e comprova os fluxos de uso no navegador.
 ---
 
 # Implementar frontend
 
-Siga o escopo aprovado, o design e os componentes existentes. Para uma spec,
-leia [implementar-spec](../../specs/implementar-spec/SKILL.md) e consulte
-`proximos-passos` para identificar o primeiro pré-requisito pendente antes de
-propor o plano. Confirme spec e plano aprovados e, antes de alterar código, execute
-`node .pbai4devs/scripts/executar-script/SCRIPT.mjs verificar-configuracao`.
-Se o estado estiver ausente, inválido ou pendente, ou faltar prova obrigatória,
-pare e informe o responsável. Saída zero ainda exige conferir as evidências.
-Respeite essa ordem sem reiniciar o fluxo nem pedir novamente aprovações já dadas.
+Em tarefa coberta por uma spec, siga os pré-requisitos, o plano e o gate de
+configuração de [implementar-spec](../../specs/implementar-spec/SKILL.md), mesmo
+para correções pontuais. Em correção avulsa autorizada, siga o escopo, as decisões
+e os componentes existentes. Acione `preparar-dev` se precisar do ambiente.
 
-Em correção avulsa autorizada de projeto existente, preserve suas decisões e
-use `preparar-dev` quando necessário, sem inventar spec ou estado. Uma tarefa
-que cite uma spec ou esteja coberta por seu escopo é tarefa de spec, mesmo
-sendo correção pontual; não a trate como avulsa. Esclareça comportamento,
-conteúdo e acessibilidade quando faltarem decisões; não escolha framework nem
-crie telas fora do escopo.
+Esclareça comportamento, conteúdo e acessibilidade conforme o escopo.
+Considere carregamento, vazio, erro e sucesso, semântica acessível, teclado e
+tamanhos de tela. Preserve contratos com o backend e proteja dados e segredos.
 
-Considere estados de carregamento, vazio, erro e sucesso; navegação por teclado,
-semântica acessível e diferentes tamanhos de tela. Preserve contratos com o
-backend e evite expor segredos ou dados de outras pessoas.
-
-Execute os testes apropriados e abra a interface real em navegador disponível.
-Percorra os fluxos alterados em desktop e celular quando aplicável; confira
-resultado, console e rede. Testes automáticos de acessibilidade são parciais:
-inclua inspeção por teclado e relate o que não foi verificado. Uma captura ou
-fixture isolada não prova o produto. Veja [Playwright](https://playwright.dev/docs/accessibility-testing).
+Use [verificar-trabalho](../../projeto/verificar-trabalho/SKILL.md) para testar
+a interface real em navegador, em desktop e celular quando aplicável.
+Confira fluxo, teclado, console e rede. Combine testes automáticos e inspeção
+por teclado para acessibilidade. Registre evidências e cobertura pendente.

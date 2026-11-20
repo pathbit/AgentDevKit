@@ -836,7 +836,8 @@ Em outra rodada sintética, com o caminho visível no link e sem explicação de
 resolução, nove perfis foram comprovados e dois outros não foram verificados.
 Os resultados não estabelecem que a alternativa de apontamento seja melhor.
 Em Linux, outra matriz da candidata passou em 40 projetos sintéticos para as
-operações e verificações documentadas nos [testes](../../tests/README.md); isso
+operações e verificações documentadas nos [testes do repositório][testes-kit];
+isso
 não substitui a prova de recuperação, que falhou separadamente.
 Em repetição posterior com o pacote local e as alterações TOML, 34 dos 40
 projetos passaram; seis seleções com Claude ficaram não verificadas quanto ao
@@ -1043,3 +1044,5 @@ existência de uma tag não substitui os testes da alteração em andamento.
 [discovery]: ../specs/discovery-preservation/SPEC.md
 [targets]: ../specs/target-paths/SPEC.md
 [order]: ../specs/preimplementation-order/SPEC.md
+
+[testes-kit]: https://github.com/pathbit/AgentDevKit/blob/master/tests/README.md

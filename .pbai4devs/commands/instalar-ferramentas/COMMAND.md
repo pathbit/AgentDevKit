@@ -1,19 +1,22 @@
 ---
-description: Prepara Node e npm automaticamente, instala e valida as ferramentas locais.
+description: Prepara o runtime quando necessário e instala as ferramentas locais selecionadas.
 ---
 
 # Instalar ferramentas
 
-Entrada: `base`, `all`, grupo ou nome do [índice](../../tools/README.md);
-padrão: `all`. Siga o [preparo automático](../../scripts/preparar-ferramentas/BOOTSTRAP.md):
-identifique o SO e execute o inicializador nativo. Se Node/npm faltar ou falhar,
-ele instala o runtime local e continua com `setup <seleção>` automaticamente.
-Não transfira os passos de instalação para o usuário.
+Entrada: `base`, `all`, grupo ou nome do [índice](../../tools/README.md).
+Escolha a seleção pelo pedido e pelos requisitos do fluxo. O gerenciador usa
+`all` quando a seleção é omitida.
+
+Sem Node, instale Node e npm pelo mecanismo do sistema operacional. Com
+Node 18+ disponível e runtime incompatível, siga o
+[bootstrap JavaScript](../../scripts/preparar-ferramentas/BOOTSTRAP.md) com a
+seleção de ferramentas. Para preparar só o runtime, use `--runtime-only`.
 
 Siga [preparar-ferramentas](../../skills/projeto/preparar-ferramentas/SKILL.md).
-Com Node pronto, também pode usar `executar-script` com
-`preparar-ferramentas setup <seleção>`.
-Esse único fluxo instala o que faltar e verifica cada CLI, preservando
+Com Node e npm prontos, use `setup <seleção>` no
+[gerenciador do hub](../../scripts/preparar-ferramentas/README.md).
+O fluxo instala o que faltar e verifica cada CLI, preservando
 instalações saudáveis. Rede é necessária quando faltar instalação.
 
 Saída: versões, plataforma, resultados e itens não aplicáveis ou com falha.

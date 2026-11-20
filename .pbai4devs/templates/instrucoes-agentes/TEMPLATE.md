@@ -22,4 +22,5 @@ downloads locais não pertencem aos espelhos.
 
 [Indique comandos reais e os documentos de produto/arquitetura vigentes.]
 Consulte as regras e skills correspondentes à tarefa; mantenha detalhes do
-fluxo na origem de cada recurso. `CLAUDE.md` aponta para este arquivo.
+fluxo na origem de cada recurso. Quando Claude estiver selecionado, a entrada
+`CLAUDE.md` aponta para `AGENTS.md`.

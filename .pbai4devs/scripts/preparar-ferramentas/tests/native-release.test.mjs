@@ -85,7 +85,7 @@ test('native receipts reject tampering and symbolic files without following them
   assert.throws(() => checkNative(prefix, entry, platformKey()), /simbolico/); assert.equal(readFileSync(outside, 'utf8'), 'preserve');
 });
 
-test('native manager installs, reuses without network, updates reviewed pins and rolls back', { skip: process.platform === 'win32' }, async t => {
+test('native manager installs, reuses without network, updates reviewed pins and rolls back', { skip: process.platform === 'win32' && 'O pacote sintético fornece um executável POSIX com shebang.' }, async t => {
   const root = fixture(t); let bytes = Buffer.from('#!/bin/sh\nif [ "$1" = "exit" ]; then exit 37; fi\necho 1.2.3\n'), installs = 0, fail = false;
   let entry = config(bytes); const manager = new ToolManager({ root, catalog: { 'native-test': entry }, install: async prefix => { installs++; if (fail) throw Error('download failed'); await installNative(prefix, entry, platformKey(), { download: async () => bytes }); } });
   const installed = await manager.install(entry.name); assert.equal(installed.version, '1.2.3'); assert.equal(manager.check(entry.name).version, '1.2.3'); assert.equal(manager.run(entry.name, ['exit']), 37);

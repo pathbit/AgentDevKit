@@ -106,7 +106,7 @@ ACL bem-sucedida e sem entradas nos diretórios privados, nos registros e no
 arquivo de preparação antes de escrever seus bytes. Uma ACL herdada, mesmo
 em uma pasta `0700`, bloqueia a operação. O teste local confirmou a recusa
 antes de publicar um `claim` e após acrescentar uma ACL a um registro.
-[Testes de privacidade](../../../tests/recovery-backup.test.mjs)
+[Testes de privacidade](https://github.com/pathbit/AgentDevKit/blob/master/tests/recovery-backup.test.mjs)
 
 No Windows, `createPrivateRecoveryDirectory` usa o Windows PowerShell do
 sistema e `CreateDirectoryW` para criar exclusivamente uma pasta com DACL
@@ -127,7 +127,7 @@ resolução em ambas as fases, um recibo inválido e a repetição após falha d
 gravação. Falta executar os testes no Windows real para verificar DACLs,
 criação exclusiva e transições do diário naquela plataforma. A integração
 com os comandos do produto e o contrato de rollback são trabalhos separados.
-[Testes do diário](../../../tests/recovery-store.test.mjs) ·
+[Testes do diário][testes-diario] ·
 [Recuperação conservadora](../recuperacao-conservadora/SPEC.md)
 
 ## Critérios de aceite
@@ -144,3 +144,5 @@ com os comandos do produto e o contrato de rollback são trabalhos separados.
   verificado até teste real. Resultados em `.agent-tests/diario-disco/`.
 
 Os testes não aprovam integração, recuperação de projetos reais ou release.
+
+[testes-diario]: https://github.com/pathbit/AgentDevKit/blob/master/tests/recovery-store.test.mjs

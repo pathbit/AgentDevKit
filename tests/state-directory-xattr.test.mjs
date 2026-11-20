@@ -110,7 +110,8 @@ test('doctor com outro problema informa xattr do diretório legado', {timeout:18
  const after=xattr('-p',xattrName,dir);assert.equal(after.status,0);assert.deepEqual(after.stdout,attr.stdout);assert.equal(fs.existsSync(join(root,newRoot)),false);for(const [p,b]of before)assert.deepEqual(read(root,p),b,p);
 });
 
-for (const variant of ['present', 'unknown', 'mode', 'ordinary']) test(`revalidação tardia durante migração: ${variant}`, { timeout: 180000, skip: process.platform !== 'darwin' && !(process.platform === 'linux' && ['mode', 'ordinary'].includes(variant)) }, t => {
+for (const variant of ['present', 'unknown', 'mode', 'ordinary']) test(`revalidação tardia durante migração: ${variant}`, { timeout: 180000, skip: process.platform !== 'darwin' && !(process.platform === 'linux' && ['mode', 'ordinary'].includes(variant))
+  && (['mode', 'ordinary'].includes(variant) ? 'A variante exige bits POSIX de macOS ou Linux.' : 'A variante exige o probe de xattr de diretório do macOS.') }, t => {
   const f = fixture(t), { root } = f, relative = `${oldRoot}/configuracao`, dir = join(root, relative);
   const plan = planInstallation({ target: root, mode: 'update' });
   const tree = (base, rel = '') => fs.readdirSync(join(base, rel)).sort().flatMap(n => {

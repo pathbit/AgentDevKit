@@ -357,17 +357,13 @@ e a raiz, inclusive quando ausente, ficam fora do candidato; o plano completo
 do sync precisa de tratamento. O candidato não é um planejador de produção.
 As provas de captura são ignoradas no Windows enquanto o backup não o suporta.
 
-Os cenários ainda não suportados de `concurrent-recovery.test.mjs`, a edição do
-backup após o hash, a troca de ancestral em POSIX, doze casos de metadados e
-proteção em macOS e três de atributo estendido em Linux são registrados como
-TODO no teste padrão quando aplicáveis; eles não executam a fixture. A prova
-Linux exige
-Perl com `syscall.ph` e um sistema de arquivos com suporte a xattr; sem esses
-recursos, o modo estrito falha e informa o pré-requisito ausente.
-O perfil `full` força a execução estrita nas plataformas em que roda. No CI,
-esse perfil roda no Linux. O perfil `native-macos-metadata` exige os doze casos
-exclusivos de macOS sem skips, TODOs ou subtestes; ele continua falhando até que
-as regressões sejam corrigidas. Para reproduzir a suíte estrita completa:
+Os cenários de recuperação concorrente executam por padrão quando aplicáveis,
+incluindo edição de backup após hash, troca de ancestral em POSIX, doze casos
+nativos no macOS e três de atributo estendido no Linux. A fixture de xattr
+Linux exige Perl com `syscall.ph` e um volume compatível. O perfil `full`
+torna pré-requisitos estritos obrigatórios na plataforma aplicável.
+O perfil `native-macos-metadata` exige os doze casos macOS sem skips ou TODOs.
+Para exigir os pré-requisitos da suíte na execução local:
 
 ```console
 ADK_STRICT_RECOVERY_TEST=1 node --test tests/concurrent-recovery.test.mjs
@@ -379,20 +375,11 @@ No macOS, execute o mesmo gate da CI com:
 node scripts/release/pipeline.mjs native-macos-metadata
 ```
 
-O modo estrito atualmente falha no instalador e no sincronizador: uma troca
-concorrente após a última verificação pode ser removida ou sobrescrita durante
-o rollback, inclusive após atualizações do instalador e do sync. Dois casos
-adicionais registram chamadas mutadoras após a falha, um em cada entrada; eles
-cobrem somente as APIs instrumentadas, sem rastrear todas as mutações possíveis.
-Outros oito casos executam normalmente e comprovam a preservação quando a
-substituição ocorre antes de começar o rollback, inclusive após atualizações no
-instalador e no sync; eles não cobrem a janela posterior à última verificação.
-Dois dos doze casos pendentes exercitam substituição do nome temporário após
-link bem-sucedido; a limpeza atual pode remover esse arquivo humano.
-A troca de ancestral do backup pode criar arquivo fora do projeto em macOS e
-Linux; no Windows, essa fixture de symlink é ignorada e precisa de outra prova.
-Uma edição no mesmo inode após a conferência do hash pode deixar um backup
-alterado ser anunciado como válido; o caso também foi reproduzido em macOS e Linux.
+As regressões exercitam trocas concorrentes de arquivo e ancestral no rollback,
+substituição do nome temporário após link e edição do backup após conferir o
+hash. Dois casos também observam chamadas mutadoras após a falha no instalador
+e no sync, limitadas às APIs instrumentadas. A proteção da troca de ancestral
+no backup usa uma fixture de symlink POSIX.
 Quatro casos específicos de macOS verificam que atualizações do instalador e do
 sincronizador preservam ACLs legíveis e xattrs. Dois verificam preservação ou
 recusa segura quando a ACL nega apenas append. Outros seis exigem recusa e
@@ -454,9 +441,9 @@ sem alterar o índice observado. Não cobre validação de esquema, outros parse
 ou respostas HTTP.
 `gemini-xattr-preservation.test.mjs` usa TOML humano misto e xattr sintético em
 macOS e Linux para verificar atualização real ou recusa sem alterações em
-`update`, `sync` da CLI e sincronização direta. O teste exige modo estrito e
-registra TODO no perfil portátil comum; não cobre ACL, outros xattrs, mudanças
-transitórias ou todos os metadados. O gate macOS de doze casos não o inclui.
+`update`, `sync` da CLI e sincronização direta. O caso executa por padrão nas
+duas plataformas. Sua cobertura é limitada ao xattr sintético e ao estado
+persistente observado. O gate macOS de doze casos cobre outras fixtures.
 No Linux, a fixture exige Perl com `syscall.ph` e `/tmp` com suporte a xattr;
 ausência desses requisitos causa falha, não aprovação. A recusa só é comprovada
 quando a causa principal e o caminho exato aparecem em `error.code` e
@@ -465,8 +452,8 @@ direto; outra saída é inconclusiva e falha o teste. A candidata informa o cami
 para recusas de metadados no alvo real e distingue erros no estágio temporário.
 O snapshot compara nomes, modos e bytes persistentes, mas não mede ACLs, outros
 xattrs ou alterações transitórias revertidas.
-Esse resultado não comprova execução no Windows; investigue separadamente
-erros de preparação da fixture. Nunca trate os TODOs como critérios aprovados.
+A fixture usa as APIs nativas de macOS ou Linux. No Windows, consulte as
+provas de DACL e fluxos alternativos de `file-modes.test.mjs`.
 No PowerShell, defina a variável com `$env:ADK_STRICT_RECOVERY_TEST = '1'`,
 execute `node --test tests/concurrent-recovery.test.mjs` e depois remova-a com
 `Remove-Item Env:ADK_STRICT_RECOVERY_TEST`.
@@ -485,14 +472,16 @@ node --test tests/sync-temporary-privacy.test.mjs
 
 `sync-backup-failure.test.mjs` injeta falhas na cópia e no fechamento do
 backup e verifica interrupção, diagnóstico e preservação dos arquivos e do
-índice observados. Não comprova segurança concorrente ou metadados do backup.
+índice observados. Com troca de UID no Linux, a suíte comprova a recusa quando
+o proprietário diverge e preserva o modo `0440` no backup do próprio arquivo.
+Essas provas observam os caminhos da fixture e o modo de leitura.
 
 `sync-remove-failure.test.mjs` injeta falhas antes e depois de uma remoção e
 durante a restauração. A cópia anterior é preparada ao lado do destino e
 publicada por rename; se a preparação falhar, o arquivo publicado continua no
-lugar. A prova passou com 31 testes em macOS e Linux. Ainda há falhas no gate
-estrito de concorrência; esta suíte não comprova rollback integral nem fecha a
-janela entre validação e rename.
+lugar. A execução que cobriu 31 testes passou em macOS e Linux. O escopo desta
+suíte é a falha injetada e a preservação observada. O gate de recuperação
+concorrente executa suas próprias fixtures.
 
 `hardlink-unknown.test.mjs` simula contagens de links indisponíveis e verifica
 a recusa e o diagnóstico da CLI; não comprova quais sistemas as apresentam.

@@ -94,7 +94,7 @@ test('marcador legado bloqueia check; avisos de cobertura isolados não bloqueia
   assertUnchanged(edited);
 });
 
-test('comandos e sync direto preservam marcador reconhecido e Git', { skip: !supportsRuntime, timeout: 180000 }, t => {
+test('comandos e sync direto preservam marcador reconhecido e Git', { skip: !supportsRuntime ? 'A CLI do kit requer Node.js 24 ou superior nesta fixture.' : false, timeout: 180000 }, t => {
   const { root, index, exclude } = fixture(t);
   const marker = '# BEGIN AGENTDEVKIT LOCAL 0123456789abcdef\n# linha humana no bloco\n/.claude/\n# END AGENTDEVKIT LOCAL 0123456789abcdef\n';
   writeFileSync(exclude, `# prefixo humano\n${marker}# sufixo humano\n`);
@@ -146,7 +146,7 @@ test('comandos e sync direto preservam marcador reconhecido e Git', { skip: !sup
   }
 });
 
-test('worktree vinculada preserva exclude compartilhado e índices humanos', { skip: !supportsRuntime, timeout: 180000 }, t => {
+test('worktree vinculada preserva exclude compartilhado e índices humanos', { skip: !supportsRuntime ? 'A CLI do kit requer Node.js 24 ou superior nesta fixture.' : false, timeout: 180000 }, t => {
   const { base, root, index, exclude } = fixture(t);
   git(root, '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '--quiet', '--no-verify', '-m', 'fixture');
   writeFileSync(join(root, 'human.txt'), 'alteração preparada na principal\n');

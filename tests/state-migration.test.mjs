@@ -365,11 +365,11 @@ test('estado-extra codificado em escapes JSON não bloqueia a migração', t => 
   assert.equal(git(root, 'ls-files', '--stage', '-z'), f.index);
 });
 
-test('não segue link simbólico de estado legado nem altera o destino externo', { skip: process.platform === 'win32' }, t => {
+test('não segue link simbólico de estado legado nem altera o destino externo', t => {
   const f = fixture(t), { root } = f;
   const actual = join(root, 'human-backup');
   renameSync(join(root, oldRoot), actual);
-  symlinkSync(actual, join(root, oldRoot), 'dir');
+  symlinkSync(actual, join(root, oldRoot), process.platform === 'win32' ? 'junction' : 'dir');
   const before = readFileSync(join(actual, 'agentdevkit.json'));
   const result = cli(root, ['update'], 1);
   assert.equal(result.ok, false);
@@ -378,7 +378,7 @@ test('não segue link simbólico de estado legado nem altera o destino externo',
   assert.equal(git(root, 'ls-files', '--stage', '-z'), f.index);
 });
 
-test('não segue link simbólico dentro do estado legado', { skip: process.platform === 'win32' }, t => {
+test('não segue link simbólico dentro do estado legado', { skip: process.platform === 'win32' && 'A fixture exige symlink de arquivo; junctions do NTFS só representam diretórios.' }, t => {
   const f = fixture(t), { root } = f;
   const external = join(root, 'external-data.txt');
   const original = Buffer.from('Conteúdo externo protegido.\n');

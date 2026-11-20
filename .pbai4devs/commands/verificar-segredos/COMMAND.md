@@ -4,15 +4,18 @@ description: Procura sinais de credenciais expostas com scanner local.
 
 # Verificar segredos
 
-Entrada: projeto autorizado. Use as ferramentas preparadas e
-[executar-script](../../skills/projeto/executar-script/SKILL.md):
+Entrada: projeto autorizado. Confira os
+[pré-requisitos de coleta](../auditar-seguranca/COMMAND.md) e execute o
+script offline usando as ferramentas já preparadas:
 
 ```console
 node .pbai4devs/scripts/auditar-seguranca/SCRIPT.mjs run --checks secrets
 ```
 
-Siga [auditar-seguranca](../auditar-seguranca/COMMAND.md) para retorno, relatório
-e triagem. Um sinal não prova que a credencial é ativa; não tente autenticá-la.
+Leia os retornos e a cobertura no [guia do script](../../scripts/auditar-seguranca/README.md).
+Para triagem, use [revisar-seguranca](../../skills/seguranca/revisar-seguranca/SKILL.md)
+com o relatório e o escopo de segredos.
+Um sinal não prova que a credencial é ativa; não tente autenticá-la.
 Não copie o valor encontrado para a conversa. Encaminhe segredo real ao
 responsável e use
 [corrigir-vulnerabilidade](../../skills/seguranca/corrigir-vulnerabilidade/SKILL.md).

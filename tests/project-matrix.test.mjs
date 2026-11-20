@@ -16,7 +16,7 @@ import { assessCoverage, command, compareCursorSidecar, cursorMetadataFromPolicy
 const runner = join(dirname(fileURLToPath(import.meta.url)), 'project-matrix.mjs');
 // As cópias isoladas devem acompanhar também os imports transitivos do runner.
 const runnerLibraries = ['managed-content.mjs', 'managed-toml.mjs', 'managed-toml-parser.mjs', 'extended.mjs', 'legacy021.mjs', 'smol-toml.cjs'];
-const node24 = Number(process.versions.node.split('.')[0]) >= 24;
+const runtimeSkip = Number(process.versions.node.split('.')[0]) < 24 && 'A matriz do kit requer Node.js 24 ou superior.';
 const temp = t => { const root = mkdtempSync(join(tmpdir(), 'adk-matrix-test-')); t.after(() => rmSync(root, { recursive: true, force: true })); return root; };
 const put = (file, value) => { mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, value); };
 function copiedPackage(root, source = resolve(dirname(fileURLToPath(import.meta.url)), '..')) {
@@ -149,7 +149,7 @@ test('política Cursor exige uma única entrada com nome de sidecar válido', ()
   }
 });
 
-test('CLI rejeita política de adaptadores em link antes de criar projetos', { skip: !node24, timeout: 30000 }, t => {
+test('CLI rejeita política de adaptadores em link antes de criar projetos', { skip: runtimeSkip, timeout: 30000 }, t => {
   const root = temp(t), output = join(root, 'output'), testRunner = join(root, 'tests/project-matrix.mjs');
   mkdirSync(output); mkdirSync(dirname(testRunner), { recursive: true });
   const lib = join(root, '.pbai4devs/scripts/lib'); mkdirSync(lib, { recursive: true });
@@ -170,7 +170,7 @@ test('CLI rejeita política de adaptadores em link antes de criar projetos', { s
   assert.equal(readFileSync(outside, 'utf8'), '{"adapters":[]}');
 });
 
-test('CLI rejeita política sem Cursor antes de criar projetos', { skip: !node24, timeout: 30000 }, t => {
+test('CLI rejeita política sem Cursor antes de criar projetos', { skip: runtimeSkip, timeout: 30000 }, t => {
   const root = temp(t), output = join(root, 'output'), testRunner = join(root, 'tests/project-matrix.mjs');
   mkdirSync(output); mkdirSync(dirname(testRunner), { recursive: true });
   const lib = join(root, '.pbai4devs/scripts/lib'); mkdirSync(lib, { recursive: true });
@@ -185,7 +185,7 @@ test('CLI rejeita política sem Cursor antes de criar projetos', { skip: !node24
   assert.deepEqual(readdirSync(output), []);
 });
 
-test('CLI interrompe antes das fixtures quando sidecar inicial é link', { skip: !node24, timeout: 30000 }, t => {
+test('CLI interrompe antes das fixtures quando sidecar inicial é link', { skip: runtimeSkip, timeout: 30000 }, t => {
   const root = temp(t), output = join(root, 'output'), testRunner = join(root, 'tests/project-matrix.mjs');
   mkdirSync(output); mkdirSync(dirname(testRunner), { recursive: true });
   const lib = join(root, '.pbai4devs/scripts/lib'); mkdirSync(lib, { recursive: true });
@@ -359,7 +359,7 @@ test('sidecar Cursor detecta divergência de bytes sem afirmar escopo nativo', (
   assert.equal(inspectGeneratedRuleScope({ path, entry: { trigger: 'model_decision', description: 'Regra Git.' }, content, sourceMatches: true, hasMetadata: true }), 'not-verified');
 });
 
-test('matriz recusa frontmatter Cursor alterado mesmo com hash atualizado', { skip: !node24, timeout: 60000 }, async t => {
+test('matriz recusa frontmatter Cursor alterado mesmo com hash atualizado', { skip: runtimeSkip, timeout: 60000 }, async t => {
   const root = temp(t), results = join(root, 'results'); mkdirSync(results);
   const pkg = copiedPackage(root);
   const cli = join(pkg, 'bin/agentdevkit.mjs'), version = JSON.parse(readFileSync(join(pkg, 'package.json'), 'utf8')).version;
@@ -382,7 +382,7 @@ test('matriz recusa frontmatter Cursor alterado mesmo com hash atualizado', { sk
   assert.ok(!result.operations.some(operation => operation.label === 'update'));
 });
 
-test('sidecar Cursor em outra sintaxe válida permanece não verificado', { skip: !node24, timeout: 60000 }, async t => {
+test('sidecar Cursor em outra sintaxe válida permanece não verificado', { skip: runtimeSkip, timeout: 60000 }, async t => {
   const root = temp(t), results = join(root, 'results'); mkdirSync(results);
   const pkg = copiedPackage(root), cli = join(pkg, 'bin/agentdevkit.mjs');
   const version = JSON.parse(readFileSync(join(pkg, 'package.json'), 'utf8')).version;
@@ -395,7 +395,7 @@ test('sidecar Cursor em outra sintaxe válida permanece não verificado', { skip
   assert.equal(result.preservation.unchanged, true);
 });
 
-test('matriz recusa nome de metadado que sai do diretório da regra', { skip: !node24, timeout: 10000 }, async t => {
+test('matriz recusa nome de metadado que sai do diretório da regra', { skip: runtimeSkip, timeout: 10000 }, async t => {
   const root = temp(t), results = join(root, 'results'); mkdirSync(results);
   const pkg = fakePackage(root, "console.log(JSON.stringify({ok:true,version:'9.9.9'}));");
   const policyFile = join(pkg, '.pbai4devs/templates/clients/ADAPTERS.json');
@@ -435,7 +435,7 @@ test('cobertura exige dados coerentes em cada etapa', () => {
   assert.match(assessCoverage(repeated).reasons.join('\n'), /init: etapa ausente ou duplicada/);
 });
 
-test('CLI não aprova cobertura ausente em etapa anterior e falhas prevalecem', { skip: !node24, timeout: 60000 }, t => {
+test('CLI não aprova cobertura ausente em etapa anterior e falhas prevalecem', { skip: runtimeSkip, timeout: 60000 }, t => {
   const root = temp(t), testRunner = join(root, 'tests/project-matrix.mjs');
   mkdirSync(dirname(testRunner), { recursive: true });
   const lib = join(root, '.pbai4devs/scripts/lib'); mkdirSync(lib, { recursive: true });
@@ -461,7 +461,7 @@ test('CLI não aprova cobertura ausente em etapa anterior e falhas prevalecem', 
   }
 });
 
-test('CLI registra falha e exit 1 quando o pacote muda durante um cenário aprovado', { skip: !node24, timeout: 30000 }, t => {
+test('CLI registra falha e exit 1 quando o pacote muda durante um cenário aprovado', { skip: runtimeSkip, timeout: 30000 }, t => {
   const root = temp(t), output = join(root, 'output'), testRunner = join(root, 'tests/project-matrix.mjs');
   mkdirSync(output); mkdirSync(dirname(testRunner), { recursive: true });
   const lib = join(root, '.pbai4devs/scripts/lib'); mkdirSync(lib, { recursive: true });
@@ -487,7 +487,7 @@ test('CLI registra falha e exit 1 quando o pacote muda durante um cenário aprov
   for (const name of ['runner', 'managedContent', 'managedToml', 'packageCli']) assert.equal(report.provenance.before[name].sha256, report.provenance.after[name].sha256);
 });
 
-test('CLI reprova proveniência quando apenas um sidecar Cursor muda', { skip: !node24, timeout: 30000 }, t => {
+test('CLI reprova proveniência quando apenas um sidecar Cursor muda', { skip: runtimeSkip, timeout: 30000 }, t => {
   const root = temp(t), output = join(root, 'output'), testRunner = join(root, 'tests/project-matrix.mjs');
   mkdirSync(output); mkdirSync(dirname(testRunner), { recursive: true });
   const lib = join(root, '.pbai4devs/scripts/lib'); mkdirSync(lib, { recursive: true });
@@ -507,7 +507,7 @@ test('CLI reprova proveniência quando apenas um sidecar Cursor muda', { skip: !
   assert.notEqual(report.provenance.before['cursorSidecar:.pbai4devs/rules/cursor.yaml'].sha256, report.provenance.after['cursorSidecar:.pbai4devs/rules/cursor.yaml'].sha256);
 });
 
-test('CLI comunica status não verificado quando apenas a cobertura está incompleta', { skip: !node24, timeout: 30000 }, t => {
+test('CLI comunica status não verificado quando apenas a cobertura está incompleta', { skip: runtimeSkip, timeout: 30000 }, t => {
   const root = temp(t), output = join(root, 'output'), testRunner = join(root, 'tests/project-matrix.mjs');
   mkdirSync(output); mkdirSync(dirname(testRunner), { recursive: true });
   const lib = join(root, '.pbai4devs/scripts/lib'); mkdirSync(lib, { recursive: true });
@@ -524,7 +524,7 @@ test('CLI comunica status não verificado quando apenas a cobertura está incomp
   assert.equal(report.provenance.passed, true);
 });
 
-test('CLI registra exceção de preparação como falha no caso e no relatório agregado', { skip: !node24, timeout: 30000 }, t => {
+test('CLI registra exceção de preparação como falha no caso e no relatório agregado', { skip: runtimeSkip, timeout: 30000 }, t => {
   const root = temp(t), output = join(root, 'output'), testRunner = join(root, 'tests/project-matrix.mjs');
   mkdirSync(output); mkdirSync(dirname(testRunner), { recursive: true });
   const lib = join(root, '.pbai4devs/scripts/lib'); mkdirSync(lib, { recursive: true });
@@ -633,7 +633,7 @@ test('valida limites e repetição de rodadas antes de criar saída', () => {
   assert.throws(() => options([...required, '--diagnose-exclude', '--diagnose-exclude']), /repetida/);
 });
 
-test('diagnóstico continua somente exclude aditivo e mantém falha original e baseline', { skip: !node24, timeout: 20000 }, async t => {
+test('diagnóstico continua somente exclude aditivo e mantém falha original e baseline', { skip: runtimeSkip, timeout: 20000 }, async t => {
   const root = temp(t), results = join(root, 'results'); mkdirSync(results);
   const script = `import {appendFileSync} from 'node:fs';import {join} from 'node:path';const target=process.argv[process.argv.indexOf('--target')+1];if(process.argv[2]==='init'){${fakeExcludeAppend}}console.log(JSON.stringify({ok:true,version:'0.0.21'}));`;
   const pkg = fakeLegacyPackage(root, script), cli = join(pkg, 'bin/agentdevkit.mjs');
@@ -652,7 +652,7 @@ test('diagnóstico continua somente exclude aditivo e mantém falha original e b
   assert.equal(diagnostic.preservation.observedDocumentsPreserved, true);
 });
 
-test('diagnóstico recusa exclusão não aditiva e qualquer alteração humana adicional', { skip: !node24, timeout: 20000 }, async t => {
+test('diagnóstico recusa exclusão não aditiva e qualquer alteração humana adicional', { skip: runtimeSkip, timeout: 20000 }, async t => {
   const root = temp(t), results = join(root, 'results'); mkdirSync(results);
   const variants = [
     `writeFileSync(join(target,'.git/info/exclude'),'substituido\\n')`,
@@ -676,7 +676,7 @@ test('diagnóstico recusa exclusão não aditiva e qualquer alteração humana a
   }
 });
 
-test('diagnóstico recusa alteração posterior do corpo mesmo com marcadores íntegros', { skip: !node24, timeout: 10000 }, async t => {
+test('diagnóstico recusa alteração posterior do corpo mesmo com marcadores íntegros', { skip: runtimeSkip, timeout: 10000 }, async t => {
   const root = temp(t), results = join(root, 'results'); mkdirSync(results);
   const pkg = fakeLegacyPackage(root, `import {appendFileSync,readFileSync,writeFileSync} from 'node:fs';import {join} from 'node:path';const target=process.argv[process.argv.indexOf('--target')+1],f=join(target,'.git/info/exclude');if(process.argv[2]==='init'){${fakeExcludeAppend}}if(process.argv[2]==='update')writeFileSync(f,readFileSync(f,'utf8').replace('/.claude/','/*'));console.log(JSON.stringify({ok:true,version:'0.0.21'}));`);
   const result = await projectCase({ number: 1, kind: 'new', selection: 'codex' }, results, join(pkg, 'bin/agentdevkit.mjs'), '0.0.21', controlled(root), command, { diagnoseExclude: true });
@@ -685,7 +685,7 @@ test('diagnóstico recusa alteração posterior do corpo mesmo com marcadores í
   assert.equal(result.operations.at(-1).label, 'update'); assert.ok(!result.operations.some(op => op.label === 'doctor'));
 });
 
-test('diagnóstico recusa bloco conhecido em versão ou fixture não comprovada', { skip: !node24, timeout: 10000 }, async t => {
+test('diagnóstico recusa bloco conhecido em versão ou fixture não comprovada', { skip: runtimeSkip, timeout: 10000 }, async t => {
   const root = temp(t), results = join(root, 'results'); mkdirSync(results);
   const pkg = fakePackage(root, `import {appendFileSync} from 'node:fs';import {join} from 'node:path';const target=process.argv[process.argv.indexOf('--target')+1];if(process.argv[2]==='init'){${fakeExcludeAppend}}console.log(JSON.stringify({ok:true,version:'9.9.9'}));`);
   const result = await projectCase({ number: 1, kind: 'new', selection: 'codex' }, results, join(pkg, 'bin/agentdevkit.mjs'), '9.9.9', controlled(root), command, { diagnoseExclude: true });
@@ -702,7 +702,7 @@ test('diagnóstico recusa bloco conhecido em versão ou fixture não comprovada'
   }
 });
 
-test('diagnóstico interrompe atualização que altera conteúdo humano e preserva falha de init', { skip: !node24, timeout: 10000 }, async t => {
+test('diagnóstico interrompe atualização que altera conteúdo humano e preserva falha de init', { skip: runtimeSkip, timeout: 10000 }, async t => {
   const root = temp(t), results = join(root, 'results'); mkdirSync(results);
   const pkg = fakeLegacyPackage(root, `import {appendFileSync} from 'node:fs';import {join} from 'node:path';const target=process.argv[process.argv.indexOf('--target')+1];if(process.argv[2]==='init'){${fakeExcludeAppend}}if(process.argv[2]==='update')appendFileSync(join(target,'HUMAN-STAGED.txt'),'mudou');console.log(JSON.stringify({ok:true,version:'0.0.21'}));`);
   const result = await projectCase({ number: 1, kind: 'existing', selection: 'codex' }, results, join(pkg, 'bin/agentdevkit.mjs'), '0.0.21', controlled(root), command, { diagnoseExclude: true });
@@ -711,7 +711,7 @@ test('diagnóstico interrompe atualização que altera conteúdo humano e preser
   assert.equal(result.operations.at(-1).label, 'update'); assert.ok(!result.operations.some(op => op.label === 'doctor'));
 });
 
-test('diagnóstico não prossegue após timeout; mapeamento ausente permanece não verificado', { skip: !node24, timeout: 15000 }, async t => {
+test('diagnóstico não prossegue após timeout; mapeamento ausente permanece não verificado', { skip: runtimeSkip, timeout: 15000 }, async t => {
   const root = temp(t), results = join(root, 'results'); mkdirSync(results);
   const script = `import {appendFileSync} from 'node:fs';import {join} from 'node:path';const target=process.argv[process.argv.indexOf('--target')+1];if(process.argv[2]==='init'){${fakeExcludeAppend}}console.log(JSON.stringify({ok:true,version:'0.0.21'}));`;
   const pkg = fakeLegacyPackage(root, script), cli = join(pkg, 'bin/agentdevkit.mjs');
@@ -733,7 +733,7 @@ test('diagnóstico não prossegue após timeout; mapeamento ausente permanece n�
   assert.equal(unverified.preservation.unchanged, false);
 });
 
-test('diagnóstico rejeita exclude substituído por link simbólico', { skip: !node24, timeout: 10000 }, async t => {
+test('diagnóstico rejeita exclude substituído por link simbólico', { skip: runtimeSkip, timeout: 10000 }, async t => {
   const root = temp(t), target = join(root, 'sentinela'), probe = join(root, 'probe'); put(target, 'não alterar\n');
   try { symlinkSync(target, probe, 'file'); unlinkSync(probe); }
   catch (error) { if (process.platform === 'win32' && ['EPERM', 'EACCES', 'UNKNOWN'].includes(error.code)) { t.skip('Sem permissão para criar symlink no Windows.'); return; } throw error; }
@@ -744,7 +744,7 @@ test('diagnóstico rejeita exclude substituído por link simbólico', { skip: !n
   assert.match(result.preservation.after['.git/info/exclude'].error, /Link simbólico/); assert.equal(readFileSync(target, 'utf8'), 'não alterar\n');
 });
 
-test('CLI de diagnóstico preserva status de falha no resumo da rodada', { skip: !node24, timeout: 120000 }, t => {
+test('CLI de diagnóstico preserva status de falha no resumo da rodada', { skip: runtimeSkip, timeout: 120000 }, t => {
   const root = temp(t), output = join(root, 'output'); mkdirSync(output);
   const pkg = fakeLegacyPackage(root, `import {appendFileSync} from 'node:fs';import {join} from 'node:path';const target=process.argv[process.argv.indexOf('--target')+1];if(process.argv[2]==='init'){${fakeExcludeAppend}}console.log(JSON.stringify({ok:true,version:'0.0.21'}));`);
   const run = spawnSync(process.execPath, [runner, '--package', pkg, '--version', '0.0.21', '--output', output, '--jobs', '4', '--diagnose-exclude'], { encoding: 'utf8', timeout: 110000 });
@@ -758,7 +758,7 @@ test('CLI de diagnóstico preserva status de falha no resumo da rodada', { skip:
   assert.ok(report.results.some(item => item.diagnostic.triggered && item.diagnostic.initialIssue));
 });
 
-test('executa duas rodadas completas com relatórios e caminhos distintos', { skip: !node24, timeout: 120000 }, t => {
+test('executa duas rodadas completas com relatórios e caminhos distintos', { skip: runtimeSkip, timeout: 120000 }, t => {
   const root = temp(t), output = join(root, 'output'); mkdirSync(output);
   const pkg = fakePackage(root, `console.log(JSON.stringify({ok:true,version:'9.9.9'}));`);
   const run = spawnSync(process.execPath, [runner, '--package', pkg, '--version', '9.9.9', '--output', output, '--jobs', '4', '--rounds', '2', '--start-round', '2'], { encoding: 'utf8', timeout: 110000 });
@@ -776,7 +776,7 @@ test('executa duas rodadas completas com relatórios e caminhos distintos', { sk
   }
 });
 
-test('rejeita índices forjados e ausência de apontamentos para o cliente', { skip: !node24, timeout: 10000 }, async t => {
+test('rejeita índices forjados e ausência de apontamentos para o cliente', { skip: runtimeSkip, timeout: 10000 }, async t => {
   const root = temp(t), results = join(root, 'results'); mkdirSync(results);
   for (const [i, fault] of ['index', 'dest'].entries()) {
     const folder = join(root, fault); mkdirSync(folder);
@@ -787,7 +787,7 @@ test('rejeita índices forjados e ausência de apontamentos para o cliente', { s
   }
 });
 
-test('formato de destino sem mapeamento fica explicitamente não verificado', { skip: !node24, timeout: 10000 }, async t => {
+test('formato de destino sem mapeamento fica explicitamente não verificado', { skip: runtimeSkip, timeout: 10000 }, async t => {
   const root = temp(t), results = join(root, 'results'); mkdirSync(results);
   const pkg = fakePackage(root, `console.log(JSON.stringify({ok:true,version:'9.9.9'}));`, true, 'not-verified');
   const result = await projectCase({ number: 1, kind: 'new', selection: 'codex' }, results, join(pkg, 'bin/agentdevkit.mjs'), '9.9.9', controlled(root));
@@ -797,7 +797,7 @@ test('formato de destino sem mapeamento fica explicitamente não verificado', { 
   assert.equal(result.operations.at(-1).label, 'sync-check');
 });
 
-for (const [client, extension] of [['cursor', '.mdc'], ['copilot', '.instructions.md']]) test(`apontamento ${client} não certifica escopo sem validar metadados`, { skip: !node24, timeout: 10000 }, async t => {
+for (const [client, extension] of [['cursor', '.mdc'], ['copilot', '.instructions.md']]) test(`apontamento ${client} não certifica escopo sem validar metadados`, { skip: runtimeSkip, timeout: 10000 }, async t => {
   const root = temp(t), results = join(root, 'results'); mkdirSync(results);
   const pkg = fakePackage(root, `console.log(JSON.stringify({ok:true,version:'9.9.9'}));`);
   const mapper = join(pkg, '.pbai4devs/scripts/lib/resource-path.mjs');
@@ -812,7 +812,7 @@ for (const [client, extension] of [['cursor', '.mdc'], ['copilot', '.instruction
   assert.equal(result.operations.at(-1).label, 'sync-check');
 });
 
-test('matriz recusa escopo gerado divergente mesmo com link e hash válidos', { skip: !node24, timeout: 10000 }, async t => {
+test('matriz recusa escopo gerado divergente mesmo com link e hash válidos', { skip: runtimeSkip, timeout: 10000 }, async t => {
   const root = temp(t), results = join(root, 'results'); mkdirSync(results);
   const pkg = fakePackage(root, `console.log(JSON.stringify({ok:true,version:'9.9.9'}));`);
   const catalogFile = join(pkg, '.pbai4devs/scripts/lib/catalog.mjs'), catalogSource = readFileSync(catalogFile, 'utf8');
@@ -831,7 +831,7 @@ test('matriz recusa escopo gerado divergente mesmo com link e hash válidos', { 
   assert.ok(!result.operations.some(operation => operation.label === 'update'));
 });
 
-test('CLI que só responde sucesso não comprova instalação', { skip: !node24, timeout: 10000 }, async t => {
+test('CLI que só responde sucesso não comprova instalação', { skip: runtimeSkip, timeout: 10000 }, async t => {
   const root = temp(t), results = join(root, 'results'); mkdirSync(results);
   const pkg = fakePackage(root, `console.log(JSON.stringify({ok:true,version:'9.9.9'}));`, false);
   const result = await projectCase({ number: 1, kind: 'new', selection: 'codex' }, results, join(pkg, 'bin/agentdevkit.mjs'), '9.9.9', controlled(root));
@@ -839,7 +839,7 @@ test('CLI que só responde sucesso não comprova instalação', { skip: !node24,
   assert.ok(!result.operations.some(op => op.label === 'update'));
 });
 
-test('aceita somente bloco gerenciado esperado na skill humana', { skip: !node24, timeout: 10000 }, async t => {
+test('aceita somente bloco gerenciado esperado na skill humana', { skip: runtimeSkip, timeout: 10000 }, async t => {
   const root = temp(t), results = join(root, 'results'); mkdirSync(results);
   const pkg = fakePackage(root, `import {appendFileSync} from 'node:fs';import {join} from 'node:path';const target=process.argv[process.argv.indexOf('--target')+1];if(process.argv[2]==='init')appendFileSync(join(target,'.agents/skills/projeto/criar-skill/SKILL.md'),'\\n<!-- BEGIN AGENTDEVKIT -->\\nLeia e siga [origem](../../../../.pbai4devs/skills/projeto/criar-skill/SKILL.md).\\n<!-- END AGENTDEVKIT -->\\n');console.log(JSON.stringify({ok:true,version:'9.9.9'}));`);
   const result = await projectCase({ number: 1, round: 4, kind: 'existing', selection: 'codex', fixture: 3 }, results, join(pkg, 'bin/agentdevkit.mjs'), '9.9.9', controlled(root));
@@ -847,7 +847,7 @@ test('aceita somente bloco gerenciado esperado na skill humana', { skip: !node24
   assert.equal(result.preservation.documents['.agents/skills/projeto/criar-skill/SKILL.md'].allowedContent, true);
 });
 
-test('detecta origem alterada em atualização e plano pendente no sync', { skip: !node24, timeout: 10000 }, async t => {
+test('detecta origem alterada em atualização e plano pendente no sync', { skip: runtimeSkip, timeout: 10000 }, async t => {
   const root = temp(t), results = join(root, 'results'); mkdirSync(results);
   const pkg = fakePackage(root, `import {appendFileSync} from 'node:fs';import {join} from 'node:path';const target=process.argv[process.argv.indexOf('--target')+1];if(process.argv[2]==='update')appendFileSync(join(target,'.pbai4devs/skills/synthetic.txt'),'alteração');console.log(JSON.stringify({ok:true,version:'9.9.9'}));`);
   const corrupted = await projectCase({ number: 1, kind: 'new', selection: 'codex' }, results, join(pkg, 'bin/agentdevkit.mjs'), '9.9.9', controlled(root));
@@ -859,7 +859,7 @@ test('detecta origem alterada em atualização e plano pendente no sync', { skip
   assert.equal(pending.passed, false); assert.match(pending.issue, /sync-check não confirmou/);
 });
 
-test('rejeita acréscimo arbitrário mesmo com prefixo humano intacto', { skip: !node24, timeout: 10000 }, async t => {
+test('rejeita acréscimo arbitrário mesmo com prefixo humano intacto', { skip: runtimeSkip, timeout: 10000 }, async t => {
   const root = temp(t), results = join(root, 'results'); mkdirSync(results);
   const pkg = fakePackage(root, `import {appendFileSync} from 'node:fs';import {join} from 'node:path';const target=process.argv[process.argv.indexOf('--target')+1];if(process.argv[2]==='init')appendFileSync(join(target,'.agents/skills/projeto/criar-skill/SKILL.md'),'texto invasivo\\n');console.log(JSON.stringify({ok:true,version:'9.9.9'}));`);
   const result = await projectCase({ number: 1, round: 4, kind: 'existing', selection: 'codex', fixture: 3 }, results, join(pkg, 'bin/agentdevkit.mjs'), '9.9.9', controlled(root));
@@ -868,7 +868,7 @@ test('rejeita acréscimo arbitrário mesmo com prefixo humano intacto', { skip: 
   assert.ok(!result.operations.some(op => op.label === 'update'));
 });
 
-test('variantes registram arquivos humanos, configuração nativa e colisão', { skip: !node24, timeout: 30000 }, async t => {
+test('variantes registram arquivos humanos, configuração nativa e colisão', { skip: runtimeSkip, timeout: 30000 }, async t => {
   const root = temp(t), results = join(root, 'results'); mkdirSync(results);
   const pkg = fakePackage(root, `console.log(JSON.stringify({ok:true,version:'9.9.9'}));`), cli = join(pkg, 'bin/agentdevkit.mjs');
   const paths = ['.cursor/rules/equipe.mdc', '.gemini/commands/equipe.toml', '.agents/skills/projeto/criar-skill/SKILL.md'];
@@ -889,7 +889,7 @@ test('variantes registram arquivos humanos, configuração nativa e colisão', {
   }
 });
 
-test('projeto novo com fixture 3 inclui colisão humana ainda não rastreada', { skip: !node24, timeout: 10000 }, async t => {
+test('projeto novo com fixture 3 inclui colisão humana ainda não rastreada', { skip: runtimeSkip, timeout: 10000 }, async t => {
   const root = temp(t), results = join(root, 'results'); mkdirSync(results);
   const pkg = fakePackage(root, `console.log(JSON.stringify({ok:true,version:'9.9.9'}));`);
   const result = await projectCase({ number: 1, round: 4, kind: 'new', selection: 'codex', fixture: 3 }, results, join(pkg, 'bin/agentdevkit.mjs'), '9.9.9', controlled(root));
@@ -900,7 +900,7 @@ test('projeto novo com fixture 3 inclui colisão humana ainda não rastreada', {
   assert.equal(status.status, 0); assert.match(status.stdout, /^\?\? /);
 });
 
-test('detecta alteração da colisão humana e interrompe as etapas seguintes', { skip: !node24, timeout: 10000 }, async t => {
+test('detecta alteração da colisão humana e interrompe as etapas seguintes', { skip: runtimeSkip, timeout: 10000 }, async t => {
   const root = temp(t), cli = join(root, 'collision.cjs'), results = join(root, 'results'); mkdirSync(results);
   put(cli, `const {writeFileSync}=require('node:fs');const {join}=require('node:path');const target=process.argv[process.argv.indexOf('--target')+1];if(process.argv[2]==='init')writeFileSync(join(target,'.agents/skills/projeto/criar-skill/SKILL.md'),'substituído');console.log(JSON.stringify({ok:true,version:'9.9.9'}));`);
   const result = await projectCase({ number: 1, round: 4, kind: 'existing', selection: 'codex', fixture: 3 }, results, cli, '9.9.9', controlled(root));
@@ -910,7 +910,7 @@ test('detecta alteração da colisão humana e interrompe as etapas seguintes', 
   assert.ok(!result.operations.some(op => op.label === 'update'));
 });
 
-test('aceita o alias /tmp do macOS e recusa link humano', { skip: process.platform !== 'darwin' }, t => {
+test('aceita o alias /tmp do macOS e recusa link humano', { skip: process.platform !== 'darwin' && 'O alias físico /tmp → /private/tmp é específico do macOS.' }, t => {
   const root = temp(t), link = join(root, 'link-humano'); symlinkSync(realpathSync(tmpdir()), link, 'dir');
   assert.equal(outputParent('/tmp'), realpathSync('/tmp'));
   assert.throws(() => outputParent(link), /sem link simbólico/);
@@ -919,7 +919,7 @@ test('aceita o alias /tmp do macOS e recusa link humano', { skip: process.platfo
   assert.throws(() => outputParent(join(alias, 'interno')), /sem link simbólico/);
 });
 
-test('recusa saída em repositório mesmo quando padrão fictício seria ignorado', { skip: !node24 }, t => {
+test('recusa saída em repositório mesmo quando padrão fictício seria ignorado', { skip: runtimeSkip }, t => {
   const root = temp(t), pkg = fakePackage(root, 'process.exitCode=99;');
   const repo = join(root, 'repo'); mkdirSync(repo);
   const init = spawnSync('git', ['init', '--quiet', repo], { encoding: 'utf8', env: controlled(root), timeout: 30000 });
@@ -932,7 +932,7 @@ test('recusa saída em repositório mesmo quando padrão fictício seria ignorad
   assert.deepEqual(readdirSync(repo).sort(), before); assert.equal(readFileSync(join(repo, 'sentinela'), 'utf8'), 'preservado\n');
 });
 
-test('detecta alteração de modo nos três documentos humanos mesmo com prefixos intactos', { skip: !node24, timeout: 180000 }, t => {
+test('detecta alteração de modo nos três documentos humanos mesmo com prefixos intactos', { skip: runtimeSkip, timeout: 180000 }, t => {
   const root = temp(t);
   const pkg = fakePackage(root, `import {chmodSync,existsSync,statSync} from 'node:fs';\nimport {join} from 'node:path';\nconst target=process.argv[process.argv.indexOf('--target')+1];\nif(process.argv[2]==='init')for(const p of ['AGENTS.md','CLAUDE.md','.claude/skills/criar-skill/SKILL.md']){const f=join(target,p);if(existsSync(f))chmodSync(f,(statSync(f).mode&0o777)^0o200)}\nconsole.log(JSON.stringify({ok:true,version:'9.9.9'}));\n`);
   const output = join(root, 'output'); mkdirSync(output);
@@ -952,7 +952,7 @@ test('detecta alteração de modo nos três documentos humanos mesmo com prefixo
   assert.equal(report.modeMask, process.platform === 'win32' ? '0o200' : '0o777');
 });
 
-test('interrompe após alteração indevida, antes que outra etapa a reverta', { skip: !node24, timeout: 10000 }, async t => {
+test('interrompe após alteração indevida, antes que outra etapa a reverta', { skip: runtimeSkip, timeout: 10000 }, async t => {
   const root = temp(t), cli = join(root, 'transient.cjs'), results = join(root, 'results'); mkdirSync(results);
   put(cli, `const {writeFileSync}=require('node:fs');const {join}=require('node:path');const target=process.argv[process.argv.indexOf('--target')+1];if(process.argv[2]==='init')writeFileSync(join(target,'.gitignore'),'adulterado\\n');if(process.argv[2]==='update')writeFileSync(join(target,'.gitignore'),'# regra humana\\nprivate-data/\\n');console.log(JSON.stringify({ok:true,version:'9.9.9'}));`);
   const result = await projectCase({ number: 1, kind: 'existing', selection: 'codex' }, results, cli, '9.9.9', controlled(root));
@@ -963,7 +963,7 @@ test('interrompe após alteração indevida, antes que outra etapa a reverta', {
   assert.equal(readFileSync(join(result.root, '.gitignore'), 'utf8'), 'adulterado\n');
 });
 
-test('recusa troca de pasta humana por link simbólico mesmo que conteúdo pareça igual', { skip: !node24, timeout: 10000 }, async t => {
+test('recusa troca de pasta humana por link simbólico mesmo que conteúdo pareça igual', { skip: runtimeSkip, timeout: 10000 }, async t => {
   const root = temp(t), probeTarget = join(root, 'probe-target'), probeLink = join(root, 'probe-link'); mkdirSync(probeTarget);
   try { symlinkSync(probeTarget, probeLink, 'dir'); unlinkSync(probeLink); }
   catch (error) { if (process.platform === 'win32' && ['EPERM', 'EACCES', 'UNKNOWN'].includes(error.code)) { t.skip('Sem permissão para criar symlink no Windows.'); return; } throw error; }
@@ -976,7 +976,7 @@ test('recusa troca de pasta humana por link simbólico mesmo que conteúdo pare�
   assert.ok(!result.operations.some(operation => operation.label === 'update'));
 });
 
-test('detecta qualquer mudança no Git config e no exclude local', { skip: !node24, timeout: 15000 }, async t => {
+test('detecta qualquer mudança no Git config e no exclude local', { skip: runtimeSkip, timeout: 15000 }, async t => {
   const root = temp(t), results = join(root, 'results'); mkdirSync(results);
   const config = join(root, 'config.cjs');
   put(config, `const {appendFileSync}=require('node:fs');const {join}=require('node:path');const target=process.argv[process.argv.indexOf('--target')+1];if(process.argv[2]==='init')appendFileSync(join(target,'.git/config'),'\\n[fixture]\\nflag=true\\n');console.log(JSON.stringify({ok:true,version:'9.9.9'}));`);
@@ -996,7 +996,7 @@ test('detecta qualquer mudança no Git config e no exclude local', { skip: !node
   assert.notEqual(deletedRule.preservation.after['.git/info/exclude'].sha256, deletedRule.preservation.baseline.unchanged['.git/info/exclude'].sha256);
 });
 
-test('detecta mudança da ref apontada por HEAD mesmo sem editar .git/HEAD', { skip: !node24, timeout: 10000 }, async t => {
+test('detecta mudança da ref apontada por HEAD mesmo sem editar .git/HEAD', { skip: runtimeSkip, timeout: 10000 }, async t => {
   const root = temp(t), results = join(root, 'results'), cli = join(root, 'head-ref.cjs'); mkdirSync(results);
   put(cli, `const {readFileSync,writeFileSync}=require('node:fs');const {join}=require('node:path');const target=process.argv[process.argv.indexOf('--target')+1];if(process.argv[2]==='init'){const h=readFileSync(join(target,'.git/HEAD'),'utf8').trim().slice(5);writeFileSync(join(target,'.git',h),'0000000000000000000000000000000000000000\\n')}console.log(JSON.stringify({ok:true,version:'9.9.9'}));`);
   const result = await projectCase({ number: 1, kind: 'existing', selection: 'codex' }, results, cli, '9.9.9', controlled(root));
@@ -1005,7 +1005,7 @@ test('detecta mudança da ref apontada por HEAD mesmo sem editar .git/HEAD', { s
   assert.ok(!result.operations.some(operation => operation.label === 'update'));
 });
 
-test('detecta criação de outra ref e mudança em packed-refs', { skip: !node24, timeout: 10000 }, async t => {
+test('detecta criação de outra ref e mudança em packed-refs', { skip: runtimeSkip, timeout: 10000 }, async t => {
   const root = temp(t), results = join(root, 'results'), cli = join(root, 'other-ref.cjs'); mkdirSync(results);
   put(cli, `const {writeFileSync}=require('node:fs');const {join}=require('node:path');const target=process.argv[process.argv.indexOf('--target')+1];if(process.argv[2]==='init')writeFileSync(join(target,'.git/refs/heads/extra'),'0000000000000000000000000000000000000000\\n');console.log(JSON.stringify({ok:true,version:'9.9.9'}));`);
   const added = await projectCase({ number: 1, kind: 'existing', selection: 'codex' }, results, cli, '9.9.9', controlled(root));
@@ -1017,7 +1017,7 @@ test('detecta criação de outra ref e mudança em packed-refs', { skip: !node24
   assert.equal(changedPacked.passed, false); assert.equal(changedPacked.preservation.observedOptionalUnchanged, false);
 });
 
-test('recusa link simbólico dentro das refs', { skip: !node24, timeout: 10000 }, async t => {
+test('recusa link simbólico dentro das refs', { skip: runtimeSkip, timeout: 10000 }, async t => {
   const root = temp(t), probe = join(root, 'probe'), link = join(root, 'probe-link'); put(probe, 'ref\n');
   try { symlinkSync(probe, link, 'file'); unlinkSync(link); }
   catch (error) { if (process.platform === 'win32' && ['EPERM', 'EACCES', 'UNKNOWN'].includes(error.code)) { t.skip('Sem permissão para criar symlink no Windows.'); return; } throw error; }
@@ -1095,7 +1095,7 @@ test('processo vivo atinge timeout e não é tratado como sucesso', { timeout: 1
   assert.match(result.stdout, /ALVO_VIVO\r?\n/); assert.ok(Date.now() - start < 5000);
 });
 
-test('timeout encerra grupo próprio sem sinalizar processo independente', { skip: process.platform === 'win32', timeout: 10000 }, async t => {
+test('timeout encerra grupo próprio sem sinalizar processo independente', { skip: process.platform === 'win32' && 'O teste exige sinais para um grupo de processos POSIX.', timeout: 10000 }, async t => {
   const root = temp(t), script = join(root, 'group.cjs'), marker = join(root, 'escaped');
   put(script, `const {spawn}=require('node:child_process');const {tmpdir}=require('node:os');const payload="process.on('SIGTERM',()=>{});process.stdout.write('DESC_READY\\\\n');setTimeout(()=>require('node:fs').writeFileSync(process.argv[1],'alive'),3000);setTimeout(()=>{},4000);";spawn(process.execPath,['-e',payload,process.argv[2]],{stdio:'inherit',cwd:tmpdir()});process.on('SIGTERM',()=>{});setInterval(()=>{},1000);`);
   const sibling = spawn(process.execPath, ['-e', 'setTimeout(()=>{},8000)'], { stdio: 'ignore' });
@@ -1118,7 +1118,7 @@ test('limita saída excessiva e não sinaliza processo independente', { timeout:
   assert.equal(sibling.exitCode, null); assert.equal(sibling.signalCode, null);
 });
 
-test('timeout do alvo não certifica preservação mesmo quando snapshots coincidem', { skip: !node24, timeout: 30000 }, async t => {
+test('timeout do alvo não certifica preservação mesmo quando snapshots coincidem', { skip: runtimeSkip, timeout: 30000 }, async t => {
   const root = temp(t), cli = join(root, 'hang.cjs');
   put(cli, `process.stdout.write('ALVO_VIVO\\n');process.on('SIGTERM',()=>{});setInterval(()=>{},1000);`);
   const results = join(root, 'results'); mkdirSync(results);

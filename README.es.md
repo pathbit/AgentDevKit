@@ -57,6 +57,7 @@ La CLI guarda el idioma `pt`, `en` o `es` por proyecto.
 | Planificar o retomar un proyecto | [Flujo](docs/guides/workflow.md) |
 | Mejorar documentación existente | [Inventario y complementos](docs/guides/documentation.md) |
 | Crear una skill o comando | [Recursos](docs/guides/resources.md) |
+| Elegir un flujo según el objetivo | [Recursos en la práctica](docs/guides/recursos-na-pratica.md) |
 | Instalar herramientas y verificar | [Herramientas y pruebas][tests] |
 | Revisar seguridad con herramientas locales | [Seguridad local](docs/guides/security.md) |
 | Consultar opciones o resolver un error | [CLI][cli] · [Soluciones][help] |

@@ -4,8 +4,9 @@ description: Evoluir documentos existentes e criar somente o que falta.
 
 # Documentação sem perder o contexto
 
-O pacote instala as skills e suas ferramentas. O agente usa esses recursos
-para ler o projeto, propor complementos e editar os documentos autorizados.
+O pacote instala as skills, as definições das ferramentas e o inventário
+de documentos. O agente usa esses recursos para ler o projeto e propor
+complementos nos documentos autorizados. Os binários são preparados à parte.
 
 ## Começar pelo que existe
 
@@ -60,4 +61,4 @@ Use `verificar-trabalho` e `revisar-entrega`; salve as provas em `.agent-tests/`
 [Wiki](../README.md) · [Skill compartilhada][skill] · [Testes][tests]
 
 [skill]: ../../.pbai4devs/skills/projeto/atualizar-documentacao/SKILL.md
-[tests]: ../../tests/README.md
+[tests]: https://github.com/pathbit/AgentDevKit/blob/master/tests/README.md

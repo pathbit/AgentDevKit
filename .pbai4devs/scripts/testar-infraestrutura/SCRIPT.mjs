@@ -2,17 +2,12 @@
 import { lstatSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
 import { isMain, projectRoot, requireNode } from '../lib/runtime.mjs';
 import { inspectMacDirectoryAcl } from '../lib/xattr-probe.mjs';
+import { expectedPlatformFixture } from './PLATFORM_FIXTURES.mjs';
 
 export function isExpectedPlatformSkip(suite, skipped, platform = process.platform) {
-  return ['linux', 'darwin'].includes(platform)
-    && suite === 'sincronizar-agentes'
-    && skipped?.file === '.pbai4devs/scripts/sincronizar-agentes/tests/LOCAL_IGNORE.mjs'
-    && skipped.name === 'Windows normaliza o alias temporário 8.3 antes de comparar a raiz Git'
-    && skipped.kind === 'test' && skipped.event === 'test:pass' && skipped.reason === null
-    && skipped.booleanSkip === true && skipped.todo === false;
+  return Boolean(expectedPlatformFixture(suite, skipped, platform));
 }
 
 export function classifyExecution(result, evidence) {
@@ -88,7 +83,7 @@ export function testInfrastructure(root = projectRoot) {
   // Cada --test precisa de seu proprio contexto, inclusive ao testar este runner.
   // Opções herdadas poderiam filtrar os testes sem alterar o código de saída.
   for (const key of Object.keys(environment)) if (['NODE_TEST_CONTEXT', 'NODE_OPTIONS', 'ADK_INFRA_ENTRY'].includes(key.toUpperCase())) delete environment[key];
-  const reporter = fileURLToPath(new URL('./REPORTER.mjs', import.meta.url));
+  const reporter = new URL('./REPORTER.mjs', import.meta.url).href;
   for (const name of suites) {
     const file = join(scripts, name, 'tests/TEST.mjs');
     const result = spawnSync(process.execPath, ['--test', `--test-reporter=${reporter}`, file], { cwd: root, env: { ...environment, ADK_INFRA_ENTRY: file }, encoding: 'utf8', timeout: 180000, maxBuffer: 8 * 1024 * 1024, windowsHide: true });
@@ -99,7 +94,17 @@ export function testInfrastructure(root = projectRoot) {
     const match = result.stdout?.match(/\nADK_INFRA_EVIDENCE (\{[^\n]*\})\n$/);
     let evidence;
     try { evidence = match ? JSON.parse(match[1]) : undefined; } catch { /* inconclusive */ }
-    if (Array.isArray(evidence?.skipped)) evidence.skipped = evidence.skipped.map(item => ({ ...item, expectedForPlatform: isExpectedPlatformSkip(name, item) }));
+    if (Array.isArray(evidence?.skipped)) {
+      evidence.skipped = evidence.skipped.map(item => {
+        const fixture = expectedPlatformFixture(name, item, process.platform);
+        return {
+          ...item,
+          expectedForPlatform: Boolean(fixture),
+          ...(fixture ? { nativePlatform: fixture.native } : {}),
+          classification: fixture ? 'platform' : item.reason ? 'unexpected' : 'missing-reason',
+        };
+      });
+    }
     const status = classifyExecution(result, evidence);
     report.suites.push({ name, status, log, ...(evidence ? { evidence } : {}) });
     console.log(`${name}=${status}`);

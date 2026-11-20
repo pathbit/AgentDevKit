@@ -21,7 +21,7 @@ npm run check
 O checkout contém fontes. Execute `npm run examples` para explorar os agentes
 em uma pasta temporária fora de Git, informada pelo comando.
 Para escolher um destino local ignorado, consulte o guia em
-[`examples/`](examples/README.md).
+[`examples/`](https://github.com/pathbit/AgentDevKit/blob/master/examples/README.md).
 
 ## Escolher a origem da mudança
 

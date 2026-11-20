@@ -306,7 +306,7 @@ test('variáveis de temporários não autorizam link humano no destino', t => {
   }
 });
 
-test('macOS aceita apenas alias temporário de sistema, preservando Git e recusando links internos', { skip: process.platform !== 'darwin' }, t => {
+test('macOS aceita apenas alias temporário de sistema, preservando Git e recusando links internos', { skip: process.platform !== 'darwin' ? 'A fixture verifica os aliases físicos dos diretórios de sistema do macOS.' : false }, t => {
   const root = mkdtempSync('/private/tmp/adk-system-alias-');
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const logical = join('/tmp', basename(root));
@@ -346,7 +346,7 @@ test('macOS aceita apenas alias temporário de sistema, preservando Git e recusa
   }
 });
 
-test('macOS recusa alias de sistema com proprietário ou destino inesperado', { skip: process.platform !== 'darwin' }, () => {
+test('macOS recusa alias de sistema com proprietário ou destino inesperado', { skip: process.platform !== 'darwin' ? 'A fixture verifica os aliases físicos dos diretórios de sistema do macOS.' : false }, () => {
   const modulePath = join(project, 'src', 'install.mjs');
   const script = `
     import fs from 'node:fs';

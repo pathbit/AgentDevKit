@@ -272,22 +272,23 @@ for (const gitMissing of [false, true]) test(`projeto sem Git ${gitMissing ? 'in
   assert.equal(readFileSync(join(root, path), 'utf8'), human);
 });
 
-test('link humano fora do escopo é preservado; link em fonte gerenciada é recusado', { skip: process.platform === 'win32' }, t => {
+test('link humano fora do escopo é preservado; link em fonte gerenciada é recusado', t => {
   const f = fixture(t), external = join(f.root, 'external');
   mkdirSync(external);
   writeFileSync(join(external, 'secret.txt'), 'Não alterar.\n');
   mkdirSync(join(f.root, '.pbai4devs'), { recursive: true });
   const ownLink = join(f.root, '.pbai4devs', 'minhas-notas');
-  symlinkSync(external, ownLink, 'dir');
+  const directoryLink = process.platform === 'win32' ? 'junction' : 'dir';
+  symlinkSync(external, ownLink, directoryLink);
   const legacyLink = join(f.root, '.pbai4devs', 'adapters');
-  symlinkSync(external, legacyLink, 'dir');
+  symlinkSync(external, legacyLink, directoryLink);
   f.cli('init', '--agents', 'codex', '--force');
   f.cli('update', '--force');
   assert.equal(lstatSync(ownLink).isSymbolicLink(), true);
   assert.equal(lstatSync(legacyLink).isSymbolicLink(), true);
   assert.equal(readFileSync(join(external, 'secret.txt'), 'utf8'), 'Não alterar.\n');
   const managedLink = join(f.root, '.pbai4devs', 'skills', 'equipe-link');
-  symlinkSync(external, managedLink, 'dir');
+  symlinkSync(external, managedLink, directoryLink);
   const result = spawnSync(process.execPath, [bin, 'update', '--force', '--target', f.root, '--json'], {
     encoding: 'utf8', timeout: 180000,
   });

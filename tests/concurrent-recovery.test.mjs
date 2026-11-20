@@ -44,8 +44,6 @@ function prepareSyncUpdate(root) {
 
 if (process.platform === 'win32') {
   test('sync: troca de ancestral do backup não cria arquivo externo', { skip: 'fixture exige symlink em ambiente POSIX' });
-} else if (process.env.ADK_STRICT_RECOVERY_TEST !== '1') {
-  test('sync: troca de ancestral do backup não cria arquivo externo', { todo: 'abertura do destino não fixa os ancestrais' });
 } else {
   test('sync: troca de ancestral do backup não cria arquivo externo', { timeout: 120000 }, t => {
     const root = fixture(t, 'sync'), external = fs.realpathSync(fs.mkdtempSync(join(tmpdir(), 'adk-backup-external-')));
@@ -250,7 +248,6 @@ for (const kind of ['install', 'sync']) {
 for (const kind of ['xattr', 'acl']) {
   const name = `install: atualização preserva ${kind} existente no macOS`;
   if (process.platform !== 'darwin') { test(name, { skip: 'metadados nativos exigem macOS real' }); continue; }
-  if (process.env.ADK_STRICT_RECOVERY_TEST !== '1') { test(name, { todo: 'metadados nativos ainda não são preservados' }); continue; }
   test(name, { timeout: 120000 }, t => {
     const root = fixture(t, 'install'), target = join(root, 'AGENTS.md');
     const content = '# Documento da equipe\n'; fs.writeFileSync(target, content);
@@ -287,7 +284,6 @@ for (const kind of ['xattr', 'acl']) {
 for (const kind of ['xattr', 'acl']) {
   const name = `sync: atualização preserva ${kind} existente no macOS`;
   if (process.platform !== 'darwin') { test(name, { skip: 'metadados nativos exigem macOS real' }); continue; }
-  if (process.env.ADK_STRICT_RECOVERY_TEST !== '1') { test(name, { todo: 'metadados nativos ainda não são preservados' }); continue; }
   test(name, { timeout: 120000 }, t => {
     const root = fixture(t, 'sync'), { run } = prepareSyncUpdate(root);
     const target = join(root, '.pbai4devs/catalog.json');
@@ -322,7 +318,6 @@ for (const kind of ['xattr', 'acl']) {
 for (const kind of ['install', 'sync']) {
   const name = `${kind}: atualização preserva ACL que nega append ou recusa com segurança no macOS`;
   if (process.platform !== 'darwin') { test(name, { skip: 'ACL nativa exige macOS real' }); continue; }
-  if (process.env.ADK_STRICT_RECOVERY_TEST !== '1') { test(name, { todo: 'ACL existente pode ser perdida na substituição' }); continue; }
   test(name, { timeout: 120000 }, t => {
     const root = fixture(t, kind);
     let target, operation, expected;
@@ -408,13 +403,21 @@ const linuxXattrPerl = String.raw`
   exit(3) if $rc < 0;
   print substr($buffer, 0, $rc);
 `;
+
+function prepareLinuxXattr(t, file) {
+  const probe = spawnSync('perl', ['-e', 'require "syscall.ph"; my $set = &SYS_setxattr; my $get = &SYS_getxattr; exit(0)']);
+  const attribute = probe.status === 0 && spawnSync('perl', ['-e', linuxXattrPerl, 'set', file]);
+  if (attribute && attribute.status === 0) return true;
+  const reason = probe.status === 0 ? 'Filesystem da fixture não permite xattr sintético.' : 'A fixture exige Perl com syscall.ph e chamadas xattr do Linux.';
+  if (process.env.ADK_STRICT_RECOVERY_TEST === '1') assert.fail(reason);
+  t.skip(reason);
+  return false;
+}
+
 for (const kind of ['install', 'sync']) {
   const linuxXattrName = `${kind}: atualização preserva atributo estendido no Linux`;
   if (process.platform !== 'linux') { test(linuxXattrName, { skip: 'fixture exige Linux' }); continue; }
-  if (process.env.ADK_STRICT_RECOVERY_TEST !== '1') { test(linuxXattrName, { todo: 'atributos estendidos ainda não são preservados' }); continue; }
   test(linuxXattrName, { timeout: 120000 }, t => {
-    const perl = spawnSync('perl', ['-e', 'require "syscall.ph"; my $set = &SYS_setxattr; my $get = &SYS_getxattr; exit(0)']);
-    assert.equal(perl.status, 0, 'a prova estrita exige Perl, syscall.ph e as chamadas xattr do Linux');
     const root = fixture(t, kind);
     let run, target;
     if (kind === 'sync') {
@@ -429,7 +432,7 @@ for (const kind of ['install', 'sync']) {
     }
     const before = fs.readFileSync(target);
     const xattr = action => spawnSync('perl', ['-e', linuxXattrPerl, action, target], { encoding: 'utf8' });
-    assert.equal(xattr('set').status, 0, 'sistema de arquivos da fixture deve suportar xattr');
+    if (!prepareLinuxXattr(t, target)) return;
     const original = xattr('get');
     assert.equal(original.status, 0); assert.equal(original.stdout, 'sentinela-sintetica');
     run();
@@ -443,16 +446,12 @@ for (const kind of ['install', 'sync']) {
 const linuxBackupXattrName = 'install: backup preserva atributo estendido no Linux';
 if (process.platform !== 'linux') {
   test(linuxBackupXattrName, { skip: 'fixture exige Linux' });
-} else if (process.env.ADK_STRICT_RECOVERY_TEST !== '1') {
-  test(linuxBackupXattrName, { todo: 'backup ainda não preserva atributos estendidos' });
 } else {
   test(linuxBackupXattrName, { timeout: 120000 }, t => {
-    const perl = spawnSync('perl', ['-e', 'require "syscall.ph"; my $set = &SYS_setxattr; my $get = &SYS_getxattr; exit(0)']);
-    assert.equal(perl.status, 0, 'a prova estrita exige Perl, syscall.ph e as chamadas xattr do Linux');
     const root = fixture(t, 'install'), target = join(root, 'AGENTS.md');
     const human = Buffer.from('# Documento humano\n'); fs.writeFileSync(target, human);
     const xattr = (action, file) => spawnSync('perl', ['-e', linuxXattrPerl, action, file], { encoding: 'utf8' });
-    assert.equal(xattr('set', target).status, 0, 'sistema de arquivos da fixture deve suportar xattr');
+    if (!prepareLinuxXattr(t, target)) return;
     const original = xattr('get', target);
     assert.equal(original.status, 0); assert.equal(original.stdout, 'sentinela-sintetica');
     const plan = planInstallation({ target: root, mode: 'init', clients: ['codex'] });
@@ -691,7 +690,6 @@ test('verificador exige causa primária de proteção do alvo e estado observado
 for (const kind of ['install', 'update', 'sync']) for (const protection of ['acl-deny', 'immutable']) {
   const name = `${kind}: recusa alteração quando ${protection} nega escrita e preserva estado observado após recusa`;
   if (process.platform !== 'darwin') { test(name, { skip: 'proteção nativa exige macOS real' }); continue; }
-  if (process.env.ADK_STRICT_RECOVERY_TEST !== '1') { test(name, { todo: 'pré-verificação e recuperação de metadados ainda não implementadas' }); continue; }
   test(name, { timeout: 120000 }, t => {
     const root = fixture(t, kind), command = (program, args) => {
       const result = spawnSync(program, args, { encoding: 'utf8' });

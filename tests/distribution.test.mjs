@@ -3,10 +3,11 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
-import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { findNpmCli } from '../.pbai4devs/scripts/lib/npm.mjs';
+import { localLinkTargets } from '../.pbai4devs/scripts/verificar-recursos/SCRIPT.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const json = file => JSON.parse(readFileSync(file, 'utf8'));
@@ -97,11 +98,19 @@ test('pacote real instala, preserva projetos e oferece próximos passos', { time
   assert.ok(existsSync(bin));
   const canonicalLicense = readFileSync(join(packageRoot, 'LICENSE'));
   assert.deepEqual(canonicalLicense, readFileSync(join(root, 'LICENSE')));
-  for (const relative of readdirSync(packageRoot, { recursive: true })) {
-    const file = relative.split(sep).join('/');
+  for (const entry of readdirSync(packageRoot, { recursive: true })) {
+    const file = entry.split(sep).join('/');
     assert.doesNotMatch(file, /(?:^|\/)(?:\.local|\.cache|node_modules|\.agent-tests|tmp|temp)(?:\/|$)/, file);
     assert.ok(!file.startsWith('.pbai4devs/adapters/'), file);
     assert.ok(!localOnly.includes(file), file);
+    if (!file.endsWith('.md')) continue;
+    const source = join(packageRoot, entry);
+    for (const target of localLinkTargets(readFileSync(source, 'utf8'))) {
+      const destination = resolve(dirname(source), target);
+      const child = relative(packageRoot, destination);
+      assert.ok(!isAbsolute(child) && child !== '..' && !child.startsWith(`..${sep}`), `${file} -> ${target}`);
+      assert.ok(existsSync(destination), `Link ausente no pacote: ${file} -> ${target}`);
+    }
   }
   const cli = (args, expected = 0, executable = bin) => {
     const result = spawnSync(process.execPath, [executable, ...args, '--json'], { cwd: work, env: environment, encoding: 'utf8', timeout: 90000, maxBuffer: 8 * 1024 * 1024 });

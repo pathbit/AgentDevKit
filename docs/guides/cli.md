@@ -70,7 +70,8 @@ Diretórios antigos sem comprovação de propriedade podem permanecer vazios.
 Ao mudar a seleção, pastas compartilhadas continuam quando outro cliente
 precisa delas; arquivos adicionais da equipe devem ser preservados.
 
-Na versão `0.0.21`, `init --force` e `update --force` podem substituir um
+Em instalações legadas na versão `0.0.21`, `init --force` e `update --force`
+podem substituir um
 `.pbai4devs/catalog.json` preexistente. Preserve uma cópia fora do projeto
 antes de executar esses comandos nessa versão. Nas fixtures testadas, `init`
 da `0.0.21` também acrescentou regras a `.git/info/exclude`; confira esse
@@ -109,10 +110,8 @@ O sincronizador independente também pode ser executado pelo
 comando agêntico [sincronizar](../../.pbai4devs/commands/sincronizar/COMMAND.md)
 orienta revisar e aplicar o plano pela CLI; `--force` é uma opção explícita.
 
-Na implementação em desenvolvimento, o kit procura preservar os ignores e a
-configuração existentes, incluindo `.git/info/exclude`. Verifique o
-comportamento da versão usada, inclusive o aviso da `0.0.21` acima. Saídas
-podem ficar visíveis; consulte
+Na versão atual, o kit preserva os ignores e a configuração Git existentes,
+incluindo `.git/info/exclude`. Saídas geradas podem ficar visíveis. Consulte
 [Git e migração](installation.md#git-e-migração). Os comandos não
 retiram arquivos já rastreados do índice, e `untrackedPaths` permanece vazio
 por compatibilidade. Backups locais ficam em `.agent-tests/`, podem conter

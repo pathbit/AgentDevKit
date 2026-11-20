@@ -86,13 +86,14 @@ o projeto usa Node 24. Configure a relação de confiança depois que o pacote
 existir; a primeira publicação pode usar o secret `NPMJS_TOKEN`.
 
 Por padrão, uma tag publica nos dois destinos. Para completar o GitHub
-Packages de uma tag existente, preservando a release e o npm:
+Packages de uma tag existente, substitua `vX.Y.Z` pela tag desejada:
 
 ```console
-gh workflow run Release -f tag=v0.0.12 -F package_only=true -f registry=github
+gh workflow run Release -f tag=vX.Y.Z -F package_only=true -f registry=github
 ```
 
-Se o artefato expirou, reexecute o CI original da tag antes da publicação.
+Se o artefato expirou, reexecute o CI do push à branch principal para o
+commit exato apontado pela tag.
 `registry` aceita `both`, `npm` ou `github`. `package_only` impede alterar a
 release existente; cada registry recusa versões com bytes diferentes e pula
 a publicação se a mesma versão já estiver correta.

@@ -16,7 +16,16 @@ export default async function* reporter(source) {
       if (isTestEvent(event.data)) observed++;
       if (event.data.skip) {
         const path = typeof event.data.file === 'string' ? relative(process.cwd(), event.data.file) : '';
-        skipped.push({ name: event.data.name, file: path && path !== '..' && !path.startsWith(`..${process.platform === 'win32' ? '\\' : '/'}`) && !isAbsolute(path) ? path.replaceAll('\\', '/') : null, reason: typeof event.data.skip === 'string' ? event.data.skip : null, kind: event.data.details?.type ?? null, event: event.type, booleanSkip: event.data.skip === true, todo: Boolean(event.data.todo) });
+        const reason = typeof event.data.skip === 'string' && event.data.skip.trim() ? event.data.skip : null;
+        skipped.push({
+          name: event.data.name,
+          file: path && path !== '..' && !path.startsWith(`..${process.platform === 'win32' ? '\\' : '/'}`) && !isAbsolute(path) ? path.replaceAll('\\', '/') : null,
+          reason,
+          kind: event.data.details?.type ?? null,
+          event: event.type,
+          booleanSkip: event.data.skip === true,
+          todo: Boolean(event.data.todo),
+        });
       }
       if (event.data.todo) pending.push({ name: event.data.name });
       yield `${event.type === 'test:fail' ? 'FAIL' : event.data.skip ? 'SKIP' : event.data.todo ? 'TODO' : 'PASS'} ${JSON.stringify(event.data.name)}\n`;
@@ -24,8 +33,8 @@ export default async function* reporter(source) {
     }
     if (event.type === 'test:stdout' || event.type === 'test:stderr') yield `OUTPUT ${JSON.stringify(String(event.data.message ?? ''))}\n`;
     if (event.type === 'test:summary') {
-      if (event.data?.file && entry && canonical(event.data.file) === entry) fileSummaries++;
-      else counts = event.data?.counts;
+      if (!event.data?.file) counts = event.data?.counts;
+      else if (!entry || canonical(event.data.file) === entry) fileSummaries++;
     }
   }
   yield `\nADK_INFRA_EVIDENCE ${JSON.stringify({ observed, fileSummaries, counts, skipped, pending })}\n`;

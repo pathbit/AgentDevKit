@@ -5,9 +5,10 @@ description: Atualiza documentos afetados e sua coerência com a entrega.
 
 # Atualizar documentação
 
-Antes de escrever, execute `inspecionar-projeto` por `executar-script` e consulte
-`documentation`. Abra os documentos relevantes: o inventário não substitui a
-leitura nem comprova aprovação. Confira também o diff e os critérios da tarefa.
+Antes de escrever, execute o [inventário do hub][inventario] e consulte
+`documentation`. Se o runtime não estiver disponível, mapeie os documentos
+por leitura e relate os limites. Abra os arquivos relevantes e confira
+aprovações, diff e critérios da tarefa.
 Reúna no início somente dúvidas que os arquivos não respondem.
 
 Proponha por caminho: manter, complementar uma seção ou criar arquivo ausente.
@@ -37,9 +38,12 @@ links e exemplos; compare o conteúdo anterior e confirme que arquivos fora
 do plano permanecem intactos. Repetir a tarefa não deve duplicar seções.
 Código de teste é versionado, evidências ficam ignoradas.
 
-Após alterações, acione o [revisor](../../../agents/revisor/AGENT.md) em leitura
-com o diff, documentos, critérios e provas; não apresente a revisão como opcional.
-Aplique os achados pertinentes e peça nova
-revisão após correções. Informe impedimentos; não declare aprovação se essa
-revisão não ocorreu. Na entrega, o agente principal registra a decisão do
-revisor no JSON de `revisar-entrega`, após conferir o estado final.
+Quando delegado, devolva ao agente principal o diff, as decisões por documento
+e as provas. Em entrega ou revisão já aberta, reúna o resultado no diff final.
+Se você for o agente principal e a documentação for a entrega inteira, abra
+a revisão, se ainda não estiver em andamento, por
+[revisar-entrega](../../../commands/revisar-entrega/COMMAND.md) para acionar
+o [revisor](../../../agents/revisor/AGENT.md) em leitura. Corrija achados e
+confirme o estado final antes de registrar aprovação no relatório.
+
+[inventario]: ../../../scripts/inspecionar-projeto/README.md

@@ -1,52 +1,36 @@
 ---
 name: preparar-dev
-description: Prepara ou repara o ambiente local de um projeto existente.
+description: Faz um projeto existente rodar na máquina ou repara seu ambiente, seguindo a stack e os comandos atuais.
 ---
 
 # Preparar desenvolvimento
 
-Inspecione somente este repositório: README, regras, manifests, lockfiles,
-Makefile, Compose, Dockerfiles, exemplos de ambiente e comandos de CI/testes.
-Identifique tecnologia, versões e a forma real de executar; não presuma que a
-estrutura esteja correta nem que tenha sido criada por este agente.
-Confira arquivos ocultos relevantes, como `.gitignore`, antes de afirmar que
-faltam; uma busca que não os exibe não comprova ausência. Diferencie variáveis
-e serviços opcionais dos necessários ao fluxo escolhido, conforme as evidências.
+Inspecione somente este repositório. Reutilize o resultado atual de
+[diagnosticar](../../../commands/diagnosticar/COMMAND.md) ou execute a consulta.
+Confira README, arquivos ocultos, manifests, lockfiles, Makefile, Compose,
+Dockerfiles, exemplos de configuração, CI e conectores. Identifique o comando
+real e o que é obrigatório para o fluxo. Se a consulta ao Docker falhar, relate
+**não verificado**. Sem rede permitida e sem contexto Docker comprovadamente
+local, execute o script de diagnóstico com `--no-docker-probe`, conforme
+o comando acima. O bootstrap faz seu próprio diagnóstico antes de encaminhar.
 
-Antes de preparar ferramentas, reutilize a seleção de clientes do pedido ou
-estado do kit. Se faltar, pergunte quais agentes o usuário usa; aplique pela CLI
-com `--agents` ou `agents`, sem inferir pelo aplicativo, SO ou pastas.
-Sem resposta disponível, use `all`. Isso não autoriza recriar o projeto.
+Só trate a seleção de clientes se o pedido envolver a instalação ou
+configuração do kit. Reúna dúvidas sobre o erro, objetivo,
+serviços, credenciais, versões, porta e dados a preservar.
+Use o [modelo de ambiente](../../../templates/ambiente-local/TEMPLATE.md)
+para as lacunas.
 
-1. Use `executar-script` com `inspecionar-projeto` e `diagnosticar-ambiente`
-   para descobrir estrutura, SO, arquitetura, Docker/Compose e runtimes.
-   Se a consulta ao Docker falhar, relate que ele não foi verificado neste
-   ambiente; falha de acesso ou sandbox não comprova que o daemon está parado.
-   Se acesso à rede não for permitido e o contexto Docker não for conhecido
-   como local, use `diagnosticar-ambiente --no-docker-probe` pelo seletor.
-   Confira conectores. Reúna as dúvidas no início: intenção, erro observado,
-   serviços externos, credenciais, versões, porta e dados/volumes a preservar.
-   Use o [modelo de ambiente](../../../templates/ambiente-local/TEMPLATE.md)
-   para completar apenas o que faltar.
-2. Apresente os reparos necessários e execute os autorizados. Para apenas
-   desenvolver, não exija novos PRD/design/spec nem reorganize a aplicação.
-   Restrinja o reparo ao ambiente; alterações funcionais têm escopo próprio.
-   Mudanças de arquitetura, versões ou migração de dados exigem decisão própria;
-   melhorias de estrutura seguem `configurar-projeto` quando solicitadas.
-3. Rode `preparar-ferramentas setup` para instalar e validar ferramentas locais
-   dos agentes por seus `TOOL.json`, com SO/arquitetura corretos e downloads
-   em `.pbai4devs/tools/<nome>/.local/`. Instale dependências
-   do projeto pelos lockfiles e comandos existentes; evite instalações globais.
-4. Prepare os serviços pelo Docker Compose local, conforme a
-   [regra de ambiente][ambiente]. Se estiver ausente
-   ou quebrado, adapte os modelos ao projeto com o reparo autorizado. Preserve
-   bancos, volumes e segredos; não recrie dados nem execute limpeza destrutiva.
-5. Valide configuração, build, saúde, migrações acordadas e testes relevantes.
-   Use `verificar-trabalho` para provar o fluxo real quando houver aplicação.
-   Relate comandos para subir/parar, URL/porta, evidências e pendências.
+Execute reparos autorizados no ambiente. Preserve produto, stack e documentos.
+Mudanças funcionais, de arquitetura, de versões da stack ou de dados exigem
+decisão própria.
+Para ferramentas do kit necessárias à tarefa, use `setup <seleção>` no
+[preparo de ferramentas](../../../commands/instalar-ferramentas/COMMAND.md).
+Para dependências do projeto, siga os lockfiles. Prepare serviços pelo Compose
+local e pela [regra de ambiente](../../../rules/ambiente-local/RULE.md). Adapte
+modelos quando o reparo autorizado exigir e preserve bancos, volumes e segredos.
 
-Registre resultados locais em `.agent-tests/`; atualize documentação somente
-quando necessário e sincronize seus apontamentos. Para implementar novas
-funcionalidades, encaminhe ao fluxo de specs com seus pré-requisitos.
-
-[ambiente]: ../../../rules/ambiente-local/RULE.md
+Valide configuração, build, saúde, migrações acordadas e testes relevantes.
+Use `verificar-trabalho` para o fluxo real, quando houver aplicação. Relate
+comandos para subir e parar, URL ou porta, evidências e pendências. Guarde
+resultados em `.agent-tests/`. Atualize documentação afetada e sincronize
+se recursos agênticos mudarem. Novas funcionalidades seguem o fluxo de specs.

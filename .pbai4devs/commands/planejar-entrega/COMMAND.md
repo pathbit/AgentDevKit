@@ -19,5 +19,6 @@ inclua backend, frontend, QA, segurança e performance quando aplicáveis.
 Planeje subagentes conforme a capacidade do cliente, sem antecipar fases do produto.
 
 Saída: escopo, dúvidas, tarefas, dependências, arquivos e provas por critério.
-O plano não autoriza mudanças por si só; respeite aprovações já registradas.
-Após o alinhamento, siga [implementar-entrega](../implementar-entrega/COMMAND.md).
+Encaminhe ao agente principal para obter as aprovações pendentes. Com a spec
+e o plano aprovados, entregue-os com os aceites a
+[implementar-entrega](../implementar-entrega/COMMAND.md).

@@ -17,7 +17,6 @@ function put(root, path, content) {
 
 for (const oldAtime of [false, true]) test(`sync --force guarda cópia anterior sem alterar Git nem arquivo humano (acesso antigo=${oldAtime})`, {
   timeout: 120000,
-  todo: oldAtime && process.env.ADK_STRICT_RECOVERY_TEST !== '1' ? 'planejamento pode alterar o horário de acesso antes do backup' : false,
 }, t => {
   const root = fs.realpathSync(fs.mkdtempSync(join(tmpdir(), 'adk-sync-backup-success-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -134,10 +133,12 @@ for (const denial of ['EACCES', 'EPERM']) test(`sync preserva backup se Linux ne
   assert.ok(collectErrorDiagnostics(failure).preservedPaths.some(path => path.includes('sync-backup.')));
 });
 
-for (const safeRefusal of [true, false]) test(`sync Linux preserva arquivo legível apenas pelo grupo (recusa=${safeRefusal})`, {
+for (const { name, owner, mode } of [
+  { name: 'sync Linux recusa arquivo de outro proprietário legível pelo grupo', owner: 0, mode: 0o040 },
+  { name: 'sync Linux preserva o modo de leitura do próprio arquivo no backup', owner: 65534, mode: 0o440 },
+]) test(name, {
   timeout: 120000,
   skip: process.platform !== 'linux' || process.getuid?.() !== 0 ? 'fixture requer Linux com troca de usuário' : false,
-  todo: !safeRefusal && process.env.ADK_STRICT_RECOVERY_TEST !== '1' ? 'atualização de proprietário diferente ainda não é suportada' : false,
 }, t => {
   const root = fs.realpathSync(fs.mkdtempSync(join(tmpdir(), 'adk-sync-group-readable-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -160,7 +161,18 @@ for (const safeRefusal of [true, false]) test(`sync Linux preserva arquivo legí
     if (info.isDirectory()) for (const name of fs.readdirSync(path)) chownTree(join(path, name));
     fs.chownSync(path, uid, gid);
   }
-  chownTree(root); fs.chownSync(catalog, 0, gid); fs.chmodSync(catalog, 0o040);
+  chownTree(root);
+  fs.chownSync(catalog, owner, gid);
+  fs.chmodSync(catalog, mode);
+  const safeRefusal = owner !== uid;
+  const evidenceRoot = join(root, '.agent-tests');
+  const evidenceSnapshot = () => fs.existsSync(evidenceRoot)
+    ? fs.readdirSync(evidenceRoot, { recursive: true }).sort().map(path => {
+      const fullPath = join(evidenceRoot, path);
+      return [path, fs.lstatSync(fullPath).isFile() ? fs.readFileSync(fullPath) : null];
+    })
+    : [];
+  const evidenceBefore = evidenceSnapshot();
   const moduleUrl = new URL('../.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs', import.meta.url).href;
   const script = `import { synchronize } from ${JSON.stringify(moduleUrl)}; const root = process.argv[1]; const options = { root, force: true, localIgnores: false, generateEntrypoints: false, output() {} }; if (${safeRefusal}) { const check = synchronize({ ...options, check: true }); let failure; try { synchronize(options); } catch (error) { failure = { code: error.code, path: error.path }; } process.stdout.write(JSON.stringify({ check, failure })); } else { const result = synchronize(options); process.stdout.write(JSON.stringify({ backupRoot: result.backupRoot })); }`;
   const child = spawnSync(process.execPath, ['--input-type=module', '-e', script, root], { uid, gid, encoding: 'utf8', timeout: 120000 });
@@ -171,15 +183,17 @@ for (const safeRefusal of [true, false]) test(`sync Linux preserva arquivo legí
     assert.equal(result.failure?.code, 'E_PROTECTED_METADATA');
     assert.equal(result.failure?.path, '.pbai4devs/catalog.json');
     assert.deepEqual(fs.readFileSync(catalog), before);
-    assert.equal(fs.statSync(catalog).uid, 0); assert.equal(fs.statSync(catalog).mode & 0o777, 0o040);
-    assert.deepEqual(fs.readFileSync(join(root, '.git/index')), index);
-    assert.equal(fs.existsSync(join(root, '.agent-tests')), false);
+    assert.equal(fs.statSync(catalog).uid, owner);
+    assert.equal(fs.statSync(catalog).mode & 0o777, mode);
+    assert.deepEqual(evidenceSnapshot(), evidenceBefore);
   } else {
     const backup = join(result.backupRoot, '.pbai4devs/catalog.json');
     assert.deepEqual(fs.readFileSync(backup), before);
-    assert.equal(fs.statSync(backup).mode & 0o777, 0o040);
+    assert.equal(fs.statSync(backup).uid, uid);
+    assert.equal(fs.statSync(backup).mode & 0o777, mode);
     assert.notDeepEqual(fs.readFileSync(catalog), before);
   }
+  assert.deepEqual(fs.readFileSync(join(root, '.git/index')), index);
 });
 
 for (const [name, thrown] of [['undefined', undefined], ['null', null], ['false', false], ['zero', 0], ['empty', ''], ['nan', NaN], ['bigint', 0n]]) {

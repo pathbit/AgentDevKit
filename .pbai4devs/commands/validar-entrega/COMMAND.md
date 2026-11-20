@@ -4,8 +4,9 @@ description: Executa provas da entrega e prepara a revisão independente.
 
 # Validar entrega
 
-Entrada: critérios, diff, ambiente e instruções para executar o projeto.
-Faltando aplicação ou ferramenta exigida, registre o impedimento.
+Entrada: critérios, diff, provas existentes, ambiente e instruções de execução.
+Se faltar aplicação ou ferramenta, registre os critérios afetados e prossiga
+com as provas viáveis.
 
 Acione o [validador](../../agents/validador/AGENT.md) com
 [verificar-trabalho](../../skills/projeto/verificar-trabalho/SKILL.md).
@@ -21,7 +22,7 @@ Em performance, registre ambiente, carga, métricas e comparação com a meta.
 Não invente metas nem marque como aprovado o que não foi executado.
 
 Saída: resultado por critério, comandos e provas em `.agent-tests/`. Código de
-teste e fixtures necessários são versionáveis; resultados não são versionados.
-O validador não corrige as fontes nem aprova a própria mudança. Entregue o
-resultado ao [revisor](../../agents/revisor/AGENT.md) pelo
-[gate de entrega](../revisar-entrega/COMMAND.md).
+teste e fixtures são versionáveis. O validador devolve falhas ao implementador
+e entrega as provas ao agente principal. Com os critérios comprovados, siga
+[revisar-entrega](../revisar-entrega/COMMAND.md) para fechar documentação,
+revisão independente e gate.

@@ -105,7 +105,6 @@ function snapshot(root) {
 for (const operation of ['update', 'sync-cli', 'sync-direct']) {
   const name = `Gemini ${operation}: preserva xattr ou recusa sem alterações`;
   if (!['darwin', 'linux'].includes(process.platform)) { test(name, { skip: 'xattr nativo requer macOS ou Linux' }); continue; }
-  if (process.env.ADK_STRICT_RECOVERY_TEST !== '1') { test(name, { todo: 'preservação de xattr deve ser validada no modo estrito' }); continue; }
   test(name, { timeout: 240000 }, t => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), 'adk-gemini-xattr-')));
     t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -134,7 +133,12 @@ for (const operation of ['update', 'sync-cli', 'sync-direct']) {
     state.blocks[target] = outdated.sha256;
     put(statePath, `${JSON.stringify(state, null, 2)}\n`);
     const set = attribute('set');
-    assert.equal(set.status, 0, `não foi possível preparar xattr sintético: ${set.stderr}`);
+    if (set.status !== 0) {
+      const reason = `xattr sintético indisponível na fixture: ${set.stderr || set.error?.message || set.status}`;
+      if (process.env.ADK_STRICT_RECOVERY_TEST === '1') assert.fail(reason);
+      t.skip(reason);
+      return;
+    }
     const beforeAttribute = attribute('get');
     assert.equal(beforeAttribute.status, 0);
     assert.equal(beforeAttribute.stdout.trim(), sentinel);

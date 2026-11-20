@@ -566,7 +566,7 @@ test('verificação OSS aceita somente acréscimos íntegros em entradas e recur
   assert.throws(() => checkOriginals(root, baseline, git), /Conteúdo original alterado/);
 });
 
-test('verificação OSS rejeita substituição de link por arquivo com bloco', { skip: process.platform === 'win32' }, t => {
+test('verificação OSS rejeita substituição de link por arquivo com bloco', { skip: process.platform === 'win32' ? 'A fixture de preservação exige symlink POSIX e compara seus metadados.' : false }, t => {
   const root = mkdtempSync(join(tmpdir(), 'agentdevkit-oss-link-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const path = join(root, 'CLAUDE.md');
@@ -585,7 +585,7 @@ test('verificação OSS rejeita substituição de link por arquivo com bloco', {
   assert.throws(() => checkOriginals(root, baseline, git), /Tipo do arquivo original alterado/);
 });
 
-test('verificação OSS não atravessa ancestral substituído por link mesmo com bytes iguais', { skip: process.platform === 'win32' }, t => {
+test('verificação OSS não atravessa ancestral substituído por link mesmo com bytes iguais', { skip: process.platform === 'win32' ? 'A fixture de preservação exige symlink POSIX e compara seus metadados.' : false }, t => {
   const root = mkdtempSync(join(tmpdir(), 'agentdevkit-oss-ancestor-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   mkdirSync(join(root, 'src')); writeFileSync(join(root, 'src/index.mjs'), 'original code\n');

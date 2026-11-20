@@ -1,27 +1,19 @@
 ---
 name: revisar-codigo
-description: Revisa alterações de código em busca de defeitos, regressões e provas insuficientes.
+description: Examina um diff e suas provas para apontar defeitos, regressões e lacunas de cobertura.
 ---
 
 # Revisar código
 
-Examine o diff, o contexto necessário, os critérios e as evidências; preserve
-as alterações de outras pessoas. Trabalhe em leitura quando atuar como
-[revisor](../../../agents/revisor/AGENT.md) e peça o que faltar.
-Procure critérios e testes relevantes antes de afirmar que não existem ou que
-um teste é o único. Relate apenas leituras, buscas e execuções comprovadas,
-com seu escopo; quando não puder verificar, informe essa limitação.
+Leia o diff, contratos, aceites e testes pertinentes. Atue em leitura quando
+for o [revisor](../../../agents/revisor/AGENT.md). Confira a cobertura antes de
+afirmar que falta um teste e preserve alterações de outras pessoas.
 
-Investigue correção, contratos, dados, concorrência, falhas, segurança e efeitos
-de implantação pertinentes. Use [validação adversarial](../validar-adversarial/SKILL.md)
-para refutar suposições e identifique testes de regressão ausentes. Priorize
-defeitos reproduzíveis, não preferências de estilo ou mudanças fora do escopo.
+Priorize defeitos concretos e regressões da mudança. Considere dados,
+concorrência, falhas, segurança e implantação conforme o risco. Use
+[validar-adversarial](../validar-adversarial/SKILL.md) quando houver uma
+hipótese específica a refutar.
 
-Para cada achado, informe arquivo, linha, cenário, impacto e evidência; distinga
-certeza de hipótese. Não generalize o impacto além dos casos demonstrados;
-afirmações universais exigem prova que inclua os limites do domínio. Considere
-arredondamento e valores especiais quando relevantes; sem prova geral, descreva
-o impacto com exemplos concretos, sem afirmar que vale para todas as entradas.
-Indique o que foi
-verificado e os limites. Se não houver
-achados, diga isso sem afirmar que o código está livre de defeitos.
+Para cada achado, informe arquivo, linha, cenário, impacto e evidência.
+Distinga hipóteses de fatos e limite a afirmação aos casos demonstrados.
+Informe o que consultou, o que executou e os limites da revisão.

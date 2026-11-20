@@ -56,6 +56,7 @@ The CLI supports `pt`, `en` and `es`; it saves your selection per project.
 | Plan or resume a project | [Workflow](docs/guides/workflow.md) |
 | Improve existing documentation | [Inventory and additions](docs/guides/documentation.md) |
 | Create a skill or command | [Resources](docs/guides/resources.md) |
+| Choose a workflow by outcome | [Resources in practice](docs/guides/recursos-na-pratica.md) |
 | Install tools and verify work | [Tools and tests][tests] |
 | Review security with local tools | [Local security](docs/guides/security.md) |
 | Look up options or fix an error | [CLI][cli] · [Troubleshooting][help] |

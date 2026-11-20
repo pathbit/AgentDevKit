@@ -163,7 +163,12 @@ try {
     env: { SystemRoot: process.env.SystemRoot }, input: JSON.stringify({ entries: entries.map(({ path, update }) => ({ path, update })) }),
     encoding: 'utf8', windowsHide: true, timeout: 60000,
   });
+  assertWindowsFileChangeResult(result, entries);
+}
+
+export function assertWindowsFileChangeResult(result, entries) {
   if (result.error || result.status !== 0) {
+    const singleEntry = entries.length === 1 ? entries[0] : undefined;
     const index = /^\d+$/.test(result.stdout?.trim()) ? Number(result.stdout.trim()) : null;
     const entry = index === null ? singleEntry : entries[index];
     if (!result.error && result.status === 2) throw windowsMetadataError('E_PROTECTED_METADATA', entry?.displayPath);

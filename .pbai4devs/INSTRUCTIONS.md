@@ -4,14 +4,26 @@ description: Ordem de trabalho e manutenção dos agentes.
 
 # Como usar
 
-Peça a skill pelo nome ou solicite a leitura de seu `SKILL.md`.
+Comece pelo resultado pedido. O comando orienta a sequência, a skill orienta
+as decisões, o perfil define a responsabilidade e o script executa a operação
+com as ferramentas disponíveis. Regras e modelos dão contexto e formato.
+Peça a leitura da fonte quando o cliente não oferecer o atalho.
+
+| Situação | Por onde começar | Resultado |
+| --- | --- | --- |
+| Descobrir a próxima etapa | [proximos-passos](commands/proximos-passos/COMMAND.md) | Próxima ação e pré-requisito pendente. |
+| Só consultar o ambiente ou fazer um projeto existente rodar | [diagnosticar](commands/diagnosticar/COMMAND.md) ou [preparar-dev](commands/preparar-dev/COMMAND.md) | Inventário ou ambiente verificado, conforme o pedido. |
+| Definir um incremento ou executar uma entrega aprovada | [planejar-entrega](commands/planejar-entrega/COMMAND.md) ou [implementar-entrega](commands/implementar-entrega/COMMAND.md) | Plano com aceites ou mudança pronta para validar. |
+| Comprovar a mudança ou revisar a entrega final | [validar-entrega](commands/validar-entrega/COMMAND.md) ou [revisar-entrega][revisao] | Provas por critério ou decisão independente. |
+| Revisar riscos de segurança | [auditar-seguranca](commands/auditar-seguranca/COMMAND.md) | Relatório com achados, prioridades e cobertura. |
+| Evoluir os recursos do kit | [criar-recurso](skills/projeto/criar-recurso/SKILL.md) → [sincronizar](commands/sincronizar/COMMAND.md) → [verificar-agentes](commands/verificar-agentes/COMMAND.md) | Fontes reutilizadas ou ajustadas, apontamentos e provas. |
 
 Antes de trabalhar na documentação, use `atualizar-documentacao` para inventariar
 e ler os arquivos existentes. Preserve seus caminhos e conteúdo; complemente
 lacunas e organize por índices, sem substituir documentos pelos modelos.
 
-Antes de instalar ou preparar ferramentas, pergunte quais clientes o usuário
-usa, se não houver escolha no pedido ou no estado do kit. A CLI aceita
+Ao instalar ou reconfigurar o kit, pergunte quais clientes o usuário usa se
+não houver escolha no pedido ou no estado. A CLI aceita
 `--agents codex,claude`; `agents` consulta ou altera a seleção depois.
 Use os IDs da [compatibilidade](COMPATIBILIDADE.md), sem deduzir o agente pelo
 aplicativo, SO ou pastas. Sem resposta disponível, mantenha a escolha salva ou
@@ -40,10 +52,9 @@ salvo em `.pbai4devs/state/agentdevkit.json`; sem escolha, use português.
 Evolua README e documentos pelos [modelos da fase](templates/README.md).
 Atualize fatos e links afetados; registre ausência de impacto com justificativa.
 
-Para desenvolver um projeto existente, use `preparar-dev`: diagnostique e
-prepare a máquina sem recriar documentos de produto. Melhorias de estrutura
-e mudanças funcionais têm escopo próprio. O [modelo de ambiente][ambiente]
-define as perguntas e os arquivos obrigatórios da configuração técnica.
+Em projeto existente, preserve documentos e decisões comprovados. Melhorias
+de estrutura e mudanças funcionais têm escopo próprio. O
+[modelo de ambiente][ambiente] orienta a configuração técnica.
 
 ## Trabalho com especialistas
 
@@ -84,14 +95,16 @@ Consulte [skills externas](external-skills/README.md) antes de reinventar um
 procedimento; ative referências pela tarefa, respeitando a stack decidida.
 `preparar-ferramentas` baixa/atualiza ferramentas locais para o SO/arquitetura;
 cada ferramenta tem `TOOL.json` e `SCRIPT.mjs` em `.pbai4devs/tools/<nome>`.
+Escolha somente as ferramentas aplicáveis ao pedido.
 Binários e registros em `.local/`, cache e launchers são ignorados.
 
 O arquivo local `espelhos.conf` registra seleção, layouts e pontos nativos.
 O catálogo local `catalog.json` reúne inventário e comandos das ferramentas.
 Os registros `skills.json`, `rules.json` e `agents.json` indexam as fontes.
 Codex e Antigravity compartilham `.agents`; `.agent` é uma opção legada.
-Gemini usa `.gemini`; Copilot/VS Code usa `.github` e `.vscode`. Veja os demais
-clientes e seus limites na [compatibilidade](COMPATIBILIDADE.md).
+Gemini usa `.gemini` e Copilot usa `.github`. A pasta `.vscode` depende da
+configuração do editor. Veja os clientes e seus limites na
+[compatibilidade](COMPATIBILIDADE.md).
 Só clientes selecionados recebem derivações; uma pasta compartilhada permanece
 quando outro cliente precisa dela. Atualizar ou sincronizar respeita a seleção.
 Somente recursos agênticos têm apontamentos; templates, scripts, tools e estado

@@ -6,3 +6,4 @@ import './MANAGED_CONTENT.mjs';
 import './PRESERVATION.mjs';
 import './CATALOG_OWNERSHIP.mjs';
 import './BASE.mjs';
+import './UPDATES.mjs';

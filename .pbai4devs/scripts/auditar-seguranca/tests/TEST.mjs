@@ -133,7 +133,7 @@ test('indice Git ilegivel nao autoriza gravar evidencias', async t => {
   assert.equal(fs.existsSync(join(f.root, '.agent-tests')), false);
 });
 
-test('auditoria aceita raiz Git com espaco final inclusive para historico', { skip: process.platform === 'win32' }, async t => {
+test('auditoria aceita raiz Git com espaco final inclusive para historico', { skip: process.platform === 'win32' && 'O teste exige um diretório Git com espaço final, incompatível com caminhos convencionais do Windows.' }, async t => {
   const f = fixture(t, { trailingSpace: true });
   const result = await f.audit.run({ checks: ['secrets'], includeHistory: true });
   assert.equal(result.status, 'passed');

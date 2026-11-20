@@ -51,7 +51,7 @@ test('locale do usuário não impede consulta em projeto sem Git', t => {
   assert.equal(process.env.LC_ALL, 'C.UTF-8');
 });
 
-test('init sem Git funciona com locale externo e não altera conteúdo humano', { skip: !runtimeSupported, timeout: 120000 }, t => {
+test('init sem Git funciona com locale externo e não altera conteúdo humano', { skip: !runtimeSupported ? 'A CLI do kit requer Node.js 24 ou superior nesta fixture.' : false, timeout: 120000 }, t => {
   withFrenchLocale(t);
   const root = fixture(t), file = join(root, 'human.txt'), before = readFileSync(file);
   const result = run(root, process.execPath, [cli, 'init', '--target', root, '--agents', 'codex', '--yes', '--json']);
@@ -91,7 +91,7 @@ test('erro operacional de configuração global não vira projeto sem Git', t =>
   assert.equal(existsSync(join(root, '.git')), false);
 });
 
-test('init recusa configuração Git global inválida antes de alterar o projeto', { skip: !runtimeSupported, timeout: 120000 }, t => {
+test('init recusa configuração Git global inválida antes de alterar o projeto', { skip: !runtimeSupported ? 'A CLI do kit requer Node.js 24 ou superior nesta fixture.' : false, timeout: 120000 }, t => {
   withFrenchLocale(t);
   const root = fixture(t), human = readFileSync(join(root, 'human.txt'));
   const badConfig = join(root, 'git-config-inválida');
@@ -128,7 +128,7 @@ test('classificação de consulta Git exige ausência comprovada e recusa sinais
   assert.equal(noGitRepository(nested, unavailable), false);
 });
 
-test('aplicação recusa configuração Git inválida e preserva o projeto', { skip: !runtimeSupported, timeout: 120000 }, t => {
+test('aplicação recusa configuração Git inválida e preserva o projeto', { skip: !runtimeSupported ? 'A CLI do kit requer Node.js 24 ou superior nesta fixture.' : false, timeout: 120000 }, t => {
   withFrenchLocale(t);
   const root = fixture(t), human = readFileSync(join(root, 'human.txt'));
   const badConfig = join(root, 'git-config-inválida');
@@ -145,7 +145,7 @@ test('aplicação recusa configuração Git inválida e preserva o projeto', { s
   assert.deepEqual(readFileSync(badConfig), config);
 });
 
-test('init sem executável Git recusa marcador ancestral e preserva índice', { skip: !runtimeSupported, timeout: 120000 }, t => {
+test('init sem executável Git recusa marcador ancestral e preserva índice', { skip: !runtimeSupported ? 'A CLI do kit requer Node.js 24 ou superior nesta fixture.' : false, timeout: 120000 }, t => {
   const root = fixture(t), nested = join(root, 'nested');
   for (const args of [['init', '--quiet'], ['add', '--', 'human.txt']]) {
     const result = run(root, 'git', args);

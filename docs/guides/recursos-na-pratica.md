@@ -11,6 +11,9 @@ revisão humana e testes continuam necessários no projeto atendido.
 
 ## Qual recurso usar?
 
+Consulte o [guia instalado][start] para escolher por intenção. Ele aponta
+para o comando que recebe o pedido e informa o que deve sair de cada etapa.
+
 | Recurso | Para que serve | Exemplo concreto |
 | --- | --- | --- |
 | [Skill][skills] | Orienta decisões e passos de uma tarefa recorrente. | [Criar uma spec][spec] com dúvidas e critérios. |
@@ -27,21 +30,23 @@ um processo sozinha; o cliente de IA decide como descobrir e executar recursos
 conforme suas capacidades e permissões. Consulte a
 [compatibilidade por cliente][compat] antes de depender de um atalho.
 
-## Exemplo: entregar uma funcionalidade
+## Como as etapas se conectam
 
-1. Peça ao agente para ler `AGENTS.md` e usar
-   [proximos-passos][next]. Ele identifica a fase e as pendências do projeto.
+1. Use [proximos-passos][next] para identificar a fase e as pendências.
 2. Defina produto, experiência quando aplicável e design técnico com o usuário.
    Os [templates][templates] são pontos de partida, não decisões prontas.
-3. Use [criar-spec][spec] para esclarecer dúvidas, limitar o incremento e
-   registrar critérios verificáveis. Planeje e obtenha a aprovação necessária.
-4. Use [implementar-entrega][implement] com a spec e o plano. O perfil
-   [implementador][developer] segue a skill e respeita o escopo aprovado.
-5. Execute as verificações adequadas: testes automatizados, navegador para um
-   fluxo web ou desktop para uma aplicação desktop, quando aplicáveis. Registre
-   o resultado de cada critério, incluindo o que não pôde ser executado.
-6. Atualize a documentação afetada e encaminhe a mudança à
-   [revisão independente][review]. A equipe decide quando integrar a entrega.
+3. Use [criar-spec][spec] para registrar limites e aceites. Em
+   [planejar-entrega][plan], passe o objetivo ou a spec ao planejador. Ele
+   devolve dúvidas, escopo, tarefas e provas para aprovação.
+4. Passe spec e plano aprovados a [implementar-entrega][implement]. O perfil
+   [implementador][developer] devolve o diff, aceites, comandos e provas iniciais.
+5. Passe esses materiais a [validar-entrega][validar]. O validador usa a skill
+   [verificar-trabalho][verify] e ferramentas do projeto. Para web, use
+   navegador real. Para desktop, abra a aplicação. Registre a prova e o estado
+   de cada critério.
+6. Entregue diff, decisões de documentação e provas a [revisar-entrega][review].
+   O revisor avalia o estado final em leitura, e o responsável registra a decisão
+   com o script de revisão. A equipe decide quando integrar.
 
 Quando houver trabalho independente, o agente principal pode distribuí-lo
 entre os [especialistas][specialists] disponíveis, com responsáveis por arquivos,
@@ -54,9 +59,20 @@ casos de limite e falha; segurança considera ameaças e permissões; performanc
 compara medições com metas e carga definidas. Registre ambiente, comandos e
 resultados por critério, inclusive falhas e verificações não executadas.
 
-Para um projeto existente, comece pelo inventário e preserve suas decisões;
-consulte o [fluxo de trabalho][workflow] e a
-[instalação em projetos existentes][install].
+Para **rodar um projeto existente**, `agentdevkit next --intent run --target .`
+indica a etapa atual. [Diagnosticar][diagnose] inventaria ambiente e projeto;
+[preparar-dev][prepare] usa esse inventário quando o pedido inclui ajustes.
+Entregue os comandos para subir, verificar e parar a aplicação.
+
+Para **auditar segurança**, [auditar-seguranca][audit] coleta ou reaproveita o
+relatório local, e o perfil auditor usa [revisar-seguranca][security] para
+interpretá-lo no contexto. Ferramentas ou bases ausentes entram na cobertura
+pendente. A correção tem seu próprio fluxo e escopo.
+
+Para **evoluir o kit**, localize o recurso pelo [guia de recursos][resources].
+Depois de alterar a fonte, use [sincronizar][sync-command] para aplicar e
+conferir os apontamentos e [verificar-agentes][verify-agents] para validar
+fontes, ferramentas e testes.
 
 ## Onde ficam os arquivos?
 
@@ -77,6 +93,7 @@ sincronize e verifique os apontamentos. Para dúvidas de operação, consulte
 [solução de problemas](troubleshooting.md).
 
 [skills]: ../../.pbai4devs/skills/README.md
+[start]: ../../.pbai4devs/INSTRUCTIONS.md
 [commands]: ../../.pbai4devs/commands/README.md
 [agents]: ../../.pbai4devs/agents/README.md
 [rules]: ../../.pbai4devs/rules/README.md
@@ -95,8 +112,15 @@ sincronize e verifique os apontamentos. Para dúvidas de operação, consulte
 [compat]: ../../.pbai4devs/COMPATIBILIDADE.md
 [next]: ../../.pbai4devs/skills/projeto/proximos-passos/SKILL.md
 [implement]: ../../.pbai4devs/commands/implementar-entrega/COMMAND.md
+[plan]: ../../.pbai4devs/commands/planejar-entrega/COMMAND.md
+[verify]: ../../.pbai4devs/skills/projeto/verificar-trabalho/SKILL.md
+[diagnose]: ../../.pbai4devs/commands/diagnosticar/COMMAND.md
+[prepare]: ../../.pbai4devs/commands/preparar-dev/COMMAND.md
+[audit]: ../../.pbai4devs/commands/auditar-seguranca/COMMAND.md
+[security]: ../../.pbai4devs/skills/seguranca/revisar-seguranca/SKILL.md
+[sync-command]: ../../.pbai4devs/commands/sincronizar/COMMAND.md
+[verify-agents]: ../../.pbai4devs/commands/verificar-agentes/COMMAND.md
 [review]: ../../.pbai4devs/commands/revisar-entrega/COMMAND.md
-[workflow]: workflow.md
 [install]: installation.md
 [cli]: cli.md
 [resources]: resources.md

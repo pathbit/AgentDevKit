@@ -27,6 +27,8 @@ O CI verifica Linux e distribui a portabilidade em grupos independentes:
 | Windows / Node 24 | CLI, projetos, recursos e layout em jobs separados. |
 | macOS / Node 24 | Os mesmos grupos de portabilidade em jobs separados. |
 | Linux / Node 26 | Smoke de compatibilidade. |
+| Três sistemas / Node 18.20.8 | Launcher prepara Node 24.13.1. |
+| macOS / Node 24 | Gate nativo de metadados, além dos grupos portáteis. |
 
 O perfil macOS usa o runner padrão `macos-15-intel`. O label `macos-latest`
 usa ARM64 e pode ter filas diferentes; confira os [runners disponíveis][runners]
@@ -51,6 +53,31 @@ executam os demais perfis localmente. `npm run test:examples` verifica os
 cenários em uma pasta temporária fora de Git quando a mudança afeta a geração.
 A [contribuição](../../CONTRIBUTING.md) explica os checks durante o
 desenvolvimento.
+
+## Quando um teste pode ser pulado
+
+O runner dos perfis de CI exige resultado observável. Falha, cancelamento,
+TODO, skip sem motivo e grupo sem provas aprovadas interrompem o perfil. Uma
+exceção deve informar o requisito que impede a execução naquele ambiente.
+
+- macOS comprova ACL, xattr, flags e aliases de sistema. As fixtures de caixa
+  e aliases dependem do comportamento real do volume.
+- Windows em NTFS comprova DACL, fluxos alternativos e aliases 8.3. A fixture
+  deve criar um alias que resolva o arquivo.
+- Linux comprova xattr, ACL POSIX e `O_NOATIME` com volume compatível, `attr`,
+  `acl` e Python 3 quando exigido. Uma fixture simula a falta de `getfattr`.
+- `native-linux-ownership` roda cinco casos isolados com troca real de UID.
+  O restante do perfil completo do CI roda como usuário comum.
+- Linux e macOS comprovam bits POSIX, sinais para grupos e nomes de arquivo
+  incompatíveis com Windows. Para proteção de diretórios, Windows usa
+  junctions quando representam a mesma fronteira.
+- Symlinks de arquivo, hardlinks, GNU Make e Docker Compose exigem suporte
+  do ambiente. A limitação que impediu a prova aparece no log.
+
+A infraestrutura registra cada exclusão por arquivo, teste e motivo. No
+comando instalado, isso resulta em `partial`; o release aceita apenas as
+exclusões de plataforma previstas para o perfil completo. O CI executa as
+provas obrigatórias na própria plataforma e falha se forem puladas.
 
 ## Gerar um pacote
 
@@ -79,7 +106,7 @@ nada. Nunca versione o tarball ou seus relatórios.
 
 O perfil completo exige os testes estritos de recuperação concorrente. Enquanto
 eles falharem, não há artefato certificado para publicação; consulte o
-[roadmap](../product/roadmap.md) e os [testes](../../tests/README.md).
+[roadmap](../product/roadmap.md) e os [testes](https://github.com/pathbit/AgentDevKit/blob/master/tests/README.md).
 
 Após toda a matriz de CI passar, a automação cria a tag `v<versão>` no
 commit verificado e inicia o workflow de release. Um push sem mudança de versão

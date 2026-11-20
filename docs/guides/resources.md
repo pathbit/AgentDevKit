@@ -74,36 +74,6 @@ escrita exclusivos, dependências explícitas e evidências esperadas. O princip
 integra os resultados. Sem delegação, execute sequencialmente e informe o que
 não teve revisão independente; links não garantem execução automática.
 
-## Três fluxos completos
-
-| Etapa | Comando | Resultado |
-| --- | --- | --- |
-| Planejar | `planejar-entrega` | Dúvidas, plano e aceites. |
-| Implementar | `implementar-entrega` | Código, testes e documentos. |
-| Auditar | `auditar-seguranca` | Sinais locais e triagem. |
-
-O planejador combina as skills da fase para reunir as decisões. O implementador
-executa o plano aprovado. O auditor interpreta os scanners preparados por
-`preparar-seguranca` e verifica os controles que exigem contexto.
-
-No fluxo de implementação, `validar-entrega` executa as provas e
-`atualizar-documentacao` aciona o documentador. O revisor recebe a entrega
-final por `revisar-entrega`; quem implementou não substitui a revisão independente.
-Falhas retornam ao responsável com evidência e escopo de correção.
-
-Na segurança, scanners e análise manual se complementam. Achados confirmados
-seguem `corrigir-vulnerabilidade`; depois são testados de novo. O
-[guia de segurança](security.md) define preparação, limites e resultados.
-
-Não busque quantidades iguais por tipo: uma skill atende vários comandos,
-um perfil usa várias skills e uma regra vale em diferentes fluxos. Crie um
-perfil quando houver responsabilidade recorrente e contexto próprio; use
-skill para um procedimento e comando para uma entrada de trabalho clara.
-
-Modelos não são documentos aprovados do produto. Ferramentas usam um
-`SCRIPT.mjs` fino para delegar ao instalador comum; não precisam de cópias em
-cada cliente nem de outro instalador escrito do zero.
-
 ## Criar ou evoluir
 
 Comece por [criar-recurso][recurso] para localizar um fluxo já existente.
@@ -121,6 +91,9 @@ Reutilize scripts e ferramentas existentes; não copie instruções nos clientes
 ```
 
 Defina finalidade, entrada, saída, pré-requisitos e o que comprova a conclusão.
+Indique quem recebe a saída e em qual situação. Um comando pode reutilizar
+várias skills e um perfil pode contribuir em fluxos diferentes. Ferramentas
+usam seu `SCRIPT.mjs` para delegar ao instalador comum.
 Reúna dúvidas antes de tomar decisões. Detalhes opcionais podem ficar em
 referências próximas; o arquivo principal deve continuar fácil de encontrar.
 
@@ -141,15 +114,20 @@ Não use symlinks para substituir os apontamentos Markdown.
 
 ## Sincronizar e conferir
 
-Após criar, editar, renomear ou remover uma fonte, execute na raiz do projeto:
+Após alterar uma fonte, use a [CLI](cli.md) na raiz do projeto instalado:
 
 ```sh
-node .pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs
-node .pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs --check
+npx @pathbit/agentdevkit sync --dry-run --json
+npx @pathbit/agentdevkit sync
+npx @pathbit/agentdevkit sync --check
 node .pbai4devs/scripts/verificar-recursos/SCRIPT.mjs
 ```
 
-O primeiro comando atualiza apontamentos e índices; `--check` só compara.
+Use o mesmo pacote, versão e registro da instalação. Revise o plano antes de
+aplicar. A CLI recalcula o manifesto, inclusive se
+um YAML nativo foi criado ou alterado. O
+[script direto](../../.pbai4devs/scripts/sincronizar-agentes/README.md)
+reutiliza o manifesto existente.
 Regras Claude `manual` e `model_decision` ficam na origem para leitura explícita.
 Para `glob`, configure `claude.yaml` com `paths` explícitos; não se presume
 que glob de outro cliente seja equivalente. Ao desmarcar Claude, regras antigas

@@ -725,7 +725,7 @@ test('instalador recusa hardlink criado após verificação inicial e antes da p
 });
 
 for (const kind of ['install', 'sync']) for (const scenario of ['recriado', 'mesmo-inode']) {
-  test(`${kind}: nome ${scenario} após rename de atualização não é removido na limpeza`, { timeout: 120000, skip: scenario === 'mesmo-inode' && process.platform === 'win32' }, t => {
+  test(`${kind}: nome ${scenario} após rename de atualização não é removido na limpeza`, { timeout: 120000, skip: scenario === 'mesmo-inode' && process.platform === 'win32' ? 'A variante simula preservação do inode usando a publicação POSIX.' : false }, t => {
     const root = fixture(t);
     let target, operation;
     if (kind === 'install') {

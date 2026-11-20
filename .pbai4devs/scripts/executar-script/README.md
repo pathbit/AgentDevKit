@@ -4,13 +4,15 @@ description: Executor comum dos scripts Node do projeto.
 
 # Executar script
 
-Use Node 24+ com o nome de uma pasta em `.pbai4devs/scripts/`, uma pasta do
-repositório ou o caminho de um arquivo `.mjs`. O comando funciona nos três SOs:
+Use Node 24+ com uma pasta ou arquivo do repositório. Nomes curtos são
+procurados primeiro na raiz do projeto. Para chamar uma automação do kit,
+passe o caminho explícito em `.pbai4devs/scripts/`. O comando funciona nos
+três SOs:
 
 ```console
 cd .pbai4devs/scripts/preparar-ferramentas
-node BOOTSTRAP.mjs --executar --plan preparar-ferramentas
-node BOOTSTRAP.mjs --executar preparar-ferramentas list
+node BOOTSTRAP.mjs --executar --plan .pbai4devs/scripts/preparar-ferramentas/SCRIPT.mjs
+node BOOTSTRAP.mjs --executar .pbai4devs/scripts/preparar-ferramentas list
 cd ../../..
 ```
 
@@ -32,9 +34,9 @@ Use `--raw` antes do nome do script para enviar ao stderr os metadados e o
 diagnóstico do kit, mantendo a saída do alvo em stdout:
 
 ```sh
-node .pbai4devs/scripts/executar-script/SCRIPT.mjs --raw inspecionar-projeto
+node .pbai4devs/scripts/executar-script/SCRIPT.mjs --raw .pbai4devs/scripts/inspecionar-projeto/SCRIPT.mjs
 cd .pbai4devs/scripts/preparar-ferramentas
-node BOOTSTRAP.mjs --executar --raw inspecionar-projeto
+node BOOTSTRAP.mjs --executar --raw .pbai4devs/scripts/inspecionar-projeto/SCRIPT.mjs
 cd ../../..
 ```
 
@@ -52,8 +54,8 @@ esse ambiente; o kit preserva `NODE_OPTIONS` e não o remove automaticamente.
 Com Node 24+ já disponível, o seletor pode ser chamado diretamente:
 
 ```console
-node .pbai4devs/scripts/executar-script/SCRIPT.mjs --plan preparar-ferramentas
-node .pbai4devs/scripts/executar-script/SCRIPT.mjs preparar-ferramentas list
+node .pbai4devs/scripts/executar-script/SCRIPT.mjs --plan .pbai4devs/scripts/preparar-ferramentas/SCRIPT.mjs
+node .pbai4devs/scripts/preparar-ferramentas/SCRIPT.mjs list
 ```
 
 `--plan` mostra o arquivo sem executá-lo. Os argumentos e o código de saída

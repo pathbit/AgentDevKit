@@ -4,11 +4,11 @@ description: Encaminha um plano aprovado à implementação dentro do escopo.
 
 # Implementar entrega
 
-Entrada: spec aprovada, plano, responsáveis e critérios de aceite.
+Entrada: spec e plano aprovados, responsáveis e critérios de aceite.
 Confira os pré-requisitos de
 [implementar-spec](../../skills/specs/implementar-spec/SKILL.md).
-Se houver apenas uma ideia ou escopo, encaminhe ao
-[planejador](../../agents/planejador/AGENT.md) e a `criar-spec` antes de implementar.
+Se faltar aprovação ou definição, volte a
+[planejar-entrega](../planejar-entrega/COMMAND.md) pela primeira etapa pendente.
 
 Acione o [implementador](../../agents/implementador/AGENT.md) com os arquivos
 sob sua responsabilidade. Ele usa a skill, testes e ferramentas do projeto;
@@ -21,7 +21,6 @@ objetivo, dependências, arquivos exclusivos para escrita e provas esperadas.
 O agente principal integra as alterações, resolve interfaces e confere os resultados.
 Sem suporte à delegação, execute em sequência e informe essa limitação.
 
-Saída: alteração revisável, documentação e provas locais. Encaminhe ao
-[validador](../../agents/validador/AGENT.md) por
-[validar-entrega](../validar-entrega/COMMAND.md). Falhas voltam ao implementador;
-a entrega termina somente após [revisar-entrega](../revisar-entrega/COMMAND.md).
+Saída: diff, critérios, comandos de execução, provas preliminares e pendências.
+Passe esse conjunto a [validar-entrega](../validar-entrega/COMMAND.md).
+Falhas voltam ao implementador com a prova que falhou.

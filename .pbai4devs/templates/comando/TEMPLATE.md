@@ -13,3 +13,5 @@ Especifique a ordem, argumentos e efeitos. Use `executar-script` para selecionar
 scripts `.mjs` em Node.js 24+; referencie entradas e saídas sem copiar código.
 
 Saída: resultado verificável, destino dos artefatos e tratamento das falhas.
+Se houver próxima etapa, indique quando segui-la, quem recebe o resultado e
+o que precisa ser encaminhado.

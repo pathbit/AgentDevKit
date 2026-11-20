@@ -10,6 +10,7 @@ import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { gitIndexStatIdentityMatches, synchronize } from '../SCRIPT.mjs';
 import { indexContentMatches, planUntrack } from '../../lib/gitignore.mjs';
+import { nativeSkipReason } from '../../testar-infraestrutura/PLATFORM_FIXTURES.mjs';
 
 const repository = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
 const original = '.pbai4devs/skills/projeto/criar-skill/SKILL.md';
@@ -347,7 +348,7 @@ test('diagnóstico CRLF não classifica UTF-8 inválido como divergência apenas
   assert.deepEqual(readFileSync(file(root, '.git/index')), index);
 });
 
-for (const kind of ['xattr', 'acl']) test(`sync recusa apontamento CRLF com ${kind} no macOS`, { skip: process.platform !== 'darwin' }, t => {
+for (const kind of ['xattr', 'acl']) test(`sync recusa apontamento CRLF com ${kind} no macOS`, { skip: nativeSkipReason('darwin') }, t => {
   const root = fixture(t), target = file(root, pointer);
   git(root, 'config', 'core.autocrlf', 'true');
   put(root, pointer, readFileSync(target, 'utf8').replaceAll('\n', '\r\n'));
@@ -422,7 +423,7 @@ test('referência obsoleta com conversão CRLF é preservada durante limpeza', t
   assert.deepEqual(readFileSync(file(root, '.git/index')), index);
 });
 
-test('sync preserva atributo Linux ao atualizar referência CRLF ou recusa sem alterar', { skip: process.platform !== 'linux' }, t => {
+test('sync preserva atributo Linux ao atualizar referência CRLF ou recusa sem alterar', { skip: nativeSkipReason('linux') }, t => {
   const probe = spawnSync('perl', ['-e', 'require "syscall.ph"; my $x = &SYS_setxattr; my $y = &SYS_getxattr;']);
   if (probe.status !== 0) { t.skip('Perl e syscall.ph não estão disponíveis para a fixture xattr.'); return; }
   const root = fixture(t), target = file(root, pointer);
@@ -451,7 +452,7 @@ test('sync preserva atributo Linux ao atualizar referência CRLF ou recusa sem a
   assert.deepEqual(readFileSync(file(root, '.git/index')), index);
 });
 
-test('sync preserva atributo Linux em atualização comum ou recusa sem alterar', { skip: process.platform !== 'linux' }, t => {
+test('sync preserva atributo Linux em atualização comum ou recusa sem alterar', { skip: nativeSkipReason('linux') }, t => {
   const probe = spawnSync('perl', ['-e', 'require "syscall.ph"; my $x = &SYS_setxattr; my $y = &SYS_getxattr;']);
   if (probe.status !== 0) { t.skip('Perl e syscall.ph não estão disponíveis para a fixture xattr.'); return; }
   const root = fixture(t), target = file(root, pointer);
@@ -484,7 +485,7 @@ test('sync preserva atributo Linux em atualização comum ou recusa sem alterar'
   assert.deepEqual(readFileSync(file(root, '.git/index')), index);
 });
 
-test('sync avisa quando metadados Linux não foram verificados', { skip: process.platform !== 'linux' }, t => {
+test('sync avisa quando metadados Linux não foram verificados', { skip: nativeSkipReason('linux') }, t => {
   const exists = fs.existsSync;
   t.mock.method(fs, 'existsSync', path => path !== '/usr/bin/getfattr' && exists(path));
   syncBuiltinESMExports();

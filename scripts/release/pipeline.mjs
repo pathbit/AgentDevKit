@@ -3,8 +3,9 @@ import { appendFileSync, lstatSync, mkdtempSync, readFileSync, readdirSync, real
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
 import { buildRelease, releaseRoot, sha256 } from './assets.mjs';
-import { nativeGate } from './native-macos-metadata.mjs';
+import { nativeGate, verifyNativeTests } from './native-macos-metadata.mjs';
 
 export function sourceOnlyViolations(files, policy) {
   if (policy?.schemaVersion !== 1 || !Array.isArray(policy.adapters)) throw new Error('Política de clientes inválida.');
@@ -36,11 +37,51 @@ export function guardSourceOnlyGit(root, environment = process.env) {
 
 export const nodeProcessTimeoutMs = (process.platform === 'win32' ? 50 : 40) * 60 * 1000;
 
+const testEvidenceReporter = new URL(
+  '../../.pbai4devs/scripts/testar-infraestrutura/REPORTER.mjs', import.meta.url,
+).href;
+
+function checkTestEvidence(output, expectedFiles) {
+  const match = output.match(/\nADK_INFRA_EVIDENCE (\{[^\n]*\})\r?\n$/);
+  if (!match) throw new Error('Execução de testes sem resumo do runner.');
+  const { counts, observed, fileSummaries, skipped, pending } = JSON.parse(match[1]);
+  if (!counts || counts.failed || counts.cancelled || counts.todo || pending.length) {
+    throw new Error('Execução de testes contém falha, cancelamento ou TODO.');
+  }
+  const unexplained = skipped.filter(item => !item.file || !item.reason?.trim() || item.booleanSkip || item.todo);
+  if (unexplained.length) {
+    throw new Error(`Skips sem justificativa: ${unexplained.map(item => `${item.file ?? '?'}: ${item.name}`).join(', ')}`);
+  }
+  if (fileSummaries !== expectedFiles || !counts.passed || counts.tests !== observed || counts.skipped !== skipped.length
+      || counts.passed + counts.skipped !== counts.tests) {
+    throw new Error('Execução de testes sem evidência completa de cobertura.');
+  }
+}
+
 export function executeNode(root, args, env = process.env) {
-  const childEnv = { ...env }; delete childEnv.NODE_TEST_CONTEXT;
-  const result = spawnSync(process.execPath, args, { cwd: root, env: childEnv, stdio: 'inherit', timeout: nodeProcessTimeoutMs, shell: false, windowsHide: true });
-  if (result.error || result.status !== 0) {
-    throw new Error(`Falha: node ${args.join(' ')}; status=${result.status}; sinal=${result.signal || 'none'}; erro=${result.error?.code || 'none'}${result.error?.message ? ` (${result.error.message})` : ''}`);
+  const test = args[0] === '--test';
+  const reserved = test ? ['NODE_OPTIONS', 'NODE_TEST_CONTEXT', 'ADK_INFRA_ENTRY'] : ['NODE_TEST_CONTEXT'];
+  const childEnv = Object.fromEntries(Object.entries(env).filter(([key]) => !reserved.includes(key.toUpperCase())));
+  const staging = test ? mkdtempSync(join(tmpdir(), 'agentdevkit-test-evidence-')) : undefined;
+  try {
+    const evidence = test ? join(staging, 'runner.log') : undefined;
+    let command = args;
+    if (test) {
+      const displayReporter = args.find(arg => arg.startsWith('--test-reporter=')) ?? '--test-reporter=spec';
+      command = ['--test', displayReporter, '--test-reporter-destination=stdout',
+        `--test-reporter=${testEvidenceReporter}`, `--test-reporter-destination=${evidence}`,
+        ...args.slice(1).filter(arg => arg !== displayReporter)];
+    }
+    const result = spawnSync(process.execPath, command, { cwd: root, env: childEnv, stdio: 'inherit', timeout: nodeProcessTimeoutMs, shell: false, windowsHide: true });
+    if (result.error || result.status !== 0) {
+      throw new Error(`Falha: node ${args.join(' ')}; status=${result.status}; sinal=${result.signal || 'none'}; erro=${result.error?.code || 'none'}${result.error?.message ? ` (${result.error.message})` : ''}`);
+    }
+    if (test) {
+      const expectedFiles = args.slice(1).filter(arg => !arg.startsWith('--')).length;
+      checkTestEvidence(readFileSync(evidence, 'utf8'), expectedFiles);
+    }
+  } finally {
+    if (staging) rmSync(staging, { recursive: true, force: true });
   }
 }
 
@@ -108,21 +149,9 @@ export const portableProfiles = Object.freeze({
 
 export const portableSyncProfiles = Object.freeze({
   'portable-sync-core': Object.freeze(['BASE.mjs']),
-  'portable-sync-core-updates': Object.freeze(['BASE.mjs']),
+  'portable-sync-core-updates': Object.freeze(['UPDATES.mjs']),
   'portable-sync-ownership': Object.freeze(['HUMAN_OWNERSHIP.mjs', 'COEXISTENCE.mjs', 'MANAGED_CONTENT.mjs', 'CATALOG_OWNERSHIP.mjs']),
   'portable-sync-preservation': Object.freeze(['LOCAL_IGNORE.mjs', 'PRESERVATION.mjs']),
-});
-// These four cases accounted for half the Windows runtime in the completed CI run.
-const syncCoreUpdates = [
-  'metadados humanos editados bloqueiam sync; fontes sem conflito atualizam',
-  'atualiza fontes, adiciona clientes, remove recursos e migra agrupado para plano',
-  'gera manifesto e entradas sem estado e atualiza apenas entradas integralmente próprias',
-  'manifestos Antigravity acompanham skills, regras e agentes agrupados',
-].join('|');
-const syncCorePattern = `^(?:${syncCoreUpdates})$`;
-const portableSyncFilters = Object.freeze({
-  'portable-sync-core': `--test-skip-pattern=${syncCorePattern}`,
-  'portable-sync-core-updates': `--test-name-pattern=${syncCorePattern}`,
 });
 const portableProfileNames = [...Object.keys(portableProfiles), ...Object.keys(portableSyncProfiles)];
 
@@ -207,6 +236,28 @@ export function markVerified(directory, env = process.env) {
   }
 }
 
+function verifyLinuxOwnership(root, env) {
+  if (process.platform !== 'linux' || process.getuid() !== 0) {
+    throw new Error('O gate de propriedade exige Linux e permissão para trocar de UID.');
+  }
+  const fixtures = {
+    'file-modes.test.mjs': ['CLI preserva arquivo de outro proprietário antes de instalar'],
+    'recovery-store.test.mjs': [
+      'Linux root recusa UID real divergente nos três diretórios sem escrever',
+      'Linux root recusa registro de outro UID sem gravar',
+    ],
+    'sync-backup-failure.test.mjs': [
+      'sync Linux recusa arquivo de outro proprietário legível pelo grupo',
+      'sync Linux preserva o modo de leitura do próprio arquivo no backup',
+    ],
+  };
+  let passed = 0;
+  for (const [file, names] of Object.entries(fixtures)) {
+    passed += verifyNativeTests({ root, file: `tests/${file}`, names, env });
+  }
+  console.log(JSON.stringify({ platform: process.platform, passed }));
+}
+
 export function runPipeline(profile, { root = releaseRoot, env = process.env, run = executeNode, artifactOutput } = {}) {
   if (Number(process.versions.node.split('.')[0]) < 24) throw new Error('Use Node.js 24+.');
   const hub = '.pbai4devs';
@@ -221,7 +272,7 @@ export function runPipeline(profile, { root = releaseRoot, env = process.env, ru
   };
   if (profile === 'check') { check(); return; }
   if (profile === 'full') {
-    // A release must not turn the known recovery TODOs into a passing certificate.
+    // The release gate requires native recovery fixtures.
     // NODE_OPTIONS can silently filter all tests with --test-name-pattern.
     const reserved = new Set(['NODE_OPTIONS', 'ADK_STRICT_RECOVERY_TEST', 'ADK_STRICT_CLAUDE_SCOPE_TEST']);
     const strictEnv = Object.fromEntries(Object.entries(env).filter(([key]) => !reserved.has(key.toUpperCase())));
@@ -249,6 +300,7 @@ export function runPipeline(profile, { root = releaseRoot, env = process.env, ru
     console.log(JSON.stringify({ profile, version: artifact.version, sha256: artifact.sha256, staged }));
     return;
   }
+  if (profile === 'native-linux-ownership') { verifyLinuxOwnership(root, env); return; }
   if (profile === 'native-macos-metadata') {
     verifyPortableClassification(readdirSync(join(root, tests)));
     console.log(JSON.stringify(nativeGate({ root, env })));
@@ -262,9 +314,8 @@ export function runPipeline(profile, { root = releaseRoot, env = process.env, ru
   const portableArgs = ['--test-concurrency=2', ...reporter];
   if (Object.hasOwn(portableSyncProfiles, profile)) {
     const files = portableSyncProfiles[profile];
-    const filters = Object.hasOwn(portableSyncFilters, profile) ? [portableSyncFilters[profile]] : [];
     console.log(`Perfil ${profile}: ${files.join(', ')}`);
-    run(root, ['--test', ...portableArgs, ...filters, ...files.map(file => `${hub}/scripts/sincronizar-agentes/tests/${file}`)], env);
+    run(root, ['--test', ...portableArgs, ...files.map(file => `${hub}/scripts/sincronizar-agentes/tests/${file}`)], env);
     return;
   }
   if (Object.hasOwn(portableProfiles, profile)) {
@@ -281,7 +332,7 @@ export function runPipeline(profile, { root = releaseRoot, env = process.env, ru
     for (const flag of ['--help', '--version']) run(root, ['bin/agentdevkit.mjs', flag], env);
     return;
   }
-  throw new Error(`Use full, portable, ${portableProfileNames.join(', ')}, native-macos-metadata, smoke ou check.`);
+  throw new Error(`Use full, portable, ${portableProfileNames.join(', ')}, native-macos-metadata, native-linux-ownership, smoke ou check.`);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

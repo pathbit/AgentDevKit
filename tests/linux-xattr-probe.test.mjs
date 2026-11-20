@@ -4,13 +4,16 @@ import fs from 'node:fs';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { syncBuiltinESMExports } from 'node:module';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { applyPlan, planInstallation } from '../src/install.mjs';
 import { synchronize } from '../.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs';
 import { classifyXattr, inspectLinuxXattr } from '../.pbai4devs/scripts/lib/xattr-probe.mjs';
+
+const linuxOnly = process.platform !== 'linux' && 'A consulta exige as ferramentas e os atributos estendidos nativos do Linux.';
+const linuxCliOnly = linuxOnly || Number(process.versions.node.split('.')[0]) < 24 && 'A CLI e o sincronizador requerem Node.js 24 ou superior.';
 
 function skipUnavailable(t, reason) {
   if (process.env.ADK_REQUIRE_LINUX_XATTR === '1') assert.fail(reason);
@@ -24,7 +27,7 @@ test('classificação recusa erros e distingue saída vazia e não vazia', () =>
   for (const invalid of [{ ...result, status: 1 }, { ...result, stderr: Buffer.from('erro') }, { ...result, signal: 'SIGTERM' }, { ...result, error: new Error('falha') }, null]) assert.equal(classifyXattr(invalid), 'unknown');
 });
 
-test('consulta Linux identifica atributo e falha fechada sem expor seu valor', { skip: process.platform !== 'linux' }, t => {
+test('consulta Linux identifica atributo e falha fechada sem expor seu valor', { skip: linuxOnly }, t => {
   if (spawnSync('/usr/bin/getfattr', ['--version']).error || spawnSync('/usr/bin/setfattr', ['--version']).error) { skipUnavailable(t, 'Ferramentas attr indisponíveis.'); return; }
   const root = mkdtempSync(join(tmpdir(), 'adk-xattr-probe-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -37,7 +40,7 @@ test('consulta Linux identifica atributo e falha fechada sem expor seu valor', {
   assert.equal(inspectLinuxXattr(join(root, 'ausente')), 'unknown');
 });
 
-test('consulta Linux identifica ACL POSIX listável', { skip: process.platform !== 'linux' }, t => {
+test('consulta Linux identifica ACL POSIX listável', { skip: linuxOnly }, t => {
   if (spawnSync('/usr/bin/getfattr', ['--version']).error || spawnSync('/usr/bin/setfacl', ['--version']).error) { skipUnavailable(t, 'Ferramentas attr ou acl indisponíveis.'); return; }
   const root = mkdtempSync(join(tmpdir(), 'adk-acl-probe-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -48,7 +51,7 @@ test('consulta Linux identifica ACL POSIX listável', { skip: process.platform !
   assert.equal(inspectLinuxXattr(file), 'present');
 });
 
-test('instalador atualiza os bytes e preserva o atributo Linux preexistente', { skip: process.platform !== 'linux' || Number(process.versions.node.split('.')[0]) < 24 }, t => {
+test('instalador atualiza os bytes e preserva o atributo Linux preexistente', { skip: linuxCliOnly }, t => {
   if (spawnSync('/usr/bin/getfattr', ['--version']).error || spawnSync('/usr/bin/setfattr', ['--version']).error) { skipUnavailable(t, 'Ferramentas attr indisponíveis.'); return; }
   const root = mkdtempSync(join(tmpdir(), 'adk-install-xattr-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -63,7 +66,7 @@ test('instalador atualiza os bytes e preserva o atributo Linux preexistente', { 
   assert.equal(attribute.stdout, 'valor-sintetico');
 });
 
-test('instalador recusa atributo Linux adicionado antes da publicação', { skip: process.platform !== 'linux' || Number(process.versions.node.split('.')[0]) < 24 }, t => {
+test('instalador recusa atributo Linux adicionado antes da publicação', { skip: linuxCliOnly }, t => {
   if (spawnSync('/usr/bin/getfattr', ['--version']).error || spawnSync('/usr/bin/setfattr', ['--version']).error) { skipUnavailable(t, 'Ferramentas attr indisponíveis.'); return; }
   const root = mkdtempSync(join(tmpdir(), 'adk-xattr-publication-'));
   t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); rmSync(root, { recursive: true, force: true }); });
@@ -91,7 +94,7 @@ test('instalador recusa atributo Linux adicionado antes da publicação', { skip
   assert.equal(attribute.stdout, 'fixture');
 });
 
-test('sync recusa atributo Linux adicionado antes da publicação', { skip: process.platform !== 'linux' || Number(process.versions.node.split('.')[0]) < 24 }, t => {
+test('sync recusa atributo Linux adicionado antes da publicação', { skip: linuxCliOnly }, t => {
   if (spawnSync('/usr/bin/getfattr', ['--version']).error || spawnSync('/usr/bin/setfattr', ['--version']).error) { skipUnavailable(t, 'Ferramentas attr indisponíveis.'); return; }
   const root = mkdtempSync(join(tmpdir(), 'adk-sync-xattr-publication-'));
   t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); rmSync(root, { recursive: true, force: true }); });
@@ -130,7 +133,7 @@ test('sync recusa atributo Linux adicionado antes da publicação', { skip: proc
   assert.equal(attribute.stdout, 'fixture');
 });
 
-test('instalador preserva atributo Linux adicionado antes da remoção', { skip: process.platform !== 'linux' || Number(process.versions.node.split('.')[0]) < 24 }, t => {
+test('instalador preserva atributo Linux adicionado antes da remoção', { skip: linuxCliOnly }, t => {
   if (spawnSync('/usr/bin/getfattr', ['--version']).error || spawnSync('/usr/bin/setfattr', ['--version']).error) { skipUnavailable(t, 'Ferramentas attr indisponíveis.'); return; }
   const root = mkdtempSync(join(tmpdir(), 'adk-xattr-remove-'));
   t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); rmSync(root, { recursive: true, force: true }); });
@@ -158,7 +161,7 @@ test('instalador preserva atributo Linux adicionado antes da remoção', { skip:
   assert.equal(attribute.stdout, 'fixture');
 });
 
-test('sync preserva atributo Linux adicionado antes da remoção', { skip: process.platform !== 'linux' || Number(process.versions.node.split('.')[0]) < 24 }, t => {
+test('sync preserva atributo Linux adicionado antes da remoção', { skip: linuxCliOnly }, t => {
   if (spawnSync('/usr/bin/getfattr', ['--version']).error || spawnSync('/usr/bin/setfattr', ['--version']).error) { skipUnavailable(t, 'Ferramentas attr indisponíveis.'); return; }
   const root = mkdtempSync(join(tmpdir(), 'adk-sync-xattr-remove-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -193,7 +196,7 @@ test('sync preserva atributo Linux adicionado antes da remoção', { skip: proce
   assert.equal(attribute.stdout, 'fixture');
 });
 
-test('novo plano Linux preserva o atributo detectado e recusa o plano anterior', { skip: process.platform !== 'linux' || Number(process.versions.node.split('.')[0]) < 24, timeout: 120000 }, t => {
+test('novo plano Linux preserva o atributo detectado e recusa o plano anterior', { skip: linuxCliOnly, timeout: 120000 }, t => {
   if (spawnSync('/usr/bin/getfattr', ['--version']).error || spawnSync('/usr/bin/setfattr', ['--version']).error) { skipUnavailable(t, 'Ferramentas attr indisponíveis.'); return; }
   const root = mkdtempSync(join(tmpdir(), 'adk-plan-xattr-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -228,12 +231,21 @@ test('novo plano Linux preserva o atributo detectado e recusa o plano anterior',
   assert.equal(attribute.stdout, 'valor-sintetico');
 });
 
-test('CLI informa metadados não verificados quando getfattr está ausente', { skip: process.platform !== 'linux' || Number(process.versions.node.split('.')[0]) < 24, timeout: 120000 }, t => {
-  if (existsSync('/usr/bin/getfattr')) { t.skip('A fixture exige imagem sem getfattr.'); return; }
+test('CLI informa metadados não verificados quando getfattr está ausente', { skip: linuxCliOnly, timeout: 120000 }, t => {
   const root = mkdtempSync(join(tmpdir(), 'adk-no-getfattr-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const repo = resolve(dirname(fileURLToPath(import.meta.url)), '..'), cli = join(repo, 'bin/agentdevkit.mjs');
-  const run = args => spawnSync(process.execPath, [cli, ...args, '--target', root, '--json'], { encoding: 'utf8', timeout: 60000, maxBuffer: 8 * 1024 * 1024 });
+  const hook = join(root, 'without-getfattr.mjs');
+  writeFileSync(hook, `
+import fs from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
+const exists = fs.existsSync;
+fs.existsSync = path => path !== '/usr/bin/getfattr' && exists(path);
+syncBuiltinESMExports();
+`);
+  const run = args => spawnSync(process.execPath, ['--import', pathToFileURL(hook).href, cli, ...args, '--target', root, '--json'], {
+    encoding: 'utf8', timeout: 60000, maxBuffer: 8 * 1024 * 1024,
+  });
   assert.equal(run(['init', '--agents', 'claude', '--yes']).status, 0);
   const pointer = '.claude/skills/criar-skill/SKILL.md', file = join(root, pointer), source = join(root, '.pbai4devs/skills/projeto/criar-skill/SKILL.md');
   const original = readFileSync(file), currentSource = readFileSync(source, 'utf8');

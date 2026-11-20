@@ -46,21 +46,40 @@ test('o gate de infraestrutura exige execução completa dos testes da plataform
   const skip = {
     name: 'ACL herdada no diretório de logs interrompe antes de executar suítes',
     file: '.pbai4devs/scripts/testar-infraestrutura/tests/TEST.mjs',
-    kind: 'test', event: 'test:pass', reason: null, booleanSkip: true, todo: false,
+    kind: 'test', event: 'test:pass',
+    reason: 'Requer macOS para verificar ACLs e atributos nativos.',
+    booleanSkip: false, todo: false,
   };
   const counts = { tests: 3, passed: 2, failed: 0, cancelled: 0, skipped: 1, todo: 0 };
   const evidence = { observed: 3, fileSummaries: 1, counts, skipped: [skip], pending: [] };
   const suite = { status: 'partial', name: 'testar-infraestrutura', log: 'infra.log', evidence };
+  const original = structuredClone(suite);
   assert.doesNotThrow(() => verifyInfrastructure({ suites: [suite] }, 'linux'));
+  assert.deepEqual(suite, original);
   assert.throws(() => verifyInfrastructure({ suites: [suite] }, 'darwin'), /infra.log/);
   for (const invalid of [
     { ...evidence, skipped: [{ ...skip, file: 'other.mjs' }] },
-    { ...evidence, skipped: [{ ...skip, reason: 'ferramenta ausente', booleanSkip: false }] },
+    { ...evidence, skipped: [{ ...skip, name: 'outro teste' }] },
+    { ...evidence, skipped: [{ ...skip, reason: 'ferramenta ausente' }] },
+    { ...evidence, skipped: [{ ...skip, reason: null, booleanSkip: true }] },
+    { ...evidence, skipped: [skip, skip], counts: { ...counts, passed: 1, skipped: 2 } },
+    { ...evidence, observed: 2 },
     { ...evidence, pending: [{ name: 'outro teste' }] },
     { ...evidence, counts: { ...counts, skipped: 2 } },
     { ...evidence, counts: { ...counts, tests: 1, passed: 0 } },
   ]) {
     assert.throws(() => verifyInfrastructure({ suites: [{ ...suite, evidence: invalid }] }, 'linux'), /infra.log/);
+  }
+});
+
+test('o gate exige suítes e confere a evidência mesmo quando o status é aprovado', () => {
+  const counts = { tests: 2, passed: 2, failed: 0, cancelled: 0, skipped: 0, todo: 0 };
+  const evidence = { observed: 2, fileSummaries: 1, counts, skipped: [], pending: [] };
+  const suite = { status: 'passed', name: 'arbitrária', log: 'infra.log', evidence };
+  assert.throws(() => verifyInfrastructure({ suites: [] }), /não inclui suítes/);
+  assert.doesNotThrow(() => verifyInfrastructure({ suites: [suite] }));
+  for (const invalid of [undefined, { ...evidence, skipped: [{ name: 'ignorado' }] }, { ...evidence, observed: 1 }]) {
+    assert.throws(() => verifyInfrastructure({ suites: [{ ...suite, evidence: invalid }] }), /infra.log/);
   }
 });
 
@@ -182,36 +201,17 @@ test('perfis portáteis cobrem cada suíte uma vez e o comando local executa tod
   }
   const syncDir = '.pbai4devs/scripts/sincronizar-agentes/tests';
   const syncModules = Object.values(portableSyncProfiles).flat();
-  const distinctSyncModules = [...new Set(syncModules)];
-  assert.equal(syncModules.length, distinctSyncModules.length + 1);
-  assert.equal(syncModules.filter(file => file === 'BASE.mjs').length, 2);
+  assert.equal(new Set(syncModules).size, syncModules.length);
   const aggregate = readFileSync(join(root, syncDir, 'TEST.mjs'), 'utf8');
   const imported = [...aggregate.matchAll(/^import '\.\/([^']+)';$/gm)].map(match => match[1]);
-  assert.deepEqual(distinctSyncModules.toSorted(), imported.toSorted());
-  assert.deepEqual(distinctSyncModules.toSorted(), readdirSync(join(root, syncDir)).filter(file => file.endsWith('.mjs') && file !== 'TEST.mjs').sort());
-  const syncFilters = new Map();
+  assert.deepEqual(syncModules.toSorted(), imported.toSorted());
+  assert.deepEqual(syncModules.toSorted(), readdirSync(join(root, syncDir)).filter(file => /^[A-Z_]+\.mjs$/.test(file) && file !== 'TEST.mjs').sort());
   for (const [profile, files] of Object.entries(portableSyncProfiles)) {
     const group = [];
     runPipeline(profile, { root, env: {}, run(_root, args) { group.push(args); } });
-    const command = ['--test', '--test-concurrency=2', ...files.map(file => `${syncDir}/${file}`)];
-    if (files.includes('BASE.mjs')) {
-      assert.equal(group.length, 1);
-      syncFilters.set(profile, group[0][2]);
-      assert.deepEqual(group[0].toSpliced(2, 1), command);
-    } else {
-      assert.deepEqual(group, [command]);
-    }
+    assert.deepEqual(group, [['--test', '--test-concurrency=2', ...files.map(file => `${syncDir}/${file}`)]]);
     calls.push(...group);
   }
-  const excludePrefix = '--test-skip-pattern=';
-  const excluded = syncFilters.get('portable-sync-core');
-  assert.ok(excluded.startsWith(excludePrefix));
-  const pattern = excluded.slice(excludePrefix.length);
-  assert.equal(syncFilters.get('portable-sync-core-updates'), `--test-name-pattern=${pattern}`);
-  const syncCore = readFileSync(join(root, syncDir, 'BASE.mjs'), 'utf8');
-  const testNames = [...syncCore.matchAll(/^test\('([^']+)'/gm)].map(match => match[1]);
-  const updateCase = new RegExp(pattern);
-  assert.equal(testNames.filter(name => updateCase.test(name)).length, 4);
   const individual = calls.splice(0);
   runPipeline('portable', options);
   assert.deepEqual(calls, individual);
@@ -281,6 +281,29 @@ test('perfil completo não aceita filtro herdado que oculte testes', t => {
     },
   }), error => error === stop);
   assert.equal(executed, true);
+});
+
+test('gate do runner recusa TODO, skip sem motivo e execução sem prova, e preserva a justificativa', t => {
+  const directory = fixture(t);
+  const runner = join(directory, 'gate.mjs');
+  const passed = "test('executado', () => {});";
+  const scenarios = [
+    [`${passed} test('nativo', { skip: 'A fixture requer outro sistema.' }, () => {});`],
+    [`${passed} test('sem motivo', { skip: true }, () => {});`, /Skips sem justificativa.*sem motivo/],
+    [`${passed} test('em aberto', { todo: 'pendência' }, () => {});`, /contém falha, cancelamento ou TODO/],
+    ["export {};", /sem evidência completa/],
+    ["test('nenhuma prova', { skip: 'A fixture requer outro sistema.' }, () => {});", /sem evidência completa/],
+  ];
+  for (const [cases, expected] of scenarios) {
+    writeFileSync(runner, `import test from 'node:test'; ${cases}\n`);
+    const run = () => executeNode(directory, ['--test', runner], { ...process.env, NODE_OPTIONS: '--test-name-pattern=ausente' });
+    if (expected) assert.throws(run, expected);
+    else assert.doesNotThrow(run);
+  }
+  writeFileSync(runner, `import test from 'node:test'; ${passed}\n`);
+  const empty = join(directory, 'empty.mjs');
+  writeFileSync(empty, 'export {};\n');
+  assert.throws(() => executeNode(directory, ['--test', runner, empty]), /sem evidência completa/);
 });
 
 test('as suítes de obstrução particionam os cinco casos sem duplicar cobertura', () => {

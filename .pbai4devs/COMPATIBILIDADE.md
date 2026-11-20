@@ -35,8 +35,9 @@ salva; sem ambas, usa `all`. Não há detecção automática do agente em execu�
 Aliases de IDs: `vscode` → `copilot`, `claude-code` → `claude`,
 `kimi-code` → `kimi`, `xiaomi` → `mimo`. Nomes de pastas não são IDs.
 Pastas compartilhadas permanecem se algum escolhido precisar delas.
-`.vscode` recebe apenas seu `.gitignore` local. O hub continua completo;
-seleção altera derivações, sem apagar arquivos próprios dos clientes.
+`.vscode` pode conter configurações do projeto. O kit preserva seu ignore
+existente e deriva recursos do Copilot em `.github`. O hub continua completo
+mesmo com poucos clientes selecionados.
 
 ## Formatos nativos
 

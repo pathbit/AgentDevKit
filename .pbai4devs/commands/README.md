@@ -4,6 +4,9 @@ description: Casos de uso para acionar skills, scripts e ferramentas compartilha
 
 # Comandos
 
+Escolha o primeiro comando pelo resultado no [guia de uso](../INSTRUCTIONS.md).
+As etapas seguintes e o que repassar ficam no próprio caso de uso.
+
 Cada `<nome>/COMMAND.md` é a entrada de um caso de uso: informa entrada,
 pré-requisitos, execução e saída. A skill orienta as decisões; o script executa
 a automação; a ferramenta fornece a capacidade. Referencie-os sem copiar suas

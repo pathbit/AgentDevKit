@@ -55,7 +55,7 @@ test('recusa criação concorrente da raiz durante a inspeção', t => {
   assert.equal(checks, 2); assert.equal(fs.existsSync(target), false);
 });
 
-test('captura ações e ancestrais e produz backup verificável sem alterar arquivos', { skip: process.platform === 'win32' }, t => {
+test('captura ações e ancestrais e produz backup verificável sem alterar arquivos', { skip: process.platform === 'win32' && 'fixture de backup requer modo POSIX' }, t => {
   const root = fixture(t), backup = fixture(t);
   fs.mkdirSync(join(root, 'docs'));
   const data = Buffer.from([0, 255, 128, 10]);
@@ -149,7 +149,7 @@ test('recusa edição durante a leitura em vez de registrar snapshot inconsisten
   assert.equal(changed, true); assert.equal(fs.readFileSync(path, 'utf8'), 'alterado');
 });
 
-test('troca de ancestral por link é detectada antes da leitura do arquivo externo', { skip: process.platform === 'win32' }, t => {
+test('troca de ancestral por link é detectada antes da leitura do arquivo externo', { skip: process.platform === 'win32' && 'fixture de link requer ambiente POSIX' }, t => {
   const root = fixture(t), outside = fixture(t), directory = join(root, 'docs');
   fs.mkdirSync(directory); fs.writeFileSync(join(directory, 'arquivo'), 'interno');
   const external = join(outside, 'arquivo'); fs.writeFileSync(external, 'externo');
@@ -177,8 +177,6 @@ test('troca de ancestral por link é detectada antes da leitura do arquivo exter
 const earlySwap = 'troca anterior ao lstat do arquivo não lê conteúdo externo';
 if (process.platform === 'win32') {
   test(earlySwap, { skip: 'fixture de link requer ambiente POSIX' });
-} else if (process.env.ADK_STRICT_RECOVERY_TEST !== '1') {
-  test(earlySwap, { todo: 'captura por caminhos ainda permite leitura por ancestral trocado' });
 } else {
   test(earlySwap, t => {
     const root = fixture(t), outside = fixture(t), directory = join(root, 'docs');

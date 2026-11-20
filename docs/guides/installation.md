@@ -37,9 +37,8 @@ bun x @pathbit/agentdevkit init
 ```
 
 As quatro formas foram exercitadas no macOS com a versão `0.0.30` publicada.
-Nessa versão, `init` alterou `.git/info/exclude` nas fixtures testadas; a
-preservação desse arquivo precisa ser validada na próxima publicação. Com Yarn,
-`yarn dlx -q` evita mensagens do gerenciador antes de uma resposta `--json`.
+O contrato de preservação da versão atual está em [Git e migração](#git-e-migração).
+Com Yarn, `yarn dlx -q` evita mensagens do gerenciador antes da saída `--json`.
 
 Para escolher explicitamente esse registry:
 
@@ -92,8 +91,8 @@ npx @pathbit/agentdevkit sync --check
 ```
 
 Se escolheu GitHub Packages, use o mesmo prefixo
-`npx --registry=https://npm.pkg.github.com` nesses comandos. Para fixar a versão,
-use `@pathbit/agentdevkit@0.0.12` no lugar do nome sem versão, em qualquer destino.
+`npx --registry=https://npm.pkg.github.com` nesses comandos. Para fixar uma
+versão, acrescente-a ao nome do pacote, como `@pathbit/agentdevkit@0.0.31`.
 O próximo passo é [preparar as ferramentas](prerequisites.md#depois-de-instalar-o-kit).
 
 ## O que fica no projeto

@@ -58,6 +58,17 @@ test('instalacao leva o ecossistema de seguranca sem baixar scanners nem sobresc
   await cli(root, ['sync', '--check']);
   const checked = spawnSync(process.execPath, [join(root, '.pbai4devs/scripts/verificar-recursos/SCRIPT.mjs')], { encoding: 'utf8', timeout: 180000 });
   assert.equal(checked.status, 0, `verificar-recursos: ${checked.error?.stack || ''}\nsignal: ${checked.signal || 'none'}\n${checked.stdout || ''}${checked.stderr || ''}`);
+  writeFileSync(join(root, '.gitignore'), '.agent-tests/\n');
+  const partial = spawnSync(process.execPath, [
+    '.pbai4devs/scripts/auditar-seguranca/SCRIPT.mjs', 'run', '--checks', 'secrets',
+  ], { cwd: root, encoding: 'utf8', timeout: 30000 });
+  assert.equal(partial.status, 2, partial.error?.message || partial.stderr);
+  const summary = JSON.parse(partial.stdout);
+  const report = JSON.parse(readFileSync(join(root, summary.report), 'utf8'));
+  assert.equal(summary.offline, true);
+  assert.equal(report.status, 'incomplete');
+  assert.deepEqual(report.checks.map(({ check, status }) => [check, status]), [['secrets', 'not-run']]);
+  assert.equal(existsSync(join(root, '.pbai4devs/tools/gitleaks/.local')), false);
   await cli(root, ['update']);
   assert.ok(readFileSync(join(root, custom), 'utf8').startsWith(own));
   assert.equal(existsSync(join(root, 'docs')), false, 'Guias do produto nao sao copiados ao consumidor.');

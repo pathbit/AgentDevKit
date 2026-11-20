@@ -21,8 +21,7 @@ permanecer fora do commit sem remover a versão preparada. Consulte o comando
 use o seletor para `revisar-entrega check-commit <relatorio> [outros-relatorios...]`:
 
 ```sh
-node .pbai4devs/scripts/executar-script/SCRIPT.mjs --raw \
-  revisar-entrega check-commit <relatorio>
+node .pbai4devs/scripts/revisar-entrega/SCRIPT.mjs check-commit <relatorio>
 ```
 
 Substitua `<relatorio>` pelo caminho do arquivo e acrescente outros relatórios

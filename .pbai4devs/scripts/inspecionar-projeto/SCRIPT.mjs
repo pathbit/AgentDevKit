@@ -19,7 +19,7 @@ const manifests = new Map([
   ['Package.swift', 'swift'], ['CMakeLists.txt', 'cpp']
 ]);
 const locks = new Set(['package-lock.json', 'npm-shrinkwrap.json', 'pnpm-lock.yaml', 'yarn.lock', 'bun.lock', 'bun.lockb', 'deno.lock', 'uv.lock', 'poetry.lock', 'Pipfile.lock', 'Cargo.lock', 'go.sum', 'composer.lock', 'Gemfile.lock', 'mix.lock', 'pubspec.lock', 'Package.resolved', 'packages.lock.json', 'gradle.lockfile']);
-const requiredDirectories = ['.pbai4devs', '.vscode', 'src', 'tests', 'infra'];
+const requiredDirectories = ['.pbai4devs', 'src', 'tests', 'infra'];
 function agentRoots(root) {
   const file = path.join(root, '.pbai4devs/espelhos.conf');
   if (!present(root, '.pbai4devs/espelhos.conf', false)) return defaultAgents;

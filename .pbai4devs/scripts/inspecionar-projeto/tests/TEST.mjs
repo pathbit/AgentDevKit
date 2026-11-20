@@ -185,7 +185,7 @@ test('descobre linguagens e comandos sem expor valores nem executar Python', t =
 
 test('aceita estrutura completa e raízes de agentes configuradas', t => {
   const { directory, file, run } = fixture(t);
-  for (const name of ['.pbai4devs', '.agents', '.agent', '.gemini', '.claude', '.codex', '.cursor', '.github', '.opencode', '.vscode', 'src', 'tests', 'infra']) directory(name);
+  for (const name of ['.pbai4devs', '.agents', '.agent', '.gemini', '.claude', '.codex', '.cursor', '.github', '.opencode', 'src', 'tests', 'infra']) directory(name);
   for (const name of ['.gitignore', '.gitattributes', '.editorconfig', '.dockerignore', 'README.md', 'Makefile']) file(name);
   file('infra/compose/docker-compose.local.yml', 'services: {}\n');
   const result = run('--check');
@@ -198,6 +198,14 @@ test('aceita estrutura completa e raízes de agentes configuradas', t => {
   assert.equal(configured.status, 0, configured.stderr);
   assert.ok(configured.report.structure.present.includes('.dsh'));
   assert.ok(!configured.report.manifests.some(name => name.startsWith('.dsh/')));
+  file('.pbai4devs/espelhos.conf', 'agente|.github|plano\nagente|.dsh|plano\ngitignore|.vscode\n');
+  assert.equal(run('--check').status, 0, 'Uma entrada de ignore não exige a pasta do editor.');
+  file('.pbai4devs/espelhos.conf', 'agente|.github|plano\nagente|.dsh|plano\nagente|.vscode|plano\n');
+  const missingEditor = run('--check');
+  assert.equal(missingEditor.status, 1);
+  assert.deepEqual(missingEditor.report.structure.missing, ['.vscode']);
+  directory('.vscode');
+  assert.equal(run('--check').status, 0);
 });
 
 test('manifests inválidos geram aviso sem revelar seu conteúdo', t => {
@@ -231,7 +239,7 @@ test('classifica sinais de maturidade sem confundir planejamento com produto fun
   assert.equal(run().report.maturity.level, 'planejado');
   file('package.json', '{"scripts":{"test":"node --test"}}'); file('src/main.mjs', 'export const answer = 42;');
   assert.equal(run().report.maturity.level, 'implementacao');
-  for (const name of ['.agents', '.agent', '.gemini', '.claude', '.codex', '.cursor', '.github', '.opencode', '.vscode', 'tests', 'infra']) directory(name);
+  for (const name of ['.agents', '.agent', '.gemini', '.claude', '.codex', '.cursor', '.github', '.opencode', 'tests', 'infra']) directory(name);
   for (const name of ['.gitignore', '.gitattributes', '.editorconfig', '.dockerignore', 'README.md', 'Makefile']) file(name);
   file('infra/compose/compose.local.yml', 'services: {}\n'); state('concluido');
   assert.equal(run('--check').report.maturity.level, 'configurado');

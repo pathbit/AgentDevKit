@@ -34,7 +34,8 @@ descoberta automaticamente, peça leitura explícita da fonte compartilhada.
 O agente principal distribui o contexto, limita os arquivos de cada tarefa
 e reúne os resultados. Um perfil não precisa chamar outro diretamente:
 quando o cliente proíbe delegação aninhada, devolva o próximo passo ao principal.
-Veja os [catálogo de comandos](../commands/README.md).
+Veja o [catálogo de comandos](../commands/README.md) para saber qual fluxo
+aciona cada papel e quais resultados ele recebe.
 
 Sidecars limitam ferramentas onde o formato permite. O planejador usa leitura;
 os validadores têm terminal para produzir evidências, sem editar fontes.

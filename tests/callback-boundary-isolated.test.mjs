@@ -15,7 +15,10 @@ for (const [variant,via] of [['plain','plan'],['frozen','plan'],['getter','plan'
   const root=fixture(t),source='.pbai4devs/skills/projeto/configurar-projeto/SKILL.md',target='.agents/skills/projeto/configurar-projeto/SKILL.md';
   const git=(...args)=>{const r=spawnSync('git',['-C',root,...args],{encoding:'utf8'});assert.equal(r.status,0,r.stderr)};
   put(root,'.gitignore','# sintético\n');put(root,'humano.txt','staged\n');git('add','--','.gitignore','humano.txt');put(root,'humano.txt','staged\nlocal\n');cli(root,['init','--agents','codex']);
-  const text=fs.readFileSync(join(root,source),'utf8');assert(text.includes('description: Prepara um projeto'));put(root,source,text.replace('description: Prepara um projeto','description: Organiza um projeto'));
+  const text = fs.readFileSync(join(root, source), 'utf8');
+  const edited = text.replace(/^description: .+$/m, 'description: Alteração sintética para o teste.');
+  assert.notEqual(edited, text, 'a fixture deve alterar a descrição da skill');
+  put(root, source, edited);
   const sync=spawnSync(process.execPath,[join(root,'.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs'),'--root',root],{cwd:root,encoding:'utf8',timeout:180000});assert.equal(sync.status,0,sync.stderr);
   const paths=[target,source,'humano.txt','.gitignore','.git/index','.git/config','.git/info/exclude','.pbai4devs/state/agentdevkit.json','.pbai4devs/state/derived.json'];const before=new Map(paths.map(p=>[p,fs.readFileSync(join(root,p))]));
   const scratch=fs.realpathSync(fs.mkdtempSync(join(tmpdir(),'adk-callback-isolated-'))); const saved=Object.fromEntries(['TMPDIR','TMP','TEMP'].map(k=>[k,process.env[k]]));for(const k of Object.keys(saved))process.env[k]=scratch;

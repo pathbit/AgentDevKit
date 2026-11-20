@@ -397,9 +397,9 @@ metadados, mas permitiu contornar a ACL e não protegeu a publicação contra
 troca de ancestral; não é uma correção integrada ou validada.
 Seis regressões adicionais, em `init`, `update` com legado sintético e `sync`,
 exigem recusa relacionada ao alvo protegido por ACL ou `uchg` e comparam o
-estado observado ao final. Elas falham na implementação atual; o snapshot
-exclui `.agent-tests` e não detecta mudanças transitórias revertidas. O modo
-padrão as registra como TODO, sem executar as fixtures.
+estado observado ao final. No diagnóstico inicial, falhavam em modo estrito
+e eram TODO no modo padrão. As fixtures atuais executam em macOS. O snapshot
+exclui `.agent-tests` e não detecta mudanças transitórias revertidas.
 Uma cópia experimental abriu, sem gravar, arquivos existentes previstos para
 atualização antes das mutações. As seis fixtures de ACL e `uchg` passaram no
 macOS, mas três testes históricos deixaram de alcançar o rollback de arquivos
@@ -412,9 +412,8 @@ atualização experimental, mas deixou de existir no arquivo resultante. Isso n�
 comprova o comportamento de outras ACLs ou filesystems. Duas regressões no
 produto atual também reproduziram essa perda no instalador e no sync; o gate
 nativo exige preservação ou recusa segura antes de aceitar uma release.
-A execução
-padrão registra TODOs sem executar as fixtures e não comprova a correção. Os
-logs locais existentes são evidência da reprodução, não de aceite aprovado.
+Os logs do diagnóstico inicial registram a reprodução. O gate atual
+executa as fixtures aplicáveis e exige as provas nativas antes da release.
 Uma revisão estática independente de trechos e das duas specs recomendou
 acrescentar controle negativo ao oráculo, testar backup e registros incompletos
 e reconciliar explicitamente o contrato histórico. Essas recomendações exigem
@@ -471,11 +470,10 @@ O protocolo e a forma de resolução ainda precisam ser definidos e testados.
 [PRD](../../product/prd.md), [UX/UI](../../product/ux-ui.md) e
 [design](../../product/design.md) constam como aprovados;
 [roadmap](../../product/roadmap.md) registra a recuperação como pendente e
-separa a concorrência durante a aplicação. A
-[configuração do projeto](../../../.pbai4devs/state/configuracao/ESTADO.md)
-registra preparação e configuração técnica local concluídas, com falhas de
-produto ainda abertas. Após correção do caminho
-configurado das specs, a inspeção documental local terminou sem avisos e com
+separa a concorrência durante a aplicação. O estado local em
+`.pbai4devs/state/configuracao/ESTADO.md` registra preparação e configuração
+técnica local concluídas, com falhas de produto ainda abertas. Após corrigir
+o caminho das specs, a inspeção documental local terminou sem avisos e com
 `scan.complete: true`; o inventário não substitui a leitura nem a aprovação.
 
 Esta spec está em rascunho: revisão técnica e decisões permanecem pendentes.

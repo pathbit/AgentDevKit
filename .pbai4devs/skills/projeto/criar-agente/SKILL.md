@@ -8,6 +8,7 @@ description: Cria ou atualiza perfis compartilhados de agentes e apontamentos.
 Defina papel, quando delegar, entrada, resultado, ferramentas e limites. Crie
 ou atualize `.pbai4devs/agents/<nome>/AGENT.md`, com metadados apropriados e perfil
 conciso. Preserve instruções e permissões existentes.
+Vincule as skills pertinentes e diga ao perfil a quem devolver resultados.
 
 Mapeie modo e permissões nos YAMLs nativos ao lado da fonte; mantenha o
 cabeçalho compartilhado portátil. Quando houver suporte,

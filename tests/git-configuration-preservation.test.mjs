@@ -194,7 +194,10 @@ test('diagnósticos percorrem agregados e ciclos com limites e deduplicação', 
   assert.equal(collectErrorDiagnostics(huge).truncated, true);
 });
 
-test('init/update/sync funcionam em repositório com espaço final', { skip: process.platform === 'win32', timeout: 120000 }, t => {
+test('init/update/sync funcionam em repositório com espaço final', {
+  skip: process.platform === 'win32' ? 'A API Win32 usada pela fixture normaliza espaços no fim do nome.' : false,
+  timeout: 120000,
+}, t => {
   const space = mkdtempSync(join(tmpdir(), 'adk-trailing-space-')); t.after(() => rmSync(space, { recursive: true, force: true }));
   const root = join(space, 'repo '); mkdirSync(root); git(root, 'init', '-q', '-b', 'main');
   put(root, 'human.txt', 'conteúdo staged\n'); git(root, 'add', 'human.txt');
@@ -1032,7 +1035,10 @@ test('backup do sync copia arquivo grande em blocos e conserva modo e bytes', { 
   assert.ok(reads >= 4); assert.equal(maximum, 65536);
 });
 
-test('backup do sync recusa troca da origem por link antes da abertura', { timeout: 120000, skip: process.platform === 'win32' }, t => {
+test('backup do sync recusa troca da origem por link antes da abertura', {
+  skip: process.platform === 'win32' ? 'A fixture cria um link simbólico de arquivo, que exige privilégio específico no Windows.' : false,
+  timeout: 120000,
+}, t => {
   const root = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-backup-source-link-')));
   const external = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-backup-source-external-')));
   t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); rmSync(root, { recursive: true, force: true }); rmSync(external, { recursive: true, force: true }); });
@@ -1835,12 +1841,18 @@ for (const kind of ['EEXIST', 'falha ambígua de abertura', 'EEXIST com conteúd
   assert.deepEqual(readFileSync(destination), bytes);
 });
 
-test('NTFS protege short name arbitrário existente e removido', { skip: process.platform !== 'win32', timeout: 120000 }, t => {
+test('NTFS protege short name arbitrário existente e removido', {
+  skip: process.platform !== 'win32' ? 'O teste requer aliases nativos do NTFS.' : false,
+  timeout: 120000,
+}, t => {
   const root = mkdtempSync(join(tmpdir(), 'adk-ntfs-short-name-')); t.after(() => rmSync(root, { recursive: true, force: true }));
   git(root, 'init', '-q', '-b', 'main');
   const content = 'fixture humana NTFS\n'; put(root, 'README.md', content);
   const script = String.raw`
 $ErrorActionPreference = 'Stop'
+$file = $env:ADK_TEST_FILE
+$drive = [IO.DriveInfo]::new([IO.Path]::GetPathRoot($file))
+if ($drive.DriveFormat -ne 'NTFS') { throw 'A fixture de short name requer um volume NTFS.' }
 Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
@@ -1850,12 +1862,20 @@ public static class AdkShortName {
   [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)] public static extern bool SetFileShortName(SafeFileHandle h, string n);
 }
 '@
-$handle = [AdkShortName]::CreateFile($env:ADK_TEST_FILE, 0x10000, 7, [IntPtr]::Zero, 3, 0x02000000, [IntPtr]::Zero)
+$handle = [AdkShortName]::CreateFile($file, 0x10000, 7, [IntPtr]::Zero, 3, 0x02000000, [IntPtr]::Zero)
 if ($handle.IsInvalid) { throw "CreateFile: $([Runtime.InteropServices.Marshal]::GetLastWin32Error())" }
 try { if (-not [AdkShortName]::SetFileShortName($handle, 'ZFILE.TXT')) { throw "SetFileShortName: $([Runtime.InteropServices.Marshal]::GetLastWin32Error())" } } finally { $handle.Dispose() }
 `;
-  const set = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { env: { ...env, ADK_TEST_FILE: join(root, 'README.md') }, encoding: 'utf8', timeout: 30000 });
-  if (set.status !== 0 || !existsSync(join(root, 'ZFILE.TXT'))) { t.skip(`NTFS/SetFileShortName indisponível; não verificado: ${set.stderr || set.error?.message || set.status}`); return; }
+  const systemRoot = process.env.SystemRoot;
+  assert.ok(systemRoot, 'SystemRoot é necessário para encontrar o Windows PowerShell.');
+  const powershell = join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+  const set = spawnSync(powershell, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script], {
+    env: { SystemRoot: systemRoot, TEMP: tmpdir(), TMP: tmpdir(), ADK_TEST_FILE: join(root, 'README.md') },
+    encoding: 'utf8', windowsHide: true, timeout: 30000,
+  });
+  assert.ifError(set.error);
+  assert.equal(set.status, 0, set.stderr?.trim() || set.signal || 'Falha ao criar o short name NTFS.');
+  assert.equal(readFileSync(join(root, 'ZFILE.TXT'), 'utf8'), content, 'O short name precisa apontar para o arquivo da fixture.');
   stageSynthetic(root, 'ZFILE.TXT', 'conteúdo staged diferente\n');
   const index = readFileSync(join(root, '.git/index'));
   const expected = { 'README.md': createHash('sha256').update(content).digest('hex') };
@@ -1877,7 +1897,10 @@ test('arquivo Unicode independente staged não impede init nem muda o índice', 
   assert.equal(readFileSync(join(root, 'relatório.txt'), 'utf8'), 'conteúdo humano\n');
 });
 
-for (const name of ['relatorio~1.txt', 'relatorio.txt.']) test(`arquivo staged independente ${name} não impede init`, { skip: process.platform === 'win32' && name.endsWith('.'), timeout: 120000 }, t => {
+for (const name of ['relatorio~1.txt', 'relatorio.txt.']) test(`arquivo staged independente ${name} não impede init`, {
+  skip: process.platform === 'win32' && name.endsWith('.') ? 'A API Win32 usada pela fixture normaliza o ponto final do nome.' : false,
+  timeout: 120000,
+}, t => {
   const root = mkdtempSync(join(tmpdir(), 'adk-unrelated-alias-')); t.after(() => rmSync(root, { recursive: true, force: true }));
   git(root, 'init', '-q', '-b', 'main');
   put(root, name, 'conteúdo humano\n'); git(root, 'add', '--', name);
@@ -2065,7 +2088,10 @@ test('filtragem de .local em qualquer caixa nunca remove ou desindexa arquivos h
   assert.deepEqual(readFileSync(join(root, '.git/index')), index);
 });
 
-test('consultas de init, update e verificações não executam fsmonitor configurado pelo usuário', { skip: process.platform === 'win32', timeout: 120000 }, t => {
+test('consultas de init, update e verificações não executam fsmonitor configurado pelo usuário', {
+  skip: process.platform === 'win32' ? 'A fixture executa um hook com shebang /bin/sh e permissões POSIX.' : false,
+  timeout: 120000,
+}, t => {
   const root = mkdtempSync(join(tmpdir(), 'adk-fsmonitor-')); t.after(() => rmSync(root, { recursive: true, force: true }));
   git(root, 'init', '-q', '-b', 'main'); git(root, 'config', 'user.name', 'Teste'); git(root, 'config', 'user.email', 'teste@example.invalid');
   put(root, 'tracked.txt', 'base\n'); git(root, 'add', 'tracked.txt'); git(root, 'commit', '-qm', 'base');

@@ -17,11 +17,10 @@ com [`--executar`](executar-script/README.md).
 Sem Node/npm, o agente instala primeiro pelo mecanismo do sistema operacional.
 Não há inicializadores `.sh` ou `.ps1` no kit.
 
-Na raiz do repositório, use o seletor (adicione `--plan` antes do nome para
-consultar sem executar):
+Na raiz do repositório, use o caminho do script para consultar o ambiente:
 
 ```sh
-node .pbai4devs/scripts/executar-script/SCRIPT.mjs diagnosticar-ambiente
+node .pbai4devs/scripts/diagnosticar-ambiente/SCRIPT.mjs --no-docker-probe
 ```
 
 No diagnóstico, `docker.daemonStatus` e `docker.composeStatus` são `available`,
@@ -29,7 +28,7 @@ No diagnóstico, `docker.daemonStatus` e `docker.composeStatus` são `available`
 (executável encontrado, mas sondagem desativada).
 Falha na consulta não comprova que o serviço está parado. A consulta usa o
 contexto Docker configurado, que pode ser remoto. Para não chamar Docker, use
-`diagnosticar-ambiente --no-docker-probe` pelo seletor; os booleanos anteriores
+`--no-docker-probe` no script de diagnóstico. Os booleanos anteriores
 permanecem para compatibilidade.
 
 | Nome | Finalidade |
@@ -48,6 +47,8 @@ permanecem para compatibilidade.
 | `testar-maturidade` | Executa cenários temporários fora de Git |
 | `testar-navegador` | Cenários via conector Playwright; veja a [referência](testar-navegador/REFERENCE.md) |
 
+## Script de infraestrutura
+
 `testar-infraestrutura` grava cada execução em uma pasta nova de
 `.agent-tests/infraestrutura/` e informa o caminho do relatório. Logs e
 relatórios anteriores são preservados; links simbólicos nos diretórios de
@@ -57,13 +58,16 @@ entrada simbólica em `scripts` também interrompe a descoberta quando não for
 uma suíte. O relatório usa `partial` para testes ignorados, pendentes ou sem
 testes observáveis; nesse caso o comando retorna erro para impedir uma prova
 incompleta de passar como completa. O relatório identifica skips por nome,
-arquivo relativo e motivo disponível. Ainda não há política para skips
-aprovados para publicação: o caso específico de alias Windows é identificado
-como esperado em Linux e macOS, mas continua parcial e não comprova Windows.
+arquivo relativo e motivo, e informa quando a justificativa está ausente. Um
+skip por plataforma deixa a suíte
+parcial no script instalado. O fluxo de release do repositório aceita apenas
+os casos listados que têm cobertura na plataforma correspondente da matriz.
 No macOS, uma ACL listada ou não verificável no
 diretório de saída interrompe a execução antes da gravação. As verificações
 não isolam os testes nem garantem contenção contra substituições simultâneas
 de caminhos ou ACLs não detectadas.
+
+## Ferramentas locais
 
 Cada [ferramenta](../tools/README.md) tem `TOOL.json` e um `SCRIPT.mjs`,
 com ações `install`, `update`, `check`, `info` e `run`.
@@ -77,7 +81,9 @@ instaladas com fixtures locais. Execute com Node; resultados ficam em
 `.agent-tests/vercel-labs/`. A suíte comum permanece independente desses downloads.
 
 O seletor aceita nome ou caminho JavaScript, repassa os argumentos e preserva
-o código de saída. Ele não procura outros interpretadores após uma falha.
+o código de saída. Nomes curtos são procurados primeiro na raiz do projeto.
+Para chamar uma automação do kit, use o caminho explícito em
+`.pbai4devs/scripts/`. Uma falha encerra a execução com o mesmo código.
 `playwright-mcp` exige o conector: seu `SCRIPT.js` é código para uma página,
 não um programa Node. Novas automações usam `.mjs`; `.bun` não é necessário.
 Os testes de cada script ficam em `<nome>/tests/`; confira se os diretórios de

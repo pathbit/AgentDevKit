@@ -16,7 +16,7 @@ const cli = join(repo, 'bin/agentdevkit.mjs');
 const node24 = Number(process.versions.node.split('.')[0]) >= 24 && !process.versions.bun;
 const cliTimeout = process.platform === 'win32' ? 240000 : 120000;
 
-test('CLI preserva referência CRLF já satisfeita sem duplicar bloco ou alterar índice', { skip: !node24, timeout: process.platform === 'win32' ? 900000 : 180000 }, t => {
+test('CLI preserva referência CRLF já satisfeita sem duplicar bloco ou alterar índice', { skip: !node24 ? 'A CLI do kit requer Node.js 24 ou superior nesta fixture.' : false, timeout: process.platform === 'win32' ? 900000 : 180000 }, t => {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'adk-cli-eol-')));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const env = { ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^GIT_/i.test(key))), GIT_CONFIG_GLOBAL: testGitConfig, GIT_CONFIG_NOSYSTEM: '1', GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0' };

@@ -9,8 +9,9 @@ Entrada: `base`, `all`, grupo ou nome do
 Pré-requisitos: Node.js 24+ com npm e acesso ao registro oficial.
 
 Siga [preparar-ferramentas](../../skills/projeto/preparar-ferramentas/SKILL.md).
-Use `executar-script` com `preparar-ferramentas update <seleção>`; depois,
-confira a mesma seleção com `check`. Para uma ferramenta, também pode chamar
+Use o [gerenciador do hub](../../scripts/preparar-ferramentas/README.md) com
+`update <seleção>`; depois, confira a mesma seleção com `check`. Para uma
+ferramenta, também pode chamar
 `node <pasta-da-ferramenta>/SCRIPT.mjs` com `update` e `check`.
 
 Saída: versões, plataforma, alterações e falhas. Instalações ficam somente em

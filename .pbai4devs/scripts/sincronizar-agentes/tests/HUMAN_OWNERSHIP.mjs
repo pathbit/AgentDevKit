@@ -202,7 +202,7 @@ test('conteúdo humano é preservado quando o fechamento informa falha após a e
   assert.equal(fs.readFileSync(join(root, generated), 'utf8'), human);
 });
 
-test('falha de catálogo preserva ancestral e mantém remoções já concluídas', { skip: process.platform === 'win32' }, t => {
+test('falha de catálogo preserva ancestral e mantém remoções já concluídas', { skip: process.platform === 'win32' && 'A comparação desta fixture verifica os bits POSIX dos diretórios antes e depois da falha.' }, t => {
   const root = fixture(t); run(root);
   const parent = join(root, '.claude/skills'); fs.chmodSync(parent, 0o700);
   fs.rmSync(join(root, '.pbai4devs/skills/demo'), { recursive: true });

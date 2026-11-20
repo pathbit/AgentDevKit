@@ -5,28 +5,33 @@ description: Revisa documentação, critérios e provas antes de commit ou merge
 # Revisar entrega
 
 Entrada: referência da mudança, spec quando houver e arquivos do escopo.
-Pré-requisitos: implementação pronta e Node.js 24+. Sem spec em uma correção
-urgente, defina critérios próprios AC-001 e registre o motivo.
+Pré-requisitos: mudança pronta e Node.js 24+. Para documentação ou ajuste
+avulso autorizado sem spec, defina critérios próprios como AC-001 e registre
+o motivo. Funcionalidades seguem o fluxo de spec aprovada.
 
 A coleta automática recusa submódulos, sparse-index, flags que ocultam mudanças
 e filtros Git aplicados; nesses casos, use `--scope` para caminhos comprováveis.
 Split-index e clones parciais são recusados em todos os modos. As consultas Git
 desativam fsmonitor somente no subprocesso; nenhuma configuração é alterada.
 
-1. Siga [atualizar-documentacao][documentacao]
-   e [verificar-trabalho](../../skills/projeto/verificar-trabalho/SKILL.md).
-2. Use `executar-script` para `revisar-entrega prepare --id <referencia>`, com
+1. Reúna o diff, decisões de documentação e provas por critério. Use
+   [atualizar-documentacao][documentacao] para lacunas de documentação e
+   [verificar-trabalho](../../skills/projeto/verificar-trabalho/SKILL.md)
+   para provas faltantes ou desatualizadas.
+2. Use o [script do hub](../../scripts/revisar-entrega/README.md) com
+   `prepare --id <referencia>`, com
    `--spec`, `--scope` e `--output` quando aplicáveis. Complete o JSON gerado
    conforme o [modelo](../../templates/revisao-entrega/TEMPLATE.md), com provas
    reais e decisões de documentação justificadas.
-3. Acione o [revisor](../../agents/revisor/AGENT.md) independente, em leitura,
-   para contestar premissas e procurar regressões, falhas e lacunas nas provas.
+3. Acione o [revisor](../../agents/revisor/AGENT.md) ou outra pessoa ou agente
+   independente, em leitura, sobre o mesmo snapshot. Peça que conteste
+   premissas e procure regressões, falhas e lacunas nas provas.
    Registre achados com evidências e localização. Aplique os pertinentes; se
    arquivos mudarem, gere novo snapshot, execute as verificações afetadas e
    revise novamente antes de registrar `review.status: approved`. Sem revisão
    independente disponível, informe a limitação e mantenha a revisão pendente.
-4. Execute `revisar-entrega seal <relatorio>` para registrar os hashes após a
-   revisão e `revisar-entrega check <relatorio>` pelo mesmo seletor. Falha,
+4. Execute `seal <relatorio>` para registrar os hashes após a revisão e
+   `check <relatorio>` pelo mesmo script. Falha,
    critério sem prova ou revisão pendente bloqueiam o commit/merge.
 
 Nas saídas JSON, `reviewVerification: "not-verified"` indica que a aprovação

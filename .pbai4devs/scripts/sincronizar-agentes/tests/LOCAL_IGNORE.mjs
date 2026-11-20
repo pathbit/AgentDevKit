@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import { projectRoot } from '../../lib/runtime.mjs';
 import { planLocalIgnore, applyLocalIgnore, checkLocalIgnore, planUntrack, applyUntrack, restoreUntrack, assertLocalIgnoreUnchanged } from '../../lib/gitignore.mjs';
+import { nativeSkipReason } from '../../testar-infraestrutura/PLATFORM_FIXTURES.mjs';
 
 function fixture(t) {
   const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'agentdevkit-ignore-')));
@@ -476,7 +477,7 @@ test('canonicalização recorre a realpath quando operação nativa não é supo
   assert.equal(plan.root, join(expected, 'future')); assert.equal(existsSync(plan.root), false);
 });
 
-test('Windows normaliza o alias temporário 8.3 antes de comparar a raiz Git', { skip: process.platform !== 'win32' }, t => {
+test('Windows normaliza o alias temporário 8.3 antes de comparar a raiz Git', { skip: nativeSkipReason('win32') }, t => {
   const canonical = fixture(t);
   // cmd expands "." through Windows short-name resolution. The fixture path
   // travels as the working directory, so it never becomes shell input.
@@ -689,7 +690,7 @@ test('exceção nominal de um ignore ancestral é conferida no subprojeto', t =>
   applyLocalIgnore(plan);
 });
 
-test('permissões humanas de exclusões não são alteradas', { skip: process.platform === 'win32' }, t => {
+test('permissões humanas de exclusões não são alteradas', { skip: process.platform === 'win32' && 'A fixture verifica modos POSIX de leitura e escrita.' }, t => {
   const root = fixture(t); git(root, ['init', '-q']);
   const exclude = join(root, '.git/info/exclude'); chmodSync(exclude, 0o600);
   applyLocalIgnore(planLocalIgnore(root));
@@ -725,7 +726,7 @@ test('nenhuma renomeação ou rollback é feita em exclusões humanas', t => {
   assert.equal(renamed, false); assert.deepEqual(readFileSync(file), before);
 });
 
-test('ignore raiz mantém modo e bytes antes e depois de git init', { skip: process.platform === 'win32' }, t => {
+test('ignore raiz mantém modo e bytes antes e depois de git init', { skip: process.platform === 'win32' && 'A fixture verifica modos POSIX de leitura e escrita.' }, t => {
   const root = fixture(t), ignore = join(root, '.gitignore');
   put(root, '.gitignore', '# humano\n'); chmodSync(ignore, 0o600);
   applyLocalIgnore(planLocalIgnore(root));
@@ -737,7 +738,7 @@ test('ignore raiz mantém modo e bytes antes e depois de git init', { skip: proc
   assert.deepEqual(readFileSync(ignore), original); assert.equal(statSync(ignore).mode & 0o777, 0o600);
 });
 
-test('ignore raiz somente leitura não impede exclusão local no Git', { skip: process.platform === 'win32' }, t => {
+test('ignore raiz somente leitura não impede exclusão local no Git', { skip: process.platform === 'win32' && 'A fixture verifica modos POSIX de leitura e escrita.' }, t => {
   const root = fixture(t), ignore = join(root, '.gitignore');
   put(root, '.gitignore', '# humano\n'); chmodSync(ignore, 0o444);
   applyLocalIgnore(planLocalIgnore(root));
@@ -750,7 +751,7 @@ test('ignore raiz somente leitura não impede exclusão local no Git', { skip: p
   assert.deepEqual(readFileSync(ignore), original); assert.equal(statSync(ignore).mode & 0o777, 0o444);
 });
 
-test('projeto aninhado não lê gitignore inacessível do projeto irmão', { skip: process.platform === 'win32' }, t => {
+test('projeto aninhado não lê gitignore inacessível do projeto irmão', { skip: process.platform === 'win32' && 'A fixture verifica modos POSIX de leitura e escrita.' }, t => {
   const root = fixture(t); git(root, ['init', '-q']);
   const other = join(root, 'other/.gitignore'); put(root, 'other/.gitignore', 'tmp/\n');
   git(root, ['add', 'other/.gitignore']); chmodSync(other, 0o000);

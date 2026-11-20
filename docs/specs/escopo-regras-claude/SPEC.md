@@ -127,7 +127,7 @@ Conferir [sincronização segura](../safe-synchronization/SPEC.md),
 
 [PRD](../../product/prd.md), [UX/UI](../../product/ux-ui.md),
 [design](../../product/design.md), [roadmap](../../product/roadmap.md) e
-[configuração](../../../.pbai4devs/state/configuracao/ESTADO.md).
+o estado local em `.pbai4devs/state/configuracao/ESTADO.md`.
 
 Fontes primárias: [regras do Claude](https://code.claude.com/docs/en/memory) e
 [regras do Antigravity](https://antigravity.google/docs/rules/).

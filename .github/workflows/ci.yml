@@ -314,6 +314,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y attr acl
+      - name: Verify Linux ownership with real UID changes
+        if: runner.os == 'Linux' && matrix.profile == 'full'
+        run: sudo -- "$(command -v node)" scripts/release/pipeline.mjs native-linux-ownership
       - name: Verify the selected profile
         env:
           NODE_OPTIONS: ''

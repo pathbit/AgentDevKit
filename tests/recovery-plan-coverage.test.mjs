@@ -12,7 +12,11 @@ import { inspectSyncEffects, synchronize } from '../.pbai4devs/scripts/sincroniz
 import { prepareRecoveryBackup, verifyRecoveryBackup } from '../.pbai4devs/scripts/lib/recovery-backup.mjs';
 import { captureRecoverySnapshot, inspectRecoveryTarget } from './fixtures/recovery-capture.mjs';
 
-const test = process.platform === 'win32' ? nodeTest.skip : nodeTest;
+function test(name, options, run) {
+  const skip = process.platform === 'win32' ? 'As fixtures legadas observam efeitos no POSIX e ainda precisam de instrumentação para as operações nativas do Windows.' : false;
+  if (typeof options === 'function') return nodeTest(name, { skip }, options);
+  return nodeTest(name, { ...options, skip: options.skip || skip }, run);
+}
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const posix = path => path.split(sep).join('/');
 function fixture(t) {
@@ -34,7 +38,7 @@ function safeStat(path) {
 
 for (const scenario of ['update-sem-conteudo', 'remove-com-conteudo', 'conteudo-invalido', 'acao-desconhecida',
   'create-existente', 'update-ausente', 'remove-ausente', 'hash-invalido']) {
-  test(`plano inconsistente (${scenario}) é recusado sem alterar o projeto`, { timeout: 120000 }, t => {
+  nodeTest(`plano inconsistente (${scenario}) é recusado sem alterar o projeto`, { timeout: 120000 }, t => {
     const root = fixture(t), human = '# Instruções humanas\n';
     put(root, 'AGENTS.md', human); put(root, '.gitignore', '# regra humana\n');
     git(root, 'add', '--', 'AGENTS.md', '.gitignore');
@@ -64,7 +68,7 @@ for (const scenario of ['update-sem-conteudo', 'remove-com-conteudo', 'conteudo-
   });
 }
 
-test('plano aceita conteúdo binário vazio e não UTF-8 em criações válidas', { timeout: 120000 }, t => {
+nodeTest('plano aceita conteúdo binário vazio e não UTF-8 em criações válidas', { timeout: 120000 }, t => {
   const root = fixture(t);
   put(root, '.gitignore', '# regra humana\n');
   git(root, 'add', '--', '.gitignore');
@@ -79,7 +83,7 @@ test('plano aceita conteúdo binário vazio e não UTF-8 em criações válidas'
   assert.equal(fs.readFileSync(join(root, '.gitignore'), 'utf8'), '# regra humana\n');
 });
 
-for (const action of ['update', 'create', 'remove', 'mixed']) test(`plano com caminho ${action} duplicado é recusado antes de gravar`, { timeout: 120000 }, t => {
+for (const action of ['update', 'create', 'remove', 'mixed']) nodeTest(`plano com caminho ${action} duplicado é recusado antes de gravar`, { timeout: 120000 }, t => {
   const root = fixture(t), human = '# Instruções humanas\n';
   put(root, 'AGENTS.md', human); put(root, '.gitignore', '# regra humana\n');
   git(root, 'add', '--', 'AGENTS.md', '.gitignore');
@@ -135,7 +139,7 @@ test('mudança das ações durante backup é recusada antes das alterações pú
   assert.equal(fs.readFileSync(join(root, '.gitignore'), 'utf8'), '# regra humana\n');
 });
 
-test('candidatos de poda respeitam limites e incluem diretórios legados condicionais', () => {
+nodeTest('candidatos de poda respeitam limites e incluem diretórios legados condicionais', () => {
   const plan = {
     changes: [
       { action: 'remove', path: '.claude/skills/demo/SKILL.md' },

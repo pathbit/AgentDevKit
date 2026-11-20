@@ -5,7 +5,7 @@ description: Coleta somente leitura dos documentos configurados para uma spec.
 # Reunir contexto da spec
 
 ```sh
-node .pbai4devs/scripts/executar-script/SCRIPT.mjs --raw reunir-contexto-spec \
+node .pbai4devs/scripts/reunir-contexto-spec/SCRIPT.mjs \
   --spec docs/specs/exemplo/SPEC.md
 ```
 

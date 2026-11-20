@@ -46,8 +46,8 @@ Reutilize os caminhos e complemente lacunas, sem substituir pelo template.
 Antes de escrever documentos ou código, leia o contexto já disponível.
 Reúna as dúvidas que alteram objetivo, escopo, dependências ou critérios.
 Não pergunte novamente o que o usuário já decidiu ou o projeto já registra.
-A escolha dos clientes precede o preparo opcional de ferramentas; não aprova
-downloads, início do produto ou mudanças na aplicação.
+Escolha clientes ao instalar ou reconfigurar o kit. Ferramentas, início do
+produto e mudanças na aplicação seguem o objetivo do pedido.
 
 ```text
 Use configurar-projeto. Primeiro leia o repositório e reúna as dúvidas.

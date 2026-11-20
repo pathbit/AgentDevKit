@@ -1,96 +1,17 @@
-import '../../lib/test-git-environment.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { synchronize, header, isReference, resourcePath } from '../SCRIPT.mjs';
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, symlinkSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { header, isReference, resourcePath, synchronize } from '../SCRIPT.mjs';
 import { buildCatalog } from '../../lib/catalog.mjs';
 import { resourceTargets } from '../../testar-maturidade/SCRIPT.mjs';
 import { toolWrapper } from '../../preparar-ferramentas/SCRIPT.mjs';
 import { mergeGitignore, ignoreBegin, ignoreEnd, validateIgnoreClients } from '../../lib/gitignore.mjs';
 import { validateCatalog as validateExternalCatalog } from '../../gerenciar-skills-externas/SCRIPT.mjs';
 import { stateDirectory } from '../../lib/state-path.mjs';
-
-const project = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
-const cli = resolve(dirname(fileURLToPath(import.meta.url)), '../SCRIPT.mjs');
-const marker = '<!-- gerado: sincronizar-agentes -->';
-const skill = '---\nname: demo\ndescription: Exemplo.\n---\n\n# Demo\n\nNAO_DUPLICAR_INSTRUCOES\n';
-const source = '.pbai4devs/skills/projeto/demo/SKILL.md';
-const read = (root, path) => readFileSync(join(root, path), 'utf8');
-const write = (root, path, content) => { mkdirSync(dirname(join(root, path)), { recursive: true }); writeFileSync(join(root, path), content); };
-const pointer = (origin = 'origem.md', title = 'Referencia') => `---\ndescription: Referencia.\n---\n\n# ${title}\n\n${marker}\nLeia e siga [origem](${origin}).\n`;
-const recordOwned = (root, paths) => {
-  const statePath = '.pbai4devs/state/agentdevkit.json';
-  const previous = existsSync(join(root, statePath)) ? JSON.parse(read(root, statePath)) : {};
-  write(root, statePath, JSON.stringify({ schemaVersion: 1, files: { ...previous.files, ...Object.fromEntries(paths.map(path => [path, createHash('sha256').update(readFileSync(join(root, path))).digest('hex')])) }, blocks: previous.blocks ?? {} }));
-};
-const toolConfig = (name = 'demo') => ({ name, description: `Ferramenta ${name}.`, group: 'base', source: `https://github.com/fixture/${name}`, download: { provider: 'npm', package: name, registry: 'https://registry.npmjs.org/', repository: `fixture/${name}`, channel: 'latest' }, platforms: [`${process.platform}-${process.arch}`], scripts: { entry: 'SCRIPT.mjs' }, probe: ['--version'] });
-const externalConfig = () => ({ schemaVersion: 1, allowlist: ['fixture/skills'], skills: [{ id: 'external-demo', repository: 'fixture/skills', commit: 'a'.repeat(40), path: 'skills/demo/SKILL.md', name: 'external-demo', license: 'MIT', use: 'Revisar exemplo externo.', status: 'reviewed', notes: 'Sem execução automática.' }] });
-const run = (root, options = {}) => synchronize({ root, localIgnores: false, generateEntrypoints: false, output() {}, ...options });
-function snapshot(root) {
-  const result = [];
-  function visit(folder, parent = '') {
-    for (const name of readdirSync(folder).sort()) {
-      const file = join(folder, name), path = parent ? `${parent}/${name}` : name, item = lstatSync(file);
-      if (item.isSymbolicLink()) result.push([path, 'link', readlinkSync(file)]);
-      else if (item.isDirectory()) { result.push([path, 'directory']); visit(file, path); }
-      else result.push([path, 'file', createHash('sha256').update(readFileSync(file)).digest('hex')]);
-    }
-  }
-  visit(root);
-  return result;
-}
-function fixture(t, minimal = false) {
-  mkdirSync(join(project, '.agent-tests'), { recursive: true });
-  const root = mkdtempSync(join(project, '.agent-tests/sync-node com espaço-'));
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-  write(root, '.pbai4devs/templates/gitignore/agents.ignore', '# Cache dos clientes\n/*\n!/.gitignore\n{{ALLOWLIST}}\n/cache/\n*.log\n');
-  write(root, '.pbai4devs/templates/gitignore/clients.json', '{}\n');
-  write(root, '.pbai4devs/templates/gitignore/shared.ignore', '# Estado compartilhado\n/tools/*/.local/\n/tools/.cache/\n');
-  write(root, '.pbai4devs/espelhos.conf', minimal ? 'agente|.codex|plano\n' : [
-    '# Clientes da fixture', 'agente|.claude', 'agente|.opencode', 'agente|.github|plano', 'agente|.codex|plano', 'agente|.cursor|plano', 'agente|.kimi-code|plano', 'agente|.vscode|plano', 'agente|.agents|plano', 'agente|.agent|plano', 'agente|.gemini|plano',
-    `nativo|.github/instructions/demo.instructions.md|${source}`,
-    'nativo|.kimi-code/agents/revisor.md|.pbai4devs/agents/revisor/AGENT.md|.pbai4devs/agents/revisor/kimi-code.yaml',
-    'nativo|.opencode/agents/revisor/AGENT.md|.pbai4devs/agents/revisor/AGENT.md|.pbai4devs/agents/revisor/opencode.yaml',
-  ].join('\n') + '\n');
-  if (minimal) return root;
-  const ownedLegacy = ['.opencode/agents/revisor/AGENT.md'];
-  write(root, source, skill);
-  write(root, '.pbai4devs/skills/grupo com espaço/outro/SKILL.md', '---\nname: outro\ndescription: Outro.\n---\n\n# Outro\n');
-  write(root, '.pbai4devs/agents/revisor/AGENT.md', '---\nname: revisor\ndescription: Perfil.\n---\n\n# Revisor\n');
-  write(root, '.pbai4devs/rules/example/RULE.md', '---\ntrigger: always_on\ndescription: Regra.\n---\n\n# Regra\n');
-  write(root, '.pbai4devs/commands/check/COMMAND.md', '---\ndescription: Comando.\n---\n\n# Comando\n');
-  write(root, '.pbai4devs/agents/revisor/kimi-code.yaml', '---\nname: revisor\ntools: [Read, Grep, Glob]\n---\n');
-  write(root, '.pbai4devs/agents/revisor/opencode.yaml', '---\nmode: subagent\npermission:\n  edit: deny\n---\n');
-  write(root, '.pbai4devs/adapters/antigravity/agents/revisor.md', pointer('../../../agents/revisor/AGENT.md', 'Revisor'));
-  write(root, '.opencode/agents/revisor/AGENT.md', `---\nmode: subagent\npermission:\n  edit: deny\n---\n\n# Revisor\n\n${marker}\nLeia e siga [origem](../../../.pbai4devs/agents/revisor/AGENT.md).\n`);
-  write(root, '.github/workflows/ci.yml', 'workflow-preservado\n');
-  write(root, '.vscode/settings.json', '{"fixture":"config-preservada"}\n');
-  write(root, '.vscode/extensions.json', '{"recommendations":[]}\n');
-  write(root, '.codex/config.toml', 'config-native-preservada\n');
-  write(root, '.github/prompts/custom.prompt.md', '# Prompt proprio\n');
-  write(root, '.claude/notas.md', '# Nota propria\n');
-  write(root, 'README.md', 'README raiz preservado\n');
-  for (const kind of ['templates', 'scripts', 'tools', 'external-skills', 'state', 'tests', 'docs', 'adapters', 'extra']) {
-    write(root, `.pbai4devs/${kind}/demo/REFERENCE.md`, '---\ndescription: Exclusivo.\n---\n\n# Exclusivo\n');
-    if (kind !== 'extra') {
-      const target = `.claude/${kind}/demo/REFERENCE.md`;
-      write(root, target, pointer(`../../../.pbai4devs/${kind}/demo/REFERENCE.md`)); ownedLegacy.push(target);
-    }
-  }
-  write(root, '.pbai4devs/tools/demo/TOOL.json', JSON.stringify(toolConfig()));
-  write(root, '.pbai4devs/tools/demo/SCRIPT.mjs', toolWrapper('demo'));
-  for (const file of ['README.md', 'INSTRUCTIONS.md']) {
-    write(root, `.pbai4devs/${file}`, '---\ndescription: Guia.\n---\n\n# Guia\n');
-    write(root, `.claude/${file}`, pointer(`../.pbai4devs/${file}`, 'Guia'));
-    ownedLegacy.push(`.claude/${file}`);
-  }
-  recordOwned(root, ownedLegacy);
-  return root;
-}
+import { project, cli, marker, skill, source, read, write, pointer, recordOwned, toolConfig, externalConfig, run, snapshot, fixture, rejected, assertCheckReadonly } from './fixtures.mjs';
 
 test('sincronização direta conserva estado legado e recusa duas pastas de estado', t => {
   const root = fixture(t, true);
@@ -107,25 +28,14 @@ test('sincronização direta conserva estado legado e recusa duas pastas de esta
   assert.deepEqual(snapshot(root), before);
 });
 
-test('detecção de estado recusa link simbólico sem abrir o destino', { skip: process.platform === 'win32' }, t => {
+test('detecção de estado recusa link simbólico sem abrir o destino', t => {
   const root = fixture(t, true);
   const external = join(root, 'externo');
   mkdirSync(external);
-  symlinkSync(external, join(root, '.pbai4devs/estado'), 'dir');
+  symlinkSync(external, join(root, '.pbai4devs/estado'), process.platform === 'win32' ? 'junction' : 'dir');
   assert.throws(() => stateDirectory(root), /Link simbolico/);
   assert.equal(existsSync(join(root, '.pbai4devs/state')), false);
 });
-function rejected(root, options = {}, pattern) {
-  const before = snapshot(root);
-  assert.throws(() => run(root, options), pattern);
-  assert.deepEqual(snapshot(root), before, 'Uma operação rejeitada alterou a fixture.');
-}
-function assertCheckReadonly(root, options = {}, exitCode = 1) {
-  const before = snapshot(root);
-  assert.equal(run(root, { check: true, ...options }).exitCode, exitCode);
-  assert.deepEqual(snapshot(root), before, '--check alterou a fixture.');
-}
-
 test('sincroniza somente principais, preserva metadados e usa referências UTF-8 relativas', t => {
   const root = fixture(t);
   assertCheckReadonly(root);
@@ -157,46 +67,6 @@ test('sincroniza somente principais, preserva metadados e usa referências UTF-8
   const before = snapshot(root);
   run(root);
   assert.deepEqual(snapshot(root), before, 'A segunda sincronização deve ser idempotente.');
-});
-
-test('metadados humanos editados bloqueiam sync; fontes sem conflito atualizam', t => {
-  const root = fixture(t);
-  run(root);
-  const editedPath = '.codex/commands/check.md';
-  const human = read(root, editedPath).replace('description: Comando.', 'description: Obsoleto.\nlocal-only: true');
-  write(root, editedPath, human);
-  write(root, '.pbai4devs/commands/check/COMMAND.md', '---\nname: check-novo\ndescription: Comando atualizado.\n---\n\n# Comando\n');
-  write(root, '.pbai4devs/rules/example/RULE.md', '---\ntrigger: glob\nglobs: "**/*.ts"\ndescription: Regra atualizada.\n---\n\n# Regra\n');
-  write(root, '.pbai4devs/agents/revisor/AGENT.md', '---\nname: revisor\ndescription: Perfil atualizado.\n---\n\n# Revisor\n');
-  for (const force of [false, true]) {
-    const before = snapshot(root), check = run(root, { check: true, force });
-    assert.notEqual(check.exitCode, 0);
-    assert.ok(check.conflictPaths.includes(editedPath));
-    assert.deepEqual(snapshot(root), before);
-    rejected(root, { force }, /Conteudo proprio preservado/);
-    assert.equal(read(root, editedPath), human);
-  }
-
-  const clean = fixture(t);
-  run(clean);
-  write(clean, '.pbai4devs/commands/check/COMMAND.md', '---\nname: check-novo\ndescription: Comando atualizado.\n---\n\n# Comando\n');
-  write(clean, '.pbai4devs/rules/example/RULE.md', '---\ntrigger: glob\nglobs: "**/*.ts"\ndescription: Regra atualizada.\n---\n\n# Regra\n');
-  write(clean, '.pbai4devs/agents/revisor/AGENT.md', '---\nname: revisor\ndescription: Perfil atualizado.\n---\n\n# Revisor\n');
-  // A fixture escolhe retirar a regra gerada depois da recusa conservadora.
-  const beforeCleanCheck = snapshot(clean), cleanCheck = run(clean, { check: true });
-  assert.notEqual(cleanCheck.exitCode, 0);
-  assert.deepEqual(cleanCheck.conflictPaths, ['.claude/rules/example/RULE.md']);
-  assert.deepEqual(snapshot(clean), beforeCleanCheck);
-  rejected(clean, {}, /Conteudo proprio preservado/);
-  rmSync(join(clean, '.claude/rules/example/RULE.md'));
-  run(clean);
-  assert.match(read(clean, '.codex/commands/check.md'), /Comando atualizado\./);
-  assert.match(read(clean, '.codex/rules/example.md'), /trigger: glob\nglobs: "\*\*\/\*\.ts"/);
-  assert.match(read(clean, '.codex/agents/revisor.md'), /Perfil atualizado\./);
-  assert.match(read(clean, '.opencode/agents/revisor/AGENT.md'), /edit: deny/);
-  assert.match(read(clean, '.kimi-code/agents/revisor.md'), /tools: \[Read, Grep, Glob\]/);
-  assert.match(read(clean, '.github/instructions/demo.instructions.md'), /applyTo: '\*\*'/);
-  assertCheckReadonly(clean, {}, 0);
 });
 
 test('hub unico permite tres novos clientes, regras por inclusao e metadados nativos', t => {
@@ -490,29 +360,6 @@ test('sync e --force recusam apontamentos editados preservando recursos humanos'
   assert.match(read(root, '.codex/config.toml'), /config-native-preservada/);
 });
 
-test('atualiza fontes, adiciona clientes, remove recursos e migra agrupado para plano', t => {
-  const root = fixture(t);
-  run(root);
-  write(root, source, skill.replace('Exemplo.', 'Atualizado.'));
-  write(root, '.pbai4devs/espelhos.conf', read(root, '.pbai4devs/espelhos.conf') + 'agente|.extra|plano\n');
-  assertCheckReadonly(root);
-  run(root);
-  assert.match(read(root, '.extra/skills/demo/SKILL.md'), /Atualizado/);
-  rmSync(join(root, '.pbai4devs/rules/example/RULE.md'));
-  write(root, '.pbai4devs/espelhos.conf', read(root, '.pbai4devs/espelhos.conf').replace('agente|.claude\n', 'agente|.claude|plano\n'));
-  assertCheckReadonly(root);
-  rejected(root, { force: true }, /Conteudo proprio preservado/);
-  // A remoção é decisão manual simulada na fixture, não decorrência do hash.
-  rmSync(join(root, '.claude/rules/example/RULE.md'));
-  run(root);
-  assert.equal(existsSync(join(root, '.claude/skills/projeto/demo/SKILL.md')), false);
-  assert.ok(existsSync(join(root, '.claude/skills/projeto')));
-  assert.ok(existsSync(join(root, '.claude/skills/demo/SKILL.md')));
-  assert.equal(existsSync(join(root, '.codex/rules/example.md')), false);
-  assert.deepEqual(JSON.parse(read(root, '.pbai4devs/rules.json')).entries, []);
-  assertCheckReadonly(root, {}, 0);
-});
-
 test('preserva linhas legadas humanas sem prova de propriedade', t => {
   const root = fixture(t);
   run(root);
@@ -662,29 +509,6 @@ test('CLI Node propaga códigos de check e rejeita opções sem invocar shell', 
   write(root, source, skill.replace('Exemplo.', 'Novo.'));
   const changed = spawnSync(process.execPath, [cli, '--root', root, '--force', '--check'], { encoding: 'utf8' });
   assert.equal(changed.status, 1, changed.stderr);
-});
-
-test('gera manifesto e entradas sem estado e atualiza apenas entradas integralmente próprias', t => {
-  const root = fixture(t, true);
-  write(root, source, skill);
-  rmSync(join(root, '.pbai4devs/espelhos.conf'));
-  for (const name of ['AGENTS.md', 'CLAUDE.md', 'GEMINI.md']) write(root, `.pbai4devs/templates/entrypoints/${name}`, `---\ndescription: Entrada.\n---\n\n# ${name}\n`);
-  write(root, 'CLAUDE.md', '# Instruções humanas\n');
-  assertCheckReadonly(root, { generateEntrypoints: true });
-  const first = run(root, { generateEntrypoints: true });
-  assert.ok(first.ownedOutputs.includes('AGENTS.md'));
-  assert.equal(first.ownedOutputs.includes('CLAUDE.md'), false);
-  assert.ok(read(root, 'CLAUDE.md').startsWith('# Instruções humanas\n'));
-  assert.match(read(root, 'CLAUDE.md'), /<!-- BEGIN AGENTDEVKIT -->/);
-  assert.ok(existsSync(join(root, '.agents/skills/projeto/demo/SKILL.md')));
-  assertCheckReadonly(root, { generateEntrypoints: true }, 0);
-  write(root, '.pbai4devs/templates/entrypoints/AGENTS.md', '---\ndescription: Entrada.\n---\n\n# Atualizada\n');
-  run(root, { generateEntrypoints: true });
-  assert.match(read(root, 'AGENTS.md'), /# Atualizada/);
-  write(root, 'AGENTS.md', read(root, 'AGENTS.md') + '\nTexto humano.\n');
-  const second = run(root, { generateEntrypoints: true });
-  assert.equal(second.ownedOutputs.includes('AGENTS.md'), false);
-  assert.match(read(root, 'AGENTS.md'), /Texto humano/);
 });
 
 test('entradas da CLI mantêm ownership integral e recursos têm proveniência derivada', t => {
@@ -1195,30 +1019,6 @@ test('migração Copilot remove apenas referência global comprovadamente gerenc
   const edited = read(second, old);
   run(second, { force: true });
   assert.equal(read(second, old), edited, 'referência gerenciada editada deve permanecer');
-});
-
-test('manifestos Antigravity acompanham skills, regras e agentes agrupados', t => {
-  const root = fixture(t, true);
-  write(root, source, skill);
-  write(root, '.pbai4devs/rules/projeto/style/RULE.md', '---\ntrigger: always_on\ndescription: Estilo.\n---\n\n# Estilo\n');
-  write(root, '.pbai4devs/agents/review/security/AGENT.md', '---\nname: security\ndescription: Perfil.\n---\n\n# Perfil\n');
-  write(root, '.pbai4devs/espelhos.conf', 'agente|.agents|agrupado\ndescoberta|.agents|antigravity\n');
-  const before = snapshot(root);
-  assert.equal(run(root, { check: true, generateEntrypoints: true }).exitCode, 1);
-  assert.deepEqual(snapshot(root), before);
-  run(root, { generateEntrypoints: true });
-  assert.deepEqual(JSON.parse(read(root, '.agents/skills.json')).entries, [{ path: '.agents/skills/projeto/demo' }]);
-  assert.deepEqual(JSON.parse(read(root, '.agents/rules.json')).entries, [{ path: '.agents/rules/projeto/style/RULE.md' }]);
-  assert.deepEqual(JSON.parse(read(root, '.agents/agents.json')).entries, [{ path: '.agents/agents/review/security/AGENT.md' }]);
-  write(root, '.pbai4devs/skills/projeto/new-skill/SKILL.md', skill.replace('name: demo', 'name: new-skill'));
-  run(root, { generateEntrypoints: true });
-  assert.equal(JSON.parse(read(root, '.agents/skills.json')).entries.length, 2);
-  rmSync(join(root, '.pbai4devs/skills/projeto/demo'), { recursive: true });
-  run(root, { generateEntrypoints: true });
-  assert.deepEqual(JSON.parse(read(root, '.agents/skills.json')).entries, [{ path: '.agents/skills/projeto/new-skill' }]);
-  assert.equal(existsSync(join(root, '.agents/skills/projeto/demo/SKILL.md')), false);
-  assert.ok(existsSync(join(root, '.agents/skills/projeto/demo')));
-  assertCheckReadonly(root, { generateEntrypoints: true }, 0);
 });
 
 test('manifesto de descoberta humano permanece intacto mesmo com force', t => {

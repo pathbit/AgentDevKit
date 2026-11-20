@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { inspectRecoveryJournal, reserveRecovery, beginRecovery, finishRecovery, resolveRecovery } from '../.pbai4devs/scripts/lib/recovery-store.mjs';
 import { createPrivateRecoveryDirectory } from '../.pbai4devs/scripts/lib/recovery-privacy.mjs';
 
@@ -14,12 +14,23 @@ const source = new URL('../.pbai4devs/scripts/lib/recovery-store.mjs', import.me
 const manifest = 'a'.repeat(64);
 // The legacy POSIX suite verifies mode, UID and directory fsync. Portable
 // cases below create a root with the platform-specific protection.
-const test = process.platform === 'win32' ? nodeTest.skip : nodeTest;
+function test(name, options, run) {
+  const skip = process.platform === 'win32' ? 'A fixture legada configura o diário por modos POSIX e inclui provas de UID ou fsync de diretórios.' : false;
+  if (typeof options === 'function') return nodeTest(name, { skip }, options);
+  return nodeTest(name, { ...options, skip: options.skip || skip }, run);
+}
 function fixture(t, parent = fs.realpathSync(tmpdir())) {
   const root = fs.mkdtempSync(join(parent, 'adk-recovery-store-'));
   fs.mkdirSync(join(root, 'records'), { mode: 0o700 });
   fs.mkdirSync(join(root, 'staging'), { mode: 0o700 });
   t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); fs.rmSync(root, { recursive: true, force: true }); });
+  return root;
+}
+function protectedFixture(parent, name = 'journal') {
+  const root = join(parent, name);
+  createPrivateRecoveryDirectory(root);
+  fs.mkdirSync(join(root, 'records'), { mode: 0o700 });
+  fs.mkdirSync(join(root, 'staging'), { mode: 0o700 });
   return root;
 }
 const contents = root => fs.readdirSync(join(root, 'records')).sort().map(name => [name, fs.readFileSync(join(root, 'records', name))]);
@@ -96,7 +107,9 @@ test('store inválido e falha de leitura são distintos de operação pendente',
   } finally { t.mock.restoreAll(); syncBuiltinESMExports(); }
 });
 
-test('troca por link após lstat não lê nem altera o arquivo externo', { skip: process.platform === 'win32' }, t => {
+test('troca por link após lstat não lê nem altera o arquivo externo', {
+  skip: process.platform === 'win32' ? 'A fixture cria um link simbólico de arquivo, que exige privilégio específico no Windows.' : false,
+}, t => {
   const root = fixture(t); reserveRecovery(root);
   const external = fs.mkdtempSync(join(fs.realpathSync(tmpdir()), 'adk-recovery-link-'));
   t.after(() => fs.rmSync(external, { recursive: true, force: true }));
@@ -161,30 +174,45 @@ test('colisão na reserva preserva o claim concorrente e reporta disputa', t => 
   assert.equal(contents(root).length, 1);
 });
 
-test('colisão no arquivo de preparação é erro de E/S e não disputa de claim', t => {
-  const root = fixture(t), open = fs.openSync;
-  t.mock.method(fs, 'openSync', (path, ...args) => {
-    if (String(path).startsWith(join(root, 'staging'))) throw Object.assign(new Error('colisão sintética'), { code: 'EEXIST' });
-    return open(path, ...args);
+nodeTest('colisão no arquivo de preparação é erro de E/S e não disputa de claim', t => {
+  const root = protectedFixture(fixture(t)), open = fs.openSync;
+  const staging = join(root, 'staging');
+  let collisions = 0;
+  t.mock.method(fs, 'openSync', (path, flags, ...rest) => {
+    if (flags === 'wx' && typeof path === 'string' && dirname(path) === staging) {
+      collisions++;
+      throw Object.assign(new Error('colisão sintética'), { code: 'EEXIST' });
+    }
+    return open(path, flags, ...rest);
   });
   syncBuiltinESMExports();
   try { assert.throws(() => reserveRecovery(root), code('E_RECOVERY_IO')); }
   finally { t.mock.restoreAll(); syncBuiltinESMExports(); }
+  assert.equal(collisions, 1);
   assert.equal(inspectRecoveryJournal(root).status, 'ready');
   assert.deepEqual(fs.readdirSync(join(root, 'records')), []);
 });
 
-test('falha ao fechar arquivo de preparação não fecha o descritor duas vezes', t => {
-  const root = fixture(t), close = fs.closeSync; let calls = 0;
+nodeTest('falha ao fechar arquivo de preparação não fecha o descritor duas vezes', t => {
+  const root = protectedFixture(fixture(t)), open = fs.openSync, close = fs.closeSync;
+  const staging = join(root, 'staging');
+  let stagingFd, calls = 0;
+  t.mock.method(fs, 'openSync', (path, flags, ...rest) => {
+    const fd = open(path, flags, ...rest);
+    if (flags === 'wx' && typeof path === 'string' && dirname(path) === staging) stagingFd = fd;
+    return fd;
+  });
   t.mock.method(fs, 'closeSync', fd => {
-    calls++; close(fd);
+    if (fd !== stagingFd) return close(fd);
+    calls++;
+    close(fd);
     throw Object.assign(new Error('falha sintética após fechar'), { code: 'EIO' });
   });
   syncBuiltinESMExports();
-  assert.throws(() => reserveRecovery(root), code('E_RECOVERY_IO'));
-  t.mock.restoreAll(); syncBuiltinESMExports();
+  try { assert.throws(() => reserveRecovery(root), code('E_RECOVERY_IO')); }
+  finally { t.mock.restoreAll(); syncBuiltinESMExports(); }
   assert.equal(calls, 1); assert.equal(inspectRecoveryJournal(root).status, 'ready');
-  assert.equal(fs.readdirSync(join(root, 'staging')).length, 1);
+  assert.equal(fs.readdirSync(staging).length, 1);
 });
 
 test('limite de bytes é aplicado antes de interpretar registros inválidos', t => {
@@ -212,10 +240,7 @@ test('falha no fsync depois do recibo pode deixar done visível apesar do erro',
 });
 
 nodeTest('resolução manual exige ID e geração pendentes e preserva o projeto', t => {
-  const parent = fixture(t), root = join(parent, 'diário privado'), publicFile = join(parent, 'README.md');
-  createPrivateRecoveryDirectory(root);
-  fs.mkdirSync(join(root, 'records'), { mode: 0o700 });
-  fs.mkdirSync(join(root, 'staging'), { mode: 0o700 });
+  const parent = fixture(t), root = protectedFixture(parent, 'diário privado'), publicFile = join(parent, 'README.md');
   fs.writeFileSync(publicFile, 'edição humana');
   for (const phase of ['claim', 'begin']) {
     const { id, generation } = reserveRecovery(root);
@@ -239,10 +264,7 @@ nodeTest('resolução manual exige ID e geração pendentes e preserva o projeto
 });
 
 nodeTest('recibo inválido bloqueia a resolução e preserva a pendência para inspeção', t => {
-  const parent = fixture(t), root = join(parent, 'journal');
-  createPrivateRecoveryDirectory(root);
-  fs.mkdirSync(join(root, 'records'), { mode: 0o700 });
-  fs.mkdirSync(join(root, 'staging'), { mode: 0o700 });
+  const root = protectedFixture(fixture(t));
   const { generation, id } = reserveRecovery(root);
   const name = join(root, 'records', '000000000001.resolved.json');
   fs.writeFileSync(name, '{}\n', { flag: 'wx', mode: 0o400 });
@@ -417,7 +439,8 @@ for (const part of ['', 'records', 'staging']) for (const bit of [0o1000, 0o2000
   });
 }
 nodeTest('Linux root recusa UID real divergente nos três diretórios sem escrever', {
-  skip: process.platform !== 'linux' || typeof process.geteuid !== 'function' || process.geteuid() !== 0,
+  skip: process.platform !== 'linux' || typeof process.geteuid !== 'function' || process.geteuid() !== 0
+    ? 'A fixture requer root no Linux para atribuir aos diretórios outro UID real.' : false,
 }, t => {
   for (const part of ['', 'records', 'staging']) {
     const root = fixture(t), target = part ? join(root, part) : root;
@@ -539,7 +562,8 @@ for (const stage of ['opened', 'after', 'named']) for (const field of ['uid', 'm
   });
 }
 nodeTest('Linux root recusa registro de outro UID sem gravar', {
-  skip: process.platform !== 'linux' || typeof process.geteuid !== 'function' || process.geteuid() !== 0,
+  skip: process.platform !== 'linux' || typeof process.geteuid !== 'function' || process.geteuid() !== 0
+    ? 'A fixture requer root no Linux para atribuir ao registro outro UID real.' : false,
 }, t => {
   const root = fixture(t), claim = reserveRecovery(root), record = join(root, 'records', '000000000001.claim.json');
   fs.chownSync(record, 12345, process.getegid());

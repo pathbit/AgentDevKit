@@ -5,7 +5,7 @@ description: Confere os indicadores registrados antes da implementação.
 # Verificar configuração
 
 ```sh
-node .pbai4devs/scripts/executar-script/SCRIPT.mjs verificar-configuracao
+node .pbai4devs/scripts/verificar-configuracao/SCRIPT.mjs
 ```
 
 Para consultar apenas a preparação antes da spec, acrescente `--preparacao`.
