@@ -263,6 +263,16 @@ test('perfil completo isola recuperação e obstruções pesadas e executa cada 
   const firstFailure = new Error('recuperação falhou'); let invoked = 0;
   assert.throws(() => runPipeline('full', { root, run() { invoked++; throw firstFailure; } }), error => error === firstFailure);
   assert.equal(invoked, 1);
+  const infrastructureCalls = [];
+  const stopAtLint = new Error('fim da prova de infraestrutura');
+  assert.throws(() => runPipeline('full', { root, run(_root, args) {
+    if (args[0] === 'scripts/release/infrastructure.mjs') infrastructureCalls.push(args);
+    if (args.includes('markdownlint-cli2')) throw stopAtLint;
+  } }), error => error === stopAtLint);
+  assert.deepEqual(infrastructureCalls, [
+    ['scripts/release/infrastructure.mjs'],
+    ...(process.platform === 'linux' ? [['scripts/release/infrastructure.mjs', '--native']] : []),
+  ]);
 });
 
 test('perfil completo não aceita filtro herdado que oculte testes', t => {

@@ -129,7 +129,8 @@ test('instala recursos de desenvolvimento nos clientes selecionados e preserva p
     for (const resource of resources) assert.ok(command(id).references.includes(resource.path), `${id} → ${resource.path}`);
   }
   const verify = automation('verificar-recursos');
-  assert.ok(read(command('verificar-agentes').path).includes(verify.argv.join(' ')));
+  const firstStep = read(command('verificar-agentes').path).match(/^```console\r?\n([^\r\n]+)/m)?.[1];
+  assert.equal(firstStep, verify.argv.join(' '));
   const verified = spawnSync(process.execPath, verify.argv.slice(1), { cwd: root, encoding: 'utf8', timeout: 60000 });
   assert.equal(verified.status, 0, verified.error?.message || verified.stderr);
   assert.match(verified.stdout, /^recursos=passed$/m);

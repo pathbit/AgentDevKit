@@ -27,9 +27,10 @@ na API ou interface local conforme
 ## Relatório de segurança
 
 Encerre a revisão no diagnóstico e nas recomendações. Apresente o relatório na
-conversa e salve uma cópia em `.agent-tests/security/`.
-Cite e preserve o `report.json` se foi gerado. Omita segredos e dados
-pessoais. Use quatro seções:
+conversa. Salve uma cópia em `.agent-tests/security/` quando o destino estiver
+ignorado e fora do índice. Se precisar de uma cópia sem esse destino, use uma
+pasta temporária privada fora do Git. Cite e preserve o `report.json` existente.
+Omita segredos e dados pessoais. Use quatro seções:
 
 1. **Resumo e escopo** com caminhos, ambiente, verificações e contagem de
    achados confirmados por gravidade. Identifique e justifique suspeitas e

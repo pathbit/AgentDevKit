@@ -65,7 +65,8 @@ exceção deve informar o requisito que impede a execução naquele ambiente.
 - Windows em NTFS comprova DACL, fluxos alternativos e aliases 8.3. A fixture
   deve criar um alias que resolva o arquivo.
 - Linux comprova xattr, ACL POSIX e `O_NOATIME` com volume compatível, `attr`,
-  `acl` e Python 3 quando exigido. Uma fixture simula a falta de `getfattr`.
+  `acl` e Python 3 quando exigido. O perfil completo exige os três testes de
+  xattr do sincronizador pelo nome. Uma fixture simula a falta de `getfattr`.
 - `native-linux-ownership` roda cinco casos isolados com troca real de UID.
   O restante do perfil completo do CI roda como usuário comum.
 - Linux e macOS comprovam bits POSIX, sinais para grupos e nomes de arquivo

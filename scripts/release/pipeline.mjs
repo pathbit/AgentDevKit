@@ -282,6 +282,7 @@ export function runPipeline(profile, { root = releaseRoot, env = process.env, ru
     for (const group of fullTestGroups(readdirSync(join(root, tests)))) test(group, ['--test-concurrency=4'], strictEnv);
     run(root, [`${hub}/scripts/preparar-ferramentas/SCRIPT.mjs`, 'install', 'skills'], strictEnv);
     run(root, ['scripts/release/infrastructure.mjs'], strictEnv);
+    if (process.platform === 'linux') run(root, ['scripts/release/infrastructure.mjs', '--native'], strictEnv);
     run(root, [`${hub}/scripts/preparar-ferramentas/SCRIPT.mjs`, 'install', 'markdownlint-cli2'], strictEnv);
     check(strictEnv);
     const artifact = buildRelease(root, { env: strictEnv });

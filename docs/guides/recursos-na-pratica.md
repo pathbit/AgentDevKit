@@ -59,9 +59,11 @@ casos de limite e falha; segurança considera ameaças e permissões; performanc
 compara medições com metas e carga definidas. Registre ambiente, comandos e
 resultados por critério, inclusive falhas e verificações não executadas.
 
-Para **rodar um projeto existente**, `agentdevkit next --intent run --target .`
-indica a etapa atual. [Diagnosticar][diagnose] inventaria ambiente e projeto;
-[preparar-dev][prepare] usa esse inventário quando o pedido inclui ajustes.
+Para **rodar um projeto existente**, consulte a etapa atual com
+`npx @pathbit/agentdevkit next --intent run --target .`, usando a versão e o
+registro escolhidos na [instalação][install]. [Diagnosticar][diagnose] inventaria
+ambiente e projeto, e [preparar-dev][prepare] usa esse inventário quando o
+pedido inclui ajustes.
 Entregue os comandos para subir, verificar e parar a aplicação.
 
 Para **auditar segurança**, [auditar-seguranca][audit] coleta ou reaproveita o

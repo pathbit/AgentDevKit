@@ -63,10 +63,12 @@ Se trabalhar em sequência, informe a limitação quando ela afetar a entrega.
 Use [verificar-trabalho](../../projeto/verificar-trabalho/SKILL.md) para provar
 os aceites do seu escopo. Atualize tarefas, roadmap, release e documentos afetados
 com `atualizar-documentacao`. Se recebeu trabalho delegado, devolva ao agente
-principal o diff, provas e pendências. O principal usa
-[validar-entrega](../../../commands/validar-entrega/COMMAND.md) para comprovar
-o estado integrado e [revisar-entrega](../../../commands/revisar-entrega/COMMAND.md)
-para obter revisão independente e registrar o resultado em `.agent-tests/`.
+principal o diff, as provas e as pendências. Se iniciou pelo comando
+[implementar-entrega](../../../commands/implementar-entrega/COMMAND.md),
+devolva o mesmo conjunto ao fluxo do comando. Se iniciou por esta skill como
+responsável pela entrega, siga
+[validar-entrega](../../../commands/validar-entrega/COMMAND.md), que encaminha
+o resultado à revisão independente.
 
 Siga a regra Git em checkpoints autorizados. Preserve o conteúdo staged
 preexistente, inclusive da própria spec. Adie o checkpoint se houver risco
