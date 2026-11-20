@@ -159,14 +159,17 @@ try {
   exit 3
 }
 `;
-  const result = spawnSync(executable, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', probe], {
+  verifyWindowsFileChangeProbe(entries, () => spawnSync(executable, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', probe], {
     env: { SystemRoot: process.env.SystemRoot }, input: JSON.stringify({ entries: entries.map(({ path, update }) => ({ path, update })) }),
     encoding: 'utf8', windowsHide: true, timeout: 60000,
-  });
-  assertWindowsFileChangeResult(result, entries);
+  }));
 }
 
-export function assertWindowsFileChangeResult(result, entries) {
+export function verifyWindowsFileChangeProbe(entries, run) {
+  let result = run();
+  // A timed-out preflight can be repeated because the probe only opens files
+  // and closes the handles. Explicit denials and other errors are final.
+  if (result.error?.code === 'ETIMEDOUT') result = run();
   if (result.error || result.status !== 0) {
     const singleEntry = entries.length === 1 ? entries[0] : undefined;
     const index = /^\d+$/.test(result.stdout?.trim()) ? Number(result.stdout.trim()) : null;

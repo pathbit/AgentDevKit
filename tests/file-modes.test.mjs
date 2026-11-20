@@ -13,7 +13,7 @@ import { applyPlan, planInstallation } from '../src/install.mjs';
 import { main as cliMain } from '../src/cli.mjs';
 import { collectErrorDiagnostics } from '../.pbai4devs/scripts/lib/error-reporting.mjs';
 import { fileOwnerIssue } from '../.pbai4devs/scripts/lib/file-owner.mjs';
-import { assertWindowsFileChangeResult, checkWindowsFileChanges, publishFileReplacement } from '../.pbai4devs/scripts/lib/native-metadata.mjs';
+import { checkWindowsFileChanges, publishFileReplacement, verifyWindowsFileChangeProbe } from '../.pbai4devs/scripts/lib/native-metadata.mjs';
 import { inspectProjectRecovery } from '../.pbai4devs/scripts/lib/project-recovery.mjs';
 import { verifyRecoveryBackup } from '../.pbai4devs/scripts/lib/recovery-backup.mjs';
 import { createPrivateRecoveryDirectory } from '../.pbai4devs/scripts/lib/recovery-privacy.mjs';
@@ -152,19 +152,33 @@ test('Windows: o pré-voo verifica vários alvos e identifica o arquivo protegid
   for (const entry of entries) assert.equal(readFileSync(entry.path, 'utf8'), entry.displayPath);
 });
 
-test('Windows: o pré-voo informa timeout sem atribuir a falha a um alvo', () => {
+test('Windows: o pré-voo repete apenas timeout e mantém a recusa explícita', () => {
   const entries = ['primeiro.txt', 'segundo.txt'].map(displayPath => ({
     path: join(tmpdir(), displayPath), displayPath, update: true,
   }));
-  const result = {
-    status: null, error: Object.assign(new Error('detalhe interno'), { code: 'ETIMEDOUT' }), stdout: '',
-  };
-  assert.throws(() => assertWindowsFileChangeResult(result, entries), error => {
+  const timedOut = { status: null, error: Object.assign(new Error('detalhe interno'), { code: 'ETIMEDOUT' }), stdout: '' };
+  let attempts = 0;
+  assert.doesNotThrow(() => verifyWindowsFileChangeProbe(entries, () => ++attempts === 1 ? timedOut : { status: 0 }));
+  assert.equal(attempts, 2);
+
+  attempts = 0;
+  assert.throws(() => verifyWindowsFileChangeProbe(entries, () => {
+    attempts++;
+    return timedOut;
+  }), error => {
     assert.equal(error.code, 'E_METADATA_UNSUPPORTED');
     assert.equal(error.message, 'Windows file protection verification timed out.');
     assert.equal(error.path, undefined);
     return true;
   });
+  assert.equal(attempts, 2);
+
+  attempts = 0;
+  assert.throws(() => verifyWindowsFileChangeProbe(entries, () => {
+    attempts++;
+    return { status: 2, stdout: '1' };
+  }), { code: 'E_PROTECTED_METADATA', path: 'segundo.txt' });
+  assert.equal(attempts, 1);
 });
 
 test('classifica proprietário e leitura sem presumir suporte no Windows', () => {

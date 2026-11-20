@@ -2,10 +2,12 @@ import '../.pbai4devs/scripts/lib/test-git-environment.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmdirSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { checkDoctorIssues, checkExcludeOrigin, checkHumanExcludeBytes, checkNativeOwnership, checkOriginals, checkPreservedLinks, checkPreservedManagedEdit, checkStandaloneSync, checkSyncIssues, classifyIgnoreStatus, environment, fileSnapshot, gitSnapshot, hash, linkedDirectoryPaths, mayAliasPath, outputDirectory, parseCliResult, prepareOutput, stateJson } from './oss-compatibility.mjs';
+import { completeProjectRecovery, inspectProjectRecovery, startProjectRecovery } from '../.pbai4devs/scripts/lib/project-recovery.mjs';
+import { applyPlan } from '../src/install.mjs';
+import { checkDoctorIssues, checkExcludeOrigin, checkHumanExcludeBytes, checkNativeOwnership, checkOriginals, checkPreservedLinks, checkPreservedManagedEdit, checkStandaloneSync, checkSyncIssues, classifyIgnoreStatus, environment, fileSnapshot, gitSnapshot, hash, linkedDirectoryPaths, mayAliasPath, outputDirectory, parseCliResult, prepareOutput, stateJson, workspace } from './oss-compatibility.mjs';
 
 test('artefatos visíveis são observados e falhas do Git são recusadas', () => {
   assert.deepEqual(classifyIgnoreStatus('tmp/probe', 0), { path: 'tmp/probe', ignored: true, status: 0 });
@@ -423,8 +425,53 @@ test('verificação OSS aceita edição humana preservada e rejeita perdas ou al
     ['backup file link', { after: { ...after, [backupState]: { kind: 'symlink', target: '/outside', mode: 0o777 } } }, /Backup do estado anterior/],
     ['backup directory link', { after: { ...after, [`${backup}/.pbai4devs`]: { kind: 'symlink', target: '/outside', mode: 0o777 } } }, /Caminho do backup/],
     ['backup mode', { after: { ...after, [backupState]: { ...file('old state'), mode: 0o600 } } }, /Backup do estado anterior/],
+    ['backup extra', { after: { ...after, [`${backup}/extra.txt`]: file('inexplicado') } }, /outros arquivos/],
     ['preexisting backup', { before: { ...before, [backup]: { kind: 'directory', mode: 0o755 } } }, /já existia/],
   ]) await t.test(label, () => assert.throws(() => checkPreservedManagedEdit({ ...valid, ...change }), message));
+});
+
+test('verificação OSS aceita somente os artefatos de recuperação do update comprovado', { timeout: 120000 }, t => {
+  const root = realpathSync(mkdtempSync(join(realpathSync(tmpdir()), 'agentdevkit-oss-edit-recovery-')));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const managed = '.pbai4devs/rules/qualidade/RULE.md', statePath = '.pbai4devs/state/agentdevkit.json';
+  const edited = Buffer.from('Conteúdo humano preservado.\n');
+  const state = { schemaVersion: 1, version: '0.0.31', language: 'pt', files: {}, blocks: {} };
+  const beforeState = { ...state, files: { [managed]: hash('original') } };
+  const beforeBytes = Buffer.from(JSON.stringify(beforeState) + '\n'), afterBytes = Buffer.from(JSON.stringify(state) + '\n');
+  mkdirSync(join(root, '.pbai4devs/rules/qualidade'), { recursive: true });
+  mkdirSync(join(root, '.pbai4devs/state'), { recursive: true });
+  writeFileSync(join(root, managed), edited);
+  writeFileSync(join(root, statePath), beforeBytes);
+  writeFileSync(join(root, '__proto__'), 'arquivo humano de nome incomum');
+  completeProjectRecovery(startProjectRecovery(root, []));
+  const previousRecovery = inspectProjectRecovery(root), before = workspace(root);
+  assert.ok(Object.hasOwn(before, '__proto__'));
+  const { backup } = applyPlan({
+    target: root, canApply: true, language: 'pt', localIgnore: { edits: [] }, retiredRoots: [],
+    changes: [{ path: statePath, action: 'update', beforeHash: hash(beforeBytes), content: afterBytes }],
+  });
+  const after = workspace(root), git = { indexSha256: hash('índice imutável') };
+  const valid = { root, previousRecovery, before, after, beforeGit: git, afterGit: git, managed, edited,
+    outcome: { ok: true, backup, preserved: [{ path: managed, reason: 'edited-managed-file' }] }, beforeState, state: stateJson(root, statePath) };
+  assert.doesNotThrow(() => checkPreservedManagedEdit(valid));
+
+  const past = Object.keys(before).find(path => path.endsWith('000000000001.done.json'));
+  assert.ok(past);
+  assert.throws(() => checkPreservedManagedEdit({ ...valid, after: {
+    ...after, [past]: { ...after[past], sha256: hash('recibo alterado') },
+  } }), /arquivos preexistentes/);
+  assert.throws(() => checkPreservedManagedEdit({ ...valid, previousRecovery: { ...previousRecovery, generation: 0 } }), /única geração/);
+
+  const staged = Object.keys(after).find(path => !Object.hasOwn(before, path) && path.endsWith('/stage'));
+  assert.ok(staged);
+  mkdirSync(join(root, staged, '.git'));
+  assert.throws(() => checkPreservedManagedEdit({ ...valid, after: workspace(root) }), /outros arquivos.*\/stage\/\.git/);
+  rmdirSync(join(root, staged, '.git'));
+
+  const blob = Object.keys(after).find(path => !Object.hasOwn(before, path) && path.endsWith('/blobs/00000001.bin'));
+  assert.ok(blob);
+  writeFileSync(join(root, blob), 'backup inválido');
+  assert.throws(() => checkPreservedManagedEdit({ ...valid, after: workspace(root) }), { code: 'E_RECOVERY_BACKUP_INVALID' });
 });
 
 test('verificação OSS detecta alteração dos bytes do índice com entradas inalteradas', t => {

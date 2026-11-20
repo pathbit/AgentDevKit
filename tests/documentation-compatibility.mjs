@@ -9,7 +9,7 @@ import { findNpmCli } from '../.pbai4devs/scripts/lib/npm.mjs';
 import {
   main as runCompatibility, parseCompatibilityArgs, outputDirectory,
   environment, recorder, workspace, gitSnapshot, info, put,
-  json, hash, portable, registry,
+  checkDoctorIssues, checkStandaloneSync, checkSyncIssues, json, hash, portable, registry,
 } from './oss-compatibility.mjs';
 
 const inspector = '.pbai4devs/scripts/inspecionar-projeto/SCRIPT.mjs';
@@ -125,11 +125,11 @@ export function assertAdditivePreservation(root, before, plan, originalBytes) {
 }
 
 function cliRunner(run, envRoot, npm, options) {
-  return (name, args) => {
+  return (name, args, expected = 0) => {
     const output = run(name, process.execPath, [npm, 'exec', '--yes', '--ignore-scripts', `--registry=${registry}`,
-      `--package=${options.tarball || `@pathbit/agentdevkit@${options.version}`}`, '--', 'agentdevkit', ...args, '--json'], join(envRoot, 'npm-work'));
+      `--package=${options.tarball || `@pathbit/agentdevkit@${options.version}`}`, '--', 'agentdevkit', ...args, '--json'], join(envRoot, 'npm-work'), expected);
     const value = JSON.parse(output);
-    assert.equal(value.version, options.version); assert.equal(value.ok, true);
+    assert.equal(value.version, options.version); assert.equal(value.ok, expected === 0);
     return value;
   };
 }
@@ -144,6 +144,11 @@ function exerciseProject(project, options, output, envRoot, env, npm) {
   const checked = name => { result.checks.push({ name, status: 'passed' }); console.log(`${project.id}: documentation-${name}=passed`); };
   try {
     const before = workspace(root), gitBefore = gitSnapshot(root, git);
+    const { status, expectedBlocking } = project.diagnostics;
+    const expected = expectedBlocking.length ? 1 : 0;
+    const syncArgs = ['sync', '--check', '--target', root];
+    const baselineSync = cli('sync-before-documents', syncArgs, expected);
+    checkSyncIssues(baselineSync, null, true, expectedBlocking);
     put(join(evidence, 'before.json'), JSON.stringify({ workspace: before, git: gitBefore }, null, 2) + '\n');
     const inspected = JSON.parse(run('inventory-before', process.execPath, [inspector], root));
     assert.deepEqual(workspace(root), before, 'Inventário alterou o clone.');
@@ -159,9 +164,14 @@ function exerciseProject(project, options, output, envRoot, env, npm) {
     assert.equal(applyAdditiveFixture(root, plan).changed, false);
     assert.deepEqual(workspace(root), afterEdit, 'Repetição da fixture alterou arquivos.'); checked('fixture-idempotent');
     cli('update-documents', ['update', '--target', root, '--yes']);
-    cli('doctor-documents', ['doctor', '--target', root]);
-    cli('sync-documents', ['sync', '--check', '--target', root]);
-    run('standalone-documents', process.execPath, ['.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs', '--check'], root);
+    const doctor = cli('doctor-documents', ['doctor', '--target', root], expected);
+    const sync = cli('sync-documents', syncArgs, expected);
+    checkDoctorIssues(doctor, null, true, expectedBlocking);
+    checkSyncIssues(sync, null, true, expectedBlocking);
+    assert.deepEqual(sync.localIgnore.pending, baselineSync.localIgnore.pending, 'A manutenção alterou os diagnósticos de ignore.');
+    const standalone = run('standalone-documents', process.execPath, ['.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs', '--check'], root, expected);
+    checkStandaloneSync(standalone, sync);
+    result.diagnostics = { status, expectedBlocking };
     assert.deepEqual(workspace(root), afterEdit, 'Manutenção do kit reescreveu documentos.');
     assert.deepEqual(gitSnapshot(root, git), gitBefore, 'Git alterado após manutenção do kit.');
     checked('kit-preserves-additions');
@@ -186,6 +196,7 @@ function exerciseEmpty(options, output, envRoot, env, npm) {
   const { run, commands } = recorder(evidence, env), cli = cliRunner(run, envRoot, npm, options);
   const result = { id: 'empty', status: 'failed', checks: [], failures: [] };
   try {
+    run('git-init-empty', 'git', ['init', '--quiet', '--template=', root], output);
     assert.deepEqual(workspace(root), {});
     cli('init-empty', ['init', '--target', root, '--agents', 'codex', '--lang', 'en', '--yes']);
     const before = workspace(root), inspected = JSON.parse(run('inventory-empty', process.execPath, [inspector], root));

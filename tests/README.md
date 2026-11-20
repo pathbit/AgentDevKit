@@ -258,6 +258,8 @@ O teste clona os commits fixos da [matriz](fixtures/oss-projects.json):
 Hibernate ORM, EF6, Rust, Go, Tailcat, Express, Requests, Zod e Chi.
 Confere arquivos, permissões, links, staging, instalação e atualização; compara
 os bytes de `.git/info/exclude` e observa ignores sem exigir alterações neles.
+Para edições humanas, valida o backup compatível e, quando o pacote usa diário
+de recuperação, o encadeamento dos recibos e a cópia do estado anterior.
 Inclui uma skill própria, uma referência Markdown curta, configuração local
 e um agente humano com nome igual ao do kit. Confere também a sincronização
 independente e `--force` sem remover esses recursos.
@@ -293,8 +295,9 @@ npm run test:docs -- --version 0.0.13
 O runner reutiliza a matriz OSS e consulta o inventário do pacote instalado.
 Registra um plano aditivo, acrescenta um trecho controlado a um README regular
 e cria um índice de links. Depois repete a manutenção do kit e compara conteúdo,
-arquivos fora do plano e Git. Também verifica um projeto vazio sem inventar PRD,
-design ou aprovação. Aceita `--tarball` para validar um candidato.
+arquivos fora do plano, Git e os diagnósticos de ignore observados antes da
+edição. Também verifica um repositório Git vazio sem inventar PRD, design
+ou aprovação. Aceita `--tarball` para validar um candidato.
 
 Esses complementos são fixtures do harness: comprovam inventário e preservação,
 não a qualidade da autoria autônoma por um modelo. Um exercício real do agente

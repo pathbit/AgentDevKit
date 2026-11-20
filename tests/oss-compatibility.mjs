@@ -9,11 +9,15 @@ import { delimiter, dirname, isAbsolute, join, relative, resolve, sep } from 'no
 import { fileURLToPath } from 'node:url';
 import { findNpmCli } from '../.pbai4devs/scripts/lib/npm.mjs';
 import { createExampleOutput } from '../.pbai4devs/scripts/testar-maturidade/SCRIPT.mjs';
+import { inspectProjectRecovery } from '../.pbai4devs/scripts/lib/project-recovery.mjs';
+import { verifyRecoveryBackup } from '../.pbai4devs/scripts/lib/recovery-backup.mjs';
+import { assertPrivateRecoveryPaths } from '../.pbai4devs/scripts/lib/recovery-privacy.mjs';
 
 const repositoryRoot = realpathSync.native(resolve(dirname(fileURLToPath(import.meta.url)), '..'));
 const hash = content => createHash('sha256').update(content).digest('hex');
 const portable = path => path.split(sep).join('/');
 const statePath = '.pbai4devs/state/agentdevkit.json';
+const recoveryPath = '.agent-tests/agentdevkit/recovery';
 const registry = 'https://registry.npmjs.org';
 const put = (path, text) => { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, text); };
 const json = path => JSON.parse(readFileSync(path, 'utf8'));
@@ -213,16 +217,17 @@ function writeClone(root, path, content) {
 }
 
 function workspace(root) {
-  const files = {};
+  const files = [];
   function visit(path = '') {
     for (const name of readdirSync(join(root, path)).sort()) {
-      if (name === '.git') continue;
+      if (!path && name === '.git') continue;
       const child = path ? `${path}/${name}` : name;
-      files[child] = fileSnapshot(root, child);
-      if (files[child].kind === 'directory') visit(child);
+      const item = fileSnapshot(root, child);
+      files.push([child, item]);
+      if (item.kind === 'directory') visit(child);
     }
   }
-  visit(); return files;
+  visit(); return Object.fromEntries(files);
 }
 
 // Check path components before reading or invoking Git. This detects existing
@@ -440,10 +445,78 @@ function checkOriginals(root, baseline, git) {
   }
 }
 
-// A human edit turns a previously managed file into user-owned content. The
-// state and a newly-created backup may change, but the edited bytes, the rest of
-// the workspace and the complete Git snapshot must remain untouched.
-function checkPreservedManagedEdit({ before, after, beforeGit, afterGit, managed, edited, outcome, beforeState, state }) {
+function parentPaths(path) {
+  const parts = path.split('/');
+  return parts.slice(1).map((_, index) => parts.slice(0, index + 1).join('/'));
+}
+
+function managedEditRecoveryPaths(root, before, after, previous, added) {
+  const current = inspectProjectRecovery(root);
+  assert.equal(previous?.status, 'ready', 'Recuperação anterior não está pronta.');
+  assert.equal(current.status, 'ready', 'Recuperação do update não está pronta.');
+  if (!previous.store && !current.store) return [];
+  assert.equal(current.store, join(root, recoveryPath), 'Update usou armazenamento de recuperação fora do clone.');
+  if (previous.store) assert.equal(current.store, previous.store, 'O armazenamento de recuperação foi deslocado.');
+  assert.equal(current.generation, previous.generation + 1, 'Update deve registrar uma única geração de recuperação.');
+  assert.equal(current.terminal, 'done', 'A geração do update deve terminar em done.');
+  assert.equal(current.resolvedCount, previous.resolvedCount ?? 0, 'Update não pode resolver gerações anteriores.');
+
+  const journal = `${recoveryPath}/journal`, records = `${journal}/records`, staging = `${journal}/staging`;
+  const number = String(current.generation).padStart(12, '0');
+  const receipts = ['claim', 'begin', 'done'].map(kind => `${records}/${number}.${kind}.json`);
+  for (const path of receipts) assert.ok(added.has(path) && after[path].kind === 'file', 'Update deve publicar três recibos novos.');
+  const [claim, begin] = receipts.map(path => json(join(root, path)));
+  assert.equal(claim.previous, previous.head, 'A geração do update não continua a cadeia anterior.');
+
+  const operation = `${recoveryPath}/backups/${begin.id}`;
+  const snapshot = `${operation}/snapshot`, stage = `${operation}/stage`, origin = `${operation}/root.json`;
+  const manifest = `${snapshot}/manifest.json`, blob = `${snapshot}/blobs/00000001.bin`;
+  const originalRoot = { version: 1, target: root, anchor: root, missing: [] };
+  assert.ok(added.has(origin) && after[origin].kind === 'file', 'A transação não registrou sua origem.');
+  assert.equal(after[origin].sha256, hash(JSON.stringify(originalRoot) + '\n'), 'A origem da transação não corresponde ao clone.');
+  if (process.platform !== 'win32') assert.equal(after[origin].mode, 0o600, 'A origem da transação deve ser privada.');
+  assert.ok(added.has(manifest) && after[manifest].kind === 'file', 'A transação não registrou seu manifesto.');
+  const backupManifest = after[manifest].sha256;
+  assert.equal(begin.manifest, hash(JSON.stringify({ version: 1, originalRoot, backupManifest }) + '\n'), 'O recibo não corresponde ao manifesto da transação.');
+  const parents = parentPaths(statePath);
+  assert.deepEqual(verifyRecoveryBackup(join(root, snapshot), backupManifest), {
+    manifest: backupManifest, entries: parents.length + 1, files: 1,
+  }, 'Backup de recuperação deve conter somente o estado anterior e seus diretórios.');
+  const { entries } = json(join(root, manifest));
+  assert.deepEqual(entries.map(({ path, action, type, mode, sha256 }) => ({ path, action, type, mode, sha256 })), [
+    ...parents.map(path => ({ path, action: 'retain', type: 'directory', mode: before[path]?.mode, sha256: undefined })),
+    { path: statePath, action: 'update', type: 'file', mode: before[statePath].mode, sha256: before[statePath].sha256 },
+  ], 'Backup de recuperação não corresponde ao estado anterior.');
+
+  const privateDirs = [operation, stage, ...parents.map(path => `${stage}/${path}`)];
+  for (const path of privateDirs) {
+    assert.ok(added.has(path) && after[path].kind === 'directory', 'Diretório da transação ausente, preexistente ou inválido.');
+    if (process.platform !== 'win32') assert.equal(after[path].mode, 0o700, 'Diretório da transação deve ser privado.');
+  }
+  assertPrivateRecoveryPaths([...privateDirs, origin].map(path => join(root, path)));
+
+  // Each staging name is the other hardlink of one of the new journal receipts.
+  const identity = path => {
+    const stat = lstatSync(join(root, path), { bigint: true });
+    assert.ok(stat.isFile() && stat.ino !== 0n && stat.nlink === 2n, 'Recibo de recuperação precisa de dois hardlinks regulares.');
+    return `${stat.dev}:${stat.ino}`;
+  };
+  const links = [...added].filter(path => path.startsWith(`${staging}/`));
+  const expectedLinks = new Set(receipts.map(identity));
+  assert.equal(links.length, receipts.length, 'Staging deve conter apenas os hardlinks dos novos recibos.');
+  for (const path of links) {
+    assert.match(path.slice(staging.length + 1), /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.record$/);
+    assert.ok(expectedLinks.delete(identity(path)), 'Staging não corresponde aos recibos da transação.');
+  }
+  const initialized = previous.store ? [] : [recoveryPath, journal, records, staging, `${recoveryPath}/backups`, `${recoveryPath}/origin.json`];
+  const artifacts = [...initialized, ...privateDirs, origin, snapshot, `${snapshot}/blobs`, manifest, blob, ...receipts, ...links];
+  assert.ok(artifacts.every(path => added.has(path)), 'A transação contém artefatos ausentes ou preexistentes.');
+  return artifacts;
+}
+
+// Once hand-edited, only the ownership entry and the update's backups and
+// recovery receipts may change. Compare all other paths and the Git snapshot.
+function checkPreservedManagedEdit({ root, previousRecovery, before, after, beforeGit, afterGit, managed, edited, outcome, beforeState, state }) {
   assert.equal(outcome?.ok, true, 'Update com edição humana deve preservar o conteúdo.');
   assert.ok(outcome.preserved?.some(item => item.path === managed && item.reason === 'edited-managed-file'), 'Edição humana não foi reportada.');
   assert.deepEqual(outcome.conflicts || [], [], 'Edição preservada não deve ser tratada como conflito.');
@@ -458,22 +531,21 @@ function checkPreservedManagedEdit({ before, after, beforeGit, afterGit, managed
   assert.deepEqual(afterGit, beforeGit, 'Update alterou o Git, índice ou exclusões locais.');
   assert.equal(before[statePath]?.kind, 'file', 'Estado anterior ausente.');
   assert.equal(after[statePath]?.kind, 'file', 'Estado posterior ausente.');
+  assert.equal(after[statePath].mode, before[statePath].mode, 'As permissões do estado foram alteradas.');
   const backup = outcome.backup;
   assert.ok(typeof backup === 'string', 'Backup do estado anterior é obrigatório.');
   assert.match(backup, /^\.agent-tests\/agentdevkit\/backups\/[A-Za-z0-9-]+$/, 'Backup fora do diretório local esperado.');
   assert.ok(!Object.hasOwn(before, backup), 'Backup informado já existia.');
   const backupState = `${backup}/${statePath}`;
-  const components = backupState.split('/');
-  for (let i = 1; i < components.length; i++) assert.equal(after[components.slice(0, i).join('/')]?.kind, 'directory', 'Caminho do backup não é diretório regular.');
+  const backupParents = parentPaths(backupState);
+  for (const path of backupParents) assert.equal(after[path]?.kind, 'directory', 'Caminho do backup não é diretório regular.');
   assert.deepEqual(after[backupState], before[statePath], 'Backup do estado anterior ausente, alterado ou com permissões divergentes.');
-  const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
-  const unexpected = [...keys].filter(file => {
-    if (JSON.stringify(before[file]) === JSON.stringify(after[file]) || file === statePath) return false;
-    if (!backup || Object.hasOwn(before, file) || !Object.hasOwn(after, file)) return true;
-    const inBackup = file === backup || file.startsWith(`${backup}/`);
-    const newAncestor = backup.startsWith(`${file}/`) && after[file].kind === 'directory';
-    return !(inBackup || newAncestor);
-  });
+  const altered = Object.keys(before).filter(path => path !== statePath && JSON.stringify(before[path]) !== JSON.stringify(after[path]));
+  assert.deepEqual(altered, [], `Update alterou outros arquivos preexistentes: ${altered.join(', ')}`);
+  const added = new Set(Object.keys(after).filter(path => !Object.hasOwn(before, path)));
+  const allowed = new Set([...backupParents, backupState]);
+  if (root) for (const path of managedEditRecoveryPaths(root, before, after, previousRecovery, added)) allowed.add(path);
+  const unexpected = [...added].filter(path => !allowed.has(path));
   assert.deepEqual(unexpected, [], `Update alterou outros arquivos: ${unexpected.join(', ')}`);
 }
 
@@ -671,9 +743,10 @@ function testProject(project, options, output, env, npm) {
       const edited = Buffer.concat([original, Buffer.from('\n<!-- Deliberate human edit. -->\n')]);
       writeClone(directory, managed, edited);
       const before = workspace(directory), beforeGit = gitSnapshot(directory, git);
+      const previousRecovery = inspectProjectRecovery(directory);
       const outcome = protectedCli('update-human-edit', ['update', '--target', directory, '--yes']);
       const after = workspace(directory), afterGit = gitSnapshot(directory, git);
-      checkPreservedManagedEdit({ before, after, beforeGit, afterGit, managed, edited, outcome, beforeState, state: stateJson(directory, statePath) });
+      checkPreservedManagedEdit({ root: directory, previousRecovery, before, after, beforeGit, afterGit, managed, edited, outcome, beforeState, state: stateJson(directory, statePath) });
       const repeat = protectedCli('update-human-edit-repeat', ['update', '--target', directory, '--yes']);
       assert.equal(repeat.changed, false, 'Repetição alterou a instalação com edição humana.');
       assert.deepEqual(workspace(directory), after, 'Repetição alterou arquivos preservados ou estado.');
