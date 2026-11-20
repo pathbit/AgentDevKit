@@ -47,11 +47,17 @@ test('CLI e sync preservam referência legada e sinalizam escopo não verificado
   for (const args of [['sync'], ['update']]) { const result = cli(...args); assert.equal(result.status, 0); assert(result.data.retainedClaudeRules.includes(wrapper)); assert.deepEqual(snapshot(), initial); noOwnership(); }
   const direct = run(process.execPath, [join(root, '.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs'), '--check']); assert.equal(direct.status, 1); assert.match(direct.stdout, /Escopo Claude nao verificado/); assert.deepEqual(snapshot(), initial); noOwnership();
   const legacyText = old.toString('utf8');
-  const variants = [legacyText.replace('description:', 'paths: ["src/**"]\ndescription:'), legacyText.replace('trigger: always_on', 'trigger: always_on\ntrigger: always_on'), legacyText.replace('rules/ambiente-local/RULE.md', 'rules/outra/RULE.md'), legacyText.replace('Estrutura mínima', 'Estrutura diferente')];
+  const variants = [
+    legacyText.replace('description:', 'paths: ["src/**"]\ndescription:'),
+    legacyText.replace('trigger: always_on', 'trigger: always_on\ntrigger: always_on'),
+    legacyText.replace('rules/ambiente-local/RULE.md', 'rules/outra/RULE.md'),
+    legacyText.replace(/^description: .+$/m, '$& Descrição alterada.'),
+  ];
   try {
     for (const value of variants) {
+      assert.notEqual(value, legacyText, 'A contraprova deve alterar a referência legada.');
       writeFileSync(join(root, wrapper), value); const before = snapshot(), states = [hash(state), hash(derived)];
-      const result = cli('sync', '--check', '--force'); assert.equal(result.status, 1); assert(result.data.conflicts.includes(wrapper));
+      const result = cli('sync', '--check', '--force'); assert.equal(result.status, 1); assert(result.data.conflicts.includes(wrapper), JSON.stringify(result.data));
       const check = run(process.execPath, [join(root, '.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs'), '--check', '--force']); assert.equal(check.status, 1); assert(check.stdout.includes(wrapper), `stdout=${check.stdout} stderr=${check.stderr}`);
       assert.deepEqual(snapshot(), before); assert.deepEqual([hash(state), hash(derived)], states); noOwnership();
     }
