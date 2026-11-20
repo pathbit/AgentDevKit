@@ -2,12 +2,39 @@ import '../.pbai4devs/scripts/lib/test-git-environment.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmdirSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { completeProjectRecovery, inspectProjectRecovery, startProjectRecovery } from '../.pbai4devs/scripts/lib/project-recovery.mjs';
 import { applyPlan } from '../src/install.mjs';
 import { checkDoctorIssues, checkExcludeOrigin, checkHumanExcludeBytes, checkNativeOwnership, checkOriginals, checkPreservedLinks, checkPreservedManagedEdit, checkStandaloneSync, checkSyncIssues, classifyIgnoreStatus, environment, fileSnapshot, gitSnapshot, hash, linkedDirectoryPaths, mayAliasPath, outputDirectory, parseCliResult, prepareOutput, stateJson, workspace } from './oss-compatibility.mjs';
+import { readRegularEntrypoint } from './upgrade-packages.mjs';
+
+test('prova de upgrade recusa link que aparenta preservar modo e conteúdo do apontamento', t => {
+  const root = mkdtempSync(join(tmpdir(), 'agentdevkit-upgrade-entry-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const path = 'AGENTS.md', absolute = join(root, path), content = Buffer.from('Instrução humana.\n');
+  writeFileSync(absolute, content);
+  const original = fileSnapshot(root, path);
+  assert.deepEqual(readRegularEntrypoint(root, path, original), content);
+  const lstat = fs.lstatSync, read = fs.readFileSync;
+  let reads = 0;
+  t.mock.method(fs, 'lstatSync', (file, ...args) => {
+    const stat = lstat(file, ...args);
+    return file === absolute ? { ...stat, isFile: () => false, isSymbolicLink: () => true } : stat;
+  });
+  t.mock.method(fs, 'readFileSync', (file, ...args) => {
+    if (file === absolute) reads++;
+    return read(file, ...args);
+  });
+  syncBuiltinESMExports();
+  try {
+    assert.throws(() => readRegularEntrypoint(root, path, original), /deve continuar como arquivo regular/);
+    assert.equal(reads, 0);
+  } finally { t.mock.restoreAll(); syncBuiltinESMExports(); }
+});
 
 test('artefatos visíveis são observados e falhas do Git são recusadas', () => {
   assert.deepEqual(classifyIgnoreStatus('tmp/probe', 0), { path: 'tmp/probe', ignored: true, status: 0 });

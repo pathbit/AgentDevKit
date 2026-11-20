@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { inspectFixture } from './gemini-command-fixture.mjs';
 import { expectedStagedRefusal, mustStop, requiredIntegrityChecks } from './gemini-command-flow-policy.mjs';
 
@@ -33,6 +34,36 @@ test('argumento só em descrição ou comentário não satisfaz a contagem no pr
     assert.equal(found.promptPlaceholderCount, 0);
     assert.equal(found.argumentPlaceholderExactlyOnce, false);
   }
+});
+
+test('valida comentário V3 na posição esperada e atrelado aos bytes do bloco', () => {
+  const body = reference + '\n\n{{args}}';
+  const blockHash = createHash('sha256').update(begin + '\n' + body + '\n' + end).digest('hex');
+  const raw = file(prompt(marker, body));
+  const encode = (fields = {}) => Buffer.from(JSON.stringify({
+    v: 3, origin: 'existing', style: 'basic-one', separator: '\n\n',
+    eol: '\n', pre: '', stmtEol: '', blockHash, lineEol: '\n', ...fields,
+  })).toString('base64url');
+  const line = '# ADK-TOML-META-V3 ' + encode() + '\n';
+  const verified = raw.replace('\nprompt', '\n' + line + 'prompt');
+  assert.equal(inspectFixture(verified, marker).metadataVerified, true);
+  assert.equal(inspectFixture(verified, marker).managedReferencePresent, true);
+  assert.equal(inspectFixture(verified, marker).argumentPlaceholderExactlyOnce, true);
+  assert.equal(inspectFixture(raw, marker).metadataVerified, false);
+  for (const invalid of [
+    verified.replace(encode(), encode({ blockHash: '0'.repeat(64) })),
+    verified.replace(encode(), encode({ separator: '\n' })),
+    verified.replace(reference, reference + ' adulterada'),
+    verified.replace(line, line + line),
+    raw + line,
+    file(marker).replace('\nprompt', '\n' + line + 'prompt'),
+  ]) assert.equal(inspectFixture(invalid, marker).fixtureSyntaxValid, false);
+
+  const invalidBody = body + '\ud800';
+  const invalidHash = createHash('sha256').update(begin + '\n' + invalidBody + '\n' + end).digest('hex');
+  const invalidUnicode = file(prompt(marker, invalidBody)).replace('\nprompt', '\n'
+    + line.replace(encode(), encode({ blockHash: invalidHash })) + 'prompt');
+  assert.equal(inspectFixture(invalidUnicode, marker).fixtureSyntaxValid, false);
 });
 
 test('conta valor decodificado, detecta duplicação e recusa mudança humana fora do bloco', () => {
@@ -71,7 +102,8 @@ test('recusa staged é esperada somente com erro exato e preservação integral'
   assert.equal(expectedStagedRefusal(base), true);
   for (const variant of [
     { gitState: 'staged' }, { phase: 'sync' }, { originalHash: null },
-    { result: { ...base.result, status: 0 } }, { result: { ...base.result, signal: 'SIGTERM' } },
+    { result: { ...base.result, status: 0 } }, { result: { ...base.result, status: 2 } },
+    { result: { ...base.result, signal: 'SIGTERM' } },
     { result: { ...base.result, error: 'ETIMEDOUT' } },
     { result: { ...base.result, json: { ...base.result.json, errorCode: 'E_OTHER' } } },
     { result: { ...base.result, json: { ...base.result.json, ok: true } } },

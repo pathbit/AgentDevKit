@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,7 +15,17 @@ if (process.versions.bun || Number(process.versions.node.split('.')[0]) < 24) {
 
 // Optional regression proof. All fixtures and outputs remain in a new temp dir.
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const cli = join(repo, 'bin', 'agentdevkit.mjs');
+const args = process.argv.slice(2);
+if (args.length && (args.length !== 2 || args[0] !== '--package' || args[1].startsWith('--'))) {
+  throw new Error('Uso: node tests/gemini-command-flow-proof.mjs [--package <pacote-local-extraído>]');
+}
+const packageRoot = args.length ? realpathSync(args[1]) : repo;
+const packageInfo = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8'));
+const version = JSON.parse(readFileSync(join(repo, 'package.json'), 'utf8')).version;
+if (packageInfo.name !== '@pathbit/agentdevkit' || packageInfo.version !== version) {
+  throw new Error('O pacote precisa corresponder à versão candidata do checkout.');
+}
+const cli = join(packageRoot, 'bin', 'agentdevkit.mjs');
 const base = mkdtempSync(join(tmpdir(), 'agentdevkit-gemini-command-'));
 const home = join(base, 'home');
 mkdirSync(home);
@@ -35,7 +45,7 @@ function run(program, args, cwd) {
   const result = spawnSync(program, args, { cwd, env, encoding: 'utf8', timeout: 120000, maxBuffer: 8 * 1024 * 1024 });
   let json = null;
   if (args.includes('--json')) {
-    try { const parsed = JSON.parse(result.stdout); json = { ok: parsed.ok, command: parsed.command, clients: parsed.clients, errorCode: parsed.error?.code || null, conflicts: parsed.conflicts || [] }; } catch { /* Invalid JSON fails the check. */ }
+    try { const parsed = JSON.parse(result.stdout); json = { ok: parsed.ok, version: parsed.version, command: parsed.command, clients: parsed.clients, errorCode: parsed.error?.code || null, conflicts: parsed.conflicts || [] }; } catch { /* Invalid JSON fails the check. */ }
   }
   return { status: result.status, signal: result.signal, error: result.error?.code || null, stderr: (result.stderr || '').slice(0, 500), json };
 }
@@ -55,7 +65,9 @@ function refsHash(root) {
 }
 function readStage(root, baseline, phase, result, marker, previousSyncHash) {
   const file = join(root, target), present = existsSync(file);
-  const content = present ? readFileSync(file, 'utf8') : '';
+  const bytes = present ? readFileSync(file) : Buffer.alloc(0);
+  const decoded = bytes.toString('utf8');
+  const content = Buffer.from(decoded, 'utf8').equals(bytes) ? decoded : '';
   const observed = inspectFixture(content, marker);
   const expectedCommand = phase === 'sync-cli-repeat' || phase === 'sync-check' ? 'sync' : phase === 'sync-cli' ? 'sync' : phase;
   const checkJson = ['init', 'sync-cli', 'sync-cli-repeat', 'sync-check', 'update'].includes(phase);
@@ -76,8 +88,9 @@ function readStage(root, baseline, phase, result, marker, previousSyncHash) {
     humanDescriptionPreserved: observed.humanDescriptionPreserved,
     humanCommentPreserved: observed.humanCommentPreserved,
     argumentPlaceholderExactlyOnce: observed.argumentPlaceholderExactlyOnce,
-    managedReferencePresent: observed.managedReferencePresent,
-    expectedCliResult: !checkJson || result.json?.ok === true && result.json.command === expectedCommand && result.json.clients?.includes('gemini'),
+    managedReferencePresent: observed.managedReferencePresent && observed.metadataVerified,
+    expectedCliResult: !checkJson || result.json?.ok === true && result.json.version === version
+      && result.json.command === expectedCommand && result.json.clients?.includes('gemini'),
     repeatedSyncIdempotent: phase !== 'sync-cli-repeat' || hash(file) === previousSyncHash,
   };
   return { phase, process: result, promptPlaceholderCount: observed.promptPlaceholderCount, fileSha256: hash(file), checks, passed: Object.values(checks).every(Boolean) };
@@ -136,11 +149,15 @@ try {
       if (stopped) { item.stages.push({ phase, outcome: 'not-run', reason: stopReason }); continue; }
       const result = action();
       const stage = readStage(root, baseline, phase, result, marker, previousSyncHash);
-      if (expectedStagedRefusal({ gitState, phase, result, stage, originalHash: baseline.target })) {
-        stage.outcome = 'expected-conservative-refusal';
-        stage.passed = true;
-        item.outcome = 'expected-conservative-refusal';
-        stopped = true; stopReason = 'expected-conservative-refusal';
+      if (gitState === 'staged-and-unstaged' && phase === 'init') {
+        const refused = result.json?.version === version
+          && expectedStagedRefusal({ gitState, phase, result, stage, originalHash: baseline.target });
+        stage.checks.expectedConservativeRefusal = refused;
+        stage.passed = refused;
+        stage.outcome = refused ? 'expected-conservative-refusal' : 'failed';
+        item.outcome = stage.outcome;
+        stopped = true;
+        stopReason = refused ? 'expected-conservative-refusal' : 'expected-refusal-missing';
       } else if (mustStop(stage.checks)) {
         stage.outcome = 'failed'; stopped = true; stopReason = 'failed-check';
       } else stage.outcome = stage.passed ? 'passed' : 'failed';
@@ -156,9 +173,9 @@ try {
   cases.push({ setupError: error.message, passed: false });
 }
 const report = {
-  fixtureRoot: base, cases,
+  fixtureRoot: base, packageRoot, version, cases,
   passed: cases.length === 8 && cases.every(item => item.passed),
-  limitations: ['Fixtures sintéticas; o analisador independente cobre apenas o formato restrito usado neste teste, não TOML em geral nem o cliente Gemini.', 'Node e Git executam com as permissões do usuário; o runner não bloqueia rede nem detecta alterações transitórias revertidas.', 'O pacote testado é o checkout local, não um pacote publicado.'],
+  limitations: ['O analisador independente cobre o formato restrito da fixture e o hash do bloco registrado no comentário V3.', 'Node e Git executam com as permissões do usuário. O runner não bloqueia rede nem detecta alterações transitórias revertidas.'],
 };
 writeFileSync(join(base, 'RESULT.json'), JSON.stringify(report, null, 2) + '\n');
 console.log(JSON.stringify(report, null, 2));

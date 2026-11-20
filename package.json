@@ -1,6 +1,6 @@
 {
   "name": "@pathbit/agentdevkit",
-  "version": "0.0.31",
+  "version": "0.0.32",
   "description": "Shared skills, specifications and workflows for AI coding agents.",
   "type": "module",
   "license": "MIT",
@@ -52,7 +52,8 @@
     "ci:portable": "node scripts/release/pipeline.mjs portable",
     "ci:smoke": "node scripts/release/pipeline.mjs smoke",
     "test:oss": "node tests/oss-compatibility.mjs",
-    "test:docs": "node tests/documentation-compatibility.mjs"
+    "test:docs": "node tests/documentation-compatibility.mjs",
+    "test:upgrade": "node tests/upgrade-packages.mjs"
   },
   "author": {
     "name": "PathBit",

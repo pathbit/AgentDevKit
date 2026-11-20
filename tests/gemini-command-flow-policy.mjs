@@ -23,7 +23,7 @@ const refusalProtection = [
 // fixture, with the original command bytes and all protected snapshots intact.
 export function expectedStagedRefusal({ gitState, phase, result, stage, originalHash }) {
   return gitState === 'staged-and-unstaged' && phase === 'init'
-    && Number.isInteger(result.status) && result.status > 0 && !result.signal && !result.error
+    && result.status === 1 && !result.signal && !result.error
     && result.json?.ok === false && result.json.command === 'init' && result.json.errorCode === 'E_STAGED'
     && typeof originalHash === 'string' && /^[a-f0-9]{64}$/.test(originalHash)
     && stage.fileSha256 === originalHash

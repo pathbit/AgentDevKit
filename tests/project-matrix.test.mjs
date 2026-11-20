@@ -11,7 +11,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { syncBuiltinESMExports } from 'node:module';
 import { gunzipSync } from 'node:zlib';
 import { isGeneratedOutput } from '../.pbai4devs/scripts/lib/gitignore.mjs';
-import { assessCoverage, command, compareCursorSidecar, cursorMetadataFromPolicy, cursorSidecarSnapshot, expectedLegacyExclude, inspectGeneratedRuleScope, matrixCases, options, outputParent, overallStatus, projectCase, provenanceComparison, provenanceSnapshot, verifiedLegacyPairs } from './project-matrix.mjs';
+import { assessCoverage, command, compareCursorSidecar, cursorMetadataFromPolicy, cursorSidecarSnapshot, expectedLegacyExclude, inspectCursorSidecarScope, inspectGeneratedRuleScope, matrixCases, options, outputParent, overallStatus, projectCase, provenanceComparison, provenanceSnapshot, verifiedLegacyPairs } from './project-matrix.mjs';
 
 const runner = join(dirname(fileURLToPath(import.meta.url)), 'project-matrix.mjs');
 // As cópias isoladas devem acompanhar também os imports transitivos do runner.
@@ -359,6 +359,24 @@ test('sidecar Cursor detecta divergência de bytes sem afirmar escopo nativo', (
   assert.equal(inspectGeneratedRuleScope({ path, entry: { trigger: 'model_decision', description: 'Regra Git.' }, content, sourceMatches: true, hasMetadata: true }), 'not-verified');
 });
 
+test('sidecar Cursor comprova dois modos documentados e recusa YAML ambíguo', () => {
+  const path = '.cursor/rules/git.mdc';
+  const check = (trigger, description, alwaysApply, source = `trigger: ${trigger}`) => {
+    const metadata = Buffer.from(`---\ndescription: ${description}\nalwaysApply: ${alwaysApply}\n---\n`);
+    const content = `${metadata.toString()}\n# Git\n`;
+    return inspectCursorSidecarScope({ path, entry: { trigger }, source: Buffer.from(`---\n${source}\n---\n\n# Git\n`), metadata, content });
+  };
+  assert.equal(check('always_on', 'Regra ativa.', 'true'), 'always-apply');
+  assert.equal(check('model_decision', 'Regra Git.', 'false'), 'apply-intelligently');
+  assert.equal(check('always_on', 'Regra Git.', 'false'), 'mismatch');
+  assert.equal(check('model_decision', 'Regra Git.', 'true'), 'mismatch');
+  assert.equal(check('model_decision', 'Regra Git.', 'false', 'trigger: model_decision\ntrigger: always_on'), 'not-verified');
+  for (const description of ['null', 'true', 'No', '2026-11-29', 'Regra # comentário', 'Regra: alternativa', '[Regra]', '&alias', "'Regra Git.'", 'Regra\u2028Git', 'Regra\u2029Git']) {
+    assert.equal(check('model_decision', description, 'false'), 'not-verified', description);
+  }
+  assert.equal(check('model_decision', 'Regra Git.', '"false"'), 'not-verified');
+});
+
 test('matriz recusa frontmatter Cursor alterado mesmo com hash atualizado', { skip: runtimeSkip, timeout: 60000 }, async t => {
   const root = temp(t), results = join(root, 'results'); mkdirSync(results);
   const pkg = copiedPackage(root);
@@ -380,6 +398,55 @@ test('matriz recusa frontmatter Cursor alterado mesmo com hash atualizado', { sk
   assert.equal(result.status, 'failed');
   assert.match(result.issue, /Frontmatter Cursor diverge do sidecar instalado/);
   assert.ok(!result.operations.some(operation => operation.label === 'update'));
+});
+
+test('matriz recusa modo Cursor divergente mesmo quando o sidecar e o apontamento coincidem', { skip: runtimeSkip, timeout: 60000 }, async t => {
+  const root = temp(t), results = join(root, 'results'); mkdirSync(results);
+  const pkg = copiedPackage(root), cli = join(pkg, 'bin/agentdevkit.mjs');
+  const version = JSON.parse(readFileSync(join(pkg, 'package.json'), 'utf8')).version;
+  const sidecar = join(pkg, '.pbai4devs/rules/git/cursor.yaml');
+  writeFileSync(sidecar, readFileSync(sidecar, 'utf8').replace('alwaysApply: false', 'alwaysApply: true'));
+  const result = await projectCase({ number: 1, kind: 'new', selection: 'cursor' }, results, cli, version, controlled(root));
+  assert.equal(result.status, 'failed');
+  assert.match(result.issue, /Modo do sidecar Cursor diverge da regra de origem/);
+});
+
+test('matriz prova a omissão Claude e os modos Cursor nas cinco operações', { skip: runtimeSkip, timeout: 90000 }, async t => {
+  const root = temp(t), results = join(root, 'results'); mkdirSync(results);
+  const pkg = copiedPackage(root), cli = join(pkg, 'bin/agentdevkit.mjs');
+  const version = JSON.parse(readFileSync(join(pkg, 'package.json'), 'utf8')).version;
+  const result = await projectCase({ number: 1, kind: 'existing', selection: 'claude,cursor' }, results, cli, version, controlled(root));
+  assert.equal(result.status, 'passed', result.issue || result.coverageAssessment.reasons.join('\n'));
+  const expectedClaude = { client: 'claude', source: '.pbai4devs/rules/git/RULE.md', target: '.claude/rules/git/RULE.md', mode: 'explicit-source-only' };
+  const covers = result.operations.filter(operation => operation.installation).map(operation => operation.installation.coverage);
+  assert.equal(covers.length, 5);
+  for (const coverage of covers) {
+    assert.deepEqual(coverage.ruleScopes.filter(scope => scope.client === 'claude'), [expectedClaude]);
+    assert.equal(coverage.ruleScopes.filter(scope => scope.client === 'cursor' && scope.mode === 'always-apply').length, 6);
+    const intelligent = coverage.ruleScopes.filter(scope => scope.client === 'cursor' && scope.mode === 'apply-intelligently');
+    assert.deepEqual(intelligent.map(scope => scope.target), ['.cursor/rules/git.mdc']);
+    assert.deepEqual(coverage.notVerified, []);
+  }
+});
+
+test('matriz recusa alias Claude gerenciado para uma regra de leitura explícita', { skip: runtimeSkip, timeout: 60000 }, async t => {
+  const root = temp(t), results = join(root, 'results'); mkdirSync(results);
+  const pkg = copiedPackage(root), cli = join(pkg, 'bin/agentdevkit.mjs');
+  const version = JSON.parse(readFileSync(join(pkg, 'package.json'), 'utf8')).version;
+  const run = async (file, args, cwd, env) => {
+    const result = await command(file, args, cwd, env);
+    if (file !== process.execPath || args[0] !== cli || args[1] !== 'init' || result.status !== 0) return result;
+    const alias = '.claude/rules/alias/RULE.md';
+    const content = readFileSync(join(cwd, '.claude/rules/qualidade/RULE.md'), 'utf8').replace('/qualidade/RULE.md', '/git/RULE.md');
+    put(join(cwd, alias), content);
+    const stateFile = join(cwd, '.pbai4devs/state/agentdevkit.json'), state = JSON.parse(readFileSync(stateFile, 'utf8'));
+    state.files[alias] = createHash('sha256').update(content).digest('hex');
+    writeFileSync(stateFile, JSON.stringify(state, null, 2) + '\n');
+    return result;
+  };
+  const result = await projectCase({ number: 1, kind: 'new', selection: 'claude' }, results, cli, version, controlled(root), run);
+  assert.equal(result.status, 'failed');
+  assert.match(result.issue, /Regra Claude de leitura explícita ainda tem rota nativa/);
 });
 
 test('sidecar Cursor em outra sintaxe válida permanece não verificado', { skip: runtimeSkip, timeout: 60000 }, async t => {

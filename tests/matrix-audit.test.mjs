@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, symlinkSync, rmSync } from 'node:fs';
-import { join, win32 } from 'node:path';
+import { dirname, join, posix, win32 } from 'node:path';
 import { tmpdir } from 'node:os';
 import { audit } from './matrix-audit.mjs';
 const hash = value => createHash('sha256').update(value).digest('hex');
@@ -77,8 +77,8 @@ test('falha bem formada permanece falha',t=>{let f=fixture(t,'failed');assert.eq
 test('contagem divergente',t=>{let f=fixture(t);f.report.passed=0;f.save();assert.throws(()=>audit(f.dir,f.origin),/Contagens/);});
 test('status global divergente',t=>{let f=fixture(t,'not-verified');f.report.status='passed';f.save();assert.throws(()=>audit(f.dir,f.origin),/Status global/);});
 test('hash de log divergente',t=>{let f=fixture(t);writeFileSync(join(f.caseDir,'init.stdout.log'),'alterado');assert.throws(()=>audit(f.dir,f.origin),/Hash/);});
-test('log fora da saída',t=>{let f=fixture(t);f.result.operations.find(o=>o.label==='init').stdout='/source/outside';f.save();assert.throws(()=>audit(f.dir,f.origin),/fora da saída/);});
-test('link interno recusado',t=>{let f=fixture(t);let target=join(f.parent,'other');mkdirSync(target);writeFileSync(join(target,'log'),'');try{symlinkSync(target,join(f.dir,'link'),'dir');}catch(e){if(process.platform==='win32'&&['EPERM','EACCES'].includes(e.code)){t.skip('Privilégio de symlink indisponível');return;}throw e;}f.result.operations.find(o=>o.label==='init').stdout=f.origin+'/link/log';f.save();assert.throws(()=>audit(f.dir,f.origin),/Link simbólico/);});
+test('log fora da saída',t=>{let f=fixture(t);f.result.operations.find(o=>o.label==='init').stdout='/source/outside';f.save();assert.throws(()=>audit(f.dir,f.origin),/fora do caso/);});
+test('link interno recusado',t=>{let f=fixture(t);const log=join(f.caseDir,'init.stdout.log'),target=join(f.parent,'other.log');writeFileSync(target,readFileSync(log));rmSync(log);try{symlinkSync(target,log,'file');}catch(e){if(process.platform==='win32'&&['EPERM','EACCES'].includes(e.code)){t.skip('Privilégio de symlink indisponível');return;}throw e;}assert.throws(()=>audit(f.dir,f.origin),/Link simbólico/);});
 test('raiz symlink recusada',t=>{let f=fixture(t);const link=join(f.parent,'root-link');try{symlinkSync(f.dir,link,'dir');}catch(e){if(process.platform==='win32'&&['EPERM','EACCES'].includes(e.code)){t.skip('Privilégio de symlink indisponível');return;}throw e;}assert.throws(()=>audit(link,f.origin),/Raiz.*link/);});
 test('caso individual divergente',t=>{let f=fixture(t);writeFileSync(join(f.caseDir,'RESULT.json'),'{}');assert.throws(()=>audit(f.dir,f.origin),/individual divergente/);});
 test('identificador duplicado',t=>{let f=fixture(t);f.report.results[1].number=1;f.save();assert.throws(()=>audit(f.dir,f.origin),/Caso inválido/);});
@@ -116,7 +116,7 @@ test('novo: assessment verified coerente permanece passed',t=>{let f=fixture(t);
 test('índice Git ausente no baseline é recusado',t=>{let f=fixture(t);const file=join(f.caseDir,'BEFORE.json'), b=JSON.parse(readFileSync(file));delete b.unchanged['.git/index'];writeFileSync(file,JSON.stringify(b));assert.throws(()=>audit(f.dir,f.origin),/Arquivos mínimos/);});
 test('baseline sem arquivos mínimos é recusado',t=>{let f=fixture(t);const file=join(f.caseDir,'BEFORE.json'), b=JSON.parse(readFileSync(file));b.unchanged={};writeFileSync(file,JSON.stringify(b));assert.throws(()=>audit(f.dir,f.origin),/Arquivos mínimos/);});
 test('seleção sintética não planejada é recusada',t=>{let f=fixture(t);f.report.results[0].selection='agente-ficticio';f.report.results[1].selection='agente-ficticio';f.save();assert.throws(()=>audit(f.dir,f.origin),/Seleção não corresponde/);});
-test('rodada cinco aceita IDs e seleções planejadas',t=>{let f=fixture(t);const selection='codex,gemini|codex,copilot|codex,cursor|codex,kimi|codex,minimax|codex,deepseek|codex,antigravity|codex,antigravity-legacy|codex,zcode|codex,kimi-legacy|codex,mimo|claude,opencode|claude,copilot|claude,cursor|claude,kimi|claude,minimax|claude,deepseek|claude,antigravity|claude,antigravity-legacy|claude,zcode'.split('|');f.report.startRound=5;f.report.results.forEach((x,i)=>{x.number=161+i;x.round=5;x.selection=selection[Math.floor(i/2)];x.operations.find(o=>o.label==='init').args[3]=x.selection;});f.save();assert.equal(audit(f.dir,f.origin).matrixStatus,'passed');});
+test('rodada cinco aceita IDs e seleções planejadas',t=>{let f=fixture(t,'passed',false,5);const selection='codex,gemini|codex,copilot|codex,cursor|codex,kimi|codex,minimax|codex,deepseek|codex,antigravity|codex,antigravity-legacy|codex,zcode|codex,kimi-legacy|codex,mimo|claude,opencode|claude,copilot|claude,cursor|claude,kimi|claude,minimax|claude,deepseek|claude,antigravity|claude,antigravity-legacy|claude,zcode'.split('|');f.report.results.forEach((x,i)=>{x.selection=selection[Math.floor(i/2)];x.operations.find(o=>o.label==='init').args[3]=x.selection;});f.save();assert.equal(audit(f.dir,f.origin).matrixStatus,'passed');});
 function mutateBaseline(f, caseName, change){const file=join(f.dir,caseName,'BEFORE.json'),value=JSON.parse(readFileSync(file));change(value);writeFileSync(file,JSON.stringify(value));}
 test('referências vazias são recusadas',t=>{let f=fixture(t);mutateBaseline(f,'01-new',b=>{b.refs={};});assert.throws(()=>audit(f.dir,f.origin),/Diretórios de refs/);});
 test('ref heads obrigatória é recusada quando removida',t=>{let f=fixture(t);mutateBaseline(f,'01-new',b=>{delete b.refs['.git/refs/heads'];});assert.throws(()=>audit(f.dir,f.origin),/Diretórios de refs/);});
@@ -152,3 +152,249 @@ test('init deve informar seleção planejada',t=>{let f=fixture(t);f.result.oper
 test('sync deve registrar --check',t=>{let f=fixture(t);const o=f.result.operations.find(o=>o.label==='sync-check');o.args=o.args.filter(a=>a!=='--check');f.save();assert.throws(()=>audit(f.dir,f.origin),/Argumentos registrados/);});
 test('alvo da operação deve ser a própria fixture',t=>{let f=fixture(t);const o=f.result.operations.find(o=>o.label==='init');o.args[o.args.indexOf('--target')+1]='/outro';f.save();assert.throws(()=>audit(f.dir,f.origin),/Argumentos registrados/);});
 test('root registrado deve ser o diretório project do caso',t=>{let f=fixture(t);f.result.root='/outra-pasta';f.save();assert.throws(()=>audit(f.dir,f.origin),/Raiz registrada/);});
+
+function currentProvenance(t, { windows = false, sidecars = true } = {}) {
+  const f = fixture(t, 'passed', windows);
+  const flavor = windows ? win32 : posix;
+  const recordedRunner = windows ? 'C:\\historico\\checkout' : '/historico/checkout';
+  const recordedPackage = windows ? 'D:\\historico\\package' : '/historico/package';
+  const sources = { runnerRoot: join(f.parent, 'checkout'), packageRoot: join(f.parent, 'package') };
+  const before = {};
+  const write = (key, relative, bytes, root = 'packageRoot') => {
+    const parts = relative.split('/');
+    const file = join(sources[root], ...parts);
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, bytes);
+    before[key] = { path: flavor.join(root === 'packageRoot' ? recordedPackage : recordedRunner, ...parts), sha256: hash(bytes) };
+    return file;
+  };
+  write('runner', 'tests/project-matrix.mjs', 'runner', 'runnerRoot');
+  write('managedContent', '.pbai4devs/scripts/lib/managed-content.mjs', 'content', 'runnerRoot');
+  write('managedToml', '.pbai4devs/scripts/lib/managed-toml.mjs', 'toml', 'runnerRoot');
+  write('packageCli', 'bin/agentdevkit.mjs', 'cli');
+  write('packageManifest', 'package.json', JSON.stringify({ name: '@pathbit/agentdevkit', version: f.report.version }));
+  write('packageCatalog', '.pbai4devs/scripts/lib/catalog.mjs', 'catalog');
+  write('packageResourcePath', '.pbai4devs/scripts/lib/resource-path.mjs', 'resource-path');
+  const policyFile = write('packageAdapterPolicy', '.pbai4devs/templates/clients/ADAPTERS.json',
+    JSON.stringify({ adapters: [{ id: 'cursor', ruleMetadata: 'custom.yml' }] }));
+  const sidecarPath = '.pbai4devs/rules/git/CUSTOM.YML';
+  const sidecarKey = `cursorSidecar:${sidecarPath}`;
+  const sidecarFile = join(sources.packageRoot, ...sidecarPath.split('/'));
+  mkdirSync(dirname(sidecarFile), { recursive: true });
+  writeFileSync(join(dirname(sidecarFile), 'RULE.md'), '# Regra');
+  if (sidecars) {
+    write(sidecarKey, sidecarPath, '---\ndescription: Git\nalwaysApply: true\n---\n');
+    write('cursorSidecar:.pbai4devs/rules/qualidade/custom.yml', '.pbai4devs/rules/qualidade/custom.yml', '---\ndescription: Qualidade\nalwaysApply: false\n---\n');
+  }
+  f.report.package = recordedPackage;
+  f.report.provenance = { platform: windows ? 'win32' : 'darwin', arch: 'arm64', algorithm: 'sha256', before, after: structuredClone(before), passed: true };
+  for (const result of f.report.results) for (const op of result.operations) {
+    if (op.args[0] === '/packageCli') op.args[0] = before.packageCli.path;
+  }
+  f.save();
+  return { ...f, sources, sidecarFile, sidecarKey, policyFile, recordedPackage };
+}
+
+test('proveniência atual confere oito arquivos e sidecars de fontes locais remapeadas', t => {
+  const f = currentProvenance(t);
+  const verified = audit(f.dir, f.origin, f.sources);
+  assert.equal(verified.provenanceRecorded, true);
+  assert.equal(verified.provenanceSourcesVerified, true);
+  assert.equal(verified.matrixStatus, 'passed');
+});
+
+test('proveniência atual de Windows é verificável no host atual', t => {
+  const f = currentProvenance(t, { windows: true });
+  assert.equal(audit(f.dir, f.origin, f.sources).provenanceSourcesVerified, true);
+});
+
+test('proveniência estável exige as raízes fornecidas pelo auditor', t => {
+  const f = currentProvenance(t);
+  assert.throws(() => audit(f.dir, f.origin), /--package e --runner-root/);
+  assert.throws(() => audit(f.dir, f.origin, { packageRoot: f.sources.packageRoot }), /--package e --runner-root/);
+});
+
+test('proveniência legada é coerência histórica e não substitui a conferência de fontes', t => {
+  const f = fixture(t);
+  assert.equal(audit(f.dir, f.origin).provenanceSourcesVerified, false);
+  assert.throws(() => audit(f.dir, f.origin, { runnerRoot: f.parent, packageRoot: f.parent }), /Formato legado/);
+});
+
+test('proveniência atual verifica inventário sem sidecars quando o pacote não contém nenhum', t => {
+  const f = currentProvenance(t, { sidecars: false });
+  assert.equal(audit(f.dir, f.origin, f.sources).provenanceSourcesVerified, true);
+  writeFileSync(f.sidecarFile, 'adicionado depois');
+  assert.throws(() => audit(f.dir, f.origin, f.sources), /Inventário ou hash de sidecars/);
+});
+
+test('sidecar omitido dos dois snapshots e sidecar adulterado são recusados', t => {
+  const f = currentProvenance(t);
+  writeFileSync(f.sidecarFile, 'conteúdo modificado');
+  assert.throws(() => audit(f.dir, f.origin, f.sources), /Inventário ou hash de sidecars/);
+  for (const entries of [f.report.provenance.before, f.report.provenance.after]) delete entries[f.sidecarKey];
+  f.save();
+  assert.throws(() => audit(f.dir, f.origin, f.sources), /Inventário ou hash de sidecars/);
+});
+
+test('hash de fonte fixa falso e política trocada são recusados mesmo em snapshots iguais', t => {
+  const f = currentProvenance(t);
+  const p = f.report.provenance;
+  for (const entries of [p.before, p.after]) entries.packageCatalog.sha256 = 'a'.repeat(64);
+  f.save();
+  assert.throws(() => audit(f.dir, f.origin, f.sources), /Hash da fonte.*packageCatalog/);
+  for (const entries of [p.before, p.after]) entries.packageCatalog.sha256 = hash('catalog');
+  f.save();
+  writeFileSync(f.policyFile, '{"adapters":[{"id":"cursor","ruleMetadata":"cursor.yaml"}]}');
+  assert.throws(() => audit(f.dir, f.origin, f.sources), /Hash da fonte.*packageAdapterPolicy/);
+});
+
+test('origens de proveniência não podem redirecionar arquivos fixos nem sidecars', t => {
+  const f = currentProvenance(t);
+  const snapshots = [f.report.provenance.before, f.report.provenance.after];
+  for (const entries of snapshots) entries.packageCli.path = '/outra/origem/agentdevkit.mjs';
+  f.save();
+  assert.throws(() => audit(f.dir, f.origin, f.sources), /Caminho de proveniência/);
+  for (const entries of snapshots) {
+    entries.packageCli.path = `${f.recordedPackage}/bin/agentdevkit.mjs`;
+    entries['cursorSidecar:.pbai4devs/rules/../custom.yml'] = entries[f.sidecarKey];
+  }
+  f.save();
+  assert.throws(() => audit(f.dir, f.origin, f.sources), /Chave de proveniência Cursor/);
+});
+
+test('inventário recusa diretório com nome de sidecar', t => {
+  const f = currentProvenance(t, { sidecars: false });
+  mkdirSync(f.sidecarFile);
+  assert.throws(() => audit(f.dir, f.origin, f.sources), /arquivo regular/);
+});
+
+test('inventário recusa links em ancestrais', t => {
+  const f = currentProvenance(t, { sidecars: false });
+  const outside = join(f.parent, 'outside');
+  mkdirSync(outside);
+  const link = join(f.sources.packageRoot, '.pbai4devs', 'rules', 'redirecionado');
+  try { symlinkSync(outside, link, process.platform === 'win32' ? 'junction' : 'dir'); }
+  catch (error) {
+    if (process.platform === 'win32' && ['EPERM', 'EACCES'].includes(error.code)) { t.skip('Privilégio de symlink indisponível'); return; }
+    throw error;
+  }
+  assert.throws(() => audit(f.dir, f.origin, f.sources), /Link simbólico em inventário/);
+});
+
+test('proveniência alterada ou incompleta em execução nunca é promovida', t => {
+  const f = currentProvenance(t);
+  const p = f.report.provenance;
+  delete p.after[f.sidecarKey];
+  f.save();
+  assert.throws(() => audit(f.dir, f.origin, f.sources), /Proveniência inconsistente/);
+  p.passed = false;
+  f.report.status = 'failed';
+  f.save();
+  const failed = audit(f.dir, f.origin, f.sources);
+  assert.equal(failed.matrixStatus, 'failed');
+  assert.equal(failed.provenanceRecorded, false);
+  assert.equal(failed.provenanceSourcesVerified, false);
+  for (const key of Object.keys(p.after).filter(key => key.startsWith('cursorSidecar:'))) delete p.after[key];
+  p.after['cursorSidecar:inventory'] = { path: `${f.recordedPackage}/.pbai4devs/rules`, error: 'E_SIDECAR_INVENTORY' };
+  f.save();
+  assert.equal(audit(f.dir, f.origin, f.sources).matrixStatus, 'failed');
+  p.after[f.sidecarKey] = p.before[f.sidecarKey];
+  f.save();
+  assert.throws(() => audit(f.dir, f.origin, f.sources), /Inventário de proveniência Cursor inválido/);
+});
+
+const claudeScope = { client: 'claude', source: '.pbai4devs/rules/git/RULE.md', target: '.claude/rules/git/RULE.md', mode: 'explicit-source-only' };
+const cursorScope = { client: 'cursor', source: '.pbai4devs/rules/git/RULE.md', target: '.cursor/rules/git.mdc',
+  mode: 'always-apply', metadata: '.pbai4devs/rules/git/custom.yml' };
+const claudeOmission = { source: claudeScope.source, target: claudeScope.target, trigger: 'model_decision', status: 'explicit-reference-planned' };
+const caseFor = (fixture, selected) => fixture.report.results.find(result => result.selection === selected);
+function rewriteReply(fixture, operation, update) {
+  const file = join(fixture.dir, posix.relative(fixture.origin, operation.stdout));
+  const reply = JSON.parse(readFileSync(file));
+  update(reply);
+  const bytes = JSON.stringify(reply) + '\n';
+  writeFileSync(file, bytes);
+  operation.stdoutSha256 = hash(bytes);
+}
+
+test('audita omissão Claude e modo Cursor em relatório com fontes verificadas', t => {
+  const f = currentProvenance(t);
+  const claude = caseFor(f, 'claude'), cursor = caseFor(f, 'cursor');
+  claude.coverage.ruleScopes = [claudeScope];
+  cursor.coverage.ruleScopes = [cursorScope];
+  for (const op of claude.operations.filter(operation => operation.installation)) {
+    rewriteReply(f, op, reply => { reply.scopeOmissions = [claudeOmission]; });
+  }
+  f.save();
+  assert.equal(audit(f.dir, f.origin, f.sources).matrixStatus, 'passed');
+});
+
+test('recusa omissões Claude ausentes, contraditórias, parciais ou ambíguas', t => {
+  const f = currentProvenance(t);
+  const claude = caseFor(f, 'claude');
+  const init = claude.operations.find(op => op.label === 'init');
+  claude.coverage.ruleScopes = [claudeScope];
+  for (const scopeOmissions of [undefined, [{ ...claudeOmission, status: 'activation-unverified' }],
+    [{ ...claudeOmission, target: '.claude/rules/outro/RULE.md' }], [claudeOmission, claudeOmission],
+    [{ ...claudeOmission, trigger: 'always_on' }]]) {
+    rewriteReply(f, init, reply => { reply.scopeOmissions = scopeOmissions; });
+    f.save();
+    assert.throws(() => audit(f.dir, f.origin, f.sources), /Omissão de escopo Claude diverge/);
+  }
+});
+
+test('recusa escopo Cursor sem sidecar, modo incompatível, destino divergente ou duplicata', t => {
+  const f = currentProvenance(t);
+  const cursor = caseFor(f, 'cursor');
+  const invalid = [
+    [[{ ...cursorScope, mode: 'apply-intelligently' }], /Modo de escopo Cursor diverge/],
+    [[{ ...cursorScope, mode: 'manual' }], /Escopo de regra Cursor inválido/],
+    [[{ ...cursorScope, target: '.cursor/rules/outro.mdc' }], /Escopo de regra Cursor inválido/],
+    [[{ ...cursorScope, metadata: '.pbai4devs/rules/qualidade/custom.yml' }], /Escopo de regra Cursor inválido/],
+    [[{ ...cursorScope, source: '.pbai4devs/rules/outro/RULE.md', target: '.cursor/rules/outro.mdc',
+      metadata: '.pbai4devs/rules/outro/custom.yml' }], /Sidecar do escopo Cursor ausente/],
+    [[cursorScope, cursorScope], /Escopo de regra duplicado/],
+  ];
+  for (const [ruleScopes, diagnostic] of invalid) {
+    cursor.coverage.ruleScopes = ruleScopes;
+    f.save();
+    assert.throws(() => audit(f.dir, f.origin, f.sources), diagnostic);
+  }
+});
+
+test('recusa escopo de cliente ausente da seleção ou declarado somente na cobertura final', t => {
+  const f = currentProvenance(t);
+  const codex = caseFor(f, 'codex'), cursor = caseFor(f, 'cursor');
+  codex.coverage.ruleScopes = [cursorScope];
+  f.save();
+  assert.throws(() => audit(f.dir, f.origin, f.sources), /Origem ou cliente do escopo/);
+  delete codex.coverage.ruleScopes;
+  cursor.coverage = { ...cursor.coverage, ruleScopes: [cursorScope] };
+  f.save();
+  assert.throws(() => audit(f.dir, f.origin, f.sources), /Escopos de regra da cobertura final divergentes/);
+});
+
+test('recusa uso de stdout de outro caso e de stderr de outra etapa, mesmo com hashes iguais', t => {
+  const f = fixture(t);
+  const init = f.result.operations.find(op => op.label === 'init');
+  const other = f.report.results[1].operations.find(op => op.label === 'init');
+  assert.equal(init.stdoutSha256, other.stdoutSha256);
+  const original = init.stdout;
+  init.stdout = other.stdout;
+  f.save();
+  assert.throws(() => audit(f.dir, f.origin), /Caminho de stdout fora do caso/);
+  init.stdout = original;
+  const update = f.result.operations.find(op => op.label === 'update');
+  assert.equal(init.stderrSha256, update.stderrSha256);
+  init.stderr = update.stderr;
+  f.save();
+  assert.throws(() => audit(f.dir, f.origin), /Caminho de stderr fora do caso/);
+});
+
+test('recusa JSON copiado para o log canônico se o alvo registrado pertence a outro caso', t => {
+  const f = fixture(t);
+  const init = f.result.operations.find(op => op.label === 'init');
+  rewriteReply(f, init, reply => { reply.target = f.report.results[1].root; });
+  f.save();
+  assert.throws(() => audit(f.dir, f.origin), /Alvo do JSON de operação diverge do caso/);
+});

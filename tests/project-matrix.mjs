@@ -325,6 +325,85 @@ function snapshotRefs(root) {
 
 const catalogTypes = ['skills', 'agents', 'commands', 'rules'];
 const safePath = path => typeof path === 'string' && !isAbsolute(path) && !path.includes('\\') && path.split('/').every(part => part && part !== '.' && part !== '..');
+const generatedPointer = /^---\r?\n(?:(?!---(?:\r?\n|$))[^\r\n]*\r?\n)*---\r?\n\r?\n# [^\r\n]+\r?\n\r?\n<!-- gerado: sincronizar-agentes -->\r?\n(?:Leia e siga )?@?\[origem\]\(([^)\r\n]+)\)\.?\r?\n?$/;
+
+function sourceTrigger(bytes) {
+  const text = bytes.toString('utf8');
+  if (!Buffer.from(text, 'utf8').equals(bytes)) return null;
+  const header = /^---\r?\n([\s\S]+?)\r?\n---(?:\r?\n|$)/.exec(text);
+  if (!header) return null;
+  const fields = header[1].split(/\r?\n/).map(line => /^([a-z_][a-z0-9_]*): ([^\r\n]+)$/.exec(line));
+  if (fields.some(field => field === null) || new Set(fields.map(field => field[1])).size !== fields.length) return null;
+  const trigger = fields.find(field => field[1] === 'trigger')?.[2];
+  return ['always_on', 'model_decision', 'manual', 'glob'].includes(trigger) ? trigger : null;
+}
+
+function ownRuleSource(root, entry, humanPaths) {
+  if (humanPaths.has(entry.path)) return null;
+  const source = readProvenanceFile(join(root, entry.path));
+  return sha(source) === entry.sha256 && sourceTrigger(source) === entry.trigger ? source : null;
+}
+
+// Only certify the observable generated rule tree. Unknown files or import
+// forms cannot be used to establish that the source has no native route.
+function claudeRuleOrigins(root, state) {
+  const origins = new Set();
+  function visit(path) {
+    const info = lstatSync(join(root, path), { throwIfNoEntry: false });
+    if (!info || !info.isDirectory() || info.isSymbolicLink()) return false;
+    for (const child of readdirSync(join(root, path), { withFileTypes: true })) {
+      const target = `${path}/${child.name}`;
+      if (child.isDirectory()) { if (!visit(target)) return false; continue; }
+      if (!child.isFile() || child.isSymbolicLink() || !/\.md$/i.test(target)) return false;
+      const bytes = readProvenanceFile(join(root, target));
+      const text = bytes.toString('utf8');
+      if (!Buffer.from(text, 'utf8').equals(bytes)) return false;
+      const href = generatedPointer.exec(text)?.[1];
+      if (!href || state.files[target] !== sha(bytes)) return false;
+      const origin = posix.normalize(posix.join(posix.dirname(target), decodeURIComponent(href)));
+      if (!safePath(origin) || !origin.startsWith('.pbai4devs/rules/')) return false;
+      snapshot(root, origin);
+      origins.add(realpathSync.native(join(root, origin)));
+    }
+    return true;
+  }
+  const claude = lstatSync(join(root, '.claude'), { throwIfNoEntry: false });
+  if (claude && (!claude.isDirectory() || claude.isSymbolicLink())) return null;
+  if (claude && lstatSync(join(root, '.claude/rules'), { throwIfNoEntry: false }) && !visit('.claude/rules')) return null;
+  for (const guide of ['CLAUDE.md', '.claude/CLAUDE.md', 'CLAUDE.local.md', 'AGENTS.md']) {
+    if (!lstatSync(join(root, guide), { throwIfNoEntry: false })) continue;
+    const bytes = readProvenanceFile(join(root, guide)), text = bytes.toString('utf8');
+    if (!Buffer.from(text, 'utf8').equals(bytes)) return null;
+    const imports = text.split(/\r?\n/).filter(line => line.includes('@'));
+    if (imports.some(line => guide !== 'CLAUDE.md' || line.trim() !== '@AGENTS.md')) return null;
+  }
+  return origins;
+}
+
+function inspectClaudeOmission(root, entry, state, humanPaths, outcome) {
+  if (!['manual', 'model_decision', 'glob'].includes(entry.trigger) || !ownRuleSource(root, entry, humanPaths)) return null;
+  const target = `.claude/${entry.path.slice('.pbai4devs/'.length)}`;
+  const omissions = outcome.scopeOmissions?.filter(item => item?.source === entry.path || item?.target === target);
+  const omission = omissions?.[0];
+  if (omissions?.length !== 1 || omission.source !== entry.path || omission.target !== target
+    || omission.trigger !== entry.trigger || omission.status !== 'explicit-reference-planned') return null;
+  if (outcome.retainedClaudeRules?.length) return null;
+  if (Object.hasOwn(state.files, target) || Object.hasOwn(state.blocks || {}, target)) {
+    throw Error(`Regra Claude omitida ainda consta no estado: ${target}.`);
+  }
+  const manifest = readProvenanceFile(join(root, '.pbai4devs/espelhos.conf')).toString('utf8').split(/\r?\n/);
+  const nativeAlias = manifest.some(line => {
+    const [kind, destination, source] = line.split('|').map(part => part.trim());
+    return kind === 'nativo' && destination?.startsWith('.claude/rules/') && (destination === target || source === entry.path);
+  });
+  if (nativeAlias) throw Error(`Regra Claude omitida ainda consta no manifesto: ${target}.`);
+  const origins = claudeRuleOrigins(root, state);
+  if (!origins) return null;
+  if (lstatSync(join(root, target), { throwIfNoEntry: false }) || origins.has(realpathSync.native(join(root, entry.path)))) {
+    throw Error(`Regra Claude de leitura explícita ainda tem rota nativa: ${target}.`);
+  }
+  return { client: 'claude', source: entry.path, target, mode: 'explicit-source-only' };
+}
 
 // Only certify the simple, generated frontmatter whose origin is unchanged.
 // Sidecars and human content require separate scope analysis.
@@ -344,13 +423,30 @@ export function inspectGeneratedRuleScope({ path, entry, content, sourceMatches,
 }
 
 // Checks byte fidelity only; matching YAML does not prove its semantics or
-// native activation, so callers must keep the scope marked not verified.
+// native activation.
+const cursorSidecarHeader = /^---\ndescription: ([^\r\n]+)\nalwaysApply: (true|false)\n---\n$/;
+
 export function compareCursorSidecar({ path, metadata, content }) {
   if (!path.endsWith('.mdc') || !Buffer.isBuffer(metadata) || typeof content !== 'string') return 'not-verified';
   const text = metadata.toString('utf8');
   if (!Buffer.from(text, 'utf8').equals(metadata)
-    || !/^---\ndescription: [^\r\n]+\nalwaysApply: (?:true|false)\n---\n$/.test(text)) return 'not-verified';
+    || !cursorSidecarHeader.test(text)) return 'not-verified';
   return content.startsWith(text) ? 'matches' : 'mismatch';
+}
+
+// Cursor documents alwaysApply: true as unconditional, and a nonempty
+// description without a glob with alwaysApply: false as Apply Intelligently.
+// Restrict certification to the two-field scalar form proven here.
+export function inspectCursorSidecarScope({ path, entry, source, metadata, content }) {
+  const fidelity = compareCursorSidecar({ path, metadata, content });
+  if (fidelity !== 'matches') return fidelity;
+  const [, description, alwaysApply] = cursorSidecarHeader.exec(metadata.toString('utf8'));
+  if (!/^\p{L}[\p{L}\p{M}\p{N} .,/()'_-]*$/u.test(description)
+    || /^(?:true|false|null|yes|no|on|off|y|n)$/i.test(description.trim())) return 'not-verified';
+  const trigger = Buffer.isBuffer(source) ? sourceTrigger(source) : null;
+  if (!trigger || trigger !== entry.trigger) return 'not-verified';
+  if (alwaysApply === 'true') return trigger === 'always_on' ? 'always-apply' : 'mismatch';
+  return trigger === 'model_decision' ? 'apply-intelligently' : 'mismatch';
 }
 
 const inventoryCache = new Map();
@@ -388,7 +484,7 @@ function skillDestination(adapter, entry) {
   throw Error(`Formato de skills desconhecido: ${adapter.id}/${format}.`);
 }
 
-function inspectInstallation(root, version, selection, packageData, humanPaths, expectedDocuments) {
+function inspectInstallation(root, version, selection, packageData, humanPaths, expectedDocuments, outcome) {
   const { inventory, policy, pkg, resourcePath, buildCatalog } = packageData;
   const coverage = { status: 'verified', notVerified: [], checked: { skills: 0, agents: 0, commands: 0, rules: 0 } };
   const readJson = path => { snapshot(root, path); return JSON.parse(readFileSync(join(root, path), 'utf8')); };
@@ -447,12 +543,18 @@ function inspectInstallation(root, version, selection, packageData, humanPaths, 
         hasMetadata = Boolean(metadata && existsSync(join(pkg, metadata)));
         if (hasMetadata) packageMetadata = snapshot(pkg, metadata);
         const relativeTarget = resourcePath(entry.path, type, format, adapter.root, entry, Boolean(hasMetadata));
-        if (relativeTarget === null) { coverage.notVerified.push(`${id}/${type}: escopo nativo não comprovado para ${entry.path}`); continue; }
+        if (relativeTarget === null) {
+          const proof = id === 'claude' && adapter.root === '.claude' && type === 'rules' && format === 'agrupado' && !hasMetadata
+            ? inspectClaudeOmission(root, entry, state, humanPaths, outcome) : null;
+          if (proof) (coverage.ruleScopes ??= []).push(proof);
+          else coverage.notVerified.push(`${id}/${type}: escopo nativo não comprovado para ${entry.path}`);
+          continue;
+        }
         path = `${adapter.root}/${relativeTarget}`;
         if (id === 'gemini' && type === 'commands') path = path.replace(/\.md$/, '.toml');
       }
       if (!safePath(path)) throw Error(`Destino inválido: ${path}.`);
-      snapshot(root, path);
+      const target = snapshot(root, path);
       const content = readFileSync(join(root, path), 'utf8');
       if (path.endsWith('.toml')) {
         const lines = content.trimEnd().split(/\r?\n/);
@@ -468,20 +570,28 @@ function inspectInstallation(root, version, selection, packageData, humanPaths, 
         if (type === 'rules' && (path.endsWith('.mdc') || path.endsWith('.instructions.md'))) coverage.notVerified.push(`${id}/rules: escopo humano não verificado para ${path}`);
         continue;
       }
-      const link = content.match(/^---\r?\n(?:(?!---(?:\r?\n|$))[^\r\n]*\r?\n)*---\r?\n\r?\n# [^\r\n]+\r?\n\r?\n<!-- gerado: sincronizar-agentes -->\r?\n(?:Leia e siga )?@?\[origem\]\(([^)\r\n]+)\)\.?\r?\n?$/);
+      const link = generatedPointer.exec(content);
       if (!link || resolve(dirname(join(root, path)), decodeURIComponent(link[1])) !== join(root, entry.path) || !state.files[path]) throw Error(`Apontamento nativo ausente ou divergente: ${id}/${path}.`);
       coverage.checked[type]++;
       if (type === 'rules' && (path.endsWith('.mdc') || path.endsWith('.instructions.md'))) {
+        let scope = inspectGeneratedRuleScope({ path, entry, content, hasMetadata, sourceMatches: !humanPaths.has(entry.path) && snapshot(root, entry.path).sha256 === entry.sha256 });
         if (id === 'cursor' && hasMetadata && !humanPaths.has(metadata) && existsSync(join(root, metadata))) {
           const localMetadata = snapshot(root, metadata);
           if (localMetadata.sha256 === packageMetadata.sha256 && state.files[metadata] === localMetadata.sha256) {
             const metadataBytes = readFileSync(join(root, metadata));
-            if (sha(metadataBytes) === localMetadata.sha256 && compareCursorSidecar({ path, metadata: metadataBytes, content }) === 'mismatch') {
-              throw Error(`Frontmatter Cursor diverge do sidecar instalado: ${path}.`);
+            if (sha(metadataBytes) === localMetadata.sha256) {
+              if (compareCursorSidecar({ path, metadata: metadataBytes, content }) === 'mismatch') {
+                throw Error(`Frontmatter Cursor diverge do sidecar instalado: ${path}.`);
+              }
+              const mode = inspectCursorSidecarScope({ path, entry, source: ownRuleSource(root, entry, humanPaths), metadata: metadataBytes, content });
+              if (mode === 'mismatch') throw Error(`Modo do sidecar Cursor diverge da regra de origem: ${path}.`);
+              if (mode !== 'not-verified' && state.files[path] === target.sha256) {
+                (coverage.ruleScopes ??= []).push({ client: id, source: entry.path, target: path, mode, metadata });
+                scope = 'verified';
+              }
             }
           }
         }
-        const scope = inspectGeneratedRuleScope({ path, entry, content, hasMetadata, sourceMatches: !humanPaths.has(entry.path) && snapshot(root, entry.path).sha256 === entry.sha256 });
         if (scope === 'mismatch') throw Error(`Metadados de escopo divergentes: ${id}/${path}.`);
         if (scope !== 'verified') coverage.notVerified.push(`${id}/rules: metadados de escopo não verificados para ${path}`);
       }
@@ -659,7 +769,7 @@ export async function projectCase(item, directory, cli, version, env, runCommand
       }
       try {
         inventory ??= await packageInventory(dirname(dirname(cli)));
-        step.installation = inspectInstallation(root, version, item.selection, inventory, new Set([...Object.keys(humanHubSkills), ...Object.keys(expectedDocuments)]), expectedDocuments);
+        step.installation = inspectInstallation(root, version, item.selection, inventory, new Set([...Object.keys(humanHubSkills), ...Object.keys(expectedDocuments)]), expectedDocuments, json);
         if (diagnostic.triggered && step.installation.coverage.status !== 'verified') {
           const missing = step.installation.coverage.notVerified;
           const onlyMissingMapping = typeof inventory.resourcePath !== 'function' && missing.length > 0 && missing.every(reason => /^[a-z0-9-]+\/(?:agents|commands|rules): função de destino não disponível$/.test(reason));
@@ -733,6 +843,7 @@ async function main() {
   const summary = { version: meta.version, package: pkg, node: process.version, provenance, modeMask: `0o${modeMask.toString(8)}`, startRound: opts.startRound, rounds: opts.rounds, ...(opts.diagnoseExclude ? { diagnosticExclude: true } : {}), projects: results.length, passed: results.filter(r => r.passed).length, failed: results.filter(r => !r.passed && r.status !== 'not-verified').length, notVerified: results.filter(r => r.status === 'not-verified').length,
     limitations: ['Cada rodada contém 40 projetos; o limite é 100 rodadas (4.000 projetos), com custo de tempo e espaço proporcional; não há limite global de disco ou duração.', 'Documentos extensíveis aceitam apenas conteúdo original ou original seguido do bloco AgentDevKit exato esperado, além de modo e diretórios preservados; variantes legítimas desse bloco podem ser sinalizadas e exigem análise.', 'Projetos sintéticos locais; verifica inventário, hashes e seleção instalados após cada etapa, mas não executa skills, agentes, clientes nativos ou testes de aplicações.', 'A estabilidade do inventário indica idempotência dos arquivos gerenciados observados; update, doctor e sync dependem da CLI e de sua saída e não provam atualização a partir de conteúdo legado diferente.', 'Apontamentos Markdown de skills, perfis, comandos e regras usam política e fontes do pacote; destinos humanos preservados sem bloco são marcados não verificados. Descoberta e execução nativas não são testadas.', 'Logs de saída são texto decodificado como UTF-8; bytes inválidos não são preservados fielmente.', 'Não impede acesso à rede pelo sistema operacional.', 'Não testa configuração ou credenciais reais: remove NODE_OPTIONS, GIT_* e npm_config_* e isola configuração global do Git.', 'Os snapshots cobrem arquivos e índice registrados ao final de cada etapa; não detectam alteração e reversão durante um mesmo processo.', 'Refs das fixtures usam .git/refs e packed-refs; outros formatos e metadados Git não são cobertos.', 'Timeout ou excesso de saída deixam preservação não verificada; descendentes que escapem do grupo podem permanecer.', ...(process.platform === 'win32' ? ['No Windows, o modo compara apenas o bit de escrita reportado pelo Node; ACLs não são verificadas.', 'No Windows, apenas o processo filho é encerrado; descendentes podem permanecer.'] : [])], results };
   summary.status = overallStatus(provenance.passed, summary.failed, summary.notVerified);
+  summary.limitations.push('ruleScopes registra configuração documental: origem de leitura explícita sem apontamento Claude na fixture, ou modo Cursor comparado à regra e ao sidecar. A execução do cliente permanece não testada.');
   summary.limitations.push('A proveniência compara os oito arquivos indicados e os sidecars Cursor presentes no início e no fim; não autentica o pacote, não cobre os demais arquivos nem detecta alteração transitória revertida. Os imports podem ter sido carregados antes da primeira medição.');
   const report = join(directory, 'RESULT.json'); writeFileSync(report, JSON.stringify(summary, null, 2) + '\n', { flag: 'wx' });
   console.log(JSON.stringify({ report, version: summary.version, status: summary.status, diagnosticExclude: Boolean(opts.diagnoseExclude), startRound: summary.startRound, rounds: summary.rounds, projects: summary.projects, passed: summary.passed, failed: summary.failed, notVerified: summary.notVerified, provenancePassed: provenance.passed }));

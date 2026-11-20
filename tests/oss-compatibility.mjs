@@ -30,11 +30,14 @@ const expectedProjectIssues = projectId => projectId === 'ef6' ? [
 ] : [];
 
 function parse(args) {
-  const options = { version: json(join(repositoryRoot, 'package.json')).version };
+  const options = { version: json(join(repositoryRoot, 'package.json')).version, versionExplicit: false };
   for (let index = 0; index < args.length; index++) {
     const option = args[index];
     if (['--help', '-h'].includes(option)) options.help = true;
-    else if (['--project', '--output', '--version', '--tarball'].includes(option) && args[index + 1] && !args[index + 1].startsWith('--')) options[option.slice(2)] = args[++index];
+    else if (['--project', '--output', '--version', '--tarball'].includes(option) && args[index + 1] && !args[index + 1].startsWith('--')) {
+      options[option.slice(2)] = args[++index];
+      if (option === '--version') options.versionExplicit = true;
+    }
     else throw new Error(`Opção inválida: ${option}. Use --help.`);
   }
   if (!/^\d+\.\d+\.\d+$/.test(options.version)) throw new Error('--version exige uma versão estável x.y.z.');
@@ -165,6 +168,33 @@ function recorder(output, env) {
     return result.stdout;
   };
   return { run, commands };
+}
+
+function packCheckout(output, env, npm, version) {
+  const destination = join(output, 'local-package');
+  mkdirSync(destination);
+  const { run } = recorder(destination, env);
+  const [archive] = JSON.parse(run('npm-pack', process.execPath,
+    [npm, 'pack', '--offline', '--ignore-scripts', '--json', '--pack-destination', destination], repositoryRoot));
+  const name = 'pathbit-agentdevkit-' + version + '.tgz';
+  assert.equal(archive?.name, '@pathbit/agentdevkit', 'O npm empacotou um projeto diferente.');
+  assert.equal(archive.version, version, 'O pacote local diverge da versão do checkout.');
+  assert.equal(archive.filename, name, 'O npm criou um arquivo inesperado.');
+  return join(destination, name);
+}
+
+function validateLocalPackage(path, version, output, env, npm) {
+  const item = info(path);
+  assert.ok(path.endsWith('.tgz') && item?.isFile() && !item.isSymbolicLink(), '--tarball exige arquivo .tgz regular.');
+  const bytes = readFileSync(path);
+  const integrity = 'sha512-' + createHash('sha512').update(bytes).digest('base64');
+  const { run } = recorder(join(output, 'package-validation'), env);
+  const [archive] = JSON.parse(run('npm-pack-dry-run', process.execPath,
+    [npm, 'pack', path, '--dry-run', '--offline', '--ignore-scripts', '--json'], join(output, 'npm-work')));
+  assert.equal(archive?.name, '@pathbit/agentdevkit', 'O tarball precisa pertencer ao AgentDevKit.');
+  assert.equal(archive.version, version, 'Versão do tarball diferente da versão esperada.');
+  assert.equal(archive.integrity, integrity, 'O tarball mudou durante a validação do manifesto.');
+  return { kind: 'local-tarball', path, sha256: hash(bytes), expectedVersion: version };
 }
 
 function parseCliResult(text, status, { name, expected, version }) {
@@ -777,21 +807,24 @@ function testProject(project, options, output, env, npm) {
 export function main(args = process.argv.slice(2)) {
   const options = parse(args);
   if (options.help) {
-    console.log('Uso: node tests/oss-compatibility.mjs [--project id] [--output tmp/oss-compatibility/execucao-nova] [--version x.y.z] [--tarball arquivo.tgz]\nTeste opt-in: clona commits públicos fixos, sem executar aplicações. Sem --tarball, usa o npm público. Saídas permanecem em tmp/ ignorado.');
+    console.log('Uso: node tests/oss-compatibility.mjs [--project id] [--output tmp/oss-compatibility/execucao-nova] [--version x.y.z] [--tarball arquivo.tgz]\nClona commits públicos fixos, sem executar aplicações. Por padrão empacota o checkout. Para verificar o npm público, passe --version sem --tarball. Saídas permanecem em tmp/ ignorado.');
     return 0;
   }
   assert.ok(Number(process.versions.node.split('.')[0]) >= 24, 'Use Node.js 24+.');
   const selected = projects(options), output = outputDirectory(options.output), npm = findNpmCli();
   assert.ok(npm, 'npm CLI não encontrado junto ao Node ou no PATH.');
-  if (options.tarball) {
-    options.tarball = resolve(options.tarball);
-    const item = info(options.tarball);
-    assert.ok(options.tarball.endsWith('.tgz') && item?.isFile() && !item.isSymbolicLink(), '--tarball exige arquivo .tgz regular.');
-    options.packageSource = { kind: 'local-tarball', path: options.tarball, sha256: hash(readFileSync(options.tarball)), expectedVersion: options.version };
-  } else options.packageSource = { kind: 'public-registry', registry, package: `@pathbit/agentdevkit@${options.version}`, expectedVersion: options.version };
   const prepared = prepareOutput(output);
   prepared.verifyOutput();
   const env = environment(output);
+  if (!options.tarball && !options.versionExplicit) {
+    options.tarball = packCheckout(output, env, npm, options.version);
+    prepared.verifyOutput();
+  }
+  if (options.tarball) {
+    options.tarball = resolve(options.tarball);
+    options.packageSource = validateLocalPackage(options.tarball, options.version, output, env, npm);
+    prepared.verifyOutput();
+  } else options.packageSource = { kind: 'public-registry', registry, package: `@pathbit/agentdevkit@${options.version}`, expectedVersion: options.version };
   const results = selected.map(project => {
     prepared.verifyOutput();
     const result = testProject(project, options, output, env, npm);

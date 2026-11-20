@@ -221,19 +221,27 @@ function exerciseEmpty(options, output, envRoot, env, npm) {
 export function main(args = process.argv.slice(2)) {
   const options = parseCompatibilityArgs(args);
   if (options.help) {
-    console.log('Uso: node tests/documentation-compatibility.mjs [--project id] [--output tmp/documentation-compatibility/execucao-nova] [--version x.y.z] [--tarball arquivo.tgz]\nExecuta a matriz OSS e uma fixture documental aditiva explícita em clones descartáveis, além de um projeto vazio. Não comprova autoria autônoma de documentos nem executa aplicações.');
+    console.log('Uso: node tests/documentation-compatibility.mjs [--project id] [--output tmp/documentation-compatibility/execucao-nova] [--version x.y.z] [--tarball arquivo.tgz]\nPor padrão testa o pacote do checkout. Executa a matriz OSS e um exercício de documentação aditiva, além de um projeto vazio.');
     return 0;
   }
   assert.ok(Number(process.versions.node.split('.')[0]) >= 24, 'Use Node.js 24+.');
   const output = outputDirectory(options.output || `tmp/documentation-compatibility/${new Date().toISOString().replace(/[:.]/g, '-')}-${randomUUID().slice(0, 8)}`);
   if (options.tarball) options.tarball = resolve(options.tarball);
-  const baseArgs = ['--output', output, '--version', options.version, ...(options.project ? ['--project', options.project] : []), ...(options.tarball ? ['--tarball', options.tarball] : [])];
+  const baseArgs = ['--output', output, ...(options.versionExplicit ? ['--version', options.version] : []),
+    ...(options.project ? ['--project', options.project] : []), ...(options.tarball ? ['--tarball', options.tarball] : [])];
   const baseStatus = runCompatibility(baseArgs), original = json(join(output, 'REPORT.json'));
+  options.tarball = original.packageSource.kind === 'local-tarball' ? original.packageSource.path : undefined;
+  const packageIntact = () => {
+    if (!options.tarball) return true;
+    try { return hash(readFileSync(options.tarball)) === original.packageSource.sha256; }
+    catch { return false; }
+  };
+  const packageIntactBeforeDocuments = packageIntact();
   const report = { status: 'failed', version: options.version, packageSource: original.packageSource, installationStatus: original.status, output, results: [],
     limits: ['A autoria documental deste harness é uma fixture explícita, não um agente autônomo.',
       'Somente adições locais aprovadas para o teste; nenhuma especificação ou decisão de produto é inventada.',
       ...original.limits] };
-  if (baseStatus === 0) {
+  if (baseStatus === 0 && packageIntactBeforeDocuments) {
     const envRoot = join(output, 'documentation-environment'); mkdirSync(envRoot);
     const env = environment(envRoot), npm = findNpmCli(); assert.ok(npm, 'npm CLI não encontrado.');
     report.results = original.results.map(project => exerciseProject(project, options, output, envRoot, env, npm));
@@ -241,7 +249,7 @@ export function main(args = process.argv.slice(2)) {
     report.status = report.results.every(result => result.status === 'passed') ? 'passed' : 'failed';
   } else report.failure = 'Matriz de instalação falhou; exercícios documentais não foram executados.';
   if (options.tarball) {
-    const unchanged = hash(readFileSync(options.tarball)) === original.packageSource.sha256;
+    const unchanged = packageIntactBeforeDocuments && packageIntact();
     report.packageSource = { ...report.packageSource, unchanged };
     if (!unchanged) { report.status = 'failed'; report.failure = 'O pacote mudou durante a validação.'; }
   }

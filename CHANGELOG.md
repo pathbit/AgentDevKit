@@ -4,6 +4,17 @@ description: Alterações verificáveis por versão do AgentDevKit.
 
 # Changelog
 
+## 0.0.32
+
+- Conecta planejamento, implementação, validação e revisão por critérios de
+  aceite, com instruções mais curtas e pontos de entrada por intenção.
+- Permite verificar o kit instalado via npm sem depender de um executável
+  global e exige os testes nativos do sincronizador no Linux.
+- Repete uma vez a verificação de proteção de arquivo no Windows quando ela
+  excede o tempo limite. Recusas explícitas continuam interrompendo a operação.
+- Valida instalação e atualização com o pacote candidato local e audita os
+  recibos de recuperação e a proveniência da matriz de projetos.
+
 ## 0.0.31
 
 - No Windows, seleciona uma versão do Node com a correção de remoção em

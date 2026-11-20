@@ -102,7 +102,10 @@ nada. Nunca versione o tarball ou seus relatórios.
 ## Publicar uma versão
 
 1. Atualize versão e lockfile, changelog, exemplos e escopo da entrega.
-2. Conclua testes, documentação e revisão independente.
+2. Conclua testes, documentação e revisão independente. Use o tarball do
+   checkout candidato nas provas de instalação, compatibilidade e matriz.
+   Para a prova de atualização, comece na última versão publicada e termine
+   no mesmo tarball candidato.
 3. Envie o commit à branch principal e acompanhe o CI e a release.
 
 O perfil completo exige os testes estritos de recuperação concorrente. Enquanto
@@ -124,8 +127,8 @@ Também envia o mesmo pacote ao [npm público e GitHub Packages](packages.md),
 confere a integridade nos dois destinos e testa versão, instalação, diagnóstico
 e sincronização. O consumo pelo npm é anônimo; pelo GitHub, autenticado.
 
-A tag é a origem da publicação: `v0.0.21`, a release `v0.0.21` e os pacotes
-`0.0.21` apontam para a mesma entrega. A execução manual também exige a tag;
+A tag `v<versão>`, a release do GitHub e os pacotes nos dois registros
+identificam a mesma entrega. A execução manual também exige a tag;
 não crie outra tag para uma versão nem mova uma tag já publicada. Publicações
 feitas fora desse fluxo não criam tags automaticamente.
 

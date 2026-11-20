@@ -29,22 +29,27 @@ snapshots cobrem os caminhos listados nas fixtures, não todos os metadados Git.
 coexistentes e a recusa conservadora de migração, preservando arquivos humanos
 e o índice nas fixtures observadas. Não comprovam todos os aliases ou metadados.
 
-Para comparar uma instalação publicada `0.0.21` com o pacote local:
+Na validação de uma entrega, use o pacote gerado pelo checkout em análise.
+Gere o tarball de release uma vez e reaproveite-o para os testes de instalação
+e atualização. Para atualizar a partir do npm, informe a última versão
+publicada.
 
 ```console
-node tests/upgrade-published-021.mjs /caminho/agentdevkit-0.0.21.tgz
+npm run build
+version=$(node -p 'require("./package.json").version')
+archive=".agent-tests/release/$version/agentdevkit-$version.tgz"
+published=$(npm view @pathbit/agentdevkit@latest version --registry=https://registry.npmjs.org)
+npm run test:upgrade -- --from-version "$published" --to-tarball "$archive"
 ```
 
-O controlador compara a integridade do tarball ao valor registrado, gera o
-pacote com npm offline e exercita projetos sintéticos com Claude, Codex,
-Copilot, Gemini, OpenCode e Cursor. Ele registra as diferenças do Git na
-instalação antiga e compara caminhos Git e conteúdos humanos amostrados antes e
-depois da atualização. Saída 1 indica que algum critério ou check não passou.
-Uma fixture Codex prepara uma referência com CRLF no diretório de trabalho e
-conteúdo staged antes da atualização; o controlador não confirma por si só
-qual ramo de sincronização tratou essa referência.
-Os resultados ficam em `.agent-tests/`. A prova não cobre todos os clientes,
-histórico Git existente ou metadados.
+O teste confere a integridade da base publicada, a versão e o hash do candidato.
+Exercita Claude, Codex, Copilot, Gemini, OpenCode e Cursor em projetos
+sintéticos e compara o Git e o conteúdo humano antes e depois da atualização.
+Uma fixture Codex prepara uma referência CRLF com conteúdo staged.
+Para reinstalar ou atualizar a partir de um arquivo local, use
+`--from-tarball caminho/pacote.tgz`. Sem `--to-tarball`, o teste empacota o
+checkout. O resultado em `tmp/upgrade-packages/` registra a origem, os hashes
+dos dois pacotes e o que foi verificado.
 
 `sync-skill-collision.test.mjs` verifica o plano e o sync diante de uma skill
 humana com conteúdos staged e unstaged diferentes. A fixture confere o bloco
@@ -60,7 +65,8 @@ node tests/gemini-command-flow-proof.mjs
 ```
 
 A prova opcional exige Node 24+ e Git e usa o checkout local para criar oito
-fixtures temporárias fora de Git. O comando humano pode estar não rastreado,
+fixtures temporárias fora de Git. Para executar a CLI do tarball extraído,
+acrescente `--package /caminho/ao/pacote`. O comando pode estar não rastreado,
 ser uma adição staged, ser rastreado com edição unstaged ou ter conteúdos
 distintos staged e unstaged. Cada caso é repetido com e sem `{{args}}` no texto
 humano; os dois casos rastreados usam commits sintéticos locais. Ela executa
@@ -70,8 +76,8 @@ cada etapa, incluindo índice, diff staged, arquivos Git, trechos humanos e
 referência gerenciada. Falhas de execução, preservação ou referência gerenciada
 inválida interrompem as etapas seguintes; somente divergências de argumento e
 idempotência mantêm o diagnóstico. Um analisador independente restrito à fixture
-decodifica o valor de `prompt`, conta `{{args}}` nele e compara o texto humano
-exato ao redor do bloco gerenciado, além da descrição e do comentário. A saída
+decodifica o valor de `prompt`, conta `{{args}}` e compara o texto humano,
+a descrição e o comentário. Também confere o hash do bloco no marcador V3. A saída
 e `RESULT.json` registram o resultado. Nas duas fixtures com conteúdo staged e
 unstaged divergente, `init` deve recusar com `E_STAGED` e preservar os bytes e
 os snapshots Git; as etapas seguintes são registradas como `not-run`. Essa
@@ -79,8 +85,8 @@ recusa conservadora é esperada, não prova as etapas que não foram executadas.
 Código 1 indica
 divergência ou falha de execução; a prova é opcional e não integra `npm test`.
 Os diretórios temporários são mantidos para análise.
-O analisador aceita somente as duas linhas e o subconjunto de string básica
-usados nesta fixture; não é um parser TOML geral. Compara os valores humanos,
+O analisador aceita somente os campos, o comentário V3 e o subconjunto de
+string básica usados nesta fixture. Compara os valores humanos,
 mas não garante a preservação dos bytes originais do literal TOML. Outro arquivo
 humano é comparado integralmente por hash. Os processos têm as permissões do
 usuário; não há bloqueio de rede, Gemini real nem detecção de alterações
@@ -158,10 +164,13 @@ o reconhecimento estrito e a preservação de referências legadas, inclusive
 alterações staged e com `--force`. O alerta permanece: não comprovam ativação
 da regra no cliente nem preservação de todos os metadados do arquivo.
 
-Para exercitar 40 projetos sintéticos com um pacote já instalado, use Node 24+:
+Para exercitar 40 projetos sintéticos com o tarball local, extraia o pacote em
+uma pasta temporária. Use Node.js 24 ou mais recente.
 
 ```console
-node tests/project-matrix.mjs --package /caminho/ao/pacote --version 0.0.21
+work=$(mktemp -d)
+tar -xzf "$archive" -C "$work"
+node tests/project-matrix.mjs --package "$work/package" --version "$version"
 ```
 
 Acrescente `--rounds 25` para planejar 1.000 projetos; cada rodada contém
@@ -179,15 +188,6 @@ autentica o pacote nem detecta alterações nos demais arquivos ou mudanças
 transitórias revertidas; os imports são carregados antes da primeira medição.
 Uma diferença ou falha de leitura reprova a execução.
 
-Para investigar a mudança de `.git/info/exclude` da `0.0.21`, acrescente
-`--diagnose-exclude`. O runner continua após `init` apenas para os corpos
-e pares de fixture e seleção observados nas primeiras 25 rodadas, com 1.000
-cenários; outras variantes são interrompidas.
-O caso continua falho e a verificação do bloco não autentica o pacote: confira
-sua integridade separadamente. Os bytes originais permanecem como referência;
-o acréscimo no exclude continua registrado como falha. O resumo JSON em stdout
-inclui `diagnosticExclude` para identificar se esse modo foi solicitado.
-
 O runner confere o nome e a versão do pacote e executa `init`, `update`,
 `update --force`, `doctor` e `sync --check` para seleções de agentes, em
 projetos novos ou existentes. Varia arquivos humanos, configurações nativas e
@@ -204,12 +204,12 @@ Em documentos humanos extensíveis, aceita o conteúdo original ou o conteúdo
 original seguido do bloco gerenciado exato esperado; outras variantes exigem
 análise. Conserva snapshots, logs e `RESULT.json` em pasta exclusiva.
 Compara índices, origens e apontamentos esperados segundo a política do pacote.
-Cobertura que não consegue verificar é `not-verified`, não sucesso. A cobertura
-de regras Cursor e Copilot verifica o frontmatter gerado simples contra a
-origem, mas mantém sidecars, origens humanas e escopos ambíguos como não
-verificados; um link válido não prova seu alcance. Os demais frontmatters e
-títulos também não são comparados
-semanticamente; o resultado não comprova ativação dos clientes. A cobertura
+`ruleScopes` registra as provas de configuração de escopo. No Claude,
+`explicit-source-only` confirma a origem disponível para leitura explícita e
+a ausência de rota nativa na fixture. No Cursor, o runner compara o modo
+de aplicação com o trigger da regra e os bytes do sidecar instalado. Origens
+humanas e escopos ambíguos continuam como `not-verified`. A prova cobre
+configuração de escopo e descoberta estrutural. A cobertura
 é avaliada em cada uma das cinco operações; uma etapa sem cobertura válida
 mantém o caso como não verificado, mesmo se a última estiver verificada. Os
 logs são texto UTF-8 e não preservam bytes inválidos da saída original.
@@ -234,24 +234,27 @@ acesso ao sistema de arquivos ou à rede do processo.
 Timeout ou excesso de saída deixam preservação não verificada. Em Windows, só
 o processo filho é encerrado, e descendentes podem continuar. Falhas retornam `1`.
 
-Para conferir a coerência de uma saída preservada da matriz:
+Para conferir a coerência de uma saída preservada da matriz, forneça o caminho
+original registrado pelo runner, o pacote extraído e o checkout usado.
 
 ```console
-node tests/matrix-audit.mjs /caminho/da/saida /origem/registrada
+node tests/matrix-audit.mjs /caminho/da/saida /origem/registrada \
+  --package "$work/package" --runner-root "$PWD"
 ```
 
-O primeiro caminho contém `RESULT.json`; o segundo é o diretório registrado
-no campo `report` da saída do runner, antes de mover os arquivos. A auditoria
-confere casos, etapas, snapshots e hashes dos logs. `audit: consistent` indica
+O primeiro caminho contém `RESULT.json`. O segundo é o diretório pai do
+arquivo indicado pelo campo `report` antes de mover os arquivos. A auditoria
+confere casos, etapas, snapshots, hashes dos logs e as fontes registradas na
+proveniência. `audit: consistent` indica
 coerência, inclusive quando `matrixStatus` é `failed` ou `not-verified`;
 confira ambos. Ela não autentica a execução ou o pacote, não audita a
 preparação anterior a `BEFORE.json` e não garante segurança diante de mudanças
 concorrentes nos caminhos. Use somente evidências de origem confiável.
 
-Para verificar o pacote publicado em projetos reais, execute:
+Para verificar o pacote local em projetos reais, execute:
 
 ```console
-npm run test:oss -- --version 0.0.21
+npm run test:oss -- --tarball "$archive"
 ```
 
 O teste clona os commits fixos da [matriz](fixtures/oss-projects.json):
@@ -276,8 +279,10 @@ As verificações entre cenários não são atômicas durante todas as escritas;
 evite alterar a pasta da execução enquanto ela estiver em uso.
 Exige rede; não roda no `npm test` padrão nem executa as aplicações clonadas.
 Use `--project express` para um caso e `--help` para todas as opções.
-Para testar um candidato local, acrescente `--tarball caminho/pacote.tgz`
-e informe sua versão. O relatório distingue candidato de pacote público.
+Sem argumentos de pacote, o runner empacota o checkout. Com `--tarball`, testa
+o arquivo informado e espera a versão do checkout. Use também `--version`
+se o arquivo tiver outra versão. Para conferir o npm público, passe apenas
+`--version`. O relatório registra a origem do pacote.
 Um bloqueio por configuração preexistente aparece no relatório como falha,
 com os arquivos preservados; não equivale a uma instalação bem-sucedida.
 O processo retorna `1` se algum cenário falhar ou bloquear. No Zod, confere
@@ -289,7 +294,7 @@ expõe caches de testes; o diagnóstico preserva esse arquivo e o índice Git.
 ## Fluxo documental
 
 ```console
-npm run test:docs -- --version 0.0.13
+npm run test:docs -- --tarball "$archive"
 ```
 
 O runner reutiliza a matriz OSS e consulta o inventário do pacote instalado.
@@ -297,7 +302,8 @@ Registra um plano aditivo, acrescenta um trecho controlado a um README regular
 e cria um índice de links. Depois repete a manutenção do kit e compara conteúdo,
 arquivos fora do plano, Git e os diagnósticos de ignore observados antes da
 edição. Também verifica um repositório Git vazio sem inventar PRD, design
-ou aprovação. Aceita `--tarball` para validar um candidato.
+ou aprovação. Sem argumentos de pacote, reutiliza o tarball gerado pelo
+runner OSS no início dessa execução.
 
 Esses complementos são fixtures do harness: comprovam inventário e preservação,
 não a qualidade da autoria autônoma por um modelo. Um exercício real do agente
@@ -311,8 +317,7 @@ node tests/toml-preservation-proof.mjs
 
 O comando compara 40 exemplos sintéticos ao acrescentar, atualizar e retirar
 o bloco gerenciado. Ele retorna `1` para falhas, diferenças ou matriz
-incompleta; no comportamento atual, os 40 casos falham na restauração byte a
-byte. A prova é explícita e ainda não integra a suíte padrão. Ela não verifica
+incompleta. A prova é explícita e ainda não integra a suíte padrão. Ela não verifica
 a semântica intermediária e não substitui parser independente, clientes reais,
 Git ou plataformas diferentes.
 Veja a [spec em rascunho](../docs/specs/toml-preservacao/SPEC.md).
@@ -323,8 +328,7 @@ Para executar o ciclo da CLI e do sync em 20 fixtures TOML:
 node --test tests/gemini-toml-lifecycle-matrix.mjs
 ```
 
-A prova compara Git e bytes após a retirada do Gemini; no código atual, os
-20 casos falham na restauração integral. O leitor usa o parser distribuído
+A prova compara Git e bytes após a retirada do Gemini. O leitor usa o parser distribuído
 pelo kit e não substitui a comparação com um parser independente ou o cliente.
 Os testes rápidos do leitor estão em `gemini-toml-lifecycle-reader.test.mjs` e
 integram a suíte padrão.
@@ -537,11 +541,11 @@ Ele não comprova a ordem de todas as categorias nem um plano de recuperação.
 Com Node 24+, um pacote confiável local e as CLIs Gemini, OpenCode e Copilot:
 
 ```console
-node tests/native-client-matrix.mjs --package /caminho/ao/pacote --version 0.0.30
+node tests/native-client-matrix.mjs --package "$work/package" --version "$version"
 ```
 
 O runner cria projetos sintéticos novos e preexistentes para cada ID da política
-de adaptadores do pacote (14 no candidato 0.0.30), em pasta temporária exclusiva
+de adaptadores do pacote, em pasta temporária exclusiva
 fora de Git. Carrega os adaptadores e o construtor de catálogo do pacote;
 contratos ausentes ou não reconhecidos bloqueiam a prova. Constrói o inventário
 esperado das fontes do pacote e compara o catálogo
