@@ -30,10 +30,12 @@ quando couber.
 
 ## Plano e início
 
-Proponha escopo, componentes, decisões, riscos, tarefas e prova de cada aceite.
-Use `usar-skills-externas` e registre IDs, revisões e lacunas pertinentes.
-Aguarde a aprovação do plano antes de alterar arquivos ou ambiente. Registre-a
-no roadmap, siga o fluxo Git autorizado e conclua a configuração técnica com
+Reutilize o plano aprovado quando ainda cobrir o incremento. Se faltar plano
+ou houver mudança material, proponha escopo, componentes, decisões, riscos,
+tarefas e prova de cada aceite. Aguarde aprovação antes de alterar arquivos
+ou ambiente. Use `usar-skills-externas` para referências pertinentes e registre
+IDs, revisões e lacunas. Registre a aprovação no roadmap, siga o fluxo Git
+autorizado e conclua a configuração técnica com
 [configurar-projeto](../../projeto/configurar-projeto/SKILL.md). A configuração
 técnica vem depois das aprovações e antes do código.
 

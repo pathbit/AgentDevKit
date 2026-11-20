@@ -8,6 +8,8 @@ description: Alterações verificáveis por versão do AgentDevKit.
 
 - Conecta planejamento, implementação, validação e revisão por critérios de
   aceite, com instruções mais curtas e pontos de entrada por intenção.
+- Reaproveita planos aprovados, respeita a stack do projeto existente e
+  informa como preparar o destino local das evidências da revisão.
 - Permite verificar o kit instalado via npm sem depender de um executável
   global e exige os testes nativos do sincronizador no Linux.
 - Repete uma vez a verificação de proteção de arquivo no Windows quando ela

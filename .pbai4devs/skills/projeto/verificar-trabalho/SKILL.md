@@ -15,7 +15,8 @@ específica, use [validar-adversarial](../../qualidade/validar-adversarial/SKILL
 
 1. **Estrutura:** para recursos dos agentes, execute `verificar-recursos`;
    ele confere espelhos, frontmatter/H1 e links, além do Markdown lint quando
-   instalado. Sincronize os apontamentos antes da verificação.
+   instalado. Se houver divergência, use o [comando sincronizar][sync] para
+   conferir o plano e aplique apenas quando o pedido incluir a correção.
 2. **Comportamento:** execute testes relevantes, lint, tipos e build definidos
    no projeto; para automações dos agentes, execute `testar-infraestrutura`.
    Ao alterar catálogo, sincronizador, instalador ou cópia de projetos, execute
@@ -48,3 +49,4 @@ as ferramentas citadas nele. Ele verifica descoberta, shell virtual e roteiros;
 probes de Portless não comprovam proxy/TLS, nem dry-run comprova vídeo gravado.
 
 [navegador]: ../../../commands/testar-navegador/COMMAND.md
+[sync]: ../../../commands/sincronizar/COMMAND.md

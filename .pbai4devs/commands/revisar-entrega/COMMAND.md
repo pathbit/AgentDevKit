@@ -5,9 +5,11 @@ description: Revisa documentação, critérios e provas antes de commit ou merge
 # Revisar entrega
 
 Entrada: referência da mudança, spec quando houver e arquivos do escopo.
-Pré-requisitos: mudança pronta e Node.js 24+. Para documentação ou ajuste
-avulso autorizado sem spec, defina critérios próprios como AC-001 e registre
-o motivo. Funcionalidades seguem o fluxo de spec aprovada.
+Pré-requisitos: mudança pronta, Node.js 24+ e relatório e evidências da
+execução ignorados em `.agent-tests/` e fora do índice Git. Consulte o
+[modelo de ignore][ignore] se faltar a regra. Para documentação ou ajuste avulso
+autorizado sem spec, defina critérios próprios como AC-001 e registre o
+motivo. Funcionalidades seguem o fluxo de spec aprovada.
 
 A coleta automática recusa submódulos, sparse-index, flags que ocultam mudanças
 e filtros Git aplicados; nesses casos, use `--scope` para caminhos comprováveis.
@@ -57,3 +59,4 @@ implementação; a ausência de spec não elimina a revisão.
 `baseline.json` e `seal.json` são metadados gerados; não os edite manualmente.
 
 [documentacao]: ../../skills/projeto/atualizar-documentacao/SKILL.md
+[ignore]: ../../templates/gitignore/TEMPLATE.md

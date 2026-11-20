@@ -25,9 +25,9 @@ Mudanças funcionais, de arquitetura, de versões da stack ou de dados exigem
 decisão própria.
 Para ferramentas do kit necessárias à tarefa, use `setup <seleção>` no
 [preparo de ferramentas](../../../commands/instalar-ferramentas/COMMAND.md).
-Para dependências do projeto, siga os lockfiles. Prepare serviços pelo Compose
-local e pela [regra de ambiente](../../../rules/ambiente-local/RULE.md). Adapte
-modelos quando o reparo autorizado exigir e preserve bancos, volumes e segredos.
+Siga os lockfiles e os comandos da stack para preparar os serviços. Se o projeto
+já usar Compose, siga a [regra de ambiente](../../../rules/ambiente-local/RULE.md).
+Adapte modelos quando o reparo autorizado exigir e preserve bancos, volumes e segredos.
 
 Valide configuração, build, saúde, migrações acordadas e testes relevantes.
 Use `verificar-trabalho` para o fluxo real, quando houver aplicação. Relate

@@ -1,6 +1,6 @@
 ---
 trigger: always_on
-description: Estrutura mínima e ambiente local dos projetos com Docker Compose.
+description: Configuração técnica de projetos novos e preservação do ambiente local existente.
 ---
 
 # Ambiente local
@@ -11,9 +11,10 @@ Para a aplicação, crie `src/`, `tests/` e `infra/compose/compose.local.yml`.
 São obrigatórios `.gitignore`, `.gitattributes`, `.editorconfig`,
 `.dockerignore`, `Makefile` e `README.md`; `scripts/` é opcional para automações
 da aplicação. Em projetos existentes, preserve a organização até uma
-padronização autorizada; preparar a máquina não implica migrar o projeto.
+padronização autorizada e siga os comandos da stack em uso.
 
-Execute o ambiente local em Docker Compose. Esclareça serviços e versões,
+Use Docker Compose em projetos novos e nos existentes que já o adotam.
+Esclareça serviços e versões,
 bancos, cache, filas, integrações, recursos, segredos, portas e dados existentes.
 Pergunte a porta de entrada; se o usuário não souber, escolha uma livre e
 registre-a. Publique somente o necessário em localhost, com healthchecks e
@@ -23,10 +24,12 @@ Traefik é opcional para compartilhar a porta de entrada entre aplicações com
 hosts distintos. Use configuração de arquivo ou proxy restrito para descoberta;
 não exponha dashboard nem acesso irrestrito ao socket Docker.
 
-O Makefile deve oferecer `help`, `doctor`, `setup`, `up`, `down`, `logs`,
+Quando o Makefile fizer parte da configuração técnica, ele deve oferecer
+`help`, `doctor`, `setup`, `up`, `down`, `logs`,
 `test`, `lint` e `build`, com comandos reais da stack. Etapas ainda indefinidas
 devem falhar com mensagem útil; não simule sucesso. Documente os comandos,
-dependências e URL/porta no README; valide Compose e saúde antes de concluir.
+dependências e URL/porta no README; valide a saúde e a configuração do Compose
+quando aplicável.
 Antes de existir aplicação, valide o runtime, o Compose e os serviços de
 infraestrutura necessários. Build, saúde e fluxo da aplicação inexistente
 permanecem pendentes; não crie código de negócio para simular essas provas. Se
