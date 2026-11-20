@@ -12,9 +12,11 @@ node .pbai4devs/scripts/testar-infraestrutura/SCRIPT.mjs
 node .pbai4devs/scripts/preparar-ferramentas/SCRIPT.mjs check base
 ```
 
-O primeiro script confere os apontamentos, o catálogo e os [recursos][recursos].
-Em caso de divergência, use [sincronizar](../sincronizar/COMMAND.md) e repita.
-Os demais verificam a [infraestrutura][infra] e
+O primeiro script confere o catálogo, os [recursos][recursos] e os apontamentos
+do manifesto atual. Ao adicionar YAML nativo de cliente, passe primeiro pela
+CLI no fluxo [sincronizar](../sincronizar/COMMAND.md) para incorporá-lo. Use o
+mesmo fluxo para corrigir divergências. Os demais verificam a
+[infraestrutura][infra] e
 as [ferramentas existentes][tools].
 Ao alterar catálogo, instalação ou sincronização, rode também
 `node .pbai4devs/scripts/testar-maturidade/SCRIPT.mjs run`.
