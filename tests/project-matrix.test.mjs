@@ -411,7 +411,10 @@ test('matriz recusa modo Cursor divergente mesmo quando o sidecar e o apontament
   assert.match(result.issue, /Modo do sidecar Cursor diverge da regra de origem/);
 });
 
-test('matriz prova a omissão Claude e os modos Cursor nas cinco operações', { skip: runtimeSkip, timeout: 90000 }, async t => {
+// Each operation can run native metadata checks in a separate process on Windows.
+const scopeProofTimeout = process.platform === 'win32' ? 240000 : 90000;
+
+test('matriz prova a omissão Claude e os modos Cursor nas cinco operações', { skip: runtimeSkip, timeout: scopeProofTimeout }, async t => {
   const root = temp(t), results = join(root, 'results'); mkdirSync(results);
   const pkg = copiedPackage(root), cli = join(pkg, 'bin/agentdevkit.mjs');
   const version = JSON.parse(readFileSync(join(pkg, 'package.json'), 'utf8')).version;
@@ -509,8 +512,9 @@ test('CLI não aprova cobertura ausente em etapa anterior e falhas prevalecem', 
   for (const name of runnerLibraries) copyFileSync(resolve(dirname(runner), '../.pbai4devs/scripts/lib', name), join(lib, name));
   const original = readFileSync(runner, 'utf8');
   const reduced = original.replace('const cases = matrixCases(opts.rounds, opts.startRound);', 'const cases = matrixCases(opts.rounds, opts.startRound).slice(0, 1);');
-  const needle = 'step.installation = inspectInstallation(root, version, item.selection, inventory, new Set([...Object.keys(humanHubSkills), ...Object.keys(expectedDocuments)]), expectedDocuments);';
-  const injected = reduced.replace(needle, `${needle}\n        if (name === 'init') delete step.installation.coverage;`);
+  const installation = /^([ \t]*)step\.installation = inspectInstallation\([^\r\n]*\);$/m;
+  const injected = reduced.replace(installation, (statement, indent) =>
+    statement + '\n' + indent + "if (name === 'init') delete step.installation.coverage;");
   assert.notEqual(reduced, original); assert.notEqual(injected, reduced); writeFileSync(testRunner, injected);
   for (const failure of [false, true]) {
     const scenario = join(root, failure ? 'failed' : 'unverified'), output = join(scenario, 'output');
