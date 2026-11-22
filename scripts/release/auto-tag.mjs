@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
+import { setTimeout as pause } from 'node:timers/promises';
 import { githubRequest } from './publish.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -70,7 +71,7 @@ async function ensureNotOlderThanTags(prefix, version, request) {
 
 // The completed CI and its exact artifact are revalidated before any writes.
 // Never wait for the dispatched release from this workflow.
-export async function autoTagRelease({ event, environment = process.env, checkoutCommit, packageInfo, lock, request }) {
+export async function autoTagRelease({ event, environment = process.env, checkoutCommit, packageInfo, lock, request, sleep = pause }) {
   const context = checkedContext(event, environment, checkoutCommit);
   const { repository, branch, sha, id, attempt } = context;
   if (typeof request !== 'function') invalid('Cliente da API do GitHub ausente.');
@@ -114,7 +115,14 @@ export async function autoTagRelease({ event, environment = process.env, checkou
       if (!tagRef || await commitForRef(tagRef, repository, request) !== sha) throw error;
     }
   }
-  const finalRef = await request('GET', tagRefPath);
+  let finalRef = await request('GET', tagRefPath);
+  // A successful creation can precede visibility of the ref on a read replica.
+  for (const delay of [1000, 2000, 4000, 8000, 16000]) {
+    if (!created || finalRef !== null) break;
+    await sleep(delay);
+    finalRef = await request('GET', tagRefPath);
+  }
+  if (created && finalRef === null) invalid('A API do GitHub ainda não mostra a tag recém-criada. Execute novamente a automação.');
   if (!finalRef || await commitForRef(finalRef, repository, request) !== sha) invalid('A tag mudou antes da publicação.');
   const release = await request('GET', `${prefix}/releases/tags/${encodeURIComponent(tag)}`);
   if (release) {

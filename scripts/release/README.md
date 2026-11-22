@@ -52,6 +52,10 @@ todas as suítes.
 `smoke` verifica Node 26.
 `check` confere os recursos.
 
+`auto-tag.mjs` aguarda com releituras limitadas se a API ainda não mostrar a
+tag que acabou de criar. A release só é disparada após confirmar que a tag
+aponta para o commit aprovado pelo CI.
+
 `publish.mjs resolve` localiza um CI de push aprovado do mesmo commit da tag.
 O resolvedor espera até 65 minutos se a execução ainda estiver em andamento.
 `publish` confere procedência e hashes, e publica os mesmos bytes. Ausência de

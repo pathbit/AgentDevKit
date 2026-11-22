@@ -570,6 +570,31 @@ function autoTagFixture({ currentVersion = version, beforeVersion = '1.2.2', exi
   return { options: { event, environment, checkoutCommit: commit, packageInfo, lock, request }, event, environment, packageInfo, lock, calls, writes };
 }
 
+test('tag recém-criada aguarda visibilidade sem repetir a criação ou relaxar a conferência do commit', async t => {
+  const { autoTagRelease } = await import('../scripts/release/auto-tag.mjs');
+  const expected = { object: { type: 'commit', sha: commit } };
+  const different = { object: { type: 'commit', sha: 'd'.repeat(40) } };
+  for (const { name, existing, reads, waits, error, writes } of [
+    { name: 'propaga depois de dois 404', reads: [null, null, null, expected], waits: [1000, 2000], writes: ['refs', 'dispatches'] },
+    { name: 'continua ausente', reads: Array(7).fill(null), waits: [1000, 2000, 4000, 8000, 16000], error: /ainda não mostra/, writes: ['refs'] },
+    { name: 'aparece em outro commit', reads: [null, null, different], waits: [1000], error: /tag mudou/, writes: ['refs'] },
+    { name: 'tag preexistente desaparece', existing: expected, reads: [expected, null], waits: [], error: /tag mudou/, writes: [] },
+  ]) await t.test(name, async () => {
+    const observedWaits = [];
+    const f = autoTagFixture({ existing, onCall: ({ path }) => {
+      if (!path.includes('/git/ref/tags/')) return null;
+      assert.ok(reads.length, 'releitura de tag inesperada');
+      return { handled: true, value: reads.shift() };
+    } });
+    const result = autoTagRelease({ ...f.options, sleep: async delay => { observedWaits.push(delay); } });
+    if (error) await assert.rejects(result, error);
+    else assert.equal((await result).status, 'dispatched');
+    assert.deepEqual(observedWaits, waits);
+    assert.deepEqual(f.writes.map(call => call.path.split('/').at(-1)), writes);
+    assert.equal(reads.length, 0);
+  });
+});
+
 test('tag automática recusa evento não confiável, versão divergente e branch remoto inválido antes de escrever', async () => {
   const { autoTagRelease } = await import('../scripts/release/auto-tag.mjs');
   const changes = [
