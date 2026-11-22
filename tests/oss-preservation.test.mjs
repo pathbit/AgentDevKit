@@ -57,11 +57,13 @@ test('doctor deve identificar exatamente a fixture privada visível, sem omitir 
   assert.doesNotThrow(() => checkDoctorIssues({ issues: [{ code: 'private-file-visible', path }] }, path, false));
   assert.doesNotThrow(() => checkDoctorIssues({ issues: [] }, path, true));
   assert.doesNotThrow(() => checkDoctorIssues({ issues: [{ code: 'private-file-visible', path }, ...extra] }, path, false, extra));
+  assert.doesNotThrow(() => checkDoctorIssues({ issues: [...extra, { code: 'private-file-visible', path }] }, path, false, extra));
   assert.doesNotThrow(() => checkDoctorIssues({ issues: extra }, path, true, extra));
   assert.throws(() => checkDoctorIssues({ issues: [] }, path, false), /problemas ausentes/);
   assert.throws(() => checkDoctorIssues({ issues: [{ code: 'private-file-visible', path }, { code: 'broken' }] }, path, false), /inesperados/);
   assert.throws(() => checkDoctorIssues({ issues: [{ code: 'private-file-visible', path: 'outro' }] }, path, false), /inesperados/);
   assert.throws(() => checkDoctorIssues({ issues: [{ code: 'private-file-visible', path }] }, path, false, extra), /inesperados/);
+  assert.throws(() => checkDoctorIssues({ issues: [...extra, ...extra, { code: 'private-file-visible', path }] }, path, false, extra), /inesperados/);
   assert.throws(() => checkDoctorIssues({}, path, true), /problemas ausentes/);
 });
 
@@ -71,6 +73,8 @@ test('sync distingue alertas de visibilidade de erros além da fixture privada',
   const value = { conflicts: [], localIgnore: { pending: [{ code: 'output-visible', path: 'AGENTS.md' }, { code: 'private-file-visible', path }], trackedOutputs: [] } };
   assert.doesNotThrow(() => checkSyncIssues(value, path, false));
   const expected = structuredClone(value); expected.localIgnore.pending.push(extraIssue);
+  assert.doesNotThrow(() => checkSyncIssues(expected, path, false, [extraIssue]));
+  expected.localIgnore.pending.reverse();
   assert.doesNotThrow(() => checkSyncIssues(expected, path, false, [extraIssue]));
   assert.doesNotThrow(() => checkSyncIssues({ conflicts: [], localIgnore: { pending: [extraIssue], trackedOutputs: [] } }, path, true, [extraIssue]));
   const extra = structuredClone(value); extra.localIgnore.pending.push({ code: 'ignore-ambiguous', path: '.gitignore' });

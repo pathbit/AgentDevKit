@@ -287,16 +287,22 @@ export function checkExcludeOrigin(text) {
   assert.match(text, /^\.git\/info\/exclude:[1-9]\d*:\/oss-human-private\/\toss-human-private\/probe\r?\n$/, 'Regra humana de exclusão não foi a regra efetiva.');
 }
 
+function sortedIssues(issues) {
+  if (!Array.isArray(issues)) return issues;
+  return issues.toSorted((left, right) => String(left?.code).localeCompare(String(right?.code), 'en')
+    || String(left?.path).localeCompare(String(right?.path), 'en'));
+}
+
 export function checkDoctorIssues(value, privatePath, ignored, extraIssues = []) {
   const expected = [...(ignored ? [] : [{ code: 'private-file-visible', path: privatePath }]), ...extraIssues];
-  assert.deepEqual(value.issues, expected, 'Diagnóstico apresentou problemas ausentes ou inesperados.');
+  assert.deepEqual(sortedIssues(value.issues), sortedIssues(expected), 'Diagnóstico apresentou problemas ausentes ou inesperados.');
 }
 
 export function checkSyncIssues(value, privatePath, ignored, extraIssues = []) {
   assert.ok(Array.isArray(value.localIgnore?.pending), 'Diagnóstico sync ausente.');
   const blocking = value.localIgnore.pending.filter(item => !['artifact-unprotected', 'artifact-coverage-unverified', 'output-visible'].includes(item.code));
   const expected = [...(ignored ? [] : [{ code: 'private-file-visible', path: privatePath }]), ...extraIssues];
-  assert.deepEqual(blocking, expected, 'Sync apresentou problemas ausentes ou inesperados.');
+  assert.deepEqual(sortedIssues(blocking), sortedIssues(expected), 'Sync apresentou problemas ausentes ou inesperados.');
   assert.deepEqual(value.conflicts, [], 'Sync apresentou conflitos.');
   assert.deepEqual(value.localIgnore.trackedOutputs, [], 'Sync detectou artefatos rastreados.');
 }
