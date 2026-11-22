@@ -226,7 +226,7 @@ for (const targetName of ['main', 'linked']) test(`init/update/sync conservam Gi
   for (const args of [['init', '--agents', 'claude'], ['update'], ['sync']]) {
     const r = run(current, process.execPath, [bin, ...args, '--target', current, '--json']);
     assert.equal(r.status, 0, r.stdout + r.stderr);
-    const result = JSON.parse(r.stdout); assert.ok(result.warnings.some(w => w.includes('visiveis')));
+    const result = JSON.parse(r.stdout); assert.ok(result.warnings.some(w => w.includes('visíveis no Git')));
     files.forEach((file, i) => assert.deepEqual(readFileSync(file), before[i], `${args[0]} alterou ${file}`));
     assert.equal(git(other, 'status', '--short', '--untracked-files=all'), otherStatus);
     assert.equal(existsSync(join(current, '.claude/skills/.gitignore')), false);
@@ -265,7 +265,7 @@ test('projeto novo cria somente ignore do kit, sem mexer na configuracao Git', {
   }
   const directCheck = run(root, process.execPath, [sync, '--root', root, '--check']);
   assert.equal(directCheck.status, 0, directCheck.stdout + directCheck.stderr);
-  assert.match(directCheck.stdout, /dados privados podem ficar visiveis/);
+  assert.match(directCheck.stdout, /dados privados podem ficar visíveis/);
   const exclude = join(root, '.git/info/exclude'), originalExclude = readFileSync(exclude);
   const oldBlock = '# BEGIN AGENTDEVKIT LOCAL 1234567890abcdef\n/.claude/\n# END AGENTDEVKIT LOCAL 1234567890abcdef\n';
   for (const content of [oldBlock, `\uFEFF${oldBlock}`]) {
@@ -315,7 +315,7 @@ test('comandos JSON aceitam negações genéricas e conservam Git e ignores byte
     if (process.platform === 'win32') {
       for (const rule of ['!docs/*.md', '!docs/*.json']) assert.ok(ambiguous.some(item => item.path.endsWith(rule)), rule);
     } else assert.equal(ambiguous.length, 0);
-    assert.ok(data.warnings.some(warning => warning.includes('visiveis')), args.join(' '));
+    assert.ok(data.warnings.some(warning => warning.includes('visíveis no Git')), args.join(' '));
     paths.forEach((path, i) => assert.deepEqual(readFileSync(join(root, path)), before[i], `${args.join(' ')}: ${path}`));
   }
   const credentials = ['.claude/.env.secret.md', '.claude/auth.json', '.claude/.env.secret.yaml'];

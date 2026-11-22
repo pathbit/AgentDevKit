@@ -80,7 +80,7 @@ test('negação de ignore humana é preservada e visibilidade é avisada', t => 
   assert.equal(run(root, { localIgnores: true, force: true, output: message => messages.push(message) }).exitCode, 0);
   assert.deepEqual(fs.readFileSync(join(root, '.gitignore')), before);
   assert.deepEqual(fs.readFileSync(join(root, '.git/info/exclude')), exclude);
-  assert.ok(messages.some(message => /dados privados podem ficar visiveis/.test(message)));
+  assert.ok(messages.some(message => /dados privados podem ficar visíveis/.test(message)));
   assert.ok(fs.existsSync(join(root, generated)));
 });
 
