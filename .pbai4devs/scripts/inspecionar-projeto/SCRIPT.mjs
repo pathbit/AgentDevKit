@@ -83,6 +83,43 @@ function stableDirectory(root, directory, limit, checkContents = false) {
   return { ...boundedEntries(path.join(root, directory), limit, verify), verify };
 }
 
+export function inspectIntegrations(root) {
+  const file = name => present(root, name, false);
+  const dir = name => present(root, name, true);
+  const contains = (parent, filename) => {
+    if (!dir(parent)) return false;
+    try {
+      const listing = stableDirectory(root, parent, 512, true);
+      return listing.entries.some(item => item.isDirectory()
+        && !(parent === 'openspec/changes' && item.name === 'archive')
+        && listing.verify()
+        && file(`${parent}/${item.name}/${filename}`));
+    } catch { return false; }
+  };
+  const hasBmad = file('_bmad/config.toml') && file('_bmad/scripts/render_skill.py')
+    || file('_bmad/_config/manifest.yaml');
+  const paths = {
+    bmad: [
+      ...(dir('_bmad-output/planning-artifacts') ? ['_bmad-output/planning-artifacts'] : []),
+      ...(hasBmad ? ['_bmad'] : []),
+    ],
+    openspec: [
+      ...(contains('openspec/specs', 'spec.md') ? ['openspec/specs'] : []),
+      ...(contains('openspec/changes', 'proposal.md') ? ['openspec/changes'] : []),
+      ...(file('openspec/config.yaml') ? ['openspec/config.yaml'] : []),
+    ],
+    'spec-kit': file('.specify/memory/constitution.md')
+      ? ['.specify/memory/constitution.md', ...(contains('specs', 'spec.md') ? ['specs'] : [])]
+      : [],
+    tlc: [
+      ...(file('.specs/STATE.md') ? ['.specs/STATE.md'] : []),
+      ...(contains('.specs/features', 'spec.md') ? ['.specs/features'] : []),
+    ],
+    dotcontext: ['.context/docs', '.context/plans'].filter(dir),
+  };
+  return Object.fromEntries(Object.entries(paths).filter(([, found]) => found.length));
+}
+
 function metadata(root, file, maxBytes = 1024 * 1024) {
   const empty = { fields: {}, documents: {}, text: null, bytes: 0 };
   const identity = () => pathIdentity(root, file);
@@ -288,7 +325,8 @@ export function inspectDocumentation(root, limits = {}) {
     if (!(key in documentLimits) || !Number.isSafeInteger(value) || value < 0 || value > documentLimits[key]) throw new Error('Limite documental invalido.');
   }
   const ignored = new Set([...defaultExcluded, ...documentClients, ...agentRoots(root)].filter(name => !['examples', '.github'].includes(name)).map(name => name.toLowerCase()));
-  const excludedPaths = ['examples/generated', ...['skills', 'agents', 'commands', 'rules', 'instructions', 'prompts'].map(name => `.github/${name}`)];
+  const excludedPaths = ['examples/generated', '.context/runtime', '.context/workflow', '.context/harness',
+    ...['skills', 'agents', 'commands', 'rules', 'instructions', 'prompts'].map(name => `.github/${name}`)];
   const files = new Map();
   const configured = [];
   const warnings = [];
@@ -411,6 +449,7 @@ export function inspectProject(root = repository, { check = false, documentation
   root = fs.realpathSync(path.resolve(root));
   if (!fs.statSync(root).isDirectory()) throw new Error('A origem deve ser um diretorio.');
   const excluded = new Set(defaultExcluded);
+  const planningRoots = new Set(['_bmad', '_bmad-output', '.specify', '.specs', '.context']);
   const configuredAgents = agentRoots(root); configuredAgents.forEach(name => excluded.add(name));
   const report = { mode: 'agentes-sem-aplicacao', languages: [], manifests: [], lockfiles: [], commands: [], compose: [], dockerfiles: [], sources: [], structure: { present: [], missing: [] }, scan: { maxDepth: 6, truncated: false }, warnings: [] };
   const languages = new Set(); let entries = 0;
@@ -454,7 +493,8 @@ export function inspectProject(root = repository, { check = false, documentation
       if (/^\.playwright/i.test(item.name)) continue;
       if (item.isSymbolicLink()) continue;
       if (item.isDirectory()) {
-        if (excluded.has(item.name) || excluded.has(item.name.toLowerCase()) || /^\.?playwright/i.test(item.name)) continue;
+        if (excluded.has(item.name) || excluded.has(item.name.toLowerCase())
+          || (!directory && planningRoots.has(item.name.toLowerCase())) || /^\.?playwright/i.test(item.name)) continue;
         if (!listing.verify()) { report.scan.truncated = true; warning(directory || '.', 'changed-during-read'); return; }
         if (depth < report.scan.maxDepth) walk(file, depth + 1); else report.scan.truncated = true;
         continue;

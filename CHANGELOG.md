@@ -4,6 +4,15 @@ description: Alterações verificáveis por versão do AgentDevKit.
 
 # Changelog
 
+## 0.0.34
+
+- Guia a verificação no terminal da instalação até a próxima etapa do projeto.
+- Indica um plano somente leitura quando a sincronização precisa de revisão.
+- Oferece `next --integrations` antes e depois da instalação para localizar
+  onde consultar BMad, OpenSpec, GitHub Spec Kit, TLC e Dotcontext.
+- Explica no GitHub e no npm quando usar o kit e quando aproveitar referências
+  de outro método, com exemplos para projetos novos e existentes.
+
 ## 0.0.33
 
 - Migra referências antigas do Claude cuja origem e conteúdo são comprovados.

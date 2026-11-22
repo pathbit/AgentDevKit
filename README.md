@@ -9,19 +9,10 @@ language: pt
 
 [![npm][npm-badge]][npm-package] [![MIT][license-badge]](LICENSE)
 
-Uma forma de organizar o trabalho com agentes de código, do planejamento à
-verificação. Você mantém skills, regras, comandos e perfis em `.pbai4devs`;
-o kit gera os apontamentos que cada cliente sabe encontrar.
-
-Use com Codex, Claude, Cursor, Copilot, OpenCode e outros
-[clientes compatíveis](.pbai4devs/COMPATIBILIDADE.md). Há uma origem;
-cada cliente conserva seu formato de descoberta. No repositório, o código
-fica em `src/`, os testes em `tests/` e os recursos compartilhados em
-`.pbai4devs/`. Pastas nativas, entradas e preferências são geradas localmente.
-
-Já tem instruções ou skills no projeto? O kit acrescenta suas referências em
-blocos delimitados e preserva o conteúdo humano, inclusive em nomes iguais.
-Veja a [integração em projetos existentes](docs/guides/installation.md).
+O AgentDevKit orienta o trabalho com agentes de código, do planejamento à
+verificação. Uma origem em `.pbai4devs` guarda skills, regras, comandos e
+perfis. O kit gera apontamentos para
+[Codex, Claude, Cursor, Copilot, OpenCode e outros clientes](.pbai4devs/COMPATIBILIDADE.md).
 
 ## Começar em um projeto
 
@@ -32,32 +23,46 @@ Linux. Na pasta do seu projeto, instale pelo **npm público**, sem login:
 npx @pathbit/agentdevkit init
 ```
 
-Para pnpm, Yarn ou Bun, veja as alternativas no
-[guia de instalação](docs/guides/installation.md).
+Escolha os clientes na pergunta inicial ou passe `--agents codex,claude`.
+A escolha fica salva por projeto e pode ser alterada com `agents`. Em modo
+não interativo, `all` é o padrão quando não há escolha explícita ou salva.
+A CLI aceita `pt`, `en` e `es`.
+O [guia de instalação](docs/guides/installation.md) cobre pnpm, Yarn, Bun e
+[GitHub Packages com autenticação][github-install].
 
-Ou use **GitHub Packages**, após [autenticar no GitHub][github-install]:
+## Escolha o que quer fazer
+
+- **Planejar um produto novo ou uma evolução.** Consulte
+  `next --intent product` para identificar a próxima etapa de planejamento.
+- **Rodar uma aplicação existente.** Consulte `next --intent run` para
+  receber orientação com base no estado atual do projeto.
+- **Adotar só em alguns clientes.** Use `init --agents codex,claude` com os
+  IDs de que precisa.
+
+A instalação prepara os recursos dos agentes. Em um repositório existente,
+use `npx @pathbit/agentdevkit init --dry-run` para ver as mudanças propostas
+e os conflitos. O kit preserva as instruções e skills do projeto.
+Com Git, siga as indicações do terminal por `doctor` e `sync --check` antes
+de consultar o próximo passo para seu objetivo:
 
 ```console
-npx --registry=https://npm.pkg.github.com @pathbit/agentdevkit init
+npx @pathbit/agentdevkit next --intent product
+npx @pathbit/agentdevkit next --intent run
 ```
 
-Os dois registries oferecem o mesmo pacote. O GitHub exige token para download,
-mesmo sendo público; o npm continua sendo a opção sem login.
+O `next` indica o próximo passo. Para seguir a orientação no seu agente, peça
+que ele leia `AGENTS.md` e use `proximos-passos` com seu objetivo.
 
-Escolha os agentes na pergunta inicial ou informe `--agents codex,claude`.
-A escolha fica salva no projeto; `agents` permite consultá-la ou alterá-la.
-Sem interação ou escolha anterior, o padrão é `all` (todos os clientes).
+### Use apenas o fluxo que a tarefa exige
 
-Depois, abra o projeto no seu agente e peça:
-
-> Leia AGENTS.md e use a skill proximos-passos para orientar meu trabalho.
-
-Windows, instalação sem Node, simulação e atualização estão no
-[guia de instalação](docs/guides/installation.md). A distribuição usa a
-versão publicada no [npm e GitHub Packages][packages] e na [release][release],
-sem instalação global. Instalação e atualização usam o pacote do registro;
-os arquivos da release servem para conferir os artefatos publicados.
-O idioma da CLI pode ser `pt`, `en` ou `es`.
+O AgentDevKit serve como ponto de partida único para vários agentes. Use o
+kit para preparar o projeto e validar a entrega, aproveitando, conforme
+precisar, a descoberta do **BMad**, specs de **OpenSpec** ou **GitHub Spec Kit**,
+o planejamento do **Tech Leads Club** ou o contexto do **Dotcontext**
+(AI Context). Se o projeto já tem esses artefatos, consulte
+`npx @pathbit/agentdevkit next --integrations` para localizar as referências
+reconhecidas. Veja quando cada opção vale a pena no
+[guia comparativo](docs/guides/comparacao.md).
 
 ## Encontre o que precisa
 
@@ -92,9 +97,9 @@ use `npm run test:examples`; para verificar o pacote, `npm run verify`.
 O [guia de desenvolvimento](docs/maintainers/development.md) explica a árvore
 e os comandos.
 
-Instalar o kit prepara instruções. As ferramentas são instaladas por uma ação
-separada; PRD, design e specs surgem quando você inicia o planejamento.
-Projetos existentes preservam seu código e suas decisões.
+As ferramentas locais têm instalação separada. Os artefatos e as somas da
+[release][release] permitem conferir o pacote publicado nos
+[dois registries][packages].
 
 ## Licença e autoria
 
@@ -107,9 +112,6 @@ a licença e os arquivos próprios do seu projeto.
 
 Encontrou um problema ou tem uma ideia? [Abra uma issue][issues] pelos
 [formulários de contribuição](docs/maintainers/community.md).
-
-**[ Próximo passo ]** Siga a [instalação](docs/guides/installation.md) e peça
-ao seu agente para ler `AGENTS.md`.
 
 [tests]: docs/guides/tools-and-testing.md
 [cli]: docs/guides/cli.md

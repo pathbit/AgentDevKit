@@ -16,6 +16,9 @@ Para produto, confira `.pbai4devs/state/configuracao/ESTADO.md` e as evidências
 se a preparação estiver pendente, encaminhe a `configurar-projeto` antes do PRD;
 se não estiver comprovada, peça a confirmação necessária. Preserve documentos e
 decisões existentes. Para executar projeto existente, use `preparar-dev`.
+Quando `next` indicar referências externas, consulte `next --integrations`
+com a mesma intenção. Use somente os artefatos pertinentes como insumo e
+confira aprovações na fonte que o projeto adotou.
 
 Ao finalizar uma etapa, destaque: resultado, pendências/bloqueios e próxima
 ação com comando ou skill, no formato da

@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { packageInfo, statePath, legacyStatePath } from './config.mjs';
 import { text, normalizeLanguage, explainError } from './i18n.mjs';
 import { resolveTarget, loadState, planInstallation, applyPlan, inspect, inspectRemovalHistory } from './install.mjs';
-import { getNextSteps } from './next.mjs';
+import { getNextSteps, integrationHints, integrationNext, nextCommand, operationalNext } from './next.mjs';
 import { availableClients, normalizeClients } from './adapters/index.mjs';
 import { isBlockingLocalIgnore } from '../.pbai4devs/scripts/lib/gitignore.mjs';
 import { assertUnredirectedGitEnvironment } from '../.pbai4devs/scripts/lib/git-environment.mjs';
@@ -71,6 +71,9 @@ export function parseArgs(argv) {
     if (arg === '--' && options.command === 'tools') {
       options.toolArgs.push(...argv.slice(index));
       break;
+    } else if (arg === '--integrations' && options.command !== 'tools') {
+      if (options.integrations) usage('Use --integrations once.');
+      options.integrations = true;
     } else if (arg === '--intent' && options.command !== 'tools') {
       const value = argv[++index];
       if (!value || !['product', 'run'].includes(value)) usage('Use --intent product or run.');
@@ -111,6 +114,7 @@ export function parseArgs(argv) {
   }
   if (options.clients !== undefined && !['init', 'update', 'sync', 'lang', 'agents', 'help', 'version'].includes(options.command)) usage('--agents requires an installation or configuration command.');
   if (options.intent !== undefined && !['next', 'help', 'version'].includes(options.command)) usage('--intent requires next.');
+  if (options.integrations && !['next', 'help', 'version'].includes(options.command)) usage('--integrations requires next.');
   if (options.check && options.command !== 'sync') usage('--check requires sync.');
   if (options.dryRun && (!['init', 'update', 'sync', 'lang', 'agents'].includes(options.command) || (options.command === 'agents' && options.clients === undefined))) usage('--dry-run requires an installation or configuration change.');
   return options;
@@ -119,6 +123,9 @@ export function parseArgs(argv) {
 export function print(result, options, output) {
   if (options.json) { output.write(`${JSON.stringify(result)}\n`); return; }
   output.write(`${result.message}\n`);
+  for (const method of result.integrations || []) {
+    output.write(`\n${method.name}\n  ${method.paths.join(', ')}\n  ${method.instruction}\n  ${method.url}\n`);
+  }
   const operation = result.recovery?.id ? result.recovery : result.error?.operation;
   if (operation) output.write(`${text(result.language, 'recoveryGeneration')} ${operation.generation} · ID ${operation.id}${operation.phase || operation.kind ? ' · ' + (operation.phase || operation.kind) : ''}\n`);
   if (result.recovery?.journal) output.write(`${text(result.language, 'recoveryJournal')} ${JSON.stringify(result.recovery.journal)}\n`);
@@ -376,7 +383,8 @@ export async function main(argv = process.argv.slice(2), context = {}) {
         }
       } finally { prompt?.close(); }
     }
-    const result = { ok: true, command: options.command, version: packageInfo.version, language, ...(['help', 'version'].includes(options.command) ? {} : { clients }), target, message: '', next: getNextSteps({ command: options.command, language, target, installed: Boolean(previous), intent: options.intent }) };
+    const result = { ok: true, command: options.command, version: packageInfo.version, language, ...(['help', 'version'].includes(options.command) ? {} : { clients }), target, message: '', next: [] };
+    let installed = Boolean(previous), planCanApply;
     let exitCode = 0;
     if (options.command === 'help') result.message = text(language, 'help');
     else if (options.command === 'version') result.message = `AgentDevKit ${packageInfo.version}`;
@@ -461,7 +469,19 @@ export async function main(argv = process.argv.slice(2), context = {}) {
       result.issues = found.issues; result.ok = found.installed && found.issues.length === 0;
       result.message = text(language, result.ok ? 'healthy' : found.installed ? 'unhealthy' : 'missing'); exitCode = result.ok ? 0 : 1;
     } else if (options.command === 'next') {
-      result.message = previous ? text(language, 'workflow') : text(language, 'missing');
+      const hints = integrationHints({ target, language, intent: options.intent });
+      if (options.integrations) {
+        result.integrations = hints;
+        result.message = text(language, hints.length ? 'integrationsFound' : 'integrationsEmpty');
+        if (installed) {
+          const action = options.intent ? `next --intent ${options.intent}` : 'next';
+          result.next = [{ label: text(language, 'workflow'), command: nextCommand(action, target, language), stage: 'fluxo' }];
+        }
+      } else {
+        result.message = installed ? text(language, 'workflow') : text(language, 'missing');
+        result.next = getNextSteps({ command: 'next', language, target, installed, intent: options.intent });
+        if (hints.length) result.next.push(integrationNext(result, options.intent));
+      }
     } else if (options.command === 'tools') {
       if (!previous) throw Object.assign(new Error(text(language, 'missing')), { code: 'E_MISSING' });
       const script = join(target, '.pbai4devs/scripts/preparar-ferramentas/SCRIPT.mjs');
@@ -474,10 +494,10 @@ export async function main(argv = process.argv.slice(2), context = {}) {
       if (options.command === 'lang') {
         const selected = options.positionals[0] || options.language; language = normalizeLanguage(selected);
         if (!language) usage('Use lang pt, en or es.'); result.language = language;
-        result.next = getNextSteps({ command: options.command, language, target, installed: Boolean(previous) });
       }
       if (options.command === 'sync' && options.check && previous) removalBeforePlan = inspectRemovalHistory(target);
       const plan = preparePlan({ target, language, mode: options.command, force: options.force, clients: options.clients });
+      planCanApply = plan.canApply;
       result.preserved = plan.preserved;
       if (options.command === 'sync' && options.check && (plan.derivedFileDiagnostics.length || plan.removalDiagnostics.length)) result.issues = [...plan.derivedFileDiagnostics, ...plan.removalDiagnostics];
       if (plan.hardlinkBlockers.length || plan.ownerBlockers.length || plan.aclBlockers.length || plan.xattrBlockers.length) result.issues = [...(result.issues || []), ...plan.hardlinkBlockers, ...plan.ownerBlockers, ...plan.aclBlockers, ...plan.xattrBlockers];
@@ -525,9 +545,11 @@ export async function main(argv = process.argv.slice(2), context = {}) {
         }
         delete result.localIgnoreMigration;
         delete result.localIgnorePending;
-        result.next = getNextSteps({ command: options.command, language, target, installed: true });
+        installed = true;
       }
     }
+    if (!result.next.length) result.next = operationalNext(result, options, { installed, planCanApply })
+      || getNextSteps({ command: options.command, language, target, installed, intent: options.intent });
     print(result, options, output); return exitCode;
   } catch (error) {
     const diagnostics = collectErrorDiagnostics(error);

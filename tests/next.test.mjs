@@ -3,12 +3,13 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import test from 'node:test';
 import { getNextSteps } from '../src/next.mjs';
-import { parseArgs } from '../src/cli.mjs';
+import { main, parseArgs } from '../src/cli.mjs';
 import { packageInfo } from '../src/config.mjs';
 import { findNpmCli } from '../.pbai4devs/scripts/lib/npm.mjs';
 import { inspectDocumentation, inspectProject } from '../.pbai4devs/scripts/inspecionar-projeto/SCRIPT.mjs';
@@ -24,12 +25,14 @@ test('falha possivelmente parcial orienta revisão de backups nos três idiomas'
   }
 });
 
-function fixture(t) {
+function fixture(t, { withInspector = true } = {}) {
   const target = realpathSync(mkdtempSync(join(tmpdir(), "agentdevkit próximos $() ' -")));
   t.after(() => rmSync(target, { recursive: true, force: true }));
   const write = (file, content) => { const full = join(target, file); mkdirSync(dirname(full), { recursive: true }); writeFileSync(full, content); };
-  write('.pbai4devs/scripts/inspecionar-projeto/SCRIPT.mjs', readFileSync(join(root, '.pbai4devs/scripts/inspecionar-projeto/SCRIPT.mjs')));
-  cpSync(join(root, '.pbai4devs/scripts/lib'), join(target, '.pbai4devs/scripts/lib'), { recursive: true });
+  if (withInspector) {
+    write('.pbai4devs/scripts/inspecionar-projeto/SCRIPT.mjs', readFileSync(join(root, '.pbai4devs/scripts/inspecionar-projeto/SCRIPT.mjs')));
+    cpSync(join(root, '.pbai4devs/scripts/lib'), join(target, '.pbai4devs/scripts/lib'), { recursive: true });
+  }
   return { target, write };
 }
 function state(write, { preparation = 'concluido', technical = 'pendente', prd = 'aprovado', ux = 'nao-aplicavel', design = 'aprovado', roadmap = 'docs/planos/ROADMAP.md', specs = 'docs/incrementos' } = {}) {
@@ -484,6 +487,214 @@ function intentTree(root) {
   }
   visit(); return rows;
 }
+
+function guidanceFixture(t) {
+  const { target, write } = fixture(t, { withInspector: false });
+  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^GIT_|^NODE_OPTIONS$/i.test(key)));
+  Object.assign(env, { GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: testGitConfig, GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0', LC_ALL: 'C' });
+  function invoke(program, args, expected = 0) {
+    const result = spawnSync(program, args, { cwd: target, env, encoding: 'utf8', timeout: 180000, maxBuffer: 8 * 1024 * 1024 });
+    assert.ifError(result.error);
+    assert.equal(result.status, expected, result.stderr || result.stdout);
+    return result.stdout;
+  }
+  const cli = (args, expected) => invoke(process.execPath, [join(root, 'bin/agentdevkit.mjs'), ...args, '--target', target], expected);
+  return { target, write, cli, json: (args, expected) => JSON.parse(cli([...args, '--json'], expected)),
+    git: (...args) => invoke('git', args) };
+}
+
+const integrationFixtures = {
+  bmad: ['_bmad/config.toml', '_bmad/scripts/render_skill.py'],
+  openspec: ['openspec/specs/conta/spec.md'],
+  'spec-kit': ['.specify/memory/constitution.md'],
+  tlc: ['.specs/STATE.md'],
+  dotcontext: ['.context/docs/README.md'],
+};
+const privateFixtureText = 'ADK_INTEGRACAO_CONTEUDO_NAO_CONSULTAR';
+const integrationHint = /\bnext\b[^\r\n]*--integrations/;
+
+test('next identifica cinco estruturas de integração antes e depois da instalação sem escrever', {
+  timeout: process.platform === 'win32' ? 480000 : 180000,
+}, t => {
+  const { target, write, json, cli, git } = guidanceFixture(t);
+  git('init', '--quiet');
+  write('.gitignore', '# Ignore humano\nprivate/\n');
+  write('README.md', '# Projeto existente\n');
+  write('src/app.mjs', 'export const app = true;\n');
+  for (const path of Object.values(integrationFixtures).flat()) write(path, privateFixtureText);
+  git('add', '--', 'README.md', '.gitignore', '.specify/memory/constitution.md');
+  write('.specify/memory/constitution.md', privateFixtureText + ' edição ainda não preparada');
+  const staged = git('diff', '--cached', '--binary', '--no-ext-diff', '--no-textconv');
+  assert.match(staged, new RegExp(privateFixtureText));
+  function verify(phase) {
+    const before = intentTree(target);
+    const result = json(['next', '--integrations']);
+    assert.equal(result.ok, true);
+    assert.equal(result.command, 'next');
+    assert.equal(result.version, packageInfo.version);
+    assert.deepEqual(result.integrations.map(item => item.id).sort(), Object.keys(integrationFixtures).sort());
+    assert.doesNotMatch(JSON.stringify(result), new RegExp(privateFixtureText), phase);
+    for (const item of result.integrations) {
+      assert.deepEqual(Object.keys(item).sort(), ['id', 'instruction', 'name', 'paths', 'url']);
+      assert.ok(item.name.trim() && item.instruction.trim(), item.id);
+      assert.equal(new URL(item.url).protocol, 'https:', item.id);
+      assert.ok(Array.isArray(item.paths) && item.paths.length, item.id);
+      assert.equal(new Set(item.paths).size, item.paths.length, item.id);
+      for (const evidence of item.paths) {
+        assert.ok(evidence.split('/').every(part => part && part !== '..' && part !== '.' && !part.includes('\\')), item.id);
+        assert.ok(integrationFixtures[item.id].some(path => path === evidence || path.startsWith(evidence + '/')), evidence);
+        assert.ok(!fs.lstatSync(join(target, evidence)).isSymbolicLink(), evidence);
+      }
+    }
+    const product = json(['next', '--integrations', '--intent', 'product']).integrations;
+    const run = json(['next', '--integrations', '--intent', 'run']).integrations;
+    const methods = items => items.map(({ id, paths }) => [id, paths]);
+    assert.deepEqual(methods(product), methods(result.integrations));
+    assert.deepEqual(methods(run), methods(result.integrations));
+    assert.notDeepEqual(product.map(item => item.instruction), run.map(item => item.instruction));
+    const human = cli(['next', '--integrations']);
+    for (const { name } of result.integrations) assert.ok(human.includes(name), name);
+    assert.doesNotMatch(human, new RegExp(privateFixtureText), phase);
+    assert.equal(git('diff', '--cached', '--binary', '--no-ext-diff', '--no-textconv'), staged);
+    assert.deepEqual(intentTree(target), before, phase);
+  }
+  verify('antes do init');
+  assert.equal(json(['init', '--agents', 'codex', '--lang', 'pt', '--yes']).ok, true);
+  verify('depois do init');
+
+  const before = intentTree(target);
+  for (const [intent, skill] of [['product', 'configurar-projeto'], ['run', 'preparar-dev'], [null, 'preparar-dev']]) {
+    const result = json(intent ? ['next', '--intent', intent] : ['next']);
+    assert.equal(result.next[0].skill, skill);
+    assert.doesNotMatch(result.next[0].command || '', integrationHint, 'A orientação principal deve continuar primeiro.');
+    const hint = result.next.slice(1).find(step => integrationHint.test(step.command || ''));
+    assert.ok(hint, intent || 'sem intenção explícita');
+    if (intent) assert.ok(hint.command.includes(`--intent ${intent}`), hint.command);
+  }
+  assert.deepEqual(intentTree(target), before);
+});
+
+test('next reconhece as estruturas alternativas sem abrir os arquivos de integração', async t => {
+  const { target, write, git, json } = guidanceFixture(t);
+  const paths = [
+    '_bmad/config.toml', '_bmad-output/planning-artifacts/plan.md',
+    'openspec/specs/conta/spec.md', '.specify/memory/constitution.md', '.specs/STATE.md', '.context/plans/roadmap.md',
+  ];
+  for (const path of paths) write(path, privateFixtureText);
+  git('init', '--quiet');
+  assert.equal(json(['init', '--agents', 'codex', '--yes']).ok, true);
+  const before = intentTree(target), landmarks = new Set(paths.map(path => join(target, path)));
+  const attemptedReads = [];
+  const originalOpen = fs.openSync, originalRead = fs.readFileSync;
+  const record = (operation, path) => {
+    if (landmarks.has(path)) attemptedReads.push([operation, path]);
+  };
+  fs.openSync = (path, ...args) => { record('open', path); return originalOpen(path, ...args); };
+  fs.readFileSync = (path, ...args) => { record('read', path); return originalRead(path, ...args); };
+  syncBuiltinESMExports();
+  let output = '';
+  try {
+    const status = await main(['next', '--integrations', '--json', '--target', target], {
+      stdin: { isTTY: true }, stdout: { isTTY: true, write: text => { output += text; } },
+      ask: () => assert.fail('A consulta de integrações não deve perguntar.'),
+    });
+    assert.equal(status, 0, output);
+  } finally {
+    fs.openSync = originalOpen;
+    fs.readFileSync = originalRead;
+    syncBuiltinESMExports();
+  }
+  assert.deepEqual(JSON.parse(output).integrations.map(item => item.id).sort(), Object.keys(integrationFixtures).sort());
+  assert.match(JSON.parse(output).next[0].command, /\bnext --target\b/);
+  assert.deepEqual(attemptedReads, []);
+  assert.doesNotMatch(output, new RegExp(privateFixtureText));
+  assert.deepEqual(intentTree(target), before);
+});
+
+test('next recusa estruturas incompletas e não segue diretórios de integração por link', t => {
+  const { target, write, json } = guidanceFixture(t);
+  const external = fixture(t, { withInspector: false });
+  write('_bmad/config.toml', privateFixtureText);
+  write('.specs/README.md', privateFixtureText);
+  write('openspec/conta/spec.md', privateFixtureText);
+  write('.context/README.md', privateFixtureText);
+  mkdirSync(join(target, '.specify/memory'), { recursive: true });
+  mkdirSync(join(target, '.specify/memory/constitution.md'));
+  const before = intentTree(target);
+  assert.deepEqual(json(['next', '--integrations']).integrations, []);
+  const next = json(['next']);
+  assert.ok(next.next.every(step => !integrationHint.test(step.command || '')));
+  assert.deepEqual(intentTree(target), before);
+  external.write('.specify/memory/constitution.md', privateFixtureText);
+  external.write('openspec/specs/conta/spec.md', privateFixtureText);
+  mkdirSync(join(target, 'openspec/specs'), { recursive: true });
+  rmSync(join(target, '.specify'), { recursive: true });
+  const linkType = process.platform === 'win32' ? 'junction' : 'dir';
+  symlinkSync(join(external.target, '.specify'), join(target, '.specify'), linkType);
+  symlinkSync(join(external.target, 'openspec/specs/conta'), join(target, 'openspec/specs/conta'), linkType);
+  if (process.platform !== 'win32') {
+    external.write('.specs/STATE.md', privateFixtureText);
+    symlinkSync(join(external.target, '.specs/STATE.md'), join(target, '.specs/STATE.md'), 'file');
+  }
+  const linked = intentTree(target), outside = intentTree(external.target);
+  assert.deepEqual(json(['next', '--integrations']).integrations, []);
+  assert.deepEqual(intentTree(target), linked);
+  assert.deepEqual(intentTree(external.target), outside);
+});
+
+test('integrações são uma opção de next e o diagnóstico limpo encaminha sem escrever', {
+  timeout: process.platform === 'win32' ? 480000 : 180000,
+}, t => {
+  const { target, write, json, git } = guidanceFixture(t);
+  for (const command of ['init', 'update', 'doctor', 'sync', 'agents', 'lang', 'recovery']) {
+    assert.throws(() => parseArgs([command, '--integrations']), { code: 'E_ARGS' });
+  }
+  assert.throws(() => parseArgs(['next', '--integrations', '--integrations']), { code: 'E_ARGS' });
+  assert.deepEqual(parseArgs(['tools', 'run', 'agent-browser', '--', '--integrations']).toolArgs,
+    ['run', 'agent-browser', '--', '--integrations']);
+  git('init', '--quiet');
+  write('README.md', '# Projeto existente\n');
+  write('src/app.mjs', 'export const app = true;\n');
+  git('add', '--', 'README.md', 'src/app.mjs');
+  assert.equal(json(['init', '--agents', 'codex', '--lang', 'pt', '--yes']).ok, true);
+  const before = intentTree(target);
+  const invalid = json(['init', '--integrations'], 2);
+  assert.equal(invalid.error.code, 'E_ARGS');
+  const doctor = json(['doctor']);
+  assert.deepEqual(doctor.issues, []);
+  assert.match(doctor.next[0].command, /\bsync\b[^\r\n]*--check/);
+  const sync = json(['sync', '--check']);
+  assert.deepEqual(sync.plan, []);
+  assert.match(sync.next[0].command, /\bnext\b/);
+  const guidance = json(['next']);
+  assert.equal(guidance.next[0].skill, 'preparar-dev');
+  assert.ok(guidance.next.every(step => !integrationHint.test(step.command || '')));
+  assert.deepEqual(intentTree(target), before);
+
+  unlinkSync(join(target, '.agents/agents/analista-performance.md'));
+  const missing = intentTree(target);
+  assert.match(json(['doctor'], 1).next[0].command, /\bsync --dry-run --json\b/);
+  assert.match(json(['sync', '--check', '--agents', 'codex'], 1).next[0].command,
+    /\bsync --dry-run --json --agents codex\b/);
+  const preview = json(['sync', '--dry-run', '--agents', 'codex']);
+  assert.ok(preview.plan.some(entry => entry.path === '.agents/agents/analista-performance.md'));
+  assert.match(preview.next[0].command, /\bsync --agents codex --target\b/);
+  assert.doesNotMatch(preview.next[0].command, /--force/);
+  assert.deepEqual(intentTree(target), missing);
+});
+
+test('intenção de execução mantém o foco na aplicação com uma spec aberta', t => {
+  const { target, write } = fixture(t);
+  state(write);
+  write('package.json', '{"scripts":{"start":"node src/app.mjs"}}');
+  write('src/app.mjs', 'export const app = true;\n');
+  write('docs/incrementos/primeiro/SPEC.md', '---\nstatus: aprovado\n---\n# Spec\n');
+  write('docs/planos/ROADMAP.md', '---\nstatus: planejado\n---\n# Roadmap\n- [ ] [Spec](../incrementos/primeiro/SPEC.md)\n');
+  const next = intent => getNextSteps({ command: 'next', target, installed: true, intent })[0];
+  assert.equal(next('product').skill, 'implementar-spec');
+  assert.equal(next().skill, 'implementar-spec');
+  assert.equal(next('run').skill, 'preparar-dev');
+});
 
 test('next diferencia intenção de produto e execução sem alterar projeto ou Git', t => {
   const { target, write } = fixture(t);

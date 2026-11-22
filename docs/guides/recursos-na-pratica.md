@@ -65,6 +65,10 @@ registro escolhidos na [instalação][install]. [Diagnosticar][diagnose] inventa
 ambiente e projeto, e [preparar-dev][prepare] usa esse inventário quando o
 pedido inclui ajustes.
 Entregue os comandos para subir, verificar e parar a aplicação.
+Quando a tarefa depende de uma spec ou um plano existente, a skill
+[proximos-passos](../../.pbai4devs/skills/projeto/proximos-passos/SKILL.md)
+usa as indicações de `next --integrations` para encontrar referências no projeto.
+Consulte [quando usar outros métodos](comparacao.md).
 
 Para **auditar segurança**, [auditar-seguranca][audit] coleta ou reaproveita o
 relatório local, e o perfil auditor usa [revisar-seguranca][security] para

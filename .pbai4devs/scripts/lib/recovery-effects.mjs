@@ -3,7 +3,7 @@ import { types } from 'node:util';
 
 const keys = new Set([
   'command', 'positionals', 'toolArgs', 'target', 'language', 'clients',
-  'yes', 'json', 'dryRun', 'force', 'check', 'help', 'version', 'intent',
+  'yes', 'json', 'dryRun', 'force', 'check', 'help', 'version', 'intent', 'integrations',
 ]);
 const required = ['command', 'positionals', 'toolArgs', 'target', 'language',
   'clients', 'yes', 'json', 'dryRun', 'force', 'check'];
@@ -38,14 +38,14 @@ export function classifyRecoveryEffects(options) {
   if (![positionals, toolArgs].every(stringArray)
     || clients !== undefined && !stringArray(clients)
     || !['yes', 'json', 'dryRun', 'force', 'check'].every(key => typeof get(key) === 'boolean')
-    || !['help', 'version'].every(key => get(key) === undefined || typeof get(key) === 'boolean')
+    || !['help', 'version', 'integrations'].every(key => get(key) === undefined || typeof get(key) === 'boolean')
     || ![null, 'pt', 'en', 'es'].includes(get('language'))
     || !(get('target') === null || typeof get('target') === 'string')
     || !(get('intent') === undefined || ['product', 'run'].includes(get('intent')))) return 'unsupported';
 
   const command = get('command');
   if (command === 'recovery') {
-    if (clients !== undefined || get('intent') !== undefined || toolArgs.length
+    if (clients !== undefined || get('intent') !== undefined || get('integrations') !== undefined || toolArgs.length
       || get('check') || get('dryRun') || get('force') || get('yes')) return 'unsupported';
     if (!positionals.length) return 'query';
     return validRecoveryResolution(positionals) ? 'resolution' : 'unsupported';
@@ -58,6 +58,7 @@ export function classifyRecoveryEffects(options) {
     || toolArgs.length && !['tools', 'help', 'version'].includes(command)
     || clients !== undefined && !['init', 'update', 'sync', 'lang', 'agents', 'help', 'version'].includes(command)
     || get('intent') !== undefined && !['next', 'help', 'version'].includes(command)
+    || get('integrations') !== undefined && !['next', 'help', 'version'].includes(command)
     || get('check') && command !== 'sync'
     || get('dryRun') && (!['init', 'update', 'sync', 'lang', 'agents'].includes(command)
       || command === 'agents' && clients === undefined)) return 'unsupported';

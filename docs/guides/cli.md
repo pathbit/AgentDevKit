@@ -30,6 +30,7 @@ atendido; lá os comandos de manutenção usam o pacote por `npx`.
 | `recovery` | Consulta o diário e a cópia da operação pendente. |
 | `recovery resolve <geração> <id>` | Encerra a pendência revisada. |
 | `next` | Mostra a próxima etapa, sem iniciá-la. |
+| `next --integrations` | Indica onde consultar artefatos de outros métodos. |
 | `lang [idioma]` | Consulta ou altera o idioma: pt, en ou es. |
 | `agents` | Mostra os clientes disponíveis e a seleção salva. |
 | `agents codex,claude` | Altera a seleção e os apontamentos necessários. |
@@ -57,6 +58,7 @@ antes de executar `recovery resolve`.
 | `--force` | Solicita reparos gerenciados permitidos, com backup. |
 | `--json` | Produz uma resposta JSON para automação. |
 | `--intent product\|run` | Em `next`: produto ou execução. |
+| `--integrations` | Em `next`: consulta de referências externas no projeto. |
 
 O primeiro uso interativo reúne idioma e clientes. Sem interação, valem as
 opções explícitas, a escolha local salva e, por último, `all`. Confira os
@@ -143,6 +145,10 @@ Leia os campos estruturados, não dependa da tradução da mensagem.
 Em `next --intent product`, após uma inspeção concluída, `stage` identifica a
 etapa sugerida e `maturity` indica a maturidade detectada. Sem kit instalado ou
 com inventário incompleto, `maturity` não é informado. Não são aprovações.
+`next --integrations` acrescenta `integrations` à resposta normal, com
+`id`, `name`, `url`, `paths` relativos à raiz e `instruction` por método.
+A consulta funciona antes da instalação. Ela indica apenas caminhos padrão
+reconhecidos e não abre documentos externos, baixa pacotes ou executa ferramentas.
 `preserved` lista caminhos mantidos pelo projeto e o motivo.
 Um complemento pode ser gerenciado por bloco sem tornar o arquivo propriedade
 do kit. Conteúdo humano não é substituído por `--force`.
@@ -160,6 +166,10 @@ resposta JSON parcial possa ser recuperada automaticamente.
 
 `doctor` verifica o kit, não o produto inteiro. `next` pode terminar com
 sucesso enquanto orienta uma etapa ainda pendente.
+Em um repositório Git saudável, siga o comando copiado da saída de `init` ou
+`update` para `doctor`, depois `sync --check` e `next`. Se houver
+divergências, revise o diagnóstico e use `sync --dry-run --json` quando
+indicado para conferir o plano de sincronização.
 Para uma nova funcionalidade, use `next --intent product`; para preparar a
 execução de um projeto existente, use `next --intent run`. Sem `--intent`, a
 consulta mantém o comportamento anterior. O diagnóstico não inicia a etapa nem comprova
@@ -177,5 +187,9 @@ Na intenção de produto, avisos no inventário documental também pedem inspeç
 isso inclui caminhos inválidos, erros de leitura e links simbólicos não seguidos,
 mesmo quando um link pareça não ser documentação. Consulte o inspetor para ver
 os avisos e decida após verificar os arquivos relevantes.
+
+Use a [comparação de métodos](comparacao.md) para decidir se vale consultar
+um artefato externo. Quando `next` encontra referências, a consulta adicional
+preserva a etapa e a skill indicadas para o projeto.
 
 [Wiki](../README.md) · [Solução de problemas](troubleshooting.md)

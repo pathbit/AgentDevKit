@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { releaseCommand } from './config.mjs';
-import { inspectProject } from '../.pbai4devs/scripts/inspecionar-projeto/SCRIPT.mjs';
+import { inspectIntegrations, inspectProject } from '../.pbai4devs/scripts/inspecionar-projeto/SCRIPT.mjs';
 
 const messages = {
   pt: {
@@ -20,6 +20,12 @@ const messages = {
     existing: 'Preserve código e decisões existentes; não reinicie a definição do produto.',
     partial: 'A operação pode ter deixado alterações ou arquivos temporários.',
     partialInstruction: 'Interrompa outras operações; preserve arquivos e backups e revise o estado antes de tentar novamente. Backups podem estar incompletos: compare-os antes de restaurar.',
+    check: 'Confira se os recursos dos agentes estão sincronizados.',
+    next: 'Consulte a próxima etapa do projeto.',
+    preview: 'Veja o plano de sincronização antes de aplicar.',
+    apply: 'Aplique somente após revisar o plano.',
+    review: 'Revise os itens apontados e repita a verificação.',
+    integrations: 'Veja os artefatos de outros métodos que podem ajudar nesta tarefa.',
   },
   en: {
     install: 'Install AgentDevKit in this project.', verify: 'Check the installation.',
@@ -37,6 +43,12 @@ const messages = {
     existing: 'Preserve existing code and decisions; do not restart product discovery.',
     partial: 'The operation may have left changes or temporary files.',
     partialInstruction: 'Stop other operations; preserve files and backups and review the state before retrying. Backups may be incomplete: compare them before restoring.',
+    check: 'Check whether your agent resources are in sync.',
+    next: 'Find the next step for this project.',
+    preview: 'Review the synchronization plan before applying it.',
+    apply: 'Apply only after reviewing the plan.',
+    review: 'Review the reported items and run the check again.',
+    integrations: 'Find artifacts from other methods that can help with this task.',
   },
   es: {
     install: 'Instale AgentDevKit en este proyecto.', verify: 'Compruebe la instalación.',
@@ -54,6 +66,12 @@ const messages = {
     existing: 'Preserve el código y las decisiones existentes; no reinicie el producto.',
     partial: 'La operación puede haber dejado cambios o archivos temporales.',
     partialInstruction: 'Detenga otras operaciones; conserve archivos y respaldos y revise el estado antes de reintentar. Los respaldos pueden estar incompletos: compárelos antes de restaurar.',
+    check: 'Compruebe si los recursos de sus agentes están sincronizados.',
+    next: 'Consulte el siguiente paso del proyecto.',
+    preview: 'Revise el plan de sincronización antes de aplicarlo.',
+    apply: 'Aplique el plan después de revisarlo.',
+    review: 'Revise los elementos indicados y repita la comprobación.',
+    integrations: 'Busque artefactos de otros métodos que puedan ayudar con esta tarea.',
   },
 };
 
@@ -71,10 +89,15 @@ function commandLine(args, platform) {
   return (platform === 'win32' ? '& ' : '') + args.map(value => quote(value, platform)).join(' ');
 }
 
+export function nextCommand(action, target, language, platform = process.platform) {
+  return `${platform === 'win32' ? '& ' : ''}${releaseCommand} ${action} --target ${quote(target, platform)} --lang ${quote(language, platform)}`;
+}
+
 function workflow(report, intent) {
   const state = report.maturity;
   const app = state.signals.application;
   if (report.scan.truncated || (intent === 'product' && !report.documentation.scan.complete)) return ['incomplete', null];
+  if (intent === 'run' && app) return ['prepare', 'preparar-dev'];
   if (intent === 'product') {
     if (!state.configuration.present || state.configuration.preparacao === 'pendente') return ['configure', 'configurar-projeto'];
     if (state.configuration.preparacao !== 'concluido') return ['inspect', null];
@@ -108,7 +131,7 @@ export function getNextSteps({ command, target, language = 'pt', installed, poss
   target = resolve(target || '.');
   const text = messages[language] || messages.pt;
   if (command === 'error' && possiblePartial) return [{ label: text.partial, instruction: text.partialInstruction, stage: 'revisao' }];
-  const cli = action => `${platform === 'win32' ? '& ' : ''}${releaseCommand} ${action} --target ${quote(target, platform)} --lang ${quote(language, platform)}`;
+  const cli = action => nextCommand(action, target, language, platform);
   if (!installed) return [{ label: text.install, command: cli('init'), stage: 'instalacao' }];
   const verification = { label: text.verify, command: cli('doctor'), stage: 'verificacao' };
   let report;
@@ -134,4 +157,73 @@ export function getNextSteps({ command, target, language = 'pt', installed, poss
       : `${text.ask}${key === 'prepare' ? ` ${text.existing}` : ''}${requiresEvidence ? ` ${text.productEvidence}` : ''}`,
   };
   return ['init', 'update', 'sync', 'lang', 'agents', 'tools'].includes(command) ? [verification, step] : [step];
+}
+
+export function operationalNext(result, options, { installed, planCanApply }) {
+  const { command, language, target, ok } = result;
+  const strings = messages[language];
+  const step = (key, action, stage = 'verificacao') => [{ label: strings[key], command: nextCommand(action, target, language), stage }];
+  const selection = options.clients ? ` --agents ${options.clients.join(',')}` : '';
+  if (command === 'doctor' && installed) {
+    if (ok) return step('check', 'sync --check');
+    if (result.issues.every(issue => issue.code === 'git-pending')) return step('next', 'next', 'fluxo');
+    return step('preview', 'sync --dry-run --json', 'revisao');
+  }
+  if (options.check) {
+    if (ok) return step('next', 'next', 'fluxo');
+    if (planCanApply && result.plan.length && !options.force) return step('preview', `sync --dry-run --json${selection}`, 'revisao');
+  }
+  if (options.dryRun && !options.check && ok && !options.force) {
+    if (installed && !result.plan.length) return step('next', 'next', 'fluxo');
+    const yes = command === 'init' ? ' --yes' : '';
+    return step('apply', `${command}${selection}${yes}`, 'aplicacao');
+  }
+  if (options.check || options.dryRun) {
+    return [{ label: strings.review, stage: 'revisao' }];
+  }
+  return null;
+}
+
+const methods = {
+  bmad: {
+    name: 'BMad Method', url: 'https://github.com/bmad-code-org/BMAD-METHOD',
+    product: ['Consulte o PRD e a arquitetura já discutidos.', 'Consult the existing PRD and architecture.', 'Consulte el PRD y la arquitectura existentes.'],
+    run: ['Consulte a história e os critérios do incremento.', 'Consult the story and criteria for the increment.', 'Consulte la historia y los criterios del incremento.'],
+  },
+  openspec: {
+    name: 'OpenSpec', url: 'https://github.com/Fission-AI/OpenSpec',
+    product: ['Use as specs vigentes para entender o comportamento atual.', 'Use the current specs to understand existing behavior.', 'Use las specs vigentes para entender el comportamiento actual.'],
+    run: ['Revise a proposta e os deltas da mudança em questão.', 'Review the proposal and deltas for the change at hand.', 'Revise la propuesta y los deltas del cambio en cuestión.'],
+  },
+  'spec-kit': {
+    name: 'GitHub Spec Kit', url: 'https://github.com/github/spec-kit',
+    product: ['Consulte a constituição e a spec relevante.', 'Consult the constitution and relevant spec.', 'Consulte la constitución y la spec pertinente.'],
+    run: ['Confira a spec, o plano e as tarefas da feature.', 'Check the feature spec, plan and tasks.', 'Revise la spec, el plan y las tareas de la funcionalidad.'],
+  },
+  tlc: {
+    name: 'Tech Leads Club', url: 'https://github.com/tech-leads-club/agent-skills',
+    product: ['Consulte os requisitos e as decisões da feature.', 'Consult the feature requirements and decisions.', 'Consulte los requisitos y las decisiones de la funcionalidad.'],
+    run: ['Revise os critérios e a validação da feature.', 'Review the feature criteria and validation.', 'Revise los criterios y la validación de la funcionalidad.'],
+  },
+  dotcontext: {
+    name: 'Dotcontext (AI Context)', url: 'https://github.com/vinilana/dotcontext',
+    product: ['Use os docs e planos relevantes como contexto do produto.', 'Use the relevant docs and plans as product context.', 'Use los docs y planes pertinentes como contexto del producto.'],
+    run: ['Consulte o plano e o contexto técnico da mudança.', 'Consult the plan and technical context for the change.', 'Consulte el plan y el contexto técnico del cambio.'],
+  },
+};
+
+export function integrationHints({ target, language, intent }) {
+  const index = ['pt', 'en', 'es'].indexOf(language);
+  return Object.entries(inspectIntegrations(target)).map(([id, paths]) => {
+    const { name, url, product, run } = methods[id];
+    return { id, name, url, paths, instruction: (intent === 'product' ? product : run)[index] };
+  });
+}
+
+export function integrationNext({ target, language }, intent) {
+  return {
+    label: messages[language].integrations,
+    command: nextCommand(intent ? `next --integrations --intent ${intent}` : 'next --integrations', target, language),
+    stage: 'contexto',
+  };
 }

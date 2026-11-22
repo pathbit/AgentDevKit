@@ -9,12 +9,10 @@ language: en
 
 [![npm][npm-badge]][npm-package] [![MIT][license-badge]](LICENSE)
 
-Organize work with coding agents, from planning to verification. Keep skills,
-rules, commands and agent profiles in `.pbai4devs`; the kit generates the
-references each client can discover. Code lives in `src/`, product tests in
-`tests/`, and shared agent resources in `.pbai4devs/`. Generated client
-folders may appear in Git; the kit preserves existing Git configuration.
-See the [supported clients][clients].
+AgentDevKit guides coding agents from planning through verification.
+Skills, rules, commands and agent profiles share one source in `.pbai4devs`.
+The kit generates references for [Codex, Claude, Cursor, Copilot, OpenCode
+and other supported clients][clients].
 
 ## Start in your project
 
@@ -27,25 +25,43 @@ From your project folder, install through **npm**, without logging in:
 npx @pathbit/agentdevkit init
 ```
 
-Or use **GitHub Packages**, after [authenticating with GitHub][github-install]:
+Choose your coding agents when prompted, or pass `--agents codex,claude`.
+Your project saves the choice, and `agents` lets you change it. With no explicit
+or saved choice, a non-interactive run uses `all`. The CLI supports `pt`, `en`
+and `es`. See the [installation guide](docs/guides/installation.md) for pnpm,
+Yarn, Bun and [GitHub Packages authentication][github-install].
+
+## Choose what to do
+
+- **Plan a new product or change.** Use `next --intent product` to find the
+  next planning step.
+- **Run an existing application.** Use `next --intent run` for guidance
+  based on the current project state.
+- **Adopt the kit for selected clients.** Use `init --agents codex,claude`
+  with the IDs you need.
+
+Installation sets up agent resources. In an existing repository,
+`npx @pathbit/agentdevkit init --dry-run` shows proposed changes and
+conflicts. The kit preserves project instructions and skills.
+In a Git repository, follow the terminal guidance through `doctor` and
+`sync --check`, then ask for the next step for your goal:
 
 ```console
-npx --registry=https://npm.pkg.github.com @pathbit/agentdevkit init
+npx @pathbit/agentdevkit next --intent product
+npx @pathbit/agentdevkit next --intent run
 ```
 
-Choose your coding agents when prompted, or pass `--agents codex,claude`.
-The project saves your selection; use `agents` to view or change it later.
-Without interaction or a saved choice, the default is `all` clients.
+`next` suggests a step for you to take. Ask your agent to read `AGENTS.md`
+and use the `proximos-passos` skill with your goal.
 
-Then open the project in your coding agent and ask:
+### Use the workflow the task calls for
 
-> Read AGENTS.md and use the proximos-passos skill to guide my next steps.
-
-See [installation](docs/guides/installation.md) for runtime preparation, previews
-and updates. Both [package registries][packages] provide the same version;
-the [latest release][release] retains artifacts and checksums for verification.
-No global installation is required.
-The CLI supports `pt`, `en` and `es`; it saves your selection per project.
+AgentDevKit gives multiple coding agents the same starting point. Set up your
+project and verify delivery with the kit, then draw on **BMad** for discovery,
+**OpenSpec** or **GitHub Spec Kit** for specs, **Tech Leads Club** for planning,
+or **Dotcontext** (AI Context) for project context as needed. If the project
+already has these artifacts, run `npx @pathbit/agentdevkit next --integrations`
+to find recognized references. See the [comparison guide](docs/guides/comparacao.md).
 
 ## Explore
 
@@ -70,10 +86,9 @@ Use Node.js 24+ with npm. Run `npm ci --ignore-scripts`, `npm run check`,
 directory outside Git; `npm run test:examples` runs the scenarios.
 See the [development guide](docs/maintainers/development.md) for the project structure.
 
-Detailed guides are in Portuguese. Installing the kit prepares instructions;
-tools are installed separately. Product documents follow your planning
-decisions. Existing projects retain their code and decisions. Discovery
-depends on the client; references alone do not prove a skill was loaded.
+Detailed guides are in Portuguese. Local tools have a separate installation
+step. The [release artifacts and checksums][release] let you verify the package
+published to [both registries][packages].
 
 ## License and authorship
 
@@ -86,9 +101,6 @@ your project's license and files.
 
 Found a bug or have an idea? [Open an issue][issues] using the contribution
 forms. See [how to participate](docs/maintainers/community.md).
-
-**[ Next step ]** Follow [installation](docs/guides/installation.md), then ask your
-agent to read `AGENTS.md`.
 
 [clients]: .pbai4devs/COMPATIBILIDADE.md
 [release]: https://github.com/pathbit/AgentDevKit/releases/latest

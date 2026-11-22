@@ -26,6 +26,7 @@ pode trocar de agente sem manter várias cópias das mesmas instruções.
 | Preparar o computador | [Node/npm no Windows, macOS e Linux](guides/prerequisites.md) |
 | Primeiro uso | [Instalar via npm ou GitHub Packages][install] → [seguir o fluxo][flow] |
 | Projeto em andamento | [Instalar com simulação][install] → [retomar][flow] |
+| Já uso outro fluxo de planejamento ou contexto | [Comparar por caso de uso](guides/comparacao.md) |
 | Evoluir documentação existente | [Inventariar e complementar](guides/documentation.md) |
 | Personalizar agentes | [Recursos][resources] → [compatibilidade][clients] |
 | Entender cada peça com um exemplo | [Recursos na prática](guides/recursos-na-pratica.md) |
