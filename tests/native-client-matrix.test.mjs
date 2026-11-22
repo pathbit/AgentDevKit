@@ -125,7 +125,9 @@ console.log(JSON.stringify({ok:true}));`;
   const runner = fileURLToPath(new URL('./native-client-matrix.mjs', import.meta.url));
   const result = spawnSync(process.execPath, [runner, '--package', pkg, '--version', '1.2.3', '--output', root], { encoding:'utf8', timeout:110000 });
   assert.equal(result.status, 1, result.stderr); const summary = JSON.parse(result.stdout), report = JSON.parse(readFileSync(summary.report));
-  assert.equal(report.cases.length, 28); assert.equal(report.rows.length, 28 * (catalog.skills.length + catalog.agents.length));
+  const expectedCases = alteredPolicy.adapters.flatMap(({ id }) => ['new', 'existing'].map(kind => [id, kind]));
+  assert.deepEqual(report.cases.map(({ client, projectKind }) => [client, projectKind]), expectedCases);
+  assert.equal(report.rows.length, expectedCases.length * (catalog.skills.length + catalog.agents.length));
   for (const item of report.cases) { assert.equal(item.init.status, 'passed'); assert.ok(item.error); assert.ok(['blocked', 'not-run'].includes(item.discovery.status)); }
   assert.equal(report.rows.every(item => item.execution.status === 'not-run'), true);
   assert.ok(report.rows.find(item => item.client === 'gemini' && item.type === 'skills').structure.path.startsWith('.gemini-outra/'));
