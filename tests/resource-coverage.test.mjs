@@ -82,9 +82,16 @@ test('cada recurso instalado aponta à origem em cada cliente selecionado', asyn
   const clients = rows.filter(row => row[0] === 'agente');
   const policy = JSON.parse(readFileSync(join(root, '.pbai4devs/templates/clients/ADAPTERS.json'), 'utf8'));
   const catalog = JSON.parse(readFileSync(join(root, '.pbai4devs/catalog.json'), 'utf8'));
-  assert.equal(clients.length, policy.adapters.length);
+  assert.deepEqual(policy, JSON.parse(readFileSync(join(sourceRoot, '.pbai4devs/templates/clients/ADAPTERS.json'), 'utf8')));
+  assert.deepEqual(clients, policy.adapters.map(({ root }) => ['agente', root, 'agrupado']));
+  const formats = policy.adapters.flatMap(adapter => Object.entries(adapter.formats)
+    .map(([kind, format]) => ['formato', adapter.root, kind, format]));
+  assert.deepEqual(rows.filter(row => row[0] === 'formato'), formats);
   const sources = Object.fromEntries(Object.entries(kinds).map(([kind, principal]) => [kind, files(root, `.pbai4devs/${kind}`, principal)]));
   assert.ok(sources.skills.length >= 41 && sources.agents.length >= 11 && sources.commands.length >= 18 && sources.rules.length >= 8);
+  const supportedRoutes = policy.adapters.reduce((count, adapter) => count
+    + Object.entries(sources).filter(([kind]) => adapter.formats[kind] !== 'nenhum')
+      .reduce((subtotal, [, paths]) => subtotal + paths.length, 0), 0);
   const omissions = initialized.scopeOmissions || [];
   assert.ok(Array.isArray(omissions));
   let verified = 0, referenceOnly = 0;
@@ -123,7 +130,7 @@ test('cada recurso instalado aponta à origem em cada cliente selecionado', asyn
       verified++;
     }
   });
-  assert.ok(verified >= 1000, `Cobertura insuficiente: ${verified} referências`);
+  assert.equal(verified + referenceOnly, supportedRoutes, 'Cada rota da política deve ser verificada ou constar como omissão Claude comprovada');
   assert.equal(omissions.length, referenceOnly, 'Omissões extras ou duplicadas não contam como cobertura nativa');
 });
 
@@ -157,17 +164,19 @@ test('verificação de omissão Claude rejeita arquivo, duplicidade, link altern
 });
 
 test('todas as combinações de clientes preservam dependências e seleção determinística', () => {
-  const ids = adapters.map(adapter => adapter.id);
   const policy = JSON.parse(readFileSync(join(sourceRoot, '.pbai4devs/templates/clients/ADAPTERS.json'), 'utf8'));
+  const ids = policy.adapters.map(adapter => adapter.id);
+  assert.deepEqual(adapters.map(adapter => adapter.id), ids);
+  const byId = new Map(policy.adapters.map(adapter => [adapter.id, adapter]));
   assert.ok(ids.length > 0 && ids.length <= 20, 'A matriz precisa caber em uma máscara segura.');
   const total = 2 ** ids.length;
   for (let mask = 1; mask < total; mask++) {
     const chosen = ids.filter((_, index) => mask & (1 << index));
     const closure = new Set(chosen);
-    for (const id of closure) for (const dependency of adapters.find(adapter => adapter.id === id).requires) closure.add(dependency);
-    const expectedAdapters = adapters.filter(adapter => closure.has(adapter.id));
+    for (const id of closure) for (const dependency of byId.get(id).requires) closure.add(dependency);
+    const expectedAdapters = policy.adapters.filter(adapter => closure.has(adapter.id));
     const expectedRoots = [...new Set(expectedAdapters.flatMap(adapter => [adapter.root, ...adapter.extraRoots]))];
-    const requestedEntries = new Set([...policy.entrypoints, ...adapters.filter(adapter => chosen.includes(adapter.id)).flatMap(adapter => adapter.entrypoints)]);
+    const requestedEntries = new Set([...policy.entrypoints, ...chosen.flatMap(id => byId.get(id).entrypoints)]);
     const expectedEntries = ['AGENTS.md', 'CLAUDE.md', 'GEMINI.md'].filter(name => requestedEntries.has(name));
     const selection = resolveAdapters(chosen);
     assert.deepEqual(selection.clients, chosen, `seleção ${mask}`);
@@ -176,5 +185,4 @@ test('todas as combinações de clientes preservam dependências e seleção det
     assert.deepEqual(selection.entrypoints, expectedEntries, `entradas ${mask}`);
     assert.deepEqual(resolveAdapters([...chosen].reverse()).roots, expectedRoots, `ordem ${mask}`);
   }
-  assert.ok(total - 1 >= 10000, `Matriz insuficiente: ${total - 1}`);
 });
