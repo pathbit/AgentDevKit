@@ -1,8 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { closeSync, fstatSync, fsyncSync, lstatSync, openSync, readFileSync, realpathSync, unlinkSync, writeFileSync } from 'node:fs';
+import { closeSync, fstatSync, fsyncSync, lstatSync, openSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { assertNoNestedGit, safeGitEnvironment } from './git-environment.mjs';
+import { assertNoNestedGit, canonicalGitPath, safeGitEnvironment } from './git-environment.mjs';
 import { checkWindowsFileChanges, copyFileWithNativeMetadata, nativeMetadataCopySupported, publishFileReplacement, stageReplacementWithNativeMetadata } from './native-metadata.mjs';
 import { assertPrivateRecoveryPaths, createPrivateRecoveryDirectory } from './recovery-privacy.mjs';
 import { withUncertainPath } from './error-reporting.mjs';
@@ -56,9 +56,9 @@ function backupLocation(root) {
 export function applyLegacyExcludeMigration(plan, revalidate) {
   const edit = plan.legacyMigration;
   if (!edit) return null;
-  const root = realpathSync(plan.root);
+  const root = canonicalGitPath(plan.root);
   const destination = join(root, '.git', 'info', 'exclude');
-  if (edit.path !== destination || realpathSync(destination) !== destination) throw changed();
+  if (edit.path !== destination || canonicalGitPath(destination) !== destination) throw changed();
   revalidate(plan);
   const original = identity(destination);
   if (!sameFile(original, original) || original.mode & 0o7000n

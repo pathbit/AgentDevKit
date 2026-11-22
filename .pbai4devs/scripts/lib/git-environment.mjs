@@ -1,5 +1,13 @@
-import { lstatSync } from 'node:fs';
+import { lstatSync, realpathSync } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
+
+export function canonicalGitPath(path) {
+  if (typeof realpathSync.native === 'function') {
+    try { return realpathSync.native(path); }
+    catch (error) { if (!['ENOSYS', 'ENOTSUP', 'EINVAL'].includes(error.code)) throw error; }
+  }
+  return realpathSync(path);
+}
 
 // Git location overrides and external diff hooks may redirect inspection away
 // from the requested project. Environment keys are case-insensitive on Windows.

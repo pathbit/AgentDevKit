@@ -28,7 +28,8 @@ function git(root, ...args) {
 }
 
 function fixture(t) {
-  const base = realpathSync(mkdtempSync(join(tmpdir(), 'adk-exclude-marker-')));
+  const requestedBase = mkdtempSync(join(tmpdir(), 'adk-exclude-marker-'));
+  const base = realpathSync.native(requestedBase);
   t.after(() => rmSync(base, { recursive: true, force: true }));
   const root = join(base, 'project'), template = join(base, 'empty-git-template');
   mkdirSync(root); mkdirSync(template);
@@ -39,7 +40,7 @@ function fixture(t) {
   const index = resolve(root, git(root, 'rev-parse', '--git-path', 'index'));
   const exclude = resolve(root, git(root, 'rev-parse', '--git-path', 'info/exclude'));
   mkdirSync(dirname(exclude), { recursive: true });
-  return { base, root, index, exclude };
+  return { base, root, requestedRoot: join(requestedBase, 'project'), index, exclude };
 }
 
 function snapshots(paths) {
@@ -106,7 +107,7 @@ function matchedRules(root, paths) {
 }
 
 test('reconstitui 0.0.21 e conserva as regras efetivas de ignore na mesma posição', t => {
-  const { root, exclude, index } = fixture(t);
+  const { root, requestedRoot, exclude, index } = fixture(t);
   writeFileSync(join(root, '.gitignore'), '# ignore humano\n!/.claude/\n');
   const prefix = Buffer.from('# regra humana \xff\r\n*.scratch\r\n!/.pbai4devs/skills.json\r\n', 'latin1');
   const suffix = Buffer.from('!/.pbai4devs/catalog.json\r\n# sufixo sem quebra \xfe', 'latin1');
@@ -120,7 +121,7 @@ test('reconstitui 0.0.21 e conserva as regras efetivas de ignore na mesma posiç
   const prior = matchedRules(root, paths);
   assert.deepEqual(prior.map(([, pattern]) => pattern.startsWith('!') ? 'included' : pattern ? 'ignored' : 'unmatched'),
     ['ignored', 'ignored', 'included', 'ignored', 'ignored', 'included', 'unmatched', 'ignored', 'unmatched']);
-  const plan = planLocalIgnore(root);
+  const plan = planLocalIgnore(requestedRoot);
   assert.equal(plan.legacyMigrationStatus, 'migration');
   assert.equal(checkLocalIgnore(plan).pending.find(item => item.code === 'shared-ignore-legacy').migration, 'migration');
   const edit = plan.legacyMigration;
@@ -242,12 +243,12 @@ test('init recusa trava externa antes de publicar arquivos ou abrir recuperaçã
   skip: !supportsRuntime && 'A CLI do kit requer Node.js 24 ou superior nesta fixture.',
   timeout: 120000,
 }, t => {
-  const { root, exclude, index } = fixture(t);
+  const { root, requestedRoot, exclude, index } = fixture(t);
   writeFileSync(exclude, legacyBlock(root));
   writeFileSync(exclude + '.lock', 'trava existente\n', { flag: 'wx' });
   const before = snapshots([exclude, exclude + '.lock', index, join(root, '.git/config'), join(root, '.gitignore'), join(root, 'human.txt')]);
   const entries = readdirSync(root).sort();
-  const locked = run(root, process.execPath, [cli, 'init', '--agents', 'codex', '--target', root, '--yes', '--json']);
+  const locked = run(root, process.execPath, [cli, 'init', '--agents', 'codex', '--target', requestedRoot, '--yes', '--json']);
   assert.notEqual(locked.status, 0, locked.stdout + locked.stderr);
   const report = JSON.parse(locked.stdout);
   assert.equal(report.error?.code, 'EEXIST');
@@ -261,17 +262,17 @@ for (const kind of ['update da CLI', 'sync direto']) {
     skip: !supportsRuntime && 'A CLI do kit requer Node.js 24 ou superior nesta fixture.',
     timeout: 240000,
   }, t => {
-    const { root, exclude, index } = fixture(t);
-    const command = args => run(root, process.execPath, [cli, ...args, '--target', root, '--yes', '--json']);
-    const apply = () => kind === 'update da CLI' ? command(['update']) : run(root, process.execPath, [sync, '--root', root]);
-    const check = () => kind === 'update da CLI' ? command(['sync', '--check']) : run(root, process.execPath, [sync, '--root', root, '--check']);
+    const { root, requestedRoot, exclude, index } = fixture(t);
+    const command = args => run(root, process.execPath, [cli, ...args, '--target', requestedRoot, '--yes', '--json']);
+    const apply = () => kind === 'update da CLI' ? command(['update']) : run(root, process.execPath, [sync, '--root', requestedRoot]);
+    const check = () => kind === 'update da CLI' ? command(['sync', '--check']) : run(root, process.execPath, [sync, '--root', requestedRoot, '--check']);
     const initialized = command(['init', '--agents', 'codex']);
     assert.equal(initialized.status, 0, initialized.stdout + initialized.stderr);
 
     const before = Buffer.from(`# regra humana anterior\r\n*.fixture-local\r\n${legacyBlock(root)}!/.pbai4devs/skills.json\n# fim humano sem quebra`);
     writeFileSync(exclude, before);
     const mode = statSync(exclude).mode & 0o7777;
-    const { edit } = planLegacyIgnoreMigration(root);
+    const { edit } = planLegacyIgnoreMigration(requestedRoot);
     assert.deepEqual(edit.before, before);
     const human = snapshots([index, join(root, '.git/config'), join(root, '.gitignore'), join(root, 'human.txt')]);
     const beforeCheck = check();

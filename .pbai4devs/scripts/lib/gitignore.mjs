@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
-import { safeGitEnvironment, assertUnredirectedGitEnvironment, gitOutputLines, gitPathKey, gitPathsOverlap, ordinaryGitComponent, possibleWindowsShortName } from './git-environment.mjs';
+import { safeGitEnvironment, assertUnredirectedGitEnvironment, canonicalGitPath, gitOutputLines, gitPathKey, gitPathsOverlap, ordinaryGitComponent, possibleWindowsShortName } from './git-environment.mjs';
 import { inspectLegacyExclude } from './legacy-exclude.mjs';
-import { lstatSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
+import { lstatSync, readFileSync, readdirSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, posix, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -72,14 +72,6 @@ const localStat = file => { try { return lstatSync(file); } catch (error) { if (
 const localRead = file => localStat(file) ? readFileSync(file, 'utf8') : null;
 const localMode = file => { const item = localStat(file); return item ? item.mode & 0o777 : null; };
 const portable = path => path.split(sep).join('/');
-
-function canonicalExisting(path) {
-  if (typeof realpathSync.native === 'function') {
-    try { return realpathSync.native(path); }
-    catch (error) { if (!['ENOSYS', 'ENOTSUP', 'EINVAL'].includes(error.code)) throw error; }
-  }
-  return realpathSync(path);
-}
 
 function checkedLocalPath(file) {
   let current = resolve(file);
@@ -405,7 +397,7 @@ function localRoot(value) {
   const missing = []; let parent = resolve(value);
   while (!localStat(parent)) { missing.unshift(parent.slice(dirname(parent).length + 1)); parent = dirname(parent); }
   if (!localStat(parent).isDirectory() || localStat(parent).isSymbolicLink()) throw new Error('Raiz local exige diretorio real.');
-  const canonical = canonicalExisting(parent);
+  const canonical = canonicalGitPath(parent);
   return { root: join(canonical, ...missing), parent: canonical };
 }
 
@@ -418,11 +410,11 @@ function gitIgnoreLocation({ parent, root }) {
   const lines = gitOutputLines(info.stdout), [reportedTop, reportedExclude] = lines;
   if (lines.length !== 2 || !reportedTop || !reportedExclude) throw new Error('Localizacao Git invalida.');
   const exclude = resolve(parent, reportedExclude);
-  const top = canonicalExisting(reportedTop);
+  const top = canonicalGitPath(reportedTop);
   const prefix = relative(top, root);
   if (isAbsolute(prefix) || prefix === '..' || prefix.startsWith(`..${sep}`)) throw new Error('Projeto fora da arvore Git.');
   checkedLocalPath(exclude);
-  const canonicalExclude = localStat(exclude) ? canonicalExisting(exclude) : join(localRoot(dirname(exclude)).root, basename(exclude));
+  const canonicalExclude = localStat(exclude) ? canonicalGitPath(exclude) : join(localRoot(dirname(exclude)).root, basename(exclude));
   return { top, exclude: checkedLocalPath(canonicalExclude), prefix: portable(prefix) };
 }
 
@@ -433,7 +425,7 @@ function inspectLegacyMigration(root, location) {
     const worktrees = listed.stdout.split('\0').filter(line => line.startsWith('worktree '));
     if (worktrees.length > 1) return false;
     if (!worktrees.length) return null;
-    try { return canonicalExisting(worktrees[0].slice('worktree '.length)) === root ? true : null; }
+    try { return canonicalGitPath(worktrees[0].slice('worktree '.length)) === root ? true : null; }
     catch { return null; }
   });
 }
@@ -524,7 +516,7 @@ export function planLocalIgnore(root, { outputs = [], templateRoot } = {}) {
 export function checkLocalIgnore(plan, { replacedBlocks = [] } = {}) {
   assertUnredirectedGitEnvironment();
   replacedBlocks.forEach(item => {
-    const path = canonicalExisting(checkedLocalPath(resolve(item.path))), inside = relative(localRoot(plan.root).root, path);
+    const path = canonicalGitPath(checkedLocalPath(resolve(item.path))), inside = relative(localRoot(plan.root).root, path);
     if (isAbsolute(inside) || inside === '..' || inside.startsWith(`..${sep}`) || !Number.isInteger(item.firstLine) || !Number.isInteger(item.lastLine) || item.firstLine < 1 || item.lastLine < item.firstLine || !/^[a-f0-9]{64}$/.test(item.sha256)) throw new Error('Faixa de ignore gerenciado invalida.');
     const content = readFileSync(checkedLocalPath(path), 'utf8');
     const lines = [...content.matchAll(/[^\r\n]*(?:\r\n|\n|\r|$)/g)].filter(match => match[0]);
@@ -605,7 +597,7 @@ export function planUntrack(root, expectedHashes = {}, { gitlinkBoundaries = [] 
   }
   const topLines = topResult.status === 0 ? gitOutputLines(topResult.stdout) : [];
   if (topResult.status === 0 && (topLines.length !== 1 || !topLines[0])) throw new Error('Localizacao Git invalida.');
-  const top = topResult.status === 0 ? canonicalExisting(topLines[0]) : root;
+  const top = topResult.status === 0 ? canonicalGitPath(topLines[0]) : root;
   const local = relative(top, root);
   if (isAbsolute(local) || local === '..' || local.startsWith(`..${sep}`)) throw new Error('Projeto fora da arvore Git.');
   const rootPrefix = topResult.status === 0 ? portable(local) : '';
