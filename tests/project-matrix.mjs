@@ -489,7 +489,12 @@ function inspectInstallation(root, version, selection, packageData, humanPaths, 
   const coverage = { status: 'verified', notVerified: [], checked: { skills: 0, agents: 0, commands: 0, rules: 0 } };
   const readJson = path => { snapshot(root, path); return JSON.parse(readFileSync(join(root, path), 'utf8')); };
   const state = readJson('.pbai4devs/state/agentdevkit.json');
-  if (state.schemaVersion !== 1 || state.version !== version || !Array.isArray(state.clients) || [...state.clients].sort().join(',') !== selection.split(',').sort().join(',')) throw Error('Estado instalado não confirma versão e agentes selecionados.');
+  const requested = new Set(selection.split(',').map(id => {
+    const matches = policy.filter(adapter => adapter?.id === id || adapter?.aliases?.includes(id));
+    if (matches.length !== 1) throw Error(`Adaptador não encontrado ou ambíguo: ${id}.`);
+    return matches[0].id;
+  }));
+  if (state.schemaVersion !== 1 || state.version !== version || !Array.isArray(state.clients) || [...state.clients].sort().join(',') !== [...requested].sort().join(',')) throw Error('Estado instalado não confirma versão e agentes selecionados.');
   if (!state.files || Array.isArray(state.files) || typeof state.files !== 'object' || !Object.keys(state.files).length) throw Error('Estado instalado não possui arquivos gerenciados.');
   const catalog = readJson('.pbai4devs/catalog.json'), actualSources = buildCatalog(root).catalog;
   for (const type of catalogTypes) {
@@ -512,7 +517,7 @@ function inspectInstallation(root, version, selection, packageData, humanPaths, 
     const actual = index.entries.map(entry => entry?.path).sort();
     if (actual.some(path => !safePath(path)) || JSON.stringify(expected) !== JSON.stringify(actual)) throw Error(`Índice incompleto ou divergente: ${path}.`);
   }
-  const selected = new Set(selection.split(','));
+  const selected = new Set(requested);
   for (const id of selected) {
     const adapter = policy.find(item => item?.id === id);
     if (!adapter) throw Error(`Adaptador não encontrado: ${id}.`);

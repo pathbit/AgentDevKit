@@ -1,9 +1,11 @@
 import { createHash } from 'node:crypto';
 import { safeGitEnvironment, assertUnredirectedGitEnvironment, gitOutputLines, gitPathKey, gitPathsOverlap, ordinaryGitComponent, possibleWindowsShortName } from './git-environment.mjs';
+import { inspectLegacyExclude } from './legacy-exclude.mjs';
 import { lstatSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, posix, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { applyLegacyExcludeMigration } from './legacy-exclude-write.mjs';
 
 // Atualiza apenas o bloco reservado; regras externas permanecem byte a byte.
 export const ignoreBegin = '# BEGIN AGENT IGNORE';
@@ -407,6 +409,53 @@ function localRoot(value) {
   return { root: join(canonical, ...missing), parent: canonical };
 }
 
+function gitIgnoreLocation({ parent, root }) {
+  const info = gitCommand(parent, ['rev-parse', '--show-toplevel', '--git-path', 'info/exclude']);
+  if (info.error || info.status !== 0 || info.signal) {
+    if (noGitRepository(parent, info)) return null;
+    throw new Error(`Nao foi possivel localizar Git: ${info.error?.message || info.stderr}`);
+  }
+  const lines = gitOutputLines(info.stdout), [reportedTop, reportedExclude] = lines;
+  if (lines.length !== 2 || !reportedTop || !reportedExclude) throw new Error('Localizacao Git invalida.');
+  const exclude = resolve(parent, reportedExclude);
+  const top = canonicalExisting(reportedTop);
+  const prefix = relative(top, root);
+  if (isAbsolute(prefix) || prefix === '..' || prefix.startsWith(`..${sep}`)) throw new Error('Projeto fora da arvore Git.');
+  checkedLocalPath(exclude);
+  const canonicalExclude = localStat(exclude) ? canonicalExisting(exclude) : join(localRoot(dirname(exclude)).root, basename(exclude));
+  return { top, exclude: checkedLocalPath(canonicalExclude), prefix: portable(prefix) };
+}
+
+function inspectLegacyMigration(root, location) {
+  return inspectLegacyExclude(root, location, () => {
+    const listed = gitCommand(root, ['worktree', 'list', '--porcelain', '-z']);
+    if (listed.error || listed.signal || listed.status !== 0) return null;
+    const worktrees = listed.stdout.split('\0').filter(line => line.startsWith('worktree '));
+    if (worktrees.length > 1) return false;
+    if (!worktrees.length) return null;
+    try { return canonicalExisting(worktrees[0].slice('worktree '.length)) === root ? true : null; }
+    catch { return null; }
+  });
+}
+
+export function planLegacyIgnoreMigration(target) {
+  assertUnredirectedGitEnvironment();
+  const resolved = localRoot(target);
+  return inspectLegacyMigration(resolved.root, gitIgnoreLocation(resolved));
+}
+
+export function assertLegacyIgnoreMigration(plan) {
+  const expected = plan?.legacyMigration;
+  if (!expected || !Buffer.isBuffer(expected.before) || !Buffer.isBuffer(expected.after)) {
+    throw new Error('Plano de migração de exclusão legada inválido.');
+  }
+  const { edit } = planLegacyIgnoreMigration(plan.root);
+  if (!edit || expected.path !== edit.path || expected.mode !== edit.mode
+    || !expected.before.equals(edit.before) || !expected.after.equals(edit.after)) {
+    throw new Error('Exclusão legada ou worktree mudou após o planejamento; arquivos preservados.');
+  }
+}
+
 // Os padrões vêm do hub; apenas os nomes concretos dos derivados são calculados.
 export function planLocalIgnore(root, { outputs = [], templateRoot } = {}) {
   assertUnredirectedGitEnvironment();
@@ -424,29 +473,20 @@ export function planLocalIgnore(root, { outputs = [], templateRoot } = {}) {
   let policy;
   try { policy = JSON.parse(policyText); }
   catch { throw new SyntaxError('JSON invalido: configuracao de adaptadores.'); }
-  const clientRoots = [...new Set(policy.adapters.flatMap(adapter => [adapter.root, ...(adapter.extraRoots || [])]))];
+  const roots = [...new Set(policy.adapters.flatMap(adapter => [adapter.root, ...(adapter.extraRoots || [])]))];
+  const retiredRoots = policy.retiredRoots === undefined ? [] : policy.retiredRoots;
+  if (!Array.isArray(retiredRoots) || new Set(retiredRoots).size !== retiredRoots.length
+    || retiredRoots.some(path => roots.includes(path))) throw new Error('Raiz de cliente aposentada invalida para exclusao.');
+  // Retiring an adapter must not stop detecting private files left in its old
+  // root. Only active roots are eligible for an opt-in to derived resources.
+  const clientRoots = [...roots, ...retiredRoots];
   if (clientRoots.some(path => typeof path !== 'string' || !/^\.[a-z0-9][a-z0-9-]*$/.test(path) || ['.git', '.pbai4devs', '.agent-tests'].includes(path))) throw new Error('Raiz de cliente invalida para exclusao.');
-  const roots = [...clientRoots];
   const privateClients = privateClientPolicy(templateFile, clientRoots);
   const outputPaths = [...new Set(outputs.map(checkedOutput))];
   const paths = [...new Set([...outputPaths, ...template.split(/\r?\n/).filter(line => line.startsWith('/')).map(line => checkedOutput(line.slice(1)))])]
     .filter(path => !roots.some(client => path === client || path.startsWith(`${client}/`))).sort();
-  const info = gitCommand(resolved.parent, ['rev-parse', '--show-toplevel', '--git-path', 'info/exclude']);
-  let location = null;
-  if (!info.error && info.status === 0 && !info.signal) {
-    const lines = gitOutputLines(info.stdout), [reportedTop, reportedExclude] = lines;
-    if (lines.length !== 2 || !reportedTop || !reportedExclude) throw new Error('Localizacao Git invalida.');
-    const exclude = resolve(resolved.parent, reportedExclude);
-    const top = canonicalExisting(reportedTop);
-    const prefix = relative(top, root);
-    if (isAbsolute(prefix) || prefix === '..' || prefix.startsWith(`..${sep}`)) throw new Error('Projeto fora da arvore Git.');
-    checkedLocalPath(exclude);
-    const canonicalExclude = localStat(exclude) ? canonicalExisting(exclude) : join(localRoot(dirname(exclude)).root, basename(exclude));
-    location = { top, exclude: checkedLocalPath(canonicalExclude), prefix: portable(prefix) };
-  } else if (!noGitRepository(resolved.parent, info)) {
-    throw new Error(`Nao foi possivel localizar Git: ${info.error?.message || info.stderr}`);
-  }
-  const id = createHash('sha256').update(root).digest('hex').slice(0, 16);
+  const location = gitIgnoreLocation(resolved);
+  const legacy = inspectLegacyMigration(root, location);
   const projectIgnore = join(root, '.gitignore'), projectIgnoreStat = localStat(projectIgnore);
   const literalExceptions = projectIgnoreStat?.isFile() && !projectIgnoreStat.isSymbolicLink()
     ? new Set(readFileSync(projectIgnore, 'utf8').replace(/^\uFEFF/, '').split(/\r?\n/)) : new Set();
@@ -476,7 +516,8 @@ export function planLocalIgnore(root, { outputs = [], templateRoot } = {}) {
   }) : [];
   return { root, status: location ? 'git' : 'no-git', worktreeScope: Boolean(location), worktreeLocation: location,
     location: null, clientRoots, optedRoots, artifacts, edits: [], protectedOutputs: [], protectedHashes: {},
-    unprotectedOutputs: outputPaths, trackedOutputs };
+    unprotectedOutputs: outputPaths, trackedOutputs,
+    legacyMigration: legacy.edit ?? null, legacyMigrationStatus: legacy.status };
 
 }
 
@@ -522,20 +563,32 @@ export function checkLocalIgnore(plan, { replacedBlocks = [] } = {}) {
     }
     for (const path of ambiguousExceptions(plan.root, plan.worktreeLocation, plan.clientRoots, plan.artifacts)) pending.push({ code: 'ignore-ambiguous', path });
     const currentShared = localRead(checkedLocalPath(plan.worktreeLocation.exclude)) ?? '';
-    if (/^# BEGIN AGENTDEVKIT LOCAL [a-f0-9]{16}\r?$/m.test(currentShared.replace(/^\uFEFF/, ''))) pending.push({ code: 'shared-ignore-legacy', path: plan.worktreeLocation.exclude });
+    if (/^# BEGIN AGENTDEVKIT LOCAL [a-f0-9]{16}\r?$/m.test(currentShared.replace(/^\uFEFF/, ''))) {
+      const migration = planLegacyIgnoreMigration(plan.root);
+      pending.push({ code: 'shared-ignore-legacy', path: plan.worktreeLocation.exclude, migration: migration.status });
+    }
   return { ok: !plan.trackedOutputs.length && !pending.some(isBlockingLocalIgnore), status: plan.status, missing: [], pending, trackedOutputs: plan.trackedOutputs, changed: 0 };
 }
 
 export function assertLocalIgnoreUnchanged(plan) {
   assertUnredirectedGitEnvironment();
   if (!Array.isArray(plan.edits) || plan.edits.length) throw new Error('Alterar exclusoes Git foi desabilitado; arquivos preservados.');
+  if (plan.legacyMigration) {
+    assertLegacyIgnoreMigration(plan);
+    const lock = plan.legacyMigration.path + '.lock';
+    try { lstatSync(lock); }
+    catch (error) { if (error.code === 'ENOENT') return; throw error; }
+    throw Object.assign(new Error('Git info/exclude is locked.'), { code: 'EEXIST', path: lock });
+  }
 }
 
-export function applyLocalIgnore(plan, { validate } = {}) {
+export function applyLocalIgnore(plan, { validate, migrateLegacy = false } = {}) {
   assertLocalIgnoreUnchanged(plan);
   const checked = checkLocalIgnore(plan);
   validate?.();
-  return { status: plan.status, changed: 0, trackedOutputs: plan.trackedOutputs, pending: checked.pending };
+  const migration = migrateLegacy ? applyLegacyExcludeMigration(plan, assertLegacyIgnoreMigration) : null;
+  return { status: plan.status, changed: migration ? 1 : 0, trackedOutputs: plan.trackedOutputs,
+    pending: migration ? checkLocalIgnore(plan).pending : checked.pending, ...(migration ? { migration } : {}) };
 }
 
 export function planUntrack(root, expectedHashes = {}, { gitlinkBoundaries = [] } = {}) {

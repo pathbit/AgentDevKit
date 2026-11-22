@@ -101,7 +101,7 @@ Binários e registros em `.local/`, cache e launchers são ignorados.
 O arquivo local `espelhos.conf` registra seleção, layouts e pontos nativos.
 O catálogo local `catalog.json` reúne inventário e comandos das ferramentas.
 Os registros `skills.json`, `rules.json` e `agents.json` indexam as fontes.
-Codex e Antigravity compartilham `.agents`; `.agent` é uma opção legada.
+Codex e Antigravity compartilham `.agents`; Kimi usa `.kimi-code`.
 Gemini usa `.gemini` e Copilot usa `.github`. A pasta `.vscode` depende da
 configuração do editor. Veja os clientes e seus limites na
 [compatibilidade](COMPATIBILIDADE.md).

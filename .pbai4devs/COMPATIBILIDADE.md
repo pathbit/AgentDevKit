@@ -12,7 +12,7 @@ orienta a leitura, sem garantir que o cliente importe seu conteúdo.
 
 Use `--agents codex,claude` na instalação ou `agents codex,claude` para alterar
 depois. `--clients` e `clients` são aliases. A CLI salva os IDs no projeto;
-`all` inclui todos, inclusive os legados. Sem seleção explícita, reutiliza a
+`all` inclui todos os clientes atuais. Sem seleção explícita, reutiliza a
 salva; sem ambas, usa `all`. Não há detecção automática do agente em execução.
 
 | Cliente | ID | Pastas necessárias |
@@ -24,10 +24,8 @@ salva; sem ambas, usa `all`. Não há detecção automática do agente em execu�
 | [OpenCode V2][opencode] | `opencode` | `.opencode` |
 | [Gemini CLI][gemini] | `gemini` | `.gemini` |
 | [Antigravity][antigravity] | `antigravity` | `.agents` |
-| Antigravity legado | `antigravity-legacy` | `.agent`, `.agents` |
 | [ZCode][zcode] | `zcode` | `.zcode` |
 | [Kimi Code][kimi] | `kimi` | `.kimi-code` |
-| Kimi legado | `kimi-legacy` | `.kimi` |
 | [MiniMax Code][minimax] | `minimax` | `.minimax` |
 | [MiMo Code][mimo] | `mimo` | `.mimocode` |
 | [DeepSeek Harness][deepseek] | `deepseek` | `.dsh` |
@@ -38,6 +36,12 @@ Pastas compartilhadas permanecem se algum escolhido precisar delas.
 `.vscode` pode conter configurações do projeto. O kit preserva seu ignore
 existente e deriva recursos do Copilot em `.github`. O hub continua completo
 mesmo com poucos clientes selecionados.
+
+`antigravity-legacy` e `kimi-legacy` convergem para `antigravity` e
+`kimi` na opção de instalação ou na seleção salva. O `update` deixa
+de gerar em `.agent` e `.kimi` e retira os apontamentos de propriedade
+comprovada. Conteúdo próprio, editado ou com divergência no índice Git
+permanece.
 
 ## Formatos nativos
 
@@ -62,10 +66,10 @@ Os caminhos são relativos à pasta do cliente, exceto onde indicado.
   `agents/nome.md`; regras como referências. Skills do projeto exigem pasta
   confiável no cliente; consulte a [documentação de descoberta][gemini-trust].
 - Antigravity: skills e regras agrupadas, agentes planos registrados nos
-  manifestos; comandos como referências. `.agent` é a opção legada.
+  manifestos; comandos como referências.
 - ZCode: `skills/nome/SKILL.md`, comandos diretos; demais tipos são referências.
 - Kimi: `skills/grupo/nome/SKILL.md`; comandos exigem plugin, não configurado
-  pelos apontamentos. `.kimi` é a opção legada.
+  pelos apontamentos.
 - MiniMax e DeepSeek: `skills/nome/SKILL.md`; demais tipos como referências.
 - MiMo: `skills/grupo/nome/SKILL.md`, agentes e comandos diretos;
   regras como referências.

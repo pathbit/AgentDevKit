@@ -41,7 +41,13 @@ export const availableClients = Object.freeze([
   Object.freeze({ id: 'all', name: 'Todos os clientes', aliases: Object.freeze([]) }),
   ...adapters.map(({ id, name, root, aliases }) => Object.freeze({ id, name, root, aliases })),
 ]);
-export const adapterRoots = Object.freeze([...new Set(adapters.flatMap(adapter => [adapter.root, ...adapter.extraRoots]))]);
+const activeRoots = new Set(adapters.flatMap(adapter => [adapter.root, ...adapter.extraRoots]));
+const retiredRoots = policy.retiredRoots === undefined ? [] : policy.retiredRoots;
+if (!stringList(retiredRoots) || new Set(retiredRoots).size !== retiredRoots.length
+  || retiredRoots.some(root => !safeRoot(root) || activeRoots.has(root))) throw new Error('Raizes aposentadas invalidas na politica de clientes.');
+// Installation state may still own paths in retired roots. Only resolveAdapters
+// supplies roots for a new manifest.
+export const adapterRoots = Object.freeze([...activeRoots, ...retiredRoots]);
 
 export function normalizeClients(input) {
   if (input === undefined) return ['all'];

@@ -17,8 +17,10 @@ já equivalente. O bundle é
 distribuído com `smol-toml.LICENSE` (BSD-3-Clause), sem dependência do projeto
 consumidor. A edição e retirada de blocos ainda pode reserializar prompts TOML.
 
-`gitignore.mjs` planeja exclusões locais e detecta regras conflitantes. Ele não
-altera o `.gitignore` da raiz; conflitos são informados para revisão humana.
+`gitignore.mjs` detecta regras conflitantes e coordena a migração local.
+`legacy-exclude.mjs` reconhece o bloco exato da versão 0.0.21 com uma única
+worktree. `legacy-exclude-write.mjs` grava uma cópia privada do original antes
+de publicar as regras preservadas. Conflitos ficam pendentes para revisão.
 
 `collectErrorDiagnostics`, em `error-reporting.mjs`, coleta dados próprios sem
 executar getters ou traps de proxies; dados inseguros ou além do limite são

@@ -3,11 +3,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import fs, { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import fs, { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import { main } from '../src/cli.mjs';
+import { applyPlan, planInstallation } from '../src/install.mjs';
 import { synchronize } from '../.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs';
 import { resemblesClaudeReference } from '../.pbai4devs/scripts/lib/claude-retained.mjs';
+import { inspectProjectRecovery } from '../.pbai4devs/scripts/lib/project-recovery.mjs';
+import { verifyRecoveryBackup } from '../.pbai4devs/scripts/lib/recovery-backup.mjs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
 
@@ -62,6 +65,94 @@ function addOwnedLegacy(root, { tracked = false, edited = false } = {}) {
   if (edited) put(root, legacy, pointer + '\nAlteração humana.\n');
 }
 
+const publishedReference = (name, trigger, description, title) => Buffer.from(
+  `---\ntrigger: ${trigger}\ndescription: ${description}\n---\n\n# ${title}\n\n<!-- gerado: sincronizar-agentes -->\n`
+  + `Leia e siga [origem](../../../.pbai4devs/rules/${name}/RULE.md).\n`);
+
+for (const route of ['CLI', 'direto']) test(`sync ${route} migra apontamentos Claude comprovados e preserva o índice`, {
+  timeout: process.platform === 'win32' ? 480000 : 120000,
+}, t => {
+  const root = realpathSync.native(fixture(t)); init(root);
+  const statePath = '.pbai4devs/state/agentdevkit.json';
+  const oldGlobal = '.claude/rules/ambiente-local/RULE.md';
+  const modern = '.claude/rules/qualidade/RULE.md';
+  const gitSource = '.pbai4devs/rules/git/RULE.md';
+  const human = '.claude/rules/humano.md';
+  const previous = new Map([
+    [oldGlobal, publishedReference('ambiente-local', 'always_on', 'Estrutura mínima e ambiente local dos projetos com Docker Compose.', 'Ambiente local')],
+    [legacy, publishedReference('git', 'model_decision', 'Aplique ao preparar, integrar ou publicar alterações Git.', 'Regras Git')],
+    [modern, Buffer.from(read(root, modern).toString().replace(/^description: .+$/m, 'description: "Descrição da versão anterior."'))],
+  ]);
+  const rendered = new Map([oldGlobal, modern].map(path => [path, read(root, path)]));
+  for (const [path, bytes] of rendered) assert.notDeepEqual(bytes, previous.get(path));
+  const state = JSON.parse(read(root, statePath));
+  for (const [path, bytes] of previous) { put(root, path, bytes); state.files[path] = sha(bytes); }
+  put(root, statePath, JSON.stringify(state, null, 2) + '\n');
+  put(root, human, '# Regra humana\n\nApontamento mantido no projeto.\n');
+  const originalHuman = read(root, human), originalSource = read(root, gitSource);
+  const beforeRecovery = inspectProjectRecovery(root);
+  assert.equal(beforeRecovery.status, 'ready');
+  const direct = options => synchronize({ root, localIgnores: false, generateEntrypoints: false, output() {}, ...options });
+
+  // As duas formas de proteção do índice precisam impedir efeitos sobre o
+  // projeto: conteúdo staged diferente e remoção de entrada ainda indexada.
+  put(root, modern, Buffer.concat([previous.get(modern), Buffer.from('\nEdição staged.\n')]));
+  git(root, 'add', '-f', '--', modern, legacy);
+  put(root, modern, previous.get(modern));
+  const indexed = protectedGit(root);
+  if (route === 'CLI') {
+    const refused = cli(root, 'sync', '--force');
+    assert.equal(refused.status, 1, JSON.stringify(refused.body));
+    assert.ok(refused.body.error?.code === 'E_STAGED' || refused.body.conflicts?.includes(legacy), JSON.stringify(refused.body));
+  } else {
+    assert.throws(() => direct({ force: true }), /indice Git|rastread[oa]/i);
+  }
+  assert.deepEqual(protectedGit(root), indexed);
+  assert.deepEqual(inspectProjectRecovery(root), beforeRecovery);
+  for (const [path, bytes] of previous) assert.deepEqual(read(root, path), bytes);
+
+  git(root, 'rm', '--cached', '-f', '--', modern, legacy);
+  const before = protectedGit(root);
+  if (route === 'CLI') {
+    const result = cli(root, 'update');
+    assert.equal(result.status, 0, JSON.stringify(result.body));
+    for (const path of rendered.keys()) assert.ok(result.body.plan.some(item => item.path === path && item.action === 'update'));
+    assert.ok(result.body.plan.some(item => item.path === legacy && item.action === 'remove'));
+    assert.equal(cli(root, 'sync', '--check').status, 0);
+  } else {
+    const preflight = direct({ check: true });
+    assert.deepEqual(preflight.conflictPaths, []);
+    assert.equal(preflight.stale, 1);
+    assert.equal(direct({}).exitCode, 0);
+    assert.equal(direct({ check: true }).exitCode, 0);
+  }
+  assert.deepEqual(protectedGit(root), before);
+  assert.deepEqual(read(root, human), originalHuman);
+  assert.deepEqual(read(root, gitSource), originalSource);
+  assert.equal(existsSync(join(root, legacy)), false);
+  for (const [path, bytes] of rendered) assert.deepEqual(read(root, path), bytes);
+
+  const recovery = inspectProjectRecovery(root);
+  assert.equal(recovery.status, 'ready');
+  assert.equal(recovery.terminal, 'done');
+  assert.equal(recovery.generation, beforeRecovery.generation + 1);
+  const generation = String(recovery.generation).padStart(12, '0');
+  const begin = JSON.parse(readFileSync(join(recovery.store, 'journal', 'records', `${generation}.begin.json`)));
+  const operation = join(recovery.store, 'backups', begin.id);
+  const originalRoot = JSON.parse(readFileSync(join(operation, 'root.json')));
+  const backup = join(operation, 'snapshot');
+  const manifest = readFileSync(join(backup, 'manifest.json'));
+  const backupManifest = sha(manifest);
+  assert.equal(begin.manifest, sha(JSON.stringify({ version: 1, originalRoot, backupManifest }) + '\n'));
+  verifyRecoveryBackup(backup, backupManifest);
+  const { entries } = JSON.parse(manifest);
+  for (const [path, bytes] of previous) {
+    const item = entries.find(entry => entry.path === path);
+    assert.equal(item?.action, path === legacy ? 'remove' : 'update');
+    assert.equal(item?.sha256, sha(bytes));
+  }
+});
+
 test('init Claude informa omissão sem ativação global e preserva Git humano', t => {
   const root = fixture(t), before = protectedGit(root), result = init(root);
   assert.deepEqual(protectedGit(root), before);
@@ -84,6 +175,54 @@ test('init Claude informa omissão sem ativação global e preserva Git humano',
     assert.ok(check.body.warnings.some(warning => warning.includes(fragment)));
     assert.ok(check.body.scopeOmissions.some(item => item.source === '.pbai4devs/rules/git/RULE.md'));
   }
+  assert.deepEqual(protectedGit(root), before);
+});
+
+test('migração de regra Claude aninhada rejeita origem e sidecar alterados após planejamento', {
+  timeout: process.platform === 'win32' ? 480000 : 120000,
+}, t => {
+  const root = realpathSync.native(fixture(t));
+  init(root);
+  const source = '.pbai4devs/rules/equipe/revisao/RULE.md';
+  const sidecar = '.pbai4devs/rules/equipe/revisao/claude.yaml';
+  const target = '.claude/rules/equipe/revisao/RULE.md';
+  const stateFile = '.pbai4devs/state/agentdevkit.json';
+  const sourceText = '---\ntrigger: glob\nglobs: "src/**/*.mjs"\ndescription: Regra de revisão.\n---\n\n# Revisão anterior\n';
+  const sidecarText = '---\npaths: ["src/**/*.mjs"]\n---\n';
+  put(root, source, sourceText); put(root, sidecar, sidecarText);
+  assert.equal(cli(root, 'sync').status, 0);
+  // O título atualiza o apontamento e a descrição altera o catálogo, o que
+  // faz o sync --force preparar também o backup de compatibilidade.
+  put(root, source, sourceText.replace('anterior', 'atualizada').replace('Regra de revisão.', 'Regra de revisão atualizada.'));
+  const originalTarget = read(root, target), originalState = read(root, stateFile), before = protectedGit(root);
+  const changes = [[source, sourceText.replace('anterior', 'edição humana')], [sidecar, sidecarText.replace('src/', 'test/')]];
+  for (const [path, changed] of changes) {
+    const plan = planInstallation({ target: root, mode: 'sync' });
+    assert.ok(plan.changes.some(change => change.path === target && change.action === 'update'));
+    assert.ok(plan.stageDependencies.some(input => input.path === path && input.expectedHash === sha(read(root, path))));
+    const original = read(root, path);
+    put(root, path, changed);
+    assert.throws(() => applyPlan(plan), error => error.code === 'E_CHANGED' && error.message.includes(path));
+    assert.equal(read(root, path).toString(), changed);
+    assert.deepEqual(read(root, target), originalTarget);
+    assert.deepEqual(read(root, stateFile), originalState);
+    assert.deepEqual(protectedGit(root), before);
+    put(root, path, original);
+  }
+
+  let injected = false;
+  assert.throws(() => synchronize({
+    root, force: true, generateEntrypoints: false, localIgnores: false,
+    output(line) {
+      if (!line.startsWith('Backup local (integridade')) return;
+      injected = true;
+      put(root, sidecar, changes[1][1]);
+    },
+  }), /Arquivo mudou apos planejar: .*claude\.yaml/);
+  assert.equal(injected, true);
+  assert.equal(read(root, sidecar).toString(), changes[1][1]);
+  assert.deepEqual(read(root, target), originalTarget);
+  assert.deepEqual(read(root, stateFile), originalState);
   assert.deepEqual(protectedGit(root), before);
 });
 

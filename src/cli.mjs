@@ -21,9 +21,9 @@ function selectedClients(value) {
 
 function worktreeWarning(language) {
   return {
-    pt: 'Configuracao Git e ignores existentes foram preservados; apontamentos, artefatos e dados privados podem ficar visiveis no Git. Confira o status antes de adicionar arquivos. Regras antigas podem afetar outras worktrees.',
-    en: 'Git configuration and existing ignore files were preserved; references, artifacts and private data may remain visible to Git. Check status before adding files. Older rules may affect other worktrees.',
-    es: 'Se conservaron la configuracion Git y los archivos ignore existentes; referencias, artefactos y datos privados pueden quedar visibles en Git. Revise el estado antes de agregar archivos. Reglas anteriores pueden afectar otras worktrees.',
+    pt: 'Apontamentos, artefatos e dados privados podem ficar visíveis no Git. Confira o status antes de adicionar arquivos. Regras antigas podem afetar outras worktrees.',
+    en: 'References, artifacts and private data may remain visible to Git. Check status before adding files. Older rules may affect other worktrees.',
+    es: 'Referencias, artefactos y datos privados pueden quedar visibles en Git. Revise el estado antes de agregar archivos. Reglas anteriores pueden afectar otras worktrees.',
   }[language];
 }
 
@@ -170,13 +170,23 @@ export function print(result, options, output) {
   for (const item of displayedPending.slice(0, 5)) output.write(`  ${item.code}: ${item.path}${item.pattern ? ` (${item.pattern})` : ''}\n`);
   const morePending = { pt: 'use --json para detalhes', en: 'use --json for details', es: 'use --json para los detalles' }[result.language];
   if (pending.length > 5) output.write(`  +${pending.length - 5}; ${morePending}.\n`);
-  if ([...pending, ...(result.issues || [])].some(item => item.code === 'shared-ignore-legacy')) {
-    const guidance = {
+  const legacyIgnore = [...pending, ...(result.issues || [])].find(item => item.code === 'shared-ignore-legacy');
+  if (legacyIgnore) {
+    const guidance = legacyIgnore.migration === 'migration' ? {
+      pt: 'Bloco legado reconhecido em info/exclude. Use update ou sync para migrá-lo e guardar uma cópia local.',
+      en: 'Recognized legacy block in info/exclude. Run update or sync to migrate it and keep a local copy.',
+      es: 'Bloque anterior reconocido en info/exclude. Use update o sync para migrarlo y guardar una copia local.',
+    } : {
       pt: 'Marcador semelhante ao legado em info/exclude: regras podem afetar arquivos não rastreados em outras worktrees. Revise o arquivo e as worktrees antes de alterá-lo.',
       en: 'Legacy-like marker in info/exclude: rules may affect untracked files in other worktrees. Review the file and worktrees before changing it.',
       es: 'Marcador similar al anterior en info/exclude: las reglas pueden afectar archivos no rastreados en otros worktrees. Revise el archivo y los worktrees antes de cambiarlo.',
     };
     output.write(`${guidance[result.language]}\n`);
+  }
+  const excludeMigration = result.localIgnore?.legacyMigration;
+  if (excludeMigration?.status === 'applied') {
+    const label = { pt: 'Cópia do exclude original', en: 'Original exclude backup', es: 'Copia del exclude original' };
+    output.write(`${label[result.language]}: ${excludeMigration.backup}/exclude\n`);
   }
   if (result.plan?.length) {
     const names = { pt: { create: 'criar', update: 'atualizar', remove: 'remover' }, en: { create: 'create', update: 'update', remove: 'remove' }, es: { create: 'crear', update: 'actualizar', remove: 'eliminar' } };
@@ -484,6 +494,10 @@ export async function main(argv = process.argv.slice(2), context = {}) {
         (result.warnings ||= []).push(worktreeWarning(language));
       }
       if (plan.localIgnore.status === 'no-git') (result.warnings ||= []).push(text(language, 'gitPending'));
+      if (plan.localIgnore.legacyMigration) {
+        result.localIgnore.legacyMigration = { path: '.git/info/exclude', status: 'planned' };
+        result.plan.push({ path: '.git/info/exclude', action: 'update', conflict: false });
+      }
       if (plan.localIgnoreCheck.trackedOutputs.length) (result.warnings ||= []).push(`${text(language, 'trackedLocal')} ${plan.localIgnoreCheck.trackedOutputs.join(', ')}`);
       if (plan.localIgnore.edits.length) {
         if (plan.localIgnore.worktreeScope) result.plan.push(...plan.localIgnore.edits.map(edit => ({ path: edit.path, action: 'create', conflict: false })));
@@ -506,6 +520,10 @@ export async function main(argv = process.argv.slice(2), context = {}) {
         Object.assign(result, applyPlan(plan));
         result.message = text(language, result.changed ? options.command : 'unchanged');
         if (plan.localIgnore.worktreeScope) result.localIgnore.pending = result.localIgnorePending;
+        if (result.localIgnoreMigration) {
+          result.localIgnore.legacyMigration = { path: '.git/info/exclude', status: 'applied', ...result.localIgnoreMigration };
+        }
+        delete result.localIgnoreMigration;
         delete result.localIgnorePending;
         result.next = getNextSteps({ command: options.command, language, target, installed: true });
       }

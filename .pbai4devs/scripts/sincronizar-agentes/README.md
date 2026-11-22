@@ -74,6 +74,8 @@ Sem manifesto, o sincronizador gera a política de
 Após a instalação, depende somente de Node e do hub local, sem o pacote npm.
 Ele respeita os clientes escolhidos, sem recriar os desmarcados. Para trocar
 a seleção, use `agentdevkit agents <lista>`; não edite o manifesto gerado.
+Em instalações antigas, use `agentdevkit update` para migrar a seleção
+e o manifesto de Antigravity e Kimi aos formatos atuais.
 
 O kit preserva os ignores existentes, `.git/info/exclude` e o índice Git.
 Apontamentos e artefatos podem ficar visíveis; confira o status antes de

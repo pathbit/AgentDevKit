@@ -98,6 +98,9 @@ dependências; não apague as regras para contornar a recusa. Um hash registrado
 não comprova os metadados atuais nem a ativação efetiva no cliente.
 A saída humana mostra até cinco caminhos em conflito; use `--json` para a
 lista completa e os motivos disponíveis em `preserved`.
+Na migração da 0.0.21, o kit atualiza referências Claude globais com origem
+comprovada. A referência Git antiga só é retirada quando o conteúdo exato
+é comprovado e o caminho está fora do índice.
 Uma referência Markdown existente, integralmente idêntica à gerada e sem
 registro anterior, é preservada e pode satisfazer a descoberta sem ser adotada.
 Registros históricos de remoção seguem a política anterior e exigem revisão.
@@ -110,13 +113,11 @@ O sincronizador independente também pode ser executado pelo
 comando agêntico [sincronizar](../../.pbai4devs/commands/sincronizar/COMMAND.md)
 orienta revisar e aplicar o plano pela CLI; `--force` é uma opção explícita.
 
-Na versão atual, o kit preserva os ignores e a configuração Git existentes,
-incluindo `.git/info/exclude`. Saídas geradas podem ficar visíveis. Consulte
-[Git e migração](installation.md#git-e-migração). Os comandos não
-retiram arquivos já rastreados do índice, e `untrackedPaths` permanece vazio
-por compatibilidade. Backups locais ficam em `.agent-tests/`, podem conter
-dados privados e aparecer no Git conforme os ignores existentes; não
-substituem o histórico Git.
+O campo `localIgnore.legacyMigration` mostra a migração planejada ou aplicada
+do bloco da 0.0.21 em `.git/info/exclude`. Se aplicada, informa o caminho da
+cópia original. A configuração e o índice Git permanecem preservados, e
+`untrackedPaths` permanece vazio. Consulte [Git e migração](installation.md#git-e-migração)
+para as condições e os avisos de visibilidade.
 
 ## Ferramentas
 

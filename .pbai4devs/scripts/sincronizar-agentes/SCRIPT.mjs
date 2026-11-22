@@ -13,7 +13,7 @@ import { requireNode, projectRoot, isMain } from '../lib/runtime.mjs';
 import { buildCatalog } from '../lib/catalog.mjs';
 import { clientResourcePath, resourcePath } from '../lib/resource-path.mjs';
 import { planClaudeRule, serializeClaudePaths } from '../lib/claude-rule-scope.mjs';
-import { isLegacyExact } from '../lib/claude-legacy-exact.mjs';
+import { canMigrateClaudeReference, isLegacyExact, legacyClaudeGitSource } from '../lib/claude-legacy-exact.mjs';
 import { adapterManifest, resolveAdapters } from '../lib/adapters.mjs';
 import { nativePathBoundary } from '../lib/native-paths.mjs';
 import { mayReferenceClaudeRule, resemblesClaudeReference, scanRetainedClaude } from '../lib/claude-retained.mjs';
@@ -390,7 +390,8 @@ function runSynchronization({ root = projectRoot, check = false, force = false, 
   captureInput(config, configExists ? readFileSync(absolute(config)) : null);
   const stateRoot = stateDirectory(root);
   const stateFile = `${stateRoot}/agentdevkit.json`;
-  const installed = stat(safe(stateFile)) ? parseJson(read(safe(stateFile)), 'estado instalado') : null;
+  const installedBytes = stat(safe(stateFile)) ? readFileSync(safe(stateFile)) : null;
+  const installed = installedBytes ? parseJson(normalize(installedBytes.toString('utf8')), 'estado instalado') : null;
   const configText = configExists ? read(safe(config)) : adapterManifest(root, { clients: installed?.clients });
   const rows = configText.split('\n');
   const entryRegistry = `${stateRoot}/derived.json`;
@@ -538,7 +539,7 @@ function runSynchronization({ root = projectRoot, check = false, force = false, 
   for (const [target, source] of fallbacks) if (!agents.has(target) || !agents.has(source) || formats.get(`${target}/skills`) !== 'nenhum' || formats.get(`${source}/skills`) === 'nenhum') fail(`Fallback fora dos agentes: ${target}`);
   for (const root of discoveries) if (!agents.has(root)) fail(`Descoberta fora dos agentes: ${root}`);
   const managed = value => [...agents.keys()].some(agent => value.startsWith(agent + '/'));
-  const built = buildCatalog(root);
+  const built = buildCatalog(root, { captureRuleInputs: agents.has('.claude') });
   const sources = new Map(Object.keys(principals).flatMap(kind => built.catalog[kind].map(entry => [entry.path, kind])));
   const rules = new Map(built.catalog.rules.map(rule => [rule.path, rule]));
   const entries = new Map();
@@ -627,23 +628,57 @@ function runSynchronization({ root = projectRoot, check = false, force = false, 
   const conflicts = new Set();
   const protectedConflicts = new Set();
   const protectedClaudeStale = new Set();
+  const retiredClaude = new Set();
+  const claudeRuleInputs = new Map();
+  const migratedClaude = new Set();
+  const claudeMigrationInputs = new Map();
+  function canMigrateClaude(target, current, replacement) {
+    return canMigrateClaudeReference({
+      target, current, replacement, recordedHash: priorFiles[target],
+      blocked: installed?.blocks?.[target] || previousEntries.blocks?.[target]
+        || removedBlocks.has(target) || Object.hasOwn(removedFiles, target),
+    });
+  }
+  function captureClaudeMigration(target) {
+    migratedClaude.add(target);
+    claudeMigrationInputs.set(stateFile, installedBytes);
+    claudeMigrationInputs.set(entryRegistry, registryBytes);
+    claudeMigrationInputs.set(config, mergedInputs.get(config));
+    for (const [path, expected] of claudeRuleInputs.get(target)) {
+      const previous = claudeMigrationInputs.get(path);
+      if (previous && !previous.equals(expected)) fail(`Arquivo mudou apos planejar: ${path}`);
+      claudeMigrationInputs.set(path, expected);
+    }
+  }
+  function assertClaudeMigrationInputs(inputs = claudeMigrationInputs) {
+    for (const [path, expected] of inputs) {
+      const file = safe(path), info = stat(file);
+      if (expected ? !info?.isFile() || !readFileSync(file).equals(expected) : info) fail(`Arquivo mudou apos planejar: ${path}`);
+    }
+  }
   const omittedStagedConflicts = [];
   for (const [target] of invalidClaude) {
     conflicts.add(target); protectedConflicts.add(target);
     if (preserveBoundary(target)) { claudeScopeBoundaries.add(target); continue; }
     if (stat(safe(target))) remember(target, 'claude-scope-invalid');
   }
-  for (const [target] of omittedClaude) {
+  for (const [target, { source, trigger }] of omittedClaude) {
+    claudeRuleInputs.set(target, [[source, built.ruleInputs.get(source)]]);
     if (preserveBoundary(target)) { claudeScopeBoundaries.add(target); continue; }
     const info = stat(safe(target));
-    // Estados legados só registram hash de conteúdo. Isso não prova que o
-    // inode, o modo, ACLs ou xattrs ainda pertençam ao kit, nem que o arquivo
-    // não tenha sido substituído por outro com bytes iguais.
     if (info) {
+      const current = info.isFile() && info.size <= 1024 * 1024 ? readFileSync(safe(target)) : null;
+      if (source === legacyClaudeGitSource && trigger === 'model_decision' && canMigrateClaude(target, current, null)) {
+        captureInput(target, current);
+        captureClaudeMigration(target);
+        retiredClaude.add(target);
+        remove.add(target);
+        continue;
+      }
       remember(target, 'claude-scope-preserved');
       conflicts.add(target); protectedConflicts.add(target);
-      if (info.isFile()) {
-        const indexPlan = planUntrack(root, { [target]: createHash('sha256').update(readFileSync(safe(target))).digest('hex') });
+      if (current) {
+        const indexPlan = planUntrack(root, { [target]: createHash('sha256').update(current).digest('hex') });
         omittedStagedConflicts.push(...indexPlan.conflicts);
       }
     }
@@ -663,7 +698,7 @@ function runSynchronization({ root = projectRoot, check = false, force = false, 
   function planRemove(value, custom = false) {
     safe(value);
     if (unknownRemovedFiles.has(value)) { remember(value, 'removed-file-unverified'); conflicts.add(value); protectedConflicts.add(value); return; }
-    if (omittedClaude.has(value) || protectedClaudeStale.has(value)) { remember(value, 'claude-scope-preserved'); conflicts.add(value); protectedConflicts.add(value); return; }
+    if ((omittedClaude.has(value) && !retiredClaude.has(value)) || protectedClaudeStale.has(value)) { remember(value, 'claude-scope-preserved'); conflicts.add(value); protectedConflicts.add(value); return; }
     if (isGeneratedOutput(value)) { remember(value, 'local-output'); return; }
     if (!managed(value) || protectedPath(value)) fail(`Limpeza fora dos espelhos ou caminho protegido: ${value}`);
     // Directories, unowned files and edited references can contain project
@@ -857,16 +892,20 @@ function runSynchronization({ root = projectRoot, check = false, force = false, 
       scan(target);
       if (force) planRemove(target, true); else conflicts.add(target);
     }
-    const sourceText = read(safe(source));
-    if (target.startsWith('.claude/rules/') && rules.has(source)) {
-      const rule = rules.get(source);
+    const claudeRule = target.startsWith('.claude/rules/') ? rules.get(source) : undefined;
+    const ruleSourceBytes = claudeRule ? built.ruleInputs.get(source) : null;
+    const metadataBytes = claudeRule && metadata ? readFileSync(safe(metadata)) : null;
+    const nativeMetadata = metadataBytes ? normalize(metadataBytes.toString('utf8')) : undefined;
+    const sourceText = ruleSourceBytes ? normalize(ruleSourceBytes.toString('utf8')) : read(safe(source));
+    if (claudeRule) {
+      claudeRuleInputs.set(target, metadata ? [[source, ruleSourceBytes], [metadata, metadataBytes]] : [[source, ruleSourceBytes]]);
       // Referência legada exata não estabelece ownership nem ativação nativa.
       const legacyName = target.match(/^\.claude\/rules\/([a-z0-9]+(?:-[a-z0-9]+)*)\/RULE\.md$/)?.[1];
       const legacyTitle = sourceText.match(/^# [^\r\n]+$/m)?.[0];
-      const legacyGenerated = legacyName && legacyTitle && !metadata && rule.trigger === 'always_on'
+      const legacyGenerated = legacyName && legacyTitle && !metadata && claudeRule.trigger === 'always_on'
         && source === `.pbai4devs/rules/${legacyName}/RULE.md`
-        ? Buffer.from(`---\ndescription: ${JSON.stringify(rule.description)}\n---\n\n${legacyTitle}\n\n${marker}\nLeia e siga [origem](${link(target, source)}).\n`) : null;
-      if (legacyGenerated && targetBytes && isLegacyExact(readFileSync(absolute(source)), targetBytes, legacyGenerated, legacyName)
+        ? Buffer.from(`---\ndescription: ${JSON.stringify(claudeRule.description)}\n---\n\n${legacyTitle}\n\n${marker}\nLeia e siga [origem](${link(target, source)}).\n`) : null;
+      if (legacyGenerated && targetBytes && isLegacyExact(ruleSourceBytes, targetBytes, legacyGenerated, legacyName)
         && !installed?.files?.[target] && !installed?.blocks?.[target]
         && !previousEntries.files?.[target] && !previousEntries.blocks?.[target]
         && !previousEntries.entries?.[target] && !previousOutputs[target] && !previousCatalogs[target]
@@ -875,7 +914,7 @@ function runSynchronization({ root = projectRoot, check = false, force = false, 
         remember(target, 'legacy-claude-scope-unverified'); expected.set(target, targetBytes);
         claudeScopeBoundaries.add(target); continue;
       }
-      const scope = planClaudeRule({ trigger: rule.trigger, nativeMetadata: metadata ? read(safe(metadata)) : undefined, ...(mixed ? { humanFile: targetBytes.toString('utf8') } : {}) });
+      const scope = planClaudeRule({ trigger: claudeRule.trigger, nativeMetadata, ...(mixed ? { humanFile: targetBytes.toString('utf8') } : {}) });
       if (scope.status === 'blocked' || scope.status === 'reference-only') fail(`Escopo Claude invalido ou nao comprovado: ${target}: ${scope.reason || scope.status}.`);
       if (mixed) {
         if (priorBlocks[target]) managedBlocks[target] = priorBlocks[target];
@@ -935,11 +974,10 @@ function runSynchronization({ root = projectRoot, check = false, force = false, 
       continue;
     }
     let frontmatter;
-    if (target.startsWith('.claude/rules/') && rules.has(source)) {
-      const rule = rules.get(source);
-      const scope = planClaudeRule({ trigger: rule.trigger, nativeMetadata: metadata ? read(safe(metadata)) : undefined });
+    if (claudeRule) {
+      const scope = planClaudeRule({ trigger: claudeRule.trigger, nativeMetadata });
       if (scope.status !== 'ready') fail(`Escopo Claude invalido ou nao comprovado: ${target}.`);
-      frontmatter = scope.activation === 'paths' ? serializeClaudePaths(scope.paths) : `---\ndescription: ${JSON.stringify(rule.description)}\n---\n`;
+      frontmatter = scope.activation === 'paths' ? serializeClaudePaths(scope.paths) : `---\ndescription: ${JSON.stringify(claudeRule.description)}\n---\n`;
     } else if (metadata) frontmatter = header(read(safe(metadata)));
     else if (target.endsWith('.mdc')) {
       const rule = built.catalog.rules.find(entry => entry.path === source);
@@ -994,10 +1032,12 @@ function runSynchronization({ root = projectRoot, check = false, force = false, 
     }
     const content = merged ? merged.text : `${frontmatter}\n${title}\n\n${marker}\n${inclusion}\n`;
     if (target.startsWith('.claude/rules/') && info?.isFile() && !targetBytes.equals(Buffer.from(content))) {
-      // Um hash anterior não comprova identidade ou metadados do arquivo atual.
-      remember(target, 'claude-metadata-unverified'); conflicts.add(target); protectedConflicts.add(target);
-      expected.set(target, targetBytes);
-      continue;
+      if (!canMigrateClaude(target, targetBytes, Buffer.from(content))) {
+        remember(target, 'claude-metadata-unverified'); conflicts.add(target); protectedConflicts.add(target);
+        expected.set(target, targetBytes);
+        continue;
+      }
+      captureClaudeMigration(target);
     }
     if (mixed) { captureInput(target, current); managedBlocks[target] = merged.sha256; remember(target, 'existing-file-extended'); }
     else rememberGenerated(target, content);
@@ -1015,7 +1055,7 @@ function runSynchronization({ root = projectRoot, check = false, force = false, 
       if (item.reason !== 'claude-activation-unverified') {
         remember(file, item.reason); claudeScopeBoundaries.add(file); continue;
       }
-      if (expected.has(file)) continue;
+      if (expected.has(file) || retiredClaude.has(file)) continue;
       if (!ownedPaths.has(file)) {
         const info = stat(safe(file));
         if (!info?.isFile() || info.size > 1024 * 1024) { claudeScopeBoundaries.add(file); continue; }
@@ -1260,7 +1300,7 @@ function runSynchronization({ root = projectRoot, check = false, force = false, 
   if (conflictPaths.length) {
     output(`Conflitos preservados: ${conflictPaths.slice(0, 10).map(path => JSON.stringify(path)).join(', ')}${conflictPaths.length > 10 ? ` (+${conflictPaths.length - 10})` : ''}`);
   }
-  if (localPlan?.worktreeScope) output('Configuracao Git e ignores existentes preservados; apontamentos, artefatos e dados privados podem ficar visiveis. Confira o status antes de adicionar arquivos. Regras antigas podem afetar outras worktrees.');
+  if (localPlan?.worktreeScope) output('Apontamentos, artefatos e dados privados podem ficar visíveis. Confira o status antes de adicionar arquivos. Regras antigas podem afetar outras worktrees.');
   const pending = localStatus.pending || [];
   const displayedPending = [...pending.filter(isBlockingLocalIgnore), ...pending.filter(item => !isBlockingLocalIgnore(item))];
   for (const item of displayedPending.slice(0, 12)) output(`${isBlockingLocalIgnore(item) ? 'Pendente' : 'Aviso'}: ${item.code}: ${item.path}`);
@@ -1665,6 +1705,7 @@ function runSynchronization({ root = projectRoot, check = false, force = false, 
   try {
     stageMayHaveEffects = true;
     assertFallbackChecks();
+    assertClaudeMigrationInputs();
     if (localPlan) assertLocalIgnoreUnchanged(localPlan);
     if (Object.keys(affectedHashes).length) {
       if (!assertGitReadableForChanges() && hadGit) fail('Git deixou de estar disponivel antes da sincronizacao; arquivos preservados.');
@@ -1691,9 +1732,15 @@ function runSynchronization({ root = projectRoot, check = false, force = false, 
       }
     }
     prepareLegacyBackup();
+    assertClaudeMigrationInputs();
     for (const { path, action, content, parents } of logicalOperations) {
       assertNoNestedGit(root, [path]);
+      if (migratedClaude.has(path)) assertClaudeMigrationInputs(claudeRuleInputs.get(path));
       if (action === 'remove') mutate(path, () => {
+        if (retiredClaude.has(path)) {
+          const index = planUntrack(root, { [path]: affectedBefore.get(path) });
+          if (index.paths.length || index.conflicts.length) fail(`Arquivo Claude rastreado no indice Git; remocao bloqueada: ${path}`);
+        }
         assertNoSharedHardlinks(path);
         const target = safe(path);
         if (process.platform === 'linux' && stat(target)?.isFile() && inspectLinuxXattr(target) === 'present') {
@@ -1708,7 +1755,8 @@ function runSynchronization({ root = projectRoot, check = false, force = false, 
     }
     assertFallbackChecks();
     // Directory ownership is not recorded: keep even empty parent directories.
-    if (localPlan) applyLocalIgnore(localPlan);
+    const migratedIgnore = localPlan && applyLocalIgnore(localPlan, { migrateLegacy: true }).migration;
+    if (migratedIgnore) output(`Exclusao legada migrada. Backup local: ${migratedIgnore.backup}`);
     if (transaction) completeProjectRecovery(transaction);
   } catch (cause) {
     let error = cause;
@@ -1728,7 +1776,8 @@ function runSynchronization({ root = projectRoot, check = false, force = false, 
     }
     throw error;
   }
-  return { ...summary, ownedOutputs, managedBlocks, preserved: preservedPaths, scopeOmissions, claudeRetiredTargets, retainedClaudeRules, exitCode: 0, ...(backupRoot ? { backupRoot } : {}) };
+  return { ...summary, ownedOutputs, managedBlocks, preserved: preservedPaths, scopeOmissions, claudeRetiredTargets, retainedClaudeRules, exitCode: 0,
+    ...(backupRoot ? { backupRoot } : {}), ...(privateStage ? { claudeRuleInputs } : {}) };
 }
 
 export function main(args = process.argv.slice(2)) {

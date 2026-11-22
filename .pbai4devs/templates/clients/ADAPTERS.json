@@ -3,6 +3,10 @@
   "entrypoints": [
     "AGENTS.md"
   ],
+  "retiredRoots": [
+    ".agent",
+    ".kimi"
+  ],
   "adapters": [
     {
       "id": "antigravity",
@@ -19,31 +23,10 @@
       "sources": [
         "https://antigravity.google/docs/customization-discovery"
       ],
-      "aliases": [],
+      "aliases": [
+        "antigravity-legacy"
+      ],
       "requires": [],
-      "extraRoots": [],
-      "entrypoints": [
-        "GEMINI.md"
-      ]
-    },
-    {
-      "id": "antigravity-legacy",
-      "name": "Antigravity (legado)",
-      "root": ".agent",
-      "formats": {
-        "skills": "agrupado",
-        "agents": "plano",
-        "rules": "agrupado"
-      },
-      "agentMetadata": "antigravity.yaml",
-      "reason": "Alias legado; a descoberta agrupada é registrada pelo cliente principal .agents.",
-      "sources": [
-        "https://antigravity.google/docs/customization-discovery"
-      ],
-      "aliases": [],
-      "requires": [
-        "antigravity"
-      ],
       "extraRoots": [],
       "entrypoints": [
         "GEMINI.md"
@@ -226,24 +209,9 @@
         "https://moonshotai.github.io/kimi-code/en/customization/plugins.html"
       ],
       "aliases": [
-        "kimi-code"
+        "kimi-code",
+        "kimi-legacy"
       ],
-      "requires": [],
-      "extraRoots": [],
-      "entrypoints": []
-    },
-    {
-      "id": "kimi-legacy",
-      "name": "Kimi (legado)",
-      "root": ".kimi",
-      "formats": {
-        "skills": "plano"
-      },
-      "reason": "Compatibilidade com instalações legadas; o cliente atual usa .kimi-code e .agents.",
-      "sources": [
-        "https://moonshotai.github.io/kimi-code/en/customization/skills"
-      ],
-      "aliases": [],
       "requires": [],
       "extraRoots": [],
       "entrypoints": []

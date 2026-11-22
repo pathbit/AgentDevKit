@@ -16,7 +16,7 @@ escolhidos. Catálogos, manifesto e estado são derivados locais. As pastas
 nativas também podem conter arquivos humanos; a equipe decide o que versionar.
 No repositório do kit, o código do produto fica em
 `src/`, `bin/`, `tests/` e `scripts/release/`, na raiz.
-Use `agents` na CLI para consultar ou alterar; `all` inclui os clientes legados.
+Use `agents` na CLI para consultar ou alterar. `all` inclui os clientes atuais.
 O hub fica completo; clientes podem compartilhar pastas necessárias.
 
 | Pasta | Para que serve |

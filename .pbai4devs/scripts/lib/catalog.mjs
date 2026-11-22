@@ -42,12 +42,13 @@ function scanner(root) {
     }
     return result;
   }
-  const read = path => readFileSync(safe(path, true), 'utf8').replace(/\r\n?/g, '\n');
+  const readBytes = path => readFileSync(safe(path, true));
+  const read = path => readBytes(path).toString('utf8').replace(/\r\n?/g, '\n');
   const json = path => {
     const value = read(path);
     try { return JSON.parse(value); } catch { fail(`JSON invalido: ${path}`); }
   };
-  return { absolute, safe, walk, read, json };
+  return { absolute, safe, walk, read, readBytes, json };
 }
 
 function metadata(text, path, required = true, fields = ['name', 'description']) {
@@ -109,16 +110,20 @@ function registry(paths) {
   return '{\n  "entries": [\n' + values.map((path, index) => `    {"path": ${JSON.stringify(path)}}${index < values.length - 1 ? ',' : ''}\n`).join('') + '  ]\n}\n';
 }
 
-export function buildCatalog(root) {
+export function buildCatalog(root, { captureRuleInputs = false } = {}) {
   requireNode(); root = realpathSync(resolve(root));
   const scan = scanner(root);
+  const ruleInputs = captureRuleInputs ? new Map() : null;
   const catalog = { schemaVersion: 1, skills: [], agents: [], commands: [], rules: [], templates: [], tools: [], scripts: [], externalSkills: [] };
   for (const [kind, principal] of Object.entries(kinds)) {
     const files = scan.walk(`.pbai4devs/${kind}`);
     const mains = files.filter(path => posix.basename(path) === principal);
     for (const path of mains) {
       const folder = posix.dirname(path);
-      const text = scan.read(path), meta = metadata(text, path, true, kind === 'rules' ? ['name', 'description', 'trigger', 'globs', 'glob'] : undefined);
+      const bytes = kind === 'rules' && ruleInputs ? scan.readBytes(path) : null;
+      if (bytes) ruleInputs.set(path, bytes);
+      const text = bytes ? bytes.toString('utf8').replace(/\r\n?/g, '\n') : scan.read(path);
+      const meta = metadata(text, path, true, kind === 'rules' ? ['name', 'description', 'trigger', 'globs', 'glob'] : undefined);
       const title = text.match(/^# (.+)$/m)?.[1];
       if (!title) fail(`Titulo ausente: ${path}`);
       if (!meta.description) fail(`Descricao ausente: ${path}`);
@@ -169,5 +174,5 @@ export function buildCatalog(root) {
   outputs.set('.pbai4devs/skills.json', registry(catalog.skills.map(entry => posix.dirname(entry.path))));
   outputs.set('.pbai4devs/rules.json', registry(catalog.rules.map(entry => entry.path)));
   outputs.set('.pbai4devs/agents.json', registry(catalog.agents.map(entry => entry.path)));
-  return { catalog, outputs };
+  return { catalog, outputs, ...(ruleInputs ? { ruleInputs } : {}) };
 }

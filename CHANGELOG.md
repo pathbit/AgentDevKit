@@ -4,6 +4,16 @@ description: Alterações verificáveis por versão do AgentDevKit.
 
 # Changelog
 
+## 0.0.33
+
+- Migra referências antigas do Claude cuja origem e conteúdo são comprovados.
+- Retira adaptadores aposentados da seleção padrão e limpa seus apontamentos
+  gerados. Antigravity usa `.agents` e Kimi usa `.kimi-code`.
+- Migra o bloco conhecido do AgentDevKit 0.0.21 em `.git/info/exclude` quando há
+  uma única worktree. Preserva a ordem das regras ativas e registra uma cópia
+  local do arquivo original.
+- Preserva lançadores locais e reaproveita os que já correspondem ao gerador.
+
 ## 0.0.32
 
 - Conecta planejamento, implementação, validação e revisão por critérios de

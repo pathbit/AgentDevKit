@@ -15,6 +15,11 @@ import {
 const packageName = '@pathbit/agentdevkit';
 const cliPath = 'bin/agentdevkit.mjs';
 const statePath = '.pbai4devs/state/agentdevkit.json';
+const excludePath = '.git/info/exclude';
+const stagedCrlfPath = '.agents/skills/git/git-status/SKILL.md';
+const published021 = '3fda1ea8dd5361d84f3684b96b31573dd320db1ca87bab267370bba31e51132d';
+const published021ExcludeBody = 'a36d313b9e7f65316a5bad6dcf4ef97c98eecced86a377dcb062b0462075ca31';
+const published021ClaudeRules = ['ambiente-local', 'documentacao', 'estrutura', 'execucao-local', 'git', 'proximos-passos', 'qualidade', 'seguranca'];
 const versionPattern = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/;
 const help = [
   'Uso: node tests/upgrade-packages.mjs [--from-version x.y.z] [--from-tarball arquivo.tgz]',
@@ -166,6 +171,59 @@ function snapshotGit(root, git) {
   return { ...snapshot, raw, trees };
 }
 
+function assertGitExceptExclude(actual, expected) {
+  assert.deepEqual({
+    ...actual, exclude: expected.exclude,
+    raw: { ...actual.raw, [excludePath]: { ...actual.raw[excludePath], sha256: expected.raw[excludePath].sha256 } },
+  }, expected, 'Preserve todo o Git fora dos bytes autorizados de info/exclude.');
+}
+
+function published021Exclude(root, original, installed) {
+  assert.deepEqual(installed.subarray(0, original.length), original, 'A origem 0.0.21 alterou regras humanas.');
+  const tail = installed.subarray(original.length), text = tail.toString('utf8');
+  assert.deepEqual(Buffer.from(text), tail, 'O bloco legado não é UTF-8.');
+  const match = /^# BEGIN AGENTDEVKIT LOCAL ([0-9a-f]{16})\n([\s\S]+)# END AGENTDEVKIT LOCAL \1\n$/.exec(text);
+  assert.ok(match && match[0] === text && match[1] === hash(realpathSync.native(root)).slice(0, 16),
+    'A origem 0.0.21 deve acrescentar um único bloco autêntico a esta raiz.');
+  assert.equal(hash(match[2]), published021ExcludeBody, 'O corpo do ignore diverge do observado no npm 0.0.21 nesta fixture de entradas humanas.');
+  const rules = match[2].split('\n').filter(line => line && !line.startsWith('#'));
+  const last = rules.filter((rule, index) => rules.lastIndexOf(rule) === index);
+  return { expected: Buffer.concat([original, Buffer.from(last.join('\n') + '\n')]), removedDuplicates: rules.length - last.length };
+}
+
+function verifyPublished021Claude(root, initialState, updatedState, initial, update) {
+  const rules = '.claude/rules/';
+  const expected = [];
+  for (const name of published021ClaudeRules) {
+    const path = rules + name + '/RULE.md';
+    const sourcePath = '.pbai4devs/rules/' + name + '/RULE.md';
+    assert.equal(initial[path].kind, 'file');
+    assert.equal(initial[path].sha256, initialState.files[path], 'Apontamento de origem sem propriedade comprovada: ' + path);
+    const source = readFileSync(join(root, sourcePath), 'utf8');
+    if (name === 'git') {
+      assert.match(source, /^trigger: model_decision$/m);
+      assert.deepEqual(fileSnapshot(root, path), { kind: 'missing' }, 'Regra Git histórica ainda está em descoberta nativa.');
+      assert.equal(updatedState.files[path], undefined);
+      expected.push({ path, action: 'remove', conflict: false });
+      continue;
+    }
+    assert.match(source, /^trigger: always_on$/m);
+    const description = source.match(/^description: (.+)$/m)?.[1], title = source.match(/^# (.+)$/m)?.[1];
+    assert.ok(description?.trim() && title?.trim());
+    const generated = `---\ndescription: ${JSON.stringify(description)}\n---\n\n# ${title}\n\n<!-- gerado: sincronizar-agentes -->\n`
+      + `Leia e siga [origem](../../../${sourcePath}).\n`;
+    const file = fileSnapshot(root, path);
+    assert.deepEqual(file, { kind: 'file', mode: initial[path].mode, sha256: hash(generated) },
+      'Apontamento Claude atualizado deve corresponder à origem canônica: ' + path);
+    assert.equal(updatedState.files[path], file.sha256);
+    expected.push({ path, action: 'update', conflict: false });
+  }
+  const actions = update.plan.filter(item => item.path.startsWith(rules));
+  assert.deepEqual(actions.slice().sort((a, b) => a.path.localeCompare(b.path)), expected,
+    'O plano Claude deve atualizar os sete apontamentos e retirar somente Git.');
+  return actions;
+}
+
 export function readRegularEntrypoint(root, path, original) {
   const absolute = join(root, path), current = lstatSync(absolute);
   assert.ok(original.kind === 'file' && current.isFile() && !current.isSymbolicLink(),
@@ -179,6 +237,7 @@ function runScenario(work, env, scenario, from, to) {
   mkdirSync(root, { recursive: true }); mkdirSync(evidence, { recursive: true });
   const { run, commands } = recorder(evidence, env);
   const report = { id: scenario.id, client: scenario.client, status: 'failed', checks: [] };
+  const legacy021 = from.evidence.version === '0.0.21' && from.evidence.sha256 === published021;
   const book = (name, value) => put(join(evidence, name + '.json'), JSON.stringify(value, null, 2) + '\n');
   const passed = name => { report.checks.push(name); console.log(scenario.id + ': ' + name + '=passed'); };
   const git = (...args) => {
@@ -190,9 +249,20 @@ function runScenario(work, env, scenario, from, to) {
     return parseCliResult(stdout, commands.at(-1).status, { name, expected, version: artifact.evidence.version });
   };
   const retained = scenario.humanRule && scenario.client !== 'claude' ? ['.claude/rules/equipe.md'] : [];
-  const verifySync = (artifact, name) => {
-    const expected = retained.length ? 1 : 0;
+  const verifySync = (artifact, name, historic = false) => {
+    const historicCrlf = historic && scenario.crlf;
+    const expected = historic ? Number(Boolean(historicCrlf)) : Number(retained.length > 0);
     const sync = cli(artifact, name, ['sync', '--check'], expected);
+    if (historic) {
+      assert.deepEqual(sync.conflicts, []);
+      const plan = historicCrlf ? [stagedCrlfPath, statePath].map(path => ({ path, action: 'update', conflict: false })) : [];
+      assert.deepEqual(sync.plan, plan, 'O diagnóstico histórico CRLF deve apontar somente a referência e o estado.');
+      assert.deepEqual(sync.untrackedPaths, []);
+      assert.deepEqual(sync.localIgnore, { status: 'git', edits: [], missing: [], trackedOutputs: [] });
+      assert.equal(sync.retainedClaudeRules, undefined);
+      assert.equal(sync.error, undefined);
+      return { status: expected, contract: 'published-0.0.21', plan, retainedClaudeRulesReported: false };
+    }
     checkSyncIssues(sync, null, true);
     assert.deepEqual(sync.plan, [], 'Sync --check apontou mudanças pendentes.');
     assert.deepEqual(sync.issues ?? [], [], 'Sync --check registrou problemas inesperados.');
@@ -226,6 +296,7 @@ function runScenario(work, env, scenario, from, to) {
     }
     const humanPaths = Object.keys(human), entryPaths = Object.keys(entrypoints);
     const humanBeforeInit = capture(humanPaths), entryBeforeInit = capture(entryPaths), beforeInit = snapshotGit(root, git);
+    const originalExclude = readFileSync(join(root, excludePath));
     book('before-init', { git: beforeInit, human: humanBeforeInit, entrypoints: entryBeforeInit });
 
     stage = 'init-origin';
@@ -235,7 +306,13 @@ function runScenario(work, env, scenario, from, to) {
     assert.deepEqual(initialState.clients, [scenario.client], 'Seleção da instalação antiga divergiu.');
     const afterInit = snapshotGit(root, git);
     book('after-init', { git: afterInit, human: capture(humanPaths), state: initialState });
-    assert.deepEqual(afterInit, beforeInit, 'Instalação de origem alterou o Git ou seu ignore.');
+    let legacyIgnore;
+    if (legacy021) {
+      assertGitExceptExclude(afterInit, beforeInit);
+      legacyIgnore = published021Exclude(root, originalExclude, readFileSync(join(root, excludePath)));
+    } else {
+      assert.deepEqual(afterInit, beforeInit, 'Instalação de origem alterou o Git ou seu ignore.');
+    }
     assert.deepEqual(capture(humanPaths), humanBeforeInit, 'Instalação de origem alterou arquivos humanos.');
     if (!scenario.staged) assert.ok(!afterInit.index && afterInit.indexSha256 === null, 'Instalação não deve criar um índice no cenário untracked.');
     for (const path of entryPaths) {
@@ -243,12 +320,15 @@ function runScenario(work, env, scenario, from, to) {
       assert.ok(stripped.startsWith(entrypoints[path]) && /^[\r\n]*$/.test(stripped.slice(entrypoints[path].length)),
         'Instalação alterou o conteúdo humano de ' + path);
     }
+    const legacyClaude = legacy021 && scenario.client === 'claude' ? capture(
+      published021ClaudeRules.map(name => '.claude/rules/' + name + '/RULE.md'),
+    ) : null;
     passed('instalação de origem e preservação');
 
     stage = 'prepare-human-edits';
     let crlfPath;
     if (scenario.crlf) {
-      crlfPath = '.agents/skills/git/git-status/SKILL.md';
+      crlfPath = stagedCrlfPath;
       const original = readFileSync(join(root, crlfPath), 'utf8');
       assert.ok(original.includes('\n') && !original.includes('\r'), 'Prova CRLF exige referência original LF.');
       git('config', 'core.autocrlf', 'true');
@@ -264,13 +344,13 @@ function runScenario(work, env, scenario, from, to) {
       [path, stripManagedContent(readRegularEntrypoint(root, path, entryBeforeInit[path]), initialState.blocks?.[path])]));
     const beforeUpdate = snapshotGit(root, git);
     book('before-update', { git: beforeUpdate, human: userFiles, entrypoints: capture(entryPaths) });
-    if (retained.length) {
+    if (legacy021 || retained.length) {
       stage = 'verify-origin';
       const observed = workspace(root);
-      report.originSync = verifySync(from, 'sync-origin');
+      report.originSync = verifySync(from, 'sync-origin', legacy021);
       assert.deepEqual(workspace(root), observed, 'Sync --check de origem alterou a instalação.');
       assert.deepEqual(snapshotGit(root, git), beforeUpdate, 'Sync --check de origem alterou o Git.');
-      passed('recusa conservadora comprovada na origem');
+      passed(legacy021 ? 'diagnóstico da origem publicada 0.0.21' : 'recusa conservadora comprovada na origem');
     }
 
     stage = 'update';
@@ -280,7 +360,26 @@ function runScenario(work, env, scenario, from, to) {
     assert.equal(updatedState.version, to.evidence.version, 'O estado não avançou para a versão do pacote candidato.');
     assert.deepEqual(updatedState.clients, initialState.clients, 'A atualização alterou os clientes selecionados.');
     assert.equal(updatedState.language, initialState.language, 'A atualização alterou o idioma salvo.');
-    assert.deepEqual(afterUpdate, beforeUpdate, 'A atualização alterou o Git ou as exclusões locais.');
+    if (legacyIgnore) {
+      assertGitExceptExclude(afterUpdate, beforeUpdate);
+      assert.deepEqual(readFileSync(join(root, excludePath)), legacyIgnore.expected);
+      const migration = update.localIgnore?.legacyMigration;
+      assert.equal(migration?.status, 'applied');
+      assert.equal(migration.path, excludePath);
+      assert.equal(migration.removedMarkers, 2);
+      assert.equal(migration.removedDuplicates, legacyIgnore.removedDuplicates);
+      assert.match(migration.backup, /^\.agent-tests\/agentdevkit\/ignore-migrations\/[a-f0-9-]{36}$/);
+      const backup = migration.backup + '/exclude';
+      const original = beforeUpdate.raw[excludePath];
+      const file = fileSnapshot(root, backup);
+      assert.equal(file.kind, 'file', 'Backup do exclude deve ser arquivo regular.');
+      assert.equal(file.sha256, original.sha256, 'Backup deve conter bytes anteriores à migração.');
+      if (process.platform !== 'win32') assert.equal(file.mode, original.mode, 'Backup deve preservar o modo original.');
+      report.legacyIgnore = { ...migration, beforeSha256: original.sha256, afterSha256: afterUpdate.exclude };
+    } else {
+      assert.deepEqual(afterUpdate, beforeUpdate, 'A atualização alterou o Git ou as exclusões locais.');
+    }
+    if (legacyClaude) report.legacyClaude = verifyPublished021Claude(root, initialState, updatedState, legacyClaude, update);
     assert.deepEqual(capture(Object.keys(userFiles)), userFiles, 'A atualização alterou conteúdo humano ou a referência CRLF staged.');
     for (const path of entryPaths) {
       assert.equal(stripManagedContent(readRegularEntrypoint(root, path, entryBeforeInit[path]), updatedState.blocks?.[path]), humanEntries[path],
@@ -293,14 +392,14 @@ function runScenario(work, env, scenario, from, to) {
     const observed = workspace(root);
     report.syncCheck = verifySync(to, 'sync-check');
     assert.deepEqual(workspace(root), observed, 'Sync --check alterou a instalação.');
-    assert.deepEqual(snapshotGit(root, git), beforeUpdate, 'Sync --check alterou o Git.');
+    assert.deepEqual(snapshotGit(root, git), afterUpdate, 'Sync --check alterou o Git.');
     passed(retained.length ? 'recusa conservadora esperada sem alterações' : 'sync --check somente leitura');
 
     stage = 'repeat-update';
     const repeat = cli(to, 'update-repeat', ['update', '--yes']);
     assert.equal(repeat.changed, false, 'Repetição da atualização deve ser idempotente.');
     assert.deepEqual(workspace(root), observed, 'Repetição alterou a instalação.');
-    assert.deepEqual(snapshotGit(root, git), beforeUpdate, 'Repetição alterou o Git.');
+    assert.deepEqual(snapshotGit(root, git), afterUpdate, 'Repetição alterou o Git.');
     passed('repetição idempotente');
     report.status = 'passed';
   } catch (error) {

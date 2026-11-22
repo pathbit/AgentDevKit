@@ -49,13 +49,14 @@ test('writer e deterministico e nao executa a sincronizacao', t => {
   const root = fixture(t);
   const result = writeAdapterManifest(root);
   assert.deepEqual(result.changed, ['.pbai4devs/espelhos.conf']);
-  assert.deepEqual(result.roots, adapterRoots);
+  assert.deepEqual(result.roots, resolveAdapters().roots);
   assert.equal(existsSync(join(root, '.agents')), false);
   const first = read(root, '.pbai4devs/espelhos.conf');
   assert.deepEqual(writeAdapterManifest(root).changed, []);
   assert.equal(read(root, '.pbai4devs/espelhos.conf'), first);
   assert.ok(first.includes('nativo|.claude/agents/revisor.md|'));
   assert.ok(!first.includes('nativo|.zcode/agents/'));
+  assert.doesNotMatch(first, /\|\.(?:agent|kimi)(?:[|/]|$)/m);
 });
 
 test('clientes recebem grupos e excecoes nativas pesquisadas', t => {
@@ -151,7 +152,7 @@ test('implementador Claude declara preload da skill e mantém apontamentos para 
 
 test('cada excecao de layout tem motivo e fontes oficiais', () => {
   assert.equal(new Set(adapterRoots).size, adapterRoots.length);
-  assert.equal(adapters.length, 14);
+  assert.equal(adapters.length, 12);
   for (const adapter of adapters) {
     assert.ok(adapter.name.length > 0);
     assert.ok(adapter.reason.length > 20);
@@ -169,12 +170,13 @@ test('clientes disponiveis e aliases derivam da mesma politica', () => {
   assert.deepEqual(normalizeClients(['all', 'ALL']), ['all']);
   assert.deepEqual(normalizeClients('vscode, claude-code, kimi-code, xiaomi'), ['claude', 'copilot', 'kimi', 'mimo']);
   assert.deepEqual(normalizeClients(['CODEX', 'codex, vscode', 'copilot']), ['codex', 'copilot']);
+  assert.deepEqual(normalizeClients('ANTIGRAVITY-LEGACY, antigravity, kimi-legacy, kimi-code'), ['antigravity', 'kimi']);
   assert.deepEqual(availableClients.find(client => client.id === 'copilot').aliases, ['vscode']);
 });
 
 const selections = [
   ['antigravity', ['.agents'], ['AGENTS.md', 'GEMINI.md']],
-  ['antigravity-legacy', ['.agents', '.agent'], ['AGENTS.md', 'GEMINI.md']],
+  ['antigravity-legacy', ['.agents'], ['AGENTS.md', 'GEMINI.md'], 'antigravity'],
   ['claude', ['.claude'], ['AGENTS.md', 'CLAUDE.md']],
   ['codex', ['.agents', '.codex'], ['AGENTS.md']],
   ['cursor', ['.cursor'], ['AGENTS.md']],
@@ -183,31 +185,31 @@ const selections = [
   ['gemini', ['.gemini'], ['AGENTS.md', 'GEMINI.md']],
   ['zcode', ['.zcode'], ['AGENTS.md']],
   ['kimi', ['.kimi-code'], ['AGENTS.md']],
-  ['kimi-legacy', ['.kimi'], ['AGENTS.md']],
+  ['kimi-legacy', ['.kimi-code'], ['AGENTS.md'], 'kimi'],
   ['minimax', ['.minimax'], ['AGENTS.md']],
   ['mimo', ['.mimocode'], ['AGENTS.md']],
   ['deepseek', ['.dsh'], ['AGENTS.md']],
 ];
 
 test('selecao resolve dependencias, pontos de entrada e fallback all', () => {
-  for (const [client, roots, entrypoints] of selections) {
+  for (const [client, roots, entrypoints, id = client] of selections) {
     const selection = resolveAdapters(client);
-    assert.deepEqual(selection.clients, [client]);
+    assert.deepEqual(selection.clients, [id]);
     assert.deepEqual(selection.roots, roots, client);
     assert.deepEqual(selection.entrypoints, entrypoints, client);
     assert.deepEqual(selection.adapters.map(adapter => adapter.root), roots.filter(root => root !== '.vscode'));
   }
-  assert.deepEqual(resolveAdapters().roots, adapterRoots);
+  assert.deepEqual(adapterRoots.filter(root => !resolveAdapters().roots.includes(root)), ['.agent', '.kimi']);
   assert.deepEqual(resolveAdapters('all').entrypoints, ['AGENTS.md', 'CLAUDE.md', 'GEMINI.md']);
   assert.deepEqual(resolveAdapters(['codex', 'antigravity', 'vscode']).roots, ['.agents', '.codex', '.github', '.vscode']);
   assert.deepEqual(resolveAdapters(['gemini', 'claude']).entrypoints, ['AGENTS.md', 'CLAUDE.md', 'GEMINI.md']);
 });
 
 test('cada selecao filtra todos os tipos de linha e sincroniza somente suas raizes', async t => {
-  for (const [client, roots] of selections) await t.test(client, t => {
+  for (const [client, roots, , id = client] of selections) await t.test(client, t => {
     const root = fixture(t);
     const result = writeAdapterManifest(root, { clients: client });
-    assert.deepEqual(result.clients, [client]);
+    assert.deepEqual(result.clients, [id]);
     assert.deepEqual(result.roots, roots);
     const manifest = read(root, '.pbai4devs/espelhos.conf');
     assert.equal(manifest, adapterManifest(root, { clients: client }));

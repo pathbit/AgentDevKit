@@ -8,8 +8,8 @@ import { fileOwnerIssue } from '../.pbai4devs/scripts/lib/file-owner.mjs';
 import { chmodSync, closeSync, existsSync, fchmodSync, fstatSync, lstatSync, openSync, readFileSync, readSync, writeFileSync, readdirSync, mkdirSync, mkdtempSync, realpathSync, rmSync, rmdirSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, posix, relative, resolve, sep } from 'node:path';
 import { createPrivateSyncStage, synchronizePrivateStage, isReference } from '../.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs';
-import { isLegacyExact } from '../.pbai4devs/scripts/lib/claude-legacy-exact.mjs';
-import { isGeneratedOutput, planLocalIgnore, checkLocalIgnore, assertLocalIgnoreUnchanged, applyLocalIgnore, indexContentMatches, noGitRepository } from '../.pbai4devs/scripts/lib/gitignore.mjs';
+import { canMigrateClaudeReference, isLegacyExact, legacyClaudeGitSource, legacyClaudeGitTarget } from '../.pbai4devs/scripts/lib/claude-legacy-exact.mjs';
+import { isGeneratedOutput, planLocalIgnore, checkLocalIgnore, assertLocalIgnoreUnchanged, applyLocalIgnore, indexContentMatches, noGitRepository, planUntrack } from '../.pbai4devs/scripts/lib/gitignore.mjs';
 import { nativePathBoundary } from '../.pbai4devs/scripts/lib/native-paths.mjs';
 import { checkWindowsFileChanges, copyFileWithNativeMetadata, inspectMacWriteProtection, nativeMetadataCopySupported, publishFileReplacement, stageReplacementWithNativeMetadata } from '../.pbai4devs/scripts/lib/native-metadata.mjs';
 import { mayReferenceClaudeRule, resemblesClaudeReference, scanRetainedClaude } from '../.pbai4devs/scripts/lib/claude-retained.mjs';
@@ -368,13 +368,16 @@ function allowsStagedBlock(path, current, content, knownBlock) {
   return false;
 }
 
-export function loadState(root) {
+export function loadState(root, { rawClients = false } = {}) {
   const content = read(root, actualStatePath(root)); if (content === null) return null;
   let state; try { state = JSON.parse(content); } catch { fail('E_STATE', 'Invalid AgentDevKit state JSON.'); }
   if (state?.schemaVersion !== 1 || !normalizeLanguage(state.language) || typeof state.version !== 'string' || !state.files || typeof state.files !== 'object' || Array.isArray(state.files) || !state.blocks || typeof state.blocks !== 'object' || Array.isArray(state.blocks)) fail('E_STATE', 'Invalid AgentDevKit state.');
   if (state.clients !== undefined) {
     if (!Array.isArray(state.clients)) fail('E_STATE', 'Invalid client selection in AgentDevKit state.');
-    try { state.clients = normalizeClients(state.clients); } catch { fail('E_STATE', 'Invalid client selection in AgentDevKit state.'); }
+    try {
+      const clients = normalizeClients(state.clients);
+      if (!rawClients) state.clients = clients;
+    } catch { fail('E_STATE', 'Invalid client selection in AgentDevKit state.'); }
   }
   for (const [path, digest] of [...Object.entries(state.files), ...Object.entries(state.blocks)]) {
     safePath(root, path);
@@ -657,7 +660,8 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
   const initialStateBytes = read(target, initialStatePath), initialDerivedBytes = read(target, initialDerivedPath);
   const stageDependencies = new Map();
   const sameBytes = (left, right) => left === null ? right === null : Boolean(right && left.equals(right));
-  let previous = loadState(target);
+  // Reconcile the recorded IDs against the canonical selection for this plan.
+  let previous = loadState(target, { rawClients: true });
   const installedState = previous;
   const migration = legacyStateMigration(target);
   // A migration must update the installed scripts and pointers in the same
@@ -887,6 +891,23 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
       recordPreserved(stateReadme, 'existing-file');
     }
     const protectedClaude = new Set(), protectedUnknownRemoved = new Set(), protectedDivergedDerived = new Set(), legacyClaudeUnverified = new Set();
+    const canMigrateClaude = (path, current, replacement) => canMigrateClaudeReference({
+      target: path, current, replacement, recordedHash: derivedFiles[path] ?? previous?.files[path],
+      blocked: installedState?.blocks?.[path] || derivedBlocks[path] || removedBlocks.includes(path) || Object.hasOwn(removedFiles, path),
+    });
+    function observeClaudeMigration(path) {
+      const inputs = synchronized.claudeRuleInputs.get(path);
+      if (!inputs?.length) fail('E_CHANGED', `Missing rule inputs for: ${path}`);
+      stageDependencies.set(initialStatePath, initialStateBytes ? hash(initialStateBytes) : null);
+      stageDependencies.set(initialDerivedPath, initialDerivedBytes ? hash(initialDerivedBytes) : null);
+      for (const [input, usedBytes] of inputs) {
+        const current = read(target, input);
+        if (!usedBytes || preservedHub.has(input) && !sameBytes(current, usedBytes)) fail('E_CHANGED', `Rule input changed while planning: ${input}`);
+        const digest = current ? hash(current) : null;
+        if (stageDependencies.has(input) && stageDependencies.get(input) !== digest) fail('E_CHANGED', `Rule input changed while planning: ${input}`);
+        stageDependencies.set(input, digest);
+      }
+    }
     for (const path of unknownRemovedFiles) {
       if (desired.has(path)) protectedUnknownRemoved.add(path);
     }
@@ -922,7 +943,10 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
       const known = [previous?.files[path], derivedFiles[path]].some(digest => digest && digest === hash(current));
       if (known) {
         if (path.startsWith('.claude/rules/') && !current.equals(content)) {
-          protectedClaude.add(path); recordPreserved(path, 'claude-metadata-unverified'); desired.delete(path);
+          if (canMigrateClaude(path, current, content)) observeClaudeMigration(path);
+          else {
+            protectedClaude.add(path); recordPreserved(path, 'claude-metadata-unverified'); desired.delete(path);
+          }
         }
         continue;
       }
@@ -1118,6 +1142,7 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
       const migrated = migration?.files.find(item => item.target === path);
       changes.push({ path, action: current ? 'update' : 'create', content, beforeHash: current ? hash(current) : null, ...(migrated ? { mode: migrated.mode } : {}) });
     }
+    const retiredClaude = new Set();
     const wholeRecords = [previous?.files || {}, derivedEntries, derivedFiles];
     for (const path of new Set(wholeRecords.flatMap(record => Object.keys(record)))) if (!desired.has(path)) {
       if (path === '.gitignore' || path.endsWith('/.gitignore')) { if (read(target, path)) recordPreserved(path, 'existing-ignore'); continue; }
@@ -1125,6 +1150,7 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
       if (path === '.gitignore') { recordPreserved(path, 'project-owned'); continue; }
       if (aliasedEntrypoint(path)) continue;
       if (path.startsWith('.claude/rules/')) {
+        if (synchronized.claudeRetiredTargets?.some(item => item.target === path)) continue;
         if (boundary(path) || read(target, path)) { if (active.roots.includes('.claude')) conflicts.push(path); recordPreserved(path, 'claude-metadata-unverified'); }
         continue;
       }
@@ -1171,7 +1197,17 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
       }
       const current = read(target, path);
       if (!current) continue;
-      // Hash antigo não comprova identidade, modo, ACL ou xattrs atuais.
+      if (omission.source === legacyClaudeGitSource && omission.trigger === 'model_decision'
+        && canMigrateClaude(path, current, null)) {
+        const index = planUntrack(target, { [path]: hash(current) });
+        if (!index.paths.length && !index.conflicts.length) {
+          observeNative(path, current);
+          observeClaudeMigration(path);
+          retiredClaude.add(path);
+          changes.push({ path, action: 'remove', content: null, beforeHash: hash(current) });
+          continue;
+        }
+      }
       conflicts.push(path); recordPreserved(path, 'claude-scope-preserved');
     }
     function nativeFiles(root) {
@@ -1220,7 +1256,7 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
         if (!retainedClaudeRules.includes(full)) retainedClaudeRules.push(full);
         recordPreserved(full, item.reason); continue;
       }
-      if (desired.has(full) || legacyClaudeUnverified.has(full)) continue;
+      if (desired.has(full) || legacyClaudeUnverified.has(full) || retiredClaude.has(full)) continue;
       const known = [previous?.files[full], derivedFiles[full], knownBlocks[full]].some(Boolean);
       if (!known) {
         const info = stat(safePath(target, full));
@@ -1520,6 +1556,13 @@ export function applyPlan(plan) {
   };
   assertFallbackChecks();
   const stagedHuman = stagedDivergences(target);
+  const retiredClaude = plan.changes.find(change => change.path === legacyClaudeGitTarget && change.action === 'remove');
+  const assertClaudeRetirementUntracked = () => {
+    if (!retiredClaude) return;
+    const index = planUntrack(target, { [retiredClaude.path]: retiredClaude.beforeHash });
+    if (index.paths.length || index.conflicts.length) fail('E_STAGED', `Tracked Claude rule is preserved: ${retiredClaude.path}`);
+  };
+  assertClaudeRetirementUntracked();
   if (plan.changes.some(change => stagedContains(target, stagedHuman.gitlinks || new Set(), change.path))
     || plan.changes.some(change => change.beforeHash !== null) && stagedContains(target, stagedHuman.gitlinks || new Set(), '.agent-tests/agentdevkit/backups')) fail('E_STAGED', 'A planned change is inside a Git submodule; its contents are preserved.');
   const currentState = loadState(target);
@@ -1655,8 +1698,8 @@ export function applyPlan(plan) {
     ]),
   ];
   if (!plannedActions.length && !directories.length) {
-    const ignored = applyLocalIgnore(plan.localIgnore);
-    return { changed: false, backup: null, localIgnorePending: ignored.pending };
+    const ignored = applyLocalIgnore(plan.localIgnore, { migrateLegacy: true });
+    return { changed: Boolean(ignored.changed), backup: null, localIgnorePending: ignored.pending, localIgnoreMigration: ignored.migration };
   }
   const entries = buildRecoveryEntries(target, plannedActions.map(([path, action]) => ({
     path, action, before: before.get(path) === null ? null : { data: before.get(path), mode: beforeModes.get(path) },
@@ -1721,6 +1764,7 @@ export function applyPlan(plan) {
       } catch (error) { throw withUncertainPath(error, backup); }
     }
     assertStageDependencies();
+    assertClaudeRetirementUntracked();
     const assertOriginal = path => {
       const file = safePath(target, path), info = stat(file), bytes = before.get(path);
       assertNoSharedLinks(path, info);
@@ -1738,6 +1782,7 @@ export function applyPlan(plan) {
       const change = plan.changes[index], [path, action] = plannedActions[index];
       if (!change || change.path !== path || change.action !== action) fail('E_CHANGED', 'The installation actions changed during application.');
       assertNoNestedGit(target, [path]);
+      if (path === retiredClaude?.path) assertClaudeRetirementUntracked();
       assertOriginal(path);
       const file = safePath(target, path);
       // Publish the same private bytes that passed the staged-block check.
@@ -1788,9 +1833,12 @@ export function applyPlan(plan) {
     assertPrunePlanUnchanged();
     pruneRemovedDirectories(plan, pruneCandidates, assertPrunePlanUnchanged, path => attemptedPaths.add(path));
     const changesFallback = plan.changes.some(change => change.path === '.gitignore');
-    const ignored = applyLocalIgnore(changesFallback ? planLocalIgnore(target, { outputs: plan.ownedOutputs }) : plan.localIgnore);
+    const ignorePlan = changesFallback
+      ? { ...planLocalIgnore(target, { outputs: plan.ownedOutputs }), legacyMigration: plan.localIgnore.legacyMigration }
+      : plan.localIgnore;
+    const ignored = applyLocalIgnore(ignorePlan, { migrateLegacy: true });
     completeProjectRecovery(transaction);
-    return { changed: Boolean(plan.changes.length || ignored.changed), backup, localIgnorePending: ignored.pending };
+    return { changed: Boolean(plan.changes.length || ignored.changed), backup, localIgnorePending: ignored.pending, localIgnoreMigration: ignored.migration };
   } catch (cause) {
     let error = withPotentialPartial(cause);
     if (backup) error = withUncertainPath(error, backup);

@@ -27,7 +27,9 @@ seleção geral são informadas como não aplicáveis; pedir uma delas pelo nome
 falha. Falhas de instalação/verificação são relatadas e retornam código 1.
 Sem npm funcional, o preparo para antes de alterar as ferramentas.
 Ao mover o hub, preserve suas pastas `.local` e `.cache`; `setup` reutiliza os
-pacotes e regenera os atalhos locais, que usam imports relativos.
+pacotes e cria os atalhos locais ausentes com imports relativos. Se um
+arquivo ocupar o destino com conteúdo diferente, a ação informa o caminho
+e preserva o arquivo.
 
 ## Operações individuais
 

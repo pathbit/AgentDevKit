@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, readdirSync, existsSync, copyFileSync, symlinkSync, unlinkSync, chmodSync, statSync, renameSync, realpathSync } from 'node:fs';
 import { resolve, join, dirname, delimiter } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { hostname } from 'node:os';
 import { ToolManager, platformKey, validateRelease, validateToolConfig, loadCatalog, main, toolEnvironment, binaryInvocation, toolActions, toolWrapper } from '../SCRIPT.mjs';
@@ -172,6 +172,35 @@ test('launchers recusam links de diretorio, arquivo e destino ausente sem escrev
   });
 });
 
+test('install preserva atalhos humanos mesmo com ferramenta já instalada; update recusa destino divergente antes de baixar', async t => {
+  const { manager, state, local } = fixture(t);
+  const name = 'test-tool';
+  const bin = join(manager.home, 'bin'), launcher = join(bin, `${name}.mjs`);
+  const human = [name, `${name}.cmd`, `${name}.ps1`, `${name}.sh`].map(suffix => join(bin, suffix));
+  mkdirSync(bin, { recursive: true });
+  for (const path of human) writeFileSync(path, '# Meu atalho local\n');
+  await manager.install(name);
+  const generated = readFileSync(launcher, 'utf8');
+  const before = statSync(launcher);
+  assert.equal((await manager.install(name)).changed, false);
+  assert.equal(readFileSync(launcher, 'utf8'), generated);
+  assert.equal(statSync(launcher).mtimeMs, before.mtimeMs);
+  for (const path of human) assert.equal(readFileSync(path, 'utf8'), '# Meu atalho local\n');
+
+  const modified = generated.replace("['run'", "['own'");
+  assert.notEqual(modified, generated);
+  assert.equal(modified.length, generated.length);
+  writeFileSync(launcher, modified);
+  const receipt = readFileSync(join(local, 'CURRENT.json'));
+  state.version = '2.0.0';
+  for (const action of ['install', 'update']) await assert.rejects(manager[action](name), /Atalho local divergente; arquivo preservado:.*test-tool\.mjs/);
+  assert.equal(readFileSync(launcher, 'utf8'), modified);
+  for (const path of human) assert.equal(readFileSync(path, 'utf8'), '# Meu atalho local\n');
+  assert.deepEqual(readFileSync(join(local, 'CURRENT.json')), receipt);
+  assert.equal(state.fetches, 1);
+  assert.equal(state.installs, 1);
+});
+
 test('unlock recupera somente lock local com PID comprovadamente morto', async t => {
   const { manager, local, state } = fixture(t);
   assert.deepEqual(manager.unlock('test-tool'), { name: 'test-tool', removed: false, state: 'missing' });
@@ -338,7 +367,7 @@ test('migracao move instalacao e cache antigos sem rede nem novo download', asyn
   assert.equal(readFileSync(join(root, '.pbai4devs/tools/.cache/npm/cache-marker'), 'utf8'), 'preserved'); assert.equal(state.installs, 0); assert.equal(state.fetches, 0);
 });
 
-test('rename do hub preserva pacote e caches e setup regenera launcher sem rede', async t => {
+test('rename do hub preserva pacote, caches e launcher relativo sem rede', async t => {
   const { root, manager, state, local } = fixture(t);
   await manager.install('test-tool');
   const hub = join(root, '.pbai4devs'); const oldHub = join(root, '.agents');
@@ -351,9 +380,8 @@ test('rename do hub preserva pacote e caches e setup regenera launcher sem rede'
   }
   renameSync(hub, oldHub);
   const launcher = join(oldHub, 'tools/bin/test-tool.mjs');
-  writeFileSync(launcher, `import { main } from ${JSON.stringify(pathToFileURL(join(oldHub, 'scripts/preparar-ferramentas/SCRIPT.mjs')).href)};\nawait main(['run', 'test-tool', ...process.argv.slice(2)]);\n`);
+  const contents = readFileSync(launcher);
   renameSync(oldHub, hub);
-  assert.notEqual(spawnSync(process.execPath, [join(hub, 'tools/bin/test-tool.mjs'), '--version'], { encoding: 'utf8' }).status, 0);
   const repaired = new ToolManager({ root, npm: () => setupNpm(root),
     fetchRelease: async () => { throw new Error('Rename nao deve consultar o registro'); },
     install: () => { throw new Error('Rename nao deve reinstalar pacote'); } });
@@ -363,9 +391,9 @@ test('rename do hub preserva pacote e caches e setup regenera launcher sem rede'
   assert.equal(readFileSync(packageFile, 'utf8'), packageBefore);
   assert.equal(state.installs, 1); assert.equal(state.fetches, 1);
   for (const kind of ['npm', 'runtime/node/test-platform']) assert.equal(readFileSync(join(hub, 'tools/.cache', kind, 'preserved.txt'), 'utf8'), kind);
-  const rewritten = join(hub, 'tools/bin/test-tool.mjs');
-  assert.doesNotMatch(readFileSync(rewritten, 'utf8'), /\/\.agents\//);
-  const proof = spawnSync(process.execPath, [rewritten, 'echo', 'hub migrado'], { encoding: 'utf8' });
+  const restored = join(hub, 'tools/bin/test-tool.mjs');
+  assert.deepEqual(readFileSync(restored), contents);
+  const proof = spawnSync(process.execPath, [restored, 'echo', 'hub migrado'], { encoding: 'utf8' });
   assert.equal(proof.status, 0, proof.stderr); assert.deepEqual(JSON.parse(proof.stdout), ['hub migrado']);
   assert.equal(existsSync(oldHub), false);
   const moved = `${root}-movido`; renameSync(root, moved);

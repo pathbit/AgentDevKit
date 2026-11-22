@@ -49,6 +49,72 @@ test('seleção valida aliases e entradas antes de escrever; consulta é somente
   assert.deepEqual(readdirSync(root).filter(name => name !== '.git'), []);
 });
 
+test('seleções novas criam somente os sucessores dos adaptadores aposentados', async t => {
+  for (const [input, selected] of [['all', ['all']], ['antigravity-legacy,kimi-legacy', ['antigravity', 'kimi']]]) await t.test(input, t => {
+    const root = fixture(t);
+    cli(root, ['init', '--agents', input]);
+    for (const path of ['.agents', '.kimi-code']) assert.ok(existsSync(join(root, path)), path);
+    for (const path of ['.agent', '.kimi']) assert.equal(existsSync(join(root, path)), false, path);
+    assert.doesNotMatch(read(root, '.pbai4devs/espelhos.conf'), /\|\.(?:agent|kimi)(?:[|/]|$)/m);
+    assert.deepEqual(state(root).clients, selected);
+  });
+});
+
+test('update aposenta referências próprias antigas e preserva conteúdo humano e staged', async t => {
+  for (const [saved, expected] of [[['all'], ['all']], [['antigravity-legacy', 'kimi-legacy'], ['antigravity', 'kimi']]]) await t.test(saved.join(','), t => {
+    const root = fixture(t);
+    cli(root, ['init', '--agents', saved[0] === 'all' ? 'all' : 'antigravity,kimi']);
+    const owned = ['.agent/skills/projeto/intacta/SKILL.md', '.kimi/skills/intacta/SKILL.md'];
+    const edited = '.agent/skills/projeto/editada/SKILL.md', staged = '.kimi/skills/staged/SKILL.md';
+    const human = ['.agent/skills/projeto/intacta/nota.md', '.kimi/skills/humana/SKILL.md'];
+    const manifest = '.pbai4devs/espelhos.conf';
+    const recorded = state(root);
+    recorded.clients = saved;
+    const original = '<!-- gerado: sincronizar-agentes -->\n';
+    const digest = value => createHash('sha256').update(value).digest('hex');
+    for (const path of [...owned, edited, staged]) {
+      put(root, path, original);
+      recorded.files[path] = digest(original);
+    }
+    put(root, edited, 'Apontamento que agora contém texto humano.\n');
+    for (const path of human) put(root, path, `Humano em ${path}\n`);
+    const stagedContents = 'Conteúdo conservado no índice e diferente da cópia de trabalho.\n';
+    put(root, staged, stagedContents);
+    const git = (...args) => {
+      const result = spawnSync('git', ['-C', root, ...args], { encoding: 'utf8' });
+      assert.equal(result.status, 0, result.stderr);
+      return result.stdout;
+    };
+    git('add', '-f', '--', staged);
+    put(root, staged, original);
+    const legacyManifest = read(root, manifest) + 'agente|.agent|agrupado\nagente|.kimi|agrupado\nformato|.kimi|skills|plano\n';
+    put(root, manifest, legacyManifest);
+    recorded.files[manifest] = digest(legacyManifest);
+    const originalState = `${JSON.stringify(recorded, null, 2)}\n`;
+    put(root, statePath, originalState);
+    const beforeIndex = readFileSync(join(root, '.git/index'));
+    const retained = new Map([edited, staged, ...human].map(path => [path, read(root, path)]));
+
+    const dryRun = cli(root, ['update', '--dry-run']);
+    for (const path of owned) assert.ok(dryRun.plan.some(item => item.path === path && item.action === 'remove'), path);
+    for (const path of retained.keys()) assert.ok(!dryRun.plan.some(item => item.path === path), path);
+    assert.equal(read(root, statePath), originalState);
+    assert.equal(read(root, manifest), legacyManifest);
+    for (const path of owned) assert.equal(read(root, path), original);
+
+    cli(root, ['update']);
+    const updated = state(root);
+    assert.deepEqual(updated.clients, expected);
+    assert.doesNotMatch(read(root, manifest), /\|\.(?:agent|kimi)(?:[|/]|$)/m);
+    for (const path of owned) assert.equal(existsSync(join(root, path)), false, path);
+    for (const [path, contents] of retained) assert.equal(read(root, path), contents, path);
+    for (const path of [...owned, ...retained.keys()]) assert.ok(!updated.files[path] && !updated.blocks[path], path);
+    assert.deepEqual(readFileSync(join(root, '.git/index')), beforeIndex);
+    assert.equal(git('show', `:${staged}`), stagedContents);
+    assert.equal(cli(root, ['update']).changed, false);
+  });
+});
+
 test('claude isolado, dependência do codex e persistência não criam clientes extras', t => {
   const root = fixture(t);
   cli(root, ['init', '--agents', 'claude']);

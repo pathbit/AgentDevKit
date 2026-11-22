@@ -386,14 +386,18 @@ export class ToolManager {
     catch (error) { issue ??= error.message; }
     return { ...config, platform: this.target, supported: runtime !== null, runtime: runtime ? { path: runtime.file, version: runtime.version } : null, installed, ...(issue ? { issue } : {}) };
   }
-  launchers(name) {
+  launchers(name, { verifyOnly = false } = {}) {
     this.entry(name);
-    const bin = sourcePath(this.root, join(this.home, 'bin'));
-    const launcher = sourcePath(this.root, join(bin, `${name}.mjs`));
+    const bin = storagePath(this.root, join(this.home, 'bin'), 'directory');
+    const launcher = storagePath(this.root, join(bin, `${name}.mjs`), 'file');
+    const content = Buffer.from(`#!/usr/bin/env node\nimport { main } from '../../scripts/preparar-ferramentas/SCRIPT.mjs';\ntry { process.exitCode = await main(['run', ${JSON.stringify(name)}, ...process.argv.slice(2)]); }\ncatch (error) { console.error(error.message); process.exitCode = 1; }\n`);
+    if (existsSync(launcher)) {
+      if (lstatSync(launcher).size !== content.length || !readFileSync(launcher).equals(content)) fail(`Atalho local divergente; arquivo preservado: ${launcher}`);
+      return;
+    }
+    if (verifyOnly) return;
     mkdirSync(bin, { recursive: true });
-    writeFileSync(launcher, `#!/usr/bin/env node\nimport { main } from '../../scripts/preparar-ferramentas/SCRIPT.mjs';\ntry { process.exitCode = await main(['run', ${JSON.stringify(name)}, ...process.argv.slice(2)]); }\ncatch (error) { console.error(error.message); process.exitCode = 1; }\n`);
-    chmodSync(launcher, 0o755);
-    for (const legacy of [name, `${name}.cmd`, `${name}.ps1`, `${name}.sh`]) rmSync(join(bin, legacy), { force: true });
+    writeFileSync(launcher, content, { flag: 'wx', mode: 0o755 });
   }
   migrate(name) {
     const { local, tool } = this.storage(name);
@@ -462,14 +466,14 @@ export class ToolManager {
       }
     }
   }
-  async install(name) { this.preflight([name]); return this.withLock(name, async () => {
+  async install(name) { this.preflight([name]); this.launchers(name, { verifyOnly: true }); return this.withLock(name, async () => {
     this.migrate(name);
     let installed;
     try { installed = this.check(name); } catch { /* Ausente ou quebrado: preparar uma instalacao. */ }
     if (installed) { this.launchers(name); return { ...installed, changed: false }; }
     return this.updateLocked(name);
   }); }
-  async update(name) { this.preflight([name]); return this.withLock(name, async () => { this.migrate(name); return this.updateLocked(name); }); }
+  async update(name) { this.preflight([name]); this.launchers(name, { verifyOnly: true }); return this.withLock(name, async () => { this.migrate(name); return this.updateLocked(name); }); }
   commitState(name, temporary) {
     const { local } = this.storage(name);
     renameSync(storagePath(this.root, temporary, 'file'), storagePath(this.root, join(local, 'CURRENT.json'), 'file'));

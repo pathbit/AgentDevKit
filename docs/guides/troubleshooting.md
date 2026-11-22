@@ -345,16 +345,14 @@ não devem ser versionados. Verifique com `git status` e `git check-ignore -v
 <caminho>`. Se um arquivo já estava rastreado, acrescentar um ignore não o
 retira automaticamente do Git; revise a remoção do índice sem apagar dados.
 
-O `.gitignore` do hub não controla pastas irmãs. O kit preserva as regras Git
-existentes; confira a visibilidade com `git check-ignore -v` e ajuste as regras
-do projeto quando necessário. Um bloco antigo em `info/exclude` pode afetar
-outras worktrees e não é removido automaticamente.
-O diagnóstico `shared-ignore-legacy` pode manter `doctor` e `sync --check` com
-pendências mesmo após um update; confira o bloco e seu efeito em cada worktree
-antes de decidir qualquer ajuste nas regras Git. O aviso reconhece apenas um
-marcador de início semelhante ao antigo: ele não prova autoria, integridade
-nem identifica todos os blocos alterados. As regras existentes continuam em
-vigor enquanto permanecerem no arquivo.
+O `.gitignore` do hub não controla pastas irmãs. Confira a visibilidade com
+`git check-ignore -v` e ajuste as regras do projeto quando necessário.
+`shared-ignore-legacy` indica que ainda há uma marcação antiga em
+`info/exclude`. Se `update --dry-run --json` planejar sua migração, execute
+`update` para retirar a marcação e as duplicatas comprovadas preservando as
+regras efetivas. O resultado informa onde está a cópia original. Se o bloco
+for compartilhado ou seu conteúdo estiver incerto, confira as regras em cada
+worktree antes de decidir qualquer ajuste.
 Avisos `artifact-coverage-unverified` e `artifact-unprotected` são informativos:
 eles indicam cobertura não comprovada ou artefatos visíveis, mas não bloqueiam
 o check isoladamente. Verifique-os antes de versionar arquivos locais.
@@ -372,7 +370,7 @@ Uma regra iniciada por `!` é uma exceção. Sem correspondência, `check-ignore
 retorna 1; erros operacionais devem ser investigados separadamente. A opção
 `--no-index` consulta regras mesmo para arquivos rastreados e não informa se
 o arquivo está no índice. Revise o conteúdo e os efeitos antes de decidir
-qualquer alteração; o kit não remove o bloco automaticamente.
+qualquer alteração manual.
 
 Se aparecer `E_GIT_ENV`, há uma variável de ambiente que redireciona o
 repositório ou o índice Git. Revise `GIT_DIR`, `GIT_WORK_TREE`, `GIT_COMMON_DIR`

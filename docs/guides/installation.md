@@ -122,16 +122,16 @@ identifica a licença dos recursos do AgentDevKit, sem redefinir a do projeto.
 ## Git e migração
 
 O ignore de `.pbai4devs` controla somente sua própria árvore. O kit preserva
-os arquivos ignore existentes, a configuração Git, o índice e o arquivo
-`.git/info/exclude`, compartilhado entre worktrees. Ele não cria ignores nas
-pastas dos clientes.
+a configuração Git, o índice e as regras de ignore do projeto. Apontamentos,
+resultados e arquivos privados podem aparecer no Git. Antes de adicioná-los,
+confira o status e ajuste as regras do projeto.
 
-Apontamentos, resultados e arquivos privados podem aparecer no Git. Antes de
-adicioná-los, confira o status e ajuste voluntariamente as regras do projeto.
-`doctor` e `sync --check` avisam sobre saídas visíveis; credenciais visíveis,
-artefatos já rastreados e blocos antigos no exclude são problemas informados.
-Regras antigas no exclude continuam afetando outras worktrees; o kit não as
-remove automaticamente.
+Ao atualizar ou sincronizar, o kit migra o bloco de exclusões da 0.0.21
+quando comprova seu conteúdo e há uma única worktree. Remove a marcação e
+as duplicatas do bloco, preserva a ordem das regras efetivas e guarda o
+original em `.agent-tests/agentdevkit/ignore-migrations/`. Blocos alterados
+ou compartilhados ficam pendentes para revisão. `doctor` e `sync --check`
+também apontam credenciais visíveis e artefatos já rastreados.
 
 Ignorar não remove arquivos já rastreados. A equipe decide como ajustar o
 rastreamento. `--dry-run` e `sync --check` não alteram o índice.
@@ -140,8 +140,9 @@ rastreamento. `--dry-run` e `sync --check` não alteram o índice.
 
 Use a versão desejada do pacote para executar `update`. A escolha salva
 continua válida; `agents` consulta e `agents codex,claude` altera a seleção.
-`agents all` habilita todos. As pastas compartilhadas permanecem quando
-necessárias para outro cliente, como `.agents` para Codex e Antigravity.
+`agents all` habilita os clientes ativos. Antigravity usa `.agents`, que
+também serve ao Codex, e Kimi usa `.kimi-code`. A atualização remove
+apontamentos comprovadamente gerados em `.agent` e `.kimi`.
 
 Confira `update --dry-run --json` antes de atualizar um projeto existente.
 Revise arquivos criados, atualizados e removidos, conflitos e `preserved`.
