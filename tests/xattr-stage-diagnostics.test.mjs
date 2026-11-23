@@ -2,7 +2,7 @@ import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { devNull, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -43,13 +43,24 @@ function preparePackages(t) {
   for (const code of ['E_PROTECTED_METADATA', 'E_METADATA_UNSUPPORTED']) {
     const destination = join(work, code); mkdirSync(destination);
     const unpack = execute('tar', ['-xzf', archive, '-C', destination], { cwd: work, env }); assert.equal(unpack.status, 0, unpack.stderr);
-    const root = join(destination, 'package'), install = join(root, 'src/install.mjs');
-    const text = readFileSync(install, 'utf8');
-    const needle = 'try { synchronized = synchronizePrivateStage({ root: stage, force: true, localIgnores: false, generateEntrypoints: false, recordDerivedState: false, outputBlocked, output() {} }, stageHandle); }';
-    assert.equal(text.split(needle).length, 2, 'call site deve ser único');
-    // Inject only into the disposable packed copy, with no environment override.
-    const injection = `try { throw Object.assign(new Error('${code}: .gemini/commands/SYNTHETIC_STAGE_ONLY.toml'), { code: '${code}', path: '.gemini/commands/SYNTHETIC_STAGE_ONLY.toml' }); }`;
-    writeFileSync(install, text.replace(needle, injection));
+    const root = join(destination, 'package');
+    const sync = join(root, '.pbai4devs/scripts/sincronizar-agentes');
+    const module = join(sync, 'synchronize.mjs');
+    // Keep the real preview in the disposable package. Fail only when the
+    // installer applies the private-stage plan.
+    renameSync(module, join(sync, 'synchronize.real.mjs'));
+    const stagedPath = '.codex/commands/SYNTHETIC_STAGE_ONLY.md';
+    writeFileSync(module, `
+export * from './synchronize.real.mjs';
+import { synchronizePrivateStage as original } from './synchronize.real.mjs';
+
+export function synchronizePrivateStage(options, handle) {
+  if (options?.check) return original(options, handle);
+  const code = ${JSON.stringify(code)};
+  const path = ${JSON.stringify(stagedPath)};
+  throw Object.assign(new Error(code + ': ' + path), { code, path });
+}
+`);
     prepared[code] = root;
   }
   t.diagnostic(`espaço sintético de preparação: ${sizeOf(work)} bytes, incluindo pacote, cache isolado e duas extrações`);
