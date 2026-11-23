@@ -22,10 +22,9 @@ npx @pathbit/agentdevkit sync --check --target "./meu projeto" --json
 para o aplicativo, use os testes do próprio projeto.
 Antes de compartilhar uma saída, remova dados privados e caminhos pessoais.
 
-Se a instalação usava só o Gemini CLI, consulte `agentdevkit agents`.
-Simule `agentdevkit update --agents none --dry-run` para ficar com o hub ou
-troque `none` pelo ID de outro cliente. Confira os arquivos gerenciados e
-preservados antes de aplicar. [Migração de clientes][clients]
+Se `doctor` indicar `client-selection-retired`, siga a
+[migração de clientes][retired-clients] para escolher um destino e revisar o
+plano de atualização.
 
 No OpenCode 2, uma consulta imediata isolada de `skill.list` pode retornar uma
 lista vazia mesmo com os arquivos presentes. Confira novamente no servidor já
@@ -428,6 +427,7 @@ Use as [issues do projeto][issues] ou volte ao [índice](../README.md).
 
 [cli]: cli.md
 [clients]: installation.md#atualizar-e-escolher-agentes
+[retired-clients]: ../../.pbai4devs/COMPATIBILIDADE.md#migrar-pastas-legadas
 [runtime]: installation.md#pré-requisitos
 [tools]: ../../.pbai4devs/scripts/preparar-ferramentas/README.md
 [issues]: https://github.com/pathbit/AgentDevKit/issues

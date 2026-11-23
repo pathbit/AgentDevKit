@@ -4,6 +4,15 @@ description: Alterações verificáveis por versão do AgentDevKit.
 
 # Changelog
 
+## 0.0.37
+
+- Gera subagentes nativos do ZCode com ferramentas explícitas por função e
+  preserva perfis próprios do projeto quando ocupam o mesmo caminho.
+- Distingue os recursos de projeto e pessoais do Copilot, ajusta seu modelo
+  de ignore e exclui pastas de agentes da detecção da aplicação.
+- Centraliza a orientação para migrar do Gemini CLI e corrige os exemplos de
+  pastas geradas. Preserva as entradas que o Antigravity continua usando.
+
 ## 0.0.36
 
 - Retira o Gemini CLI da seleção e da geração de recursos. Na atualização,

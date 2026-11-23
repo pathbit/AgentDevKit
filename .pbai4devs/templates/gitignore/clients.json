@@ -7,7 +7,8 @@
   ".opencode": { "allow": ["opencode.json", "opencode.jsonc"] },
   ".github": {
     "allow": [
-      "copilot-instructions.md", "instructions/", "prompts/", "workflows/",
+      "copilot-instructions.md", "copilot/settings.json", "allowed_models.txt",
+      "instructions/", "prompts/", "workflows/",
       "actions/", "CODEOWNERS", "dependabot.yml", "ISSUE_TEMPLATE/",
       "PULL_REQUEST_TEMPLATE/", "PULL_REQUEST_TEMPLATE.md", "FUNDING.yml"
     ]

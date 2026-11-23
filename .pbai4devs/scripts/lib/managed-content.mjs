@@ -3,6 +3,7 @@ import { readdirSync } from 'node:fs';
 
 export const managedBegin = '<!-- BEGIN AGENTDEVKIT -->';
 export const managedEnd = '<!-- END AGENTDEVKIT -->';
+export const nativeZcodeAgent = path => /^\.zcode\/agents\/[^/]+\.md$/.test(path);
 const digest = value => createHash('sha256').update(value).digest('hex');
 const fail = message => { throw Object.assign(new Error(message), { code: 'E_MANAGED_BLOCK' }); };
 

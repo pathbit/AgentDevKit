@@ -34,8 +34,9 @@ O inspetor revalida a identidade dos caminhos durante a leitura; isso detecta
 mudanças, mas não é uma garantia atômica contra toda troca simultânea.
 
 `exclusions` descreve pastas de clientes, artefatos e caches fora do inventário.
-Documentos humanos em `.github`, exemplos, wiki e RFCs são incluídos; os
-apontamentos gerados em `.github/skills`, agentes e comandos ficam de fora.
+Documentos humanos em `.github`, exemplos, wiki e RFCs são incluídos. O
+inventário exclui apontamentos gerados em `.github/skills`, agentes e comandos,
+além de diretórios de clientes como `.zcode` e de configuração como `.copilot`.
 
 O script não cria nem altera arquivos. Leia os documentos relevantes antes de
 planejar complementos; preserve sua estrutura e use templates só para lacunas.

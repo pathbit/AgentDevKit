@@ -15,19 +15,22 @@ function legacyState(root, clients) {
   const generated = '.gemini/commands/owned.toml';
   const retained = '.gemini/commands/team.toml';
   const mixed = '.gemini/commands/mixed.toml';
+  const antigravityConfig = '.gemini/config.json';
+  const config = '{"personal_customization_dir":"people/{user}"}\n';
   const own = 'description = "Instrução da equipe"\nprompt = "Revise o histórico."\n';
   const text = mergeTomlContent(own, '@{.pbai4devs/commands/revisar-entrega/COMMAND.md}\n\n{{args}}');
   const generatedText = 'prompt = "Referência gerenciada"\n';
   put(root, generated, generatedText);
   put(root, retained, own);
   put(root, mixed, text.text);
+  put(root, antigravityConfig, config);
   metadata.clients = clients;
   metadata.files[generated] = digest(generatedText);
   metadata.blocks[mixed] = text.sha256;
   put(root, statePath, JSON.stringify(metadata));
-  const added = spawnSync('git', ['-C', root, 'add', '-f', '--', retained], { encoding: 'utf8' });
+  const added = spawnSync('git', ['-C', root, 'add', '-f', '--', retained, antigravityConfig], { encoding: 'utf8' });
   assert.equal(added.status, 0, added.stderr);
-  return { generated, retained, mixed, own, restored: stripTomlContent(text.text, text.sha256) };
+  return { generated, retained, mixed, own, antigravityConfig, config, restored: stripTomlContent(text.text, text.sha256) };
 }
 
 test('Gemini CLI não integra instalações novas nem aparece em agents', { timeout: 120000 }, t => {
@@ -80,13 +83,14 @@ for (const clients of [['gemini'], ['codex', 'gemini']]) {
   test(`atualiza a seleção legada ${clients.join(',')}`, { timeout: 120000 }, t => {
     const root = fixture(t);
     cli(root, ['init', '--agents', 'codex']);
-    const { generated, retained, mixed, own, restored } = legacyState(root, clients);
+    const { generated, retained, mixed, own, antigravityConfig, config, restored } = legacyState(root, clients);
     const index = readFileSync(join(root, '.git/index'));
     const previous = read(root, statePath);
     const onlyRetired = clients.length === 1;
     const selectionInfo = cli(root, ['agents']);
     assert.deepEqual(selectionInfo.clients, onlyRetired ? [] : ['codex']);
-    const selection = onlyRetired ? ['--agents', 'codex'] : [];
+    const destination = onlyRetired ? 'antigravity' : 'codex';
+    const selection = onlyRetired ? ['--agents', destination] : [];
     if (onlyRetired) {
       assert.equal(cli(root, ['agents', 'remove', 'codex', '--dry-run'], 1).error.code, 'E_CLIENTS_RETIRED');
       const blocked = cli(root, ['update', '--dry-run'], 1);
@@ -102,12 +106,15 @@ for (const clients of [['gemini'], ['codex', 'gemini']]) {
     }
     const preview = cli(root, ['update', '--dry-run', ...selection]);
     assert.ok(preview.plan.some(item => item.path === generated && item.action === 'remove'));
+    assert.ok(!preview.plan.some(item => item.path === antigravityConfig));
     assert.equal(read(root, statePath), previous);
     cli(root, ['update', ...selection]);
-    assert.deepEqual(state(root).clients, ['codex']);
+    assert.deepEqual(state(root).clients, [destination]);
+    if (onlyRetired) assert.ok(existsSync(join(root, 'GEMINI.md')));
     assert.equal(existsSync(join(root, generated)), false);
     assert.equal(read(root, retained), own);
     assert.equal(read(root, mixed), restored);
+    assert.equal(read(root, antigravityConfig), config);
     assert.deepEqual(readFileSync(join(root, '.git/index')), index);
     assert.doesNotMatch(read(root, '.pbai4devs/espelhos.conf'), /\.gemini/);
     cli(root, ['sync', '--check']);

@@ -19,7 +19,7 @@ test('destinos são específicos por cliente e tipo', () => {
   assert.equal(destination('codex', 'skills', skill), '.agents/skills/projeto/criar-skill/SKILL.md');
   assert.equal(destination('codex', 'agents', agent), '.codex/agents/revisor/AGENT.md');
   assert.equal(destination('copilot', 'agents', agent), '.github/agents/revisor.agent.md');
-  assert.equal(destination('zcode', 'agents', agent), '.zcode/agents/revisor/AGENT.md');
+  assert.equal(destination('zcode', 'agents', agent), '.zcode/agents/revisor.md');
   assert.throws(() => destination('outro', 'agents', agent));
 });
 test('estrutura exige origem e referência ao caminho correto', t => {

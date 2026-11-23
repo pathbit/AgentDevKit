@@ -1,6 +1,6 @@
 import { posix } from 'node:path';
 import { canMigrateClaudeReference, isLegacyExact } from '../../.pbai4devs/scripts/lib/claude-legacy-exact.mjs';
-import { canonicalEntrypoint, mergeManagedContent } from '../../.pbai4devs/scripts/lib/managed-content.mjs';
+import { canonicalEntrypoint, mergeManagedContent, nativeZcodeAgent } from '../../.pbai4devs/scripts/lib/managed-content.mjs';
 import { hash, fail, read, sameBytes } from './filesystem.mjs';
 import { stagedContains } from './git-index.mjs';
 import { nativeMarkdown, blockDigest } from './ownership.mjs';
@@ -106,6 +106,9 @@ export function reconcileNativeOutputs({
       && !Object.hasOwn(removedFiles, path) && current.equals(content)) {
       recordPreserved(path, 'existing-reference-satisfied');
       satisfiedReferences.add(path); desired.delete(path); continue;
+    }
+    if (nativeZcodeAgent(path)) {
+      recordPreserved(path, 'zcode-agent-preserved'); desired.delete(path); continue;
     }
     const source = content.toString('utf8'), marker = '<!-- gerado: sincronizar-agentes -->';
     const index = source.indexOf(marker);

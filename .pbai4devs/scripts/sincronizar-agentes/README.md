@@ -48,10 +48,11 @@ O [comando agêntico](../../commands/sincronizar/COMMAND.md) usa a CLI: consulte
 `sync --dry-run --json`, aplique `sync` e confira `sync --check`. O script
 direto usa o manifesto existente; seu `--check` não detecta YAMLs nativos ainda
 ausentes desse manifesto. A CLI recompõe o manifesto no planejamento.
-Recursos nativos humanos recebem um bloco curto com a referência ao hub.
-Texto, frontmatter e nomes existentes são preservados. O estado guarda só o
-hash desse bloco; edições externas continuam permitidas. Um bloco alterado
-não é sobrescrito por `--force`. Links humanos continuam opacos.
+Recursos nativos compatíveis podem receber um bloco curto com a referência ao
+hub. O estado guarda o hash do bloco e permite edições externas. Um bloco
+alterado permanece protegido mesmo com `--force`. Links humanos continuam
+opacos. Um subagente próprio em `.zcode/agents/<nome>.md` é preservado por
+inteiro quando ocupa o caminho que o kit usaria.
 Instalações legadas do Gemini CLI podem ter uma contribuição do kit no
 `prompt` TOML. O sincronizador reconhece seu formato na migração.
 O sync direto recusa linhas do manifesto que apontam para `.gemini`, inclusive
@@ -130,4 +131,4 @@ O estado derivado registra remoções comprovadas para reconciliá-las no próxi
   [apply.mjs](apply.mjs) aplica o plano e registra a recuperação.
   [backup.mjs](backup.mjs) verifica as cópias adicionais pedidas por `--force`.
 
-[migration]: ../../COMPATIBILIDADE.md#escolher-clientes
+[migration]: ../../COMPATIBILIDADE.md#migrar-pastas-legadas

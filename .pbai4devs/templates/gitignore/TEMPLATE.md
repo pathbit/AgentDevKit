@@ -11,6 +11,9 @@ ignores existentes, o índice e `.git/info/exclude`; confira a visibilidade com
 `git status` e `git check-ignore -v` e ajuste as regras do projeto quando
 necessário. Pastas de clientes podem conter arquivos humanos e dados privados.
 Arquivos já rastreados permanecem no índice; o kit não os desindexa.
+Para Copilot CLI, preserve `.github/copilot/settings.json` como configuração
+da equipe e ignore a versão `settings.local.json`. Se `COPILOT_HOME` apontar
+para dentro do projeto, ignore o diretório pessoal escolhido.
 Ignore binários baixados por local, não por extensão: `.bat`, `.exe` e outros
 arquivos podem ser scripts ou fixtures necessários. Não use regras genéricas
 como `Release/`, `Scripts/` ou `Lib/` que escondam fontes e modelos.
@@ -21,6 +24,9 @@ maiúsculas/minúsculas, inclusive `.playwright-mcp`.
 # ---------------------------
 # CUSTOM IGNORE
 # ---------------------------
+
+## Ajustes locais do Copilot CLI
+/.github/copilot/settings.local.json
 
 ## Testes e artefatos locais de agentes
 /.[Aa][Gg][Ee][Nn][Tt]-[Tt][Ee][Ss][Tt][Ss]/

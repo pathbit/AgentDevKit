@@ -11,7 +11,8 @@ import { adapterManifestHeader } from '../lib/adapter-manifest.mjs';
 
 const repository = fs.realpathSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..'));
 const defaultAgents = ['.agents', '.claude', '.codex', '.cursor', '.github', '.opencode'];
-const defaultExcluded = ['.git', '.pbai4devs', '.agent-tests', ...defaultAgents, '.agent', '.gemini', '.vscode', 'node_modules', 'vendor', 'target', 'dist', 'build', 'bin', 'obj', '.venv', 'venv', '.cache', '.next', '.nuxt', 'coverage', 'test-results', 'playwright-report', 'blob-report', 'tmp', 'temp', 'examples'];
+const otherClientDirectories = ['.agent', '.gemini', '.vscode', '.copilot', '.zcode', '.zai', '.kimi', '.kimi-code', '.minimax', '.mimocode', '.dsh'];
+const defaultExcluded = ['.git', '.pbai4devs', '.agent-tests', ...defaultAgents, ...otherClientDirectories, 'node_modules', 'vendor', 'target', 'dist', 'build', 'bin', 'obj', '.venv', 'venv', '.cache', '.next', '.nuxt', 'coverage', 'test-results', 'playwright-report', 'blob-report', 'tmp', 'temp', 'examples'];
 const manifests = new Map([
   ['package.json', 'javascript'], ['deno.json', 'javascript'], ['deno.jsonc', 'javascript'],
   ['pyproject.toml', 'python'], ['Pipfile', 'python'], ['setup.py', 'python'], ['setup.cfg', 'python'],
@@ -302,7 +303,6 @@ function maturity(root, report) {
 
 const documentRoles = new Set(['readme', 'contribuicao', 'changelog', 'seguranca', 'adrs', 'prd', 'ux_ui', 'design', 'roadmap', 'releases', 'specs', 'tarefas']);
 const documentLimits = { maxDepth: 12, maxEntries: 25000, maxFiles: 2000, maxFileBytes: 2 * 1024 * 1024, maxTotalBytes: 16 * 1024 * 1024 };
-const documentClients = [...defaultAgents, '.zcode', '.zai', '.kimi', '.kimi-code', '.minimax', '.mimocode', '.dsh'];
 const documentName = name => /\.(?:md|mdx|rst|adoc)$/i.test(name) || /^(?:readme|contributing|changelog|history|security|licen[cs]e|copying|notice|authors|code_of_conduct|architecture|design|roadmap)(?:\.txt)?$/i.test(name);
 const documentRole = file => {
   const name = path.posix.basename(file).toLowerCase();
@@ -328,7 +328,7 @@ export function inspectDocumentation(root, limits = {}, { excludeFixtures = fals
   for (const [key, value] of Object.entries(bounds)) {
     if (!(key in documentLimits) || !Number.isSafeInteger(value) || value < 0 || value > documentLimits[key]) throw new Error('Limite documental invalido.');
   }
-  const ignored = new Set([...defaultExcluded, ...documentClients, ...agentRoots(root)].filter(name => !['examples', '.github'].includes(name)).map(name => name.toLowerCase()));
+  const ignored = new Set([...defaultExcluded, ...agentRoots(root)].filter(name => !['examples', '.github'].includes(name)).map(name => name.toLowerCase()));
   if (excludeFixtures) for (const name of surveyFixtures) ignored.add(name);
   const excludedPaths = ['examples/generated', '.context/runtime', '.context/workflow', '.context/harness',
     ...['skills', 'agents', 'commands', 'rules', 'instructions', 'prompts'].map(name => `.github/${name}`)];

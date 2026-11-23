@@ -10,7 +10,7 @@ import { main } from '../src/cli.mjs';
 import { applyPlan, inspect, planInstallation } from '../src/install.mjs';
 import { synchronize } from '../.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs';
 import { gitPathsOverlap } from '../.pbai4devs/scripts/lib/git-environment.mjs';
-import { extractManagedBlock, managedBlockDigest } from '../.pbai4devs/scripts/lib/managed-content.mjs';
+import { extractManagedBlock, managedBlockDigest, mergeManagedContent } from '../.pbai4devs/scripts/lib/managed-content.mjs';
 
 const repository = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const hash = content => createHash('sha256').update(content).digest('hex');
@@ -164,6 +164,77 @@ test('instala e atualiza sobre agentes configurados preservando arquivos, links 
   assert.equal(git('ls-files', '--stage', '-z'), index);
   assert.equal(git('diff', '--cached', '--binary'), staged);
   assert.deepEqual(readFileSync(join(directory, 'outside/config.json')), outside);
+});
+
+test('instalador e sincronizador preservam o prompt ZCode humano e atualizam o perfil gerenciado', async t => {
+  const { root, git } = fixture(t);
+  const human = '.zcode/agents/revisor.md';
+  const managed = '.zcode/agents/documentador.md';
+  const source = '.pbai4devs/agents/documentador/AGENT.md';
+  const state = '.pbai4devs/state/agentdevkit.json';
+  const installedBody = '---\r\nname: revisor\r\ndescription: Revisor da equipe.\r\ntools: [Read]\r\n---\r\n\r\n# Revisão da equipe\r\n';
+  put(root, human, installedBody);
+  git('add', '--', human);
+  const userBytes = Buffer.from(installedBody + '\r\nUse os critérios da equipe.\r\n');
+  put(root, human, userBytes);
+  const index = readFileSync(join(root, '.git/index'));
+  const assertPreserved = result => {
+    assert.ok(result.preserved.some(item => item.path === human && item.reason === 'zcode-agent-preserved'));
+    assert.deepEqual(readFileSync(join(root, human)), userBytes);
+    assert.deepEqual(readFileSync(join(root, '.git/index')), index);
+  };
+  const install = ['init', '--yes', '--agents', 'zcode'];
+  assertPreserved(await cli(root, [...install, '--dry-run']));
+  assert.equal(existsSync(join(root, managed)), false);
+  assertPreserved(await cli(root, install));
+  await cli(root, ['doctor']);
+
+  const original = readFileSync(join(root, source), 'utf8');
+  put(root, source, original.replace(/^# .+$/m, '# Documentador atualizado pela CLI'));
+  assertPreserved(await cli(root, ['update', '--yes']));
+  assert.match(readFileSync(join(root, managed), 'utf8'), /^# Documentador atualizado pela CLI$/m);
+
+  put(root, source, original.replace(/^# .+$/m, '# Documentador atualizado pelo sincronizador'));
+  const messages = [];
+  const sync = { root, force: true, output: message => messages.push(message) };
+  const synchronized = synchronize(sync);
+  assert.equal(synchronized.exitCode, 0);
+  assertPreserved(synchronized);
+  assert.ok(messages.some(message => message.includes(human)));
+  assert.match(readFileSync(join(root, managed), 'utf8'), /^# Documentador atualizado pelo sincronizador$/m);
+  assertPreserved(synchronize({ ...sync, check: true }));
+  assertPreserved(await cli(root, ['sync', '--check']));
+  const saved = JSON.parse(readFileSync(join(root, state)));
+  assert.equal(saved.files[human], undefined);
+  assert.equal(saved.blocks[human], undefined);
+});
+
+test('mantém um bloco ZCode misto registrado sem regenerar ou consumir seu histórico', async t => {
+  const { root } = fixture(t);
+  const path = '.zcode/agents/revisor.md';
+  const installedPath = '.zcode/agents/documentador.md';
+  const state = '.pbai4devs/state/agentdevkit.json';
+  const overlay = '.pbai4devs/state/derived.json';
+  await cli(root, ['init', '--yes', '--agents', 'zcode']);
+  const { text, sha256 } = mergeManagedContent('# Agente da equipe\n', 'Referência anterior a revisar.');
+  const prior = JSON.parse(readFileSync(join(root, state)));
+  delete prior.files[path];
+  delete prior.files[installedPath];
+  prior.blocks[installedPath] = sha256;
+  put(root, state, JSON.stringify(prior));
+  put(root, path, text);
+  put(root, installedPath, text);
+  put(root, overlay, JSON.stringify({ schemaVersion: 1, entries: {}, blocks: { [path]: sha256 } }));
+  assert.equal(synchronize({ root, force: true, output() {} }).exitCode, 0);
+  await cli(root, ['update', '--yes']);
+  assert.equal(readFileSync(join(root, path), 'utf8'), text);
+  assert.equal(readFileSync(join(root, installedPath), 'utf8'), text);
+  assert.equal(JSON.parse(readFileSync(join(root, overlay))).blocks[path], sha256);
+  const saved = JSON.parse(readFileSync(join(root, state)));
+  assert.equal(saved.files[path], undefined);
+  assert.equal(saved.files[installedPath], undefined);
+  assert.equal(saved.blocks[installedPath], sha256);
+  await cli(root, ['doctor']);
 });
 
 test('preserva raiz externa, link pendente e ciclo preservando os destinos', async t => {

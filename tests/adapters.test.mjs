@@ -83,6 +83,62 @@ test('clientes recebem grupos e excecoes nativas pesquisadas', t => {
   assert.equal(synchronize({ localIgnores: false, generateEntrypoints: false, root, check: true, output() {} }).exitCode, 0);
 });
 
+test('migra agentes ZCode para arquivos nativos sem alterar o índice ou referências editadas', t => {
+  const root = fixture(t);
+  const config = '.pbai4devs/espelhos.conf';
+  const old = '.zcode/agents/revisor/AGENT.md';
+  const edited = '.zcode/agents/equipe/AGENT.md';
+  const native = '.zcode/agents/revisor.md';
+  const sidecar = '.pbai4devs/agents/revisor/zcode.yaml';
+  write(root, '.pbai4devs/agents/equipe/AGENT.md', '---\nname: equipe\ndescription: Perfil de equipe.\n---\n\n# Equipe\n');
+  write(root, sidecar, read(project, sidecar));
+  write(root, config, 'agente|.zcode|agrupado\nformato|.zcode|skills|plano\nformato|.zcode|commands|plano\n');
+  const options = { localIgnores: false, generateEntrypoints: false, root, output() {} };
+  assert.equal(synchronize(options).exitCode, 0);
+  assert.ok(existsSync(join(root, old)));
+  assert.ok(!existsSync(join(root, native)));
+  const human = read(root, edited) + '\nAnotação da equipe.\n';
+  write(root, edited, human);
+  const staged = spawnSync('git', ['-C', root, 'add', '--', edited], { encoding: 'utf8' });
+  assert.equal(staged.status, 0, staged.stderr);
+  const index = readFileSync(join(root, '.git/index'));
+
+  assert.throws(() => normalizeClients('.zcode'), /Cliente desconhecido/);
+  assert.deepEqual(writeAdapterManifest(root, { clients: 'ZCODE' }).clients, ['zcode']);
+  assert.ok(read(root, config).includes(`nativo|${native}|.pbai4devs/agents/revisor/AGENT.md|${sidecar}`));
+  assert.equal(synchronize(options).exitCode, 0);
+  assert.ok(!existsSync(join(root, old)));
+  assert.equal(read(root, edited), human);
+  const generated = read(root, native);
+  assert.match(generated, /^tools: \[Read, Grep, Glob\]$/m);
+  assert.match(generated, /\[origem\]\(\.\.\/\.\.\/\.pbai4devs\/agents\/revisor\/AGENT\.md\)/);
+  assert.equal(synchronize({ ...options, check: true }).exitCode, 0);
+  assert.deepEqual(readFileSync(join(root, '.git/index')), index);
+});
+
+test('perfis do kit no ZCode recebem as ferramentas previstas para cada função', t => {
+  const root = fixture(t);
+  const agents = '.pbai4devs/agents';
+  const profiles = readdirSync(join(project, agents), { withFileTypes: true })
+    .filter(entry => entry.isDirectory() && existsSync(join(project, agents, entry.name, 'AGENT.md')))
+    .map(entry => entry.name);
+  assert.ok(profiles.length > 0);
+  for (const name of profiles) {
+    for (const file of ['AGENT.md', 'zcode.yaml']) {
+      const path = `${agents}/${name}/${file}`;
+      write(root, path, read(project, path));
+    }
+  }
+  writeAdapterManifest(root, { clients: 'zcode' });
+  assert.equal(synchronize({ localIgnores: false, generateEntrypoints: false, root, output() {} }).exitCode, 0);
+  for (const name of profiles) {
+    const scope = read(project, `${agents}/${name}/claude.yaml`).match(/^tools: (.+)$/m)?.[1];
+    assert.ok(scope, name);
+    const native = read(root, `.zcode/agents/${name}.md`);
+    assert.equal(native.match(/^tools: (.+)$/m)?.[1], `[${scope}]`, name);
+  }
+});
+
 test('regra Git no Cursor usa relevância e mantém bytes do índice da fixture', t => {
   const root = fixture(t);
   const rule = '.pbai4devs/rules/git/RULE.md', metadata = '.pbai4devs/rules/git/cursor.yaml';

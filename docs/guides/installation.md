@@ -195,17 +195,8 @@ antes de aplicar a mudança de seleção.
 `sync` usa as fontes já instaladas e não baixa uma nova versão. Consulte a
 [referência da CLI](cli.md) para todos os comandos.
 
-Antigravity usa `.agents`, que também abriga as skills do Codex, e Kimi usa
-`.kimi-code`. A atualização remove apontamentos comprovadamente gerados em
-`.agent` e `.kimi`.
-
-A partir da versão `0.0.36`, o kit deixa de criar ou renovar apontamentos em
-`.gemini/`. Se uma instalação usava somente Gemini CLI, escolha outro cliente
-ou `none` com `update --agents <id> --dry-run`. Nas instalações com outros
-clientes salvos, `update` conserva esses IDs. A migração retira somente a
-contribuição do kit que for comprovada e preserva conteúdo próprio.
-`GEMINI.md` continua sendo a entrada do Antigravity. Consulte a
-[migração de clientes][migracao].
+Para atualizar instalações com pastas antigas do Antigravity, Kimi ou Gemini
+CLI, consulte a [migração de clientes][migracao].
 
 ## Preservação dos arquivos
 
@@ -258,7 +249,7 @@ Se houver erro, consulte [solução de problemas](troubleshooting.md).
 [Wiki](../README.md) · [Spec de segurança][spec]
 
 [bootstrap]: ../../.pbai4devs/scripts/preparar-ferramentas/BOOTSTRAP.md
-[migracao]: ../../.pbai4devs/COMPATIBILIDADE.md#escolher-clientes
+[migracao]: ../../.pbai4devs/COMPATIBILIDADE.md#migrar-pastas-legadas
 [spec]: ../specs/security-ecosystem/SPEC.md
 [tokens]: https://github.com/settings/tokens
 [github-auth]: https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-npm-registry#authenticating-to-github-packages

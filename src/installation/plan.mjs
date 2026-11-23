@@ -242,6 +242,7 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
     const retiredClaude = new Set();
     const wholeRecords = [previous?.files || {}, derivedEntries, derivedFiles];
     for (const path of new Set(wholeRecords.flatMap(record => Object.keys(record)))) if (!desired.has(path)) {
+      if (preserved.get(path)?.reason === 'zcode-agent-preserved') continue;
       if (path === '.gitignore' || path.endsWith('/.gitignore')) { if (read(target, path)) recordPreserved(path, 'existing-ignore'); continue; }
       if (migration && path.startsWith('.pbai4devs/estado/')) continue;
       if (path === '.gitignore') { recordPreserved(path, 'project-owned'); continue; }
@@ -262,6 +263,7 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
       const path = canonicalEntrypoint(recordedPath) ? entryPaths.get(canonicalEntrypoint(recordedPath)) : recordedPath;
       if (desired.has(path)) continue;
       if (changes.some(change => change.path === path)) continue;
+      if (preserved.get(path)?.reason === 'zcode-agent-preserved') continue;
       if (unknownRemovedFiles.has(path)) { recordPreserved(path, 'removed-file-unverified'); continue; }
       if (path === '.gitignore' || path.endsWith('/.gitignore')) { if (read(target, path)) recordPreserved(path, 'existing-ignore'); continue; }
       if (path.startsWith('.claude/rules/')) {

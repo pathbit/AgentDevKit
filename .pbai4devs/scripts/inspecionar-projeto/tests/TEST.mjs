@@ -329,10 +329,16 @@ test('descobre documentação real sem impor caixa, pasta docs ou frontmatter', 
   const content = 'DOC_CONTENT_MUST_NOT_BE_EMITTED_182711';
   for (const name of ['Readme.md', 'CONTRIBUTING.rst', 'SECURITY.adoc', 'History.md', 'ARCHITECTURE.md', 'AGENTS.md', 'LICENSE', 'examples/README', '_examples/server/README.md', 'wiki/guide.mdx', 'rfcs/001-change.md', 'packages/docs/content/api.mdx', '.github/CONTRIBUTING.md', '.github/SECURITY.md', '.github/copilot-instructions.md']) file(name, content);
   for (const name of ['node_modules/lib/README.md', '.pbai4devs/README.md', '.claude/skills/private/SKILL.md', '.github/skills/demo/SKILL.md', '.github/agents/revisor.agent.md', 'examples/generated/fixture/README.md', '.PLAYWRIGHT-MCP/README.md', 'tmp/README.md']) file(name, content);
+  for (const dir of ['.Copilot', '.zcode', '.kimi-code', '.minimax', '.mimocode', '.dsh']) {
+    file(dir + '/README.md', content);
+    file(dir + '/package.json', '{"name":"client-cache"}');
+  }
   const result = run();
   assert.equal(result.status, 0, result.stderr);
   const docs = result.report.documentation;
   assert.equal(docs.files.length, 15);
+  assert.ok(docs.exclusions.directories.includes('.copilot'));
+  assert.deepEqual(result.report.manifests, [], 'configuração de clientes não vira manifesto da aplicação');
   assert.equal(docs.files.find(item => item.path === 'Readme.md').role, 'readme');
   assert.equal(docs.files.find(item => item.path === 'rfcs/001-change.md').role, 'decision');
   assert.equal(docs.files.find(item => item.path === 'ARCHITECTURE.md').role, 'design');

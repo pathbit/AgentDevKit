@@ -21,6 +21,11 @@ export function planStateRecords({
     if (block) manifest.blocks[path] = block;
     else manifest.files[path] = hash(content);
   }
+  for (const [path, { reason }] of preserved) {
+    if (reason === 'zcode-agent-preserved' && installedState?.blocks?.[path] && !removedBlocks.includes(path)) {
+      manifest.blocks[path] = installedState.blocks[path];
+    }
+  }
   // A standalone sync records its proven outputs separately. During a later
   // check/sync, compare that overlay before declaring the installation state
   // stale; update still consolidates it into the main state transactionally.
@@ -96,7 +101,7 @@ export function planStateRecords({
   if (nextDerivedBytes && Object.keys(derivedBlocks).length) {
     const finalState = JSON.parse(stateContent);
     const remaining = Object.fromEntries(Object.entries(derivedBlocks).filter(([path, digest]) => {
-      if (unknownRemovedFiles.has(path)) return true;
+      if (unknownRemovedFiles.has(path) || preserved.get(path)?.reason === 'zcode-agent-preserved') return true;
       const content = desired.get(path);
       // A deselected generated block is removed later in this transaction.
       // Drop its overlay only if its current bytes are still proven; edited

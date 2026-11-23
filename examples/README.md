@@ -205,13 +205,13 @@ As cópias mostram os clientes selecionados na origem e seus apontamentos:
     ├── .codex/                  apontamentos do Codex
     ├── .cursor/                 apontamentos do Cursor
     ├── .github/                 apontamentos do Copilot
-    ├── .vscode/                 configuração do editor
     └── .opencode/               apontamentos do OpenCode
 ```
 
-Com todos os clientes selecionados, também aparecem `.agents`, `.agent`,
-`.gemini`, `.zcode`, `.kimi-code`, `.kimi`, `.minimax`, `.mimocode` e `.dsh`.
-As pastas são locais; os templates e assets do gerador são a fonte versionada.
+Com todos os clientes selecionados, o kit também gera `.agents`, `.zcode`,
+`.kimi-code`, `.minimax`, `.mimocode` e `.dsh`. Os exemplos podem copiar
+configurações existentes do projeto, como `.vscode`. Os templates e assets do
+gerador são a fonte versionada.
 
 | Cenário | Conteúdo |
 | --- | --- |

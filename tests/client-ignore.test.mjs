@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { renderClientIgnore } from '../.pbai4devs/scripts/lib/gitignore.mjs';
 
 const repository = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const bin = join(repository, 'bin/agentdevkit.mjs');
@@ -134,6 +135,18 @@ test('clientes existentes permanecem visíveis e staged é preservado em todo o 
     assert.equal(ignored(root, '.vscode/settings.json'), false);
     for (const path of ['.claude/auth.json', '.claude/.env', '.claude/playwright-report/index.html']) assert.equal(ignored(root, path), false, path);
   }
+});
+
+test('allowlist opcional do Copilot libera configurações compartilhadas sem expor o ajuste local', t => {
+  const root = fixture(t);
+  const dir = join(repository, '.pbai4devs/templates/gitignore');
+  const clients = JSON.parse(readFileSync(join(dir, 'clients.json'), 'utf8'));
+  const template = '/*\n{{ALLOWLIST}}\n' + readFileSync(join(dir, 'agents.ignore'), 'utf8');
+  put(root, '.github/.gitignore', renderClientIgnore(template, clients['.github']));
+  assert.equal(ignored(root, '.github/copilot/settings.json'), false);
+  assert.equal(ignored(root, '.github/allowed_models.txt'), false);
+  assert.equal(ignored(root, '.github/copilot/settings.local.json'), true);
+  assert.equal(ignored(root, '.github/copilot/Settings.Local.JSON'), true);
 });
 
 test('seleção de um arquivo exige reabrir pais e regras posteriores prevalecem', t => {

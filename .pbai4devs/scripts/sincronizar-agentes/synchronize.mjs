@@ -8,7 +8,7 @@ import { planClaudeRule, serializeClaudePaths } from '../lib/claude-rule-scope.m
 import { canMigrateClaudeReference, isLegacyExact, legacyClaudeGitSource } from '../lib/claude-legacy-exact.mjs';
 import { adapterManifest } from '../lib/adapters.mjs';
 import { mayReferenceClaudeRule, resemblesClaudeReference, scanRetainedClaude } from '../lib/claude-retained.mjs';
-import { canonicalEntrypoint, extractManagedBlock, mergeManagedContent, stripManagedContent } from '../lib/managed-content.mjs';
+import { canonicalEntrypoint, extractManagedBlock, mergeManagedContent, nativeZcodeAgent, stripManagedContent } from '../lib/managed-content.mjs';
 import { stripTomlContent } from '../lib/managed-toml.mjs';
 import { mergeGitignore, validateIgnoreClients, renderClientIgnore, isGeneratedOutput, planLocalIgnore, checkLocalIgnore, assertLocalIgnoreUnchanged, planUntrack, isBlockingLocalIgnore, ignoreBegin, ignoreEnd } from '../lib/gitignore.mjs';
 import { stateDirectory } from '../lib/state-path.mjs';
@@ -423,6 +423,13 @@ function runSynchronization({ root = projectRoot, check = false, force = false, 
       captureInput(target, current); preservedHumanFiles.add(target);
       remember(target, 'existing-reference-satisfied'); expected.set(target, current); continue;
     }
+    if (current && nativeZcodeAgent(target)) {
+      // Its Markdown body is an active system prompt. A generic block would
+      // change the behavior of the agent already defined by the project.
+      if (priorBlocks[target]) managedBlocks[target] = priorBlocks[target];
+      preservedHumanFiles.add(target);
+      remember(target, 'zcode-agent-preserved'); expected.set(target, current); continue;
+    }
     const merged = mixed ? mergeManagedContent(current, inclusion, { expectedHash: priorBlocks[target] }) : null;
     if (current && !stagedLineEndingCandidates.has(target) && !priorBlocks[target]
       && priorFiles[target] !== createHash('sha256').update(current).digest('hex') && extractManagedBlock(current)) {
@@ -614,6 +621,8 @@ function runSynchronization({ root = projectRoot, check = false, force = false, 
     : `Plano Claude sem nova ativacao automatica: ${scopeOmissions.map(item => item.source).join(', ')}. Leia as fontes explicitamente; outras regras podem estar ativas e a equivalencia de escopo nao foi comprovada.`);
   const copilotCollisions = preservedPaths.filter(item => item.reason === 'copilot-scope-preserved').map(item => item.path);
   if (copilotCollisions.length) output(`Escopo Copilot humano diferente ou ambiguo; arquivos preservados para revisao: ${copilotCollisions.join(', ')}`);
+  const zcodeCollisions = preservedPaths.filter(item => item.reason === 'zcode-agent-preserved').map(item => item.path);
+  if (zcodeCollisions.length) output(`Perfis ZCode do projeto preservados (${zcodeCollisions.slice(0, 10).map(path => JSON.stringify(path)).join(', ')}${zcodeCollisions.length > 10 ? ` e mais ${zcodeCollisions.length - 10}` : ''}).`);
   if (check) {
     const { hardlinkBlockers, hardlinkUnverified, aclBlockers, xattrBlockers, xattrUnverified, ownerBlockers } = inspectSyncMetadata(logicalOperations, safe, output);
     return {

@@ -1,6 +1,6 @@
 {
   "name": "@pathbit/agentdevkit",
-  "version": "0.0.36",
+  "version": "0.0.37",
   "description": "A guided CLI for shared agent skills and on-demand planning in new and existing projects.",
   "type": "module",
   "license": "MIT",

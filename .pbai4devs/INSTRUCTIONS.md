@@ -109,8 +109,9 @@ O arquivo local `espelhos.conf` registra seleção, layouts e pontos nativos.
 O catálogo local `catalog.json` reúne inventário e comandos das ferramentas.
 Os registros `skills.json`, `rules.json` e `agents.json` indexam as fontes.
 Codex e Antigravity compartilham `.agents`; Kimi usa `.kimi-code`.
-Copilot usa `.github`. A pasta `.vscode` depende da
-configuração do editor. Veja os clientes e seus limites na
+Os recursos de projeto do Copilot ficam em `.github`. A pasta
+`~/.copilot` é pessoal e `.vscode` é opcional para configurações do editor.
+Veja os clientes e seus limites na
 [compatibilidade](COMPATIBILIDADE.md).
 Só clientes selecionados recebem derivações; uma pasta compartilhada permanece
 quando outro cliente precisa dela. Atualizar ou sincronizar respeita a seleção.

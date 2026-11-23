@@ -17,12 +17,12 @@ altere a seleção com `agents add <ids>`, `agents remove <ids>` ou
 `AGENTS.md` e é o padrão de uma instalação sem seleção. Atualizações e
 sincronizações reutilizam a seleção salva.
 
-| Cliente | ID | Pastas necessárias |
+| Cliente | ID | Destinos no projeto |
 | --- | --- | --- |
 | [Codex][codex] | `codex` | `.codex`, `.agents` |
 | [Claude][claude] | `claude` | `.claude` |
 | [Cursor][cursor] | `cursor` | `.cursor` |
-| [Copilot][cp] | `copilot` | `.github`, `.vscode` |
+| [Copilot][cp] | `copilot` | `.github`. `.vscode` é opcional. |
 | [OpenCode V2][opencode] | `opencode` | `.opencode` |
 | [Antigravity][antigravity] | `antigravity` | `.agents` |
 | [ZCode][zcode] | `zcode` | `.zcode` |
@@ -34,24 +34,42 @@ sincronizações reutilizam a seleção salva.
 Aliases de IDs: `vscode` → `copilot`, `claude-code` → `claude`,
 `kimi-code` → `kimi`, `xiaomi` → `mimo`. Nomes de pastas não são IDs.
 Pastas compartilhadas permanecem se algum escolhido precisar delas.
-`.vscode` pode conter configurações do projeto. O kit preserva seu ignore
-existente e deriva recursos do Copilot em `.github`. O hub continua completo
-mesmo com poucos clientes selecionados.
+O hub continua completo mesmo com poucos clientes selecionados.
+
+## Migrar pastas legadas
 
 `antigravity-legacy` e `kimi-legacy` convergem para `antigravity` e
-`kimi` na opção de instalação ou na seleção salva. O `update` deixa
-de gerar em `.agent` e `.kimi` e retira os apontamentos de propriedade
-comprovada. Conteúdo próprio, editado ou com divergência no índice Git
-permanece.
-
-O Gemini CLI saiu da seleção ativa do AgentDevKit. Em uma instalação que
-também usa outros clientes, `update` conserva esses IDs. Em uma instalação
-exclusiva do Gemini CLI, consulte `agents` e use `update --agents <id> --dry-run`
-com outro cliente ou `update --agents none --dry-run` para usar o hub.
-O plano identifica os apontamentos antigos
-cuja propriedade o kit consegue comprovar e preserva arquivos do projeto.
-`GEMINI.md` continua sendo um ponto de entrada do adaptador Antigravity.
+`kimi`. Desde `0.0.36`, o Gemini CLI saiu da seleção e o kit usa `.agent`,
+`.kimi` e `.gemini` de projeto apenas para reconhecer instalações antigas.
+`update` conserva os outros clientes selecionados. Se antes usava só o Gemini
+CLI, simule `agentdevkit update --agents antigravity --dry-run`. Use o ID de
+outro cliente listado em `agentdevkit agents` ou `none` para ficar só com o
+hub. O plano retira a contribuição comprovada do kit e preserva conteúdo
+próprio, inclusive arquivos com divergência no índice Git.
 [Transição anunciada pelo Google][gemini-transition]
+
+## Copilot no projeto e na máquina
+
+- **Projeto.** Recursos em `.github/skills/`, `.github/agents/` e
+  `.github/instructions/`. Use `AGENTS.md` ou
+  `.github/copilot-instructions.md` como entrada de instruções.
+- **Configuração da CLI no projeto.** `.github/copilot/settings.json` pode
+  ser compartilhado. `.github/copilot/settings.local.json` guarda ajustes
+  locais.
+- **Configuração e recursos pessoais.** A CLI usa `~/.copilot/` por padrão.
+  `COPILOT_HOME` seleciona outro diretório pessoal.
+- **Editor.** `.vscode/` é opcional para configurações do VS Code.
+
+O kit escreve os apontamentos de projeto em `.github` e usa `AGENTS.md`
+como entrada compartilhada. A seleção `copilot` também registra `.vscode`
+para diagnóstico, sem criar a pasta. A pasta pessoal e os arquivos de
+configuração da CLI são administrados pelo usuário. O Copilot CLI também
+reconhece skills do projeto em `.agents/skills` e `.claude/skills`.
+[Caminhos das skills][cp] · [Configuração da CLI][cp-config] ·
+[Instruções do repositório][cp-instructions]
+
+Use `copilot skill list` e `copilot instruction list` na raiz do repositório
+para consultar a descoberta local, se sua versão da CLI oferecer esses comandos.
 
 ## Formatos nativos
 
@@ -61,8 +79,10 @@ Os caminhos são relativos à pasta do cliente, exceto onde indicado.
 
 - Codex: `.agents/skills/grupo/nome/SKILL.md` e referências agrupadas em
   `.codex`. Selecionar só o Codex usa `.agents` apenas para as skills.
-  Se essa rota estiver obstruída, a skill usa `.codex/skills`. `AGENTS.md`
-  apresenta o hub.
+  Se essa rota estiver obstruída, a skill usa `.codex/skills`, reconhecida
+  pelo carregador do Codex 0.171.0. Os perfis Markdown em `.codex/agents`
+  servem para consulta. Subagentes nativos do Codex usam arquivos TOML.
+  [Carregador][codex-roots] · [Subagentes][codex-agents]
 - Claude: `skills/nome/SKILL.md`, `commands/grupo/nome.md`,
   `rules/grupo/nome/RULE.md` e `agents/nome.md`.
 - Cursor: `skills/grupo/nome/SKILL.md`, `rules/grupo/nome.mdc`,
@@ -74,10 +94,17 @@ Os caminhos são relativos à pasta do cliente, exceto onde indicado.
 - OpenCode: `skills/grupo/nome/SKILL.md`, `commands/grupo/nome.md`,
   `agents/grupo/nome.md`; regras como referências.
 - Antigravity: skills e regras agrupadas, agentes planos registrados nos
-  manifestos; comandos como referências.
-- ZCode: `skills/nome/SKILL.md`, comandos diretos; demais tipos são referências.
-- Kimi: `skills/grupo/nome/SKILL.md`; comandos exigem plugin, não configurado
-  pelos apontamentos.
+  manifestos e comandos como referências. O cliente lê `AGENTS.md` e
+  `GEMINI.md` no projeto, além de usar `~/.gemini/config/` para preferências
+  pessoais. Equipes podem configurar pastas pessoais com `.gemini/config.json`
+  no projeto. [Descoberta no Antigravity][antigravity]
+- ZCode: `skills/nome/SKILL.md`, `agents/nome.md` e `commands/nome.md`.
+  Cada perfil do kit declara as ferramentas que sua função usa. Se o projeto
+  já definiu um agente no mesmo caminho, o kit preserva o arquivo. Regras ficam
+  como referências. [Subagentes do ZCode][zcode-agents]
+- Kimi: `skills/grupo/nome/SKILL.md` e `agents/nome.md`. O cliente
+  também aceita `.agents`. Comandos exigem configuração de plugin.
+  [Agentes do Kimi][kimi-agents]
 - MiniMax e DeepSeek: `skills/nome/SKILL.md`; demais tipos como referências.
 - MiMo: `skills/grupo/nome/SKILL.md`, agentes e comandos diretos;
   regras como referências.
@@ -88,8 +115,18 @@ Os novos perfis OpenCode usam `permissions` do formato V2, com ações como
 Permissão de terminal não isola caminhos por si só: o perfil e os scripts
 continuam responsáveis por respeitar o escopo autorizado.
 
-Claude documenta skills no nível `skills/nome`; sua descoberta de arquivos
-`.claude` em subprojetos não confirma grupos dentro de `skills/`.
+Claude documenta skills no nível `skills/nome` e descoberta recursiva em
+`.claude/agents/`. O kit usa agentes planos. O Cursor também reconhece
+skills em raízes de outros clientes. Com vários clientes selecionados,
+consulte a lista do editor para identificar nomes repetidos.
+[Subagentes do Claude][claude-agents] · [Skills do Cursor][cursor]
+
+Quando uma skill e um comando legado do Claude têm o mesmo nome, a skill
+recebe a invocação por barra. Isso ocorre com `atualizar-documentacao`,
+`documentar-legado`, `preparar-dev` e `proximos-passos`. Para usar a
+orquestração do comando homônimo, indique o `COMMAND.md` do hub.
+[Precedência de nomes no Claude][claude-skills]
+
 MiniMax, Copilot CLI/SDK e DeepSeek usam filhos imediatos. ZCode exige skills
 planas em plugins. Mantemos esses layouts; não presumimos recursão em agentes ou
 comandos quando o fornecedor só documenta arquivos diretos.
@@ -186,11 +223,19 @@ comprovada. As razões e fontes por adaptador também ficam em
 [codex]: https://learn.chatgpt.com/docs/build-skills
 [claude]: https://code.claude.com/docs/en/skills
 [cursor]: https://cursor.com/docs/skills
-[cp]: https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/skills
+[cp]: https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-skills
+[cp-config]: https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-config-dir-reference
+[cp-instructions]: https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-custom-instructions
+[codex-roots]: https://github.com/openai/codex/blob/rust-v0.171.0/codex-rs/ext/skills/src/host_roots.rs#L127-L164
+[codex-agents]: https://learn.chatgpt.com/docs/agent-configuration/subagents#custom-agents
+[claude-skills]: https://code.claude.com/docs/en/skills#resolve-skills-that-share-a-name
+[claude-agents]: https://code.claude.com/docs/en/sub-agents#choose-the-subagent-scope
+[zcode-agents]: https://zcode.z.ai/en/docs/subagents#configuration-scope
 [opencode]: https://opencode.ai/docs/skills
 [gemini-transition]: https://developers.googleblog.com/an-important-update-transitioning-gemini-cli-to-antigravity-cli/
 [antigravity]: https://antigravity.google/docs/customization-discovery
 [zcode]: https://zcode.z.ai/en/docs/skill
+[kimi-agents]: https://moonshotai.github.io/kimi-code/en/customization/agents.html
 [kimi]: https://moonshotai.github.io/kimi-code/en/customization/skills
 [minimax]: https://github.com/MiniMax-AI/minimax-code
 [mimo]: https://mimo.xiaomi.com/mimocode/skills
