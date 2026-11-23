@@ -134,6 +134,23 @@ function cliRunner(run, envRoot, npm, options) {
   };
 }
 
+function verifyLegacySurvey(cli, root, version, { empty = false } = {}) {
+  const [major, minor, patch] = version.split('.').map(Number);
+  if (major === 0 && minor === 0 && patch < 35) return false;
+  const survey = cli('legacy-survey', ['document', '--target', root]);
+  assert.equal(survey.documentation.status, 'rascunho');
+  assert.ok(survey.documentation.gaps.includes('behavior-unverified'));
+  assert.ok(survey.documentation.evidence.documents.some(item => item.roles.includes('readme')));
+  if (empty) {
+    assert.equal(survey.documentation.coverage.applicationDetected, false);
+    assert.ok(survey.documentation.gaps.includes('no-application-evidence'));
+  }
+  const guidance = cli('legacy-next', ['next', '--intent', 'document', '--target', root]);
+  assert.equal(guidance.next[0].skill, 'documentar-legado');
+  assert.match(guidance.next[0].command, /\bdocument --target\b/);
+  return true;
+}
+
 function exerciseProject(project, options, output, envRoot, env, npm) {
   const root = join(output, 'projects', project.id), evidence = join(output, 'documentation', project.id);
   mkdirSync(evidence, { recursive: true });
@@ -180,6 +197,11 @@ function exerciseProject(project, options, output, envRoot, env, npm) {
     assert.equal(discovered?.kind, 'file'); assert.equal(discovered.sha256, plan.create.sha256);
     assert.equal(afterInventory.documentation.files.find(file => file.path === plan.append.path)?.sha256, plan.append.afterSha256);
     assert.deepEqual(workspace(root), afterEdit, 'Segundo inventário alterou o clone.'); checked('new-index-discovered');
+    if (verifyLegacySurvey(cli, root, options.version)) {
+      assert.deepEqual(workspace(root), afterEdit, 'Levantamento legado alterou o clone.');
+      assert.deepEqual(gitSnapshot(root, git), gitBefore, 'Levantamento legado alterou o Git.');
+      checked('legacy-survey-read-only');
+    }
     put(join(evidence, 'inventory-after.json'), JSON.stringify(afterInventory.documentation, null, 2) + '\n');
     put(join(evidence, 'after.json'), JSON.stringify({ workspace: workspace(root), git: gitSnapshot(root, git) }, null, 2) + '\n');
     Object.assign(result, { status: 'passed', appendedDocument: plan.append.path, createdIndex: plan.create.path,
@@ -208,10 +230,12 @@ function exerciseEmpty(options, output, envRoot, env, npm) {
     cli('init-empty-repeat', ['init', '--target', root, '--agents', 'codex', '--lang', 'en', '--yes']);
     cli('update-empty', ['update', '--target', root, '--yes']); cli('doctor-empty', ['doctor', '--target', root]);
     cli('sync-empty', ['sync', '--check', '--target', root]);
+    const assessedLegacy = verifyLegacySurvey(cli, root, options.version, { empty: true });
     assert.deepEqual(workspace(root), before, 'Repetição alterou o projeto vazio.');
     put(join(evidence, 'inventory.json'), JSON.stringify(inspected, null, 2) + '\n');
     Object.assign(result, { status: 'passed', noInventedProductDecisions: true, checks: [
       { name: 'inventory-read-only', status: 'passed' }, { name: 'product-documents-pending', status: 'passed' }, { name: 'idempotent', status: 'passed' },
+      ...(assessedLegacy ? [{ name: 'legacy-survey-read-only', status: 'passed' }] : []),
     ] });
   } catch (error) { result.error = error.message; result.failures.push(error.message); }
   result.commands = commands.length; result.evidence = portable(relative(output, evidence));

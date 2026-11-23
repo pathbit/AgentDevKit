@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { releaseCommand } from './config.mjs';
+import { hasLegacyDocumentationSkill } from './legacy-documentation.mjs';
 import { inspectIntegrations, inspectProject } from '../.pbai4devs/scripts/inspecionar-projeto/SCRIPT.mjs';
 
 const messages = {
@@ -26,6 +27,9 @@ const messages = {
     apply: 'Aplique somente após revisar o plano.',
     review: 'Revise os itens apontados e repita a verificação.',
     integrations: 'Veja os artefatos de outros métodos que podem ajudar nesta tarefa.',
+    document: 'Levante evidências para documentar o sistema existente.',
+    documentReview: 'Valide os comportamentos com as evidências e complemente os documentos acordados.',
+    documentUpdate: 'Atualize o kit para disponibilizar a skill de documentação.',
   },
   en: {
     install: 'Install AgentDevKit in this project.', verify: 'Check the installation.',
@@ -49,6 +53,9 @@ const messages = {
     apply: 'Apply only after reviewing the plan.',
     review: 'Review the reported items and run the check again.',
     integrations: 'Find artifacts from other methods that can help with this task.',
+    document: 'Gather evidence to document the existing system.',
+    documentReview: 'Verify behavior against the evidence and supplement the agreed documents.',
+    documentUpdate: 'Update the kit to add the documentation skill.',
   },
   es: {
     install: 'Instale AgentDevKit en este proyecto.', verify: 'Compruebe la instalación.',
@@ -72,6 +79,9 @@ const messages = {
     apply: 'Aplique el plan después de revisarlo.',
     review: 'Revise los elementos indicados y repita la comprobación.',
     integrations: 'Busque artefactos de otros métodos que puedan ayudar con esta tarea.',
+    document: 'Reúna evidencias para documentar el sistema existente.',
+    documentReview: 'Verifique los comportamientos con las evidencias y complete los documentos acordados.',
+    documentUpdate: 'Actualice el kit para disponer de la skill de documentación.',
   },
 };
 
@@ -132,6 +142,16 @@ export function getNextSteps({ command, target, language = 'pt', installed, poss
   const text = messages[language] || messages.pt;
   if (command === 'error' && possiblePartial) return [{ label: text.partial, instruction: text.partialInstruction, stage: 'revisao' }];
   const cli = action => nextCommand(action, target, language, platform);
+  if (command === 'document-error') return [{ label: text.review, command: cli('document'), stage: 'revisao' }];
+  if (command === 'document' || intent === 'document') {
+    const skillAvailable = installed && hasLegacyDocumentationSkill(target);
+    const skill = skillAvailable ? { skill: 'documentar-legado' } : {};
+    if (command !== 'document') return [{ label: text.document, command: cli('document'), ...skill, stage: 'documentacao' }];
+    if (skillAvailable) return [{ label: text.documentReview, ...skill, stage: 'documentacao' }];
+    return [installed
+      ? { label: text.documentUpdate, command: cli('update'), stage: 'instalacao' }
+      : { label: text.install, command: cli('init --purpose document'), stage: 'instalacao' }];
+  }
   if (!installed) return [{ label: text.install, command: cli('init'), stage: 'instalacao' }];
   const verification = { label: text.verify, command: cli('doctor'), stage: 'verificacao' };
   let report;
@@ -175,11 +195,18 @@ export function operationalNext(result, options, { installed, planCanApply }) {
   }
   if (options.dryRun && !options.check && ok && !options.force) {
     if (installed && !result.plan.length) return step('next', 'next', 'fluxo');
+    const purpose = options.purpose ? ` --purpose ${options.purpose}` : '';
     const yes = command === 'init' ? ' --yes' : '';
-    return step('apply', `${command}${selection}${yes}`, 'aplicacao');
+    return step('apply', `${command}${selection}${purpose}${yes}`, 'aplicacao');
   }
   if (options.check || options.dryRun) {
     return [{ label: strings.review, stage: 'revisao' }];
+  }
+  if (command === 'init' && options.purpose) {
+    const verification = step('verify', 'doctor');
+    if (options.purpose === 'agents') return verification;
+    const key = options.purpose === 'document' ? 'document' : 'next';
+    return [...step(key, `next --intent ${options.purpose}`, 'fluxo'), ...verification];
   }
   return null;
 }

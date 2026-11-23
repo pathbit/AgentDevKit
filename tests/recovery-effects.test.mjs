@@ -8,6 +8,8 @@ test('classifica comandos reais sem tratar ferramentas opacas como consulta', ()
     [[], 'mutation'],
     [['init'], 'mutation'],
     [['init', '--dry-run'], 'planning'],
+    ...['agents', 'product', 'run', 'document'].map(purpose => [['init', '--purpose', purpose], 'mutation']),
+    [['init', '--purpose', 'document', '--dry-run'], 'planning'],
     [['update'], 'mutation'],
     [['update', '--force', '--dry-run'], 'planning'],
     [['sync'], 'mutation'],
@@ -24,6 +26,10 @@ test('classifica comandos reais sem tratar ferramentas opacas como consulta', ()
     [['language', 'pt'], 'mutation'],
     [['doctor'], 'query'],
     [['next', '--intent', 'product'], 'query'],
+    [['next', '--intent', 'document'], 'query'],
+    [['document'], 'query'],
+    [['document', '--json'], 'query'],
+    [['document', '--markdown'], 'query'],
     [['--help'], 'query'],
     [['--version'], 'query'],
     [['tools', '--help'], 'opaque'],
@@ -37,6 +43,31 @@ test('classifica comandos reais sem tratar ferramentas opacas como consulta', ()
   for (const [args, expected] of cases) {
     assert.equal(classifyRecoveryEffects(parseArgs(args)), expected, args.join(' '));
   }
+});
+
+test('parser e classificador restringem o propósito e os formatos aos comandos correspondentes', () => {
+  const invalid = [
+    ['init', '--purpose'], ['init', '--purpose', 'other'],
+    ['init', '--purpose', 'run', '--purpose', 'document'],
+    ['update', '--purpose', 'document'], ['next', '--purpose', 'document'],
+    ['document', '--purpose', 'document'], ['document', '--intent', 'document'],
+    ['next', '--markdown'], ['document', '--dry-run'], ['document', '--check'],
+    ['document', '--force'], ['document', '--yes'],
+    ['document', '--markdown', '--json'], ['document', '--json', '--markdown'],
+  ];
+  for (const args of invalid) assert.throws(() => parseArgs(args), { code: 'E_ARGS' }, args.join(' '));
+  const childArgs = ['--', '--purpose', 'document', '--markdown'];
+  const toolOptions = parseArgs(['tools', 'run', 'agent-browser', ...childArgs]);
+  assert.deepEqual(toolOptions.toolArgs, ['run', 'agent-browser', ...childArgs]);
+  assert.equal(classifyRecoveryEffects(toolOptions), 'opaque');
+  for (const options of [
+    { ...parseArgs(['document', '--markdown']), json: true },
+    { ...parseArgs(['document']), markdown: 'true' },
+    { ...parseArgs(['document']), purpose: 'run' },
+    { ...parseArgs(['document']), force: true },
+    { ...parseArgs(['init']), purpose: 'other' },
+    { ...parseArgs(['next', '--intent', 'document']), markdown: true },
+  ]) assert.equal(classifyRecoveryEffects(options), 'unsupported', JSON.stringify(options));
 });
 
 test('opções desconhecidas, acessores e proxies não recebem classificação confiável', () => {
@@ -81,10 +112,10 @@ test('não consulta propriedades opcionais herdadas ao classificar', () => {
 
 test('combinações aceitas pelo parser continuam classificáveis', () => {
   const commands = [[], ['init'], ['update'], ['sync'], ['lang'], ['lang', 'en'],
-    ['agents'], ['agents', 'codex'], ['doctor'], ['next'], ['tools', 'run', 'agent-browser'],
+    ['agents'], ['agents', 'codex'], ['doctor'], ['next'], ['document'], ['tools', 'run', 'agent-browser'],
     ['help'], ['version'], ['clients'], ['language']];
   const flags = [['--json'], ['--yes'], ['--force'], ['--dry-run'], ['--check'],
-    ['--help'], ['--version'], ['--lang', 'pt'], ['--agents', 'codex']];
+    ['--help'], ['--version'], ['--lang', 'pt'], ['--agents', 'codex'], ['--markdown'], ['--purpose', 'document']];
   let accepted = 0;
   for (const command of commands) for (let mask = 0; mask < 2 ** flags.length; mask++) {
     const args = [...command];

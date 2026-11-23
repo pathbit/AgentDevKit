@@ -13,6 +13,7 @@ Peça a leitura da fonte quando o cliente não oferecer o atalho.
 | --- | --- | --- |
 | Descobrir a próxima etapa | [proximos-passos](commands/proximos-passos/COMMAND.md) | Próxima ação e pré-requisito pendente. |
 | Só consultar o ambiente ou fazer um projeto existente rodar | [diagnosticar](commands/diagnosticar/COMMAND.md) ou [preparar-dev](commands/preparar-dev/COMMAND.md) | Inventário ou ambiente verificado, conforme o pedido. |
+| Entender e documentar um sistema existente | [documentar-legado](commands/documentar-legado/COMMAND.md) | Comportamentos, evidências e lacunas por fluxo. |
 | Definir um incremento ou executar uma entrega aprovada | [planejar-entrega](commands/planejar-entrega/COMMAND.md) ou [implementar-entrega](commands/implementar-entrega/COMMAND.md) | Plano com aceites ou mudança pronta para validar. |
 | Comprovar a mudança ou revisar a entrega final | [validar-entrega](commands/validar-entrega/COMMAND.md) ou [revisar-entrega][revisao] | Provas por critério ou decisão independente. |
 | Revisar riscos de segurança | [auditar-seguranca](commands/auditar-seguranca/COMMAND.md) | Relatório com achados, prioridades e cobertura. |
@@ -28,6 +29,10 @@ não houver escolha no pedido ou no estado. A CLI aceita
 Use os IDs da [compatibilidade](COMPATIBILIDADE.md), sem deduzir o agente pelo
 aplicativo, SO ou pastas. Sem resposta disponível, mantenha a escolha salva ou
 `all`. Registre pela CLI, sem editar hashes do estado manualmente.
+
+No primeiro uso, indique o objetivo com `init --purpose agents|product|run|document`
+ou responda à pergunta interativa. A escolha orienta a próxima ação.
+Para consultar o inventário antes de instalar, use `agentdevkit document`.
 
 Para iniciar produto, siga a ordem abaixo. Para preparar a execução de projeto
 existente, use `preparar-dev` e preserve as decisões já comprovadas.

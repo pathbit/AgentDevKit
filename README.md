@@ -27,6 +27,8 @@ Escolha os clientes na pergunta inicial ou passe `--agents codex,claude`.
 A escolha fica salva por projeto e pode ser alterada com `agents`. Em modo
 não interativo, `all` é o padrão quando não há escolha explícita ou salva.
 A CLI aceita `pt`, `en` e `es`.
+Quando o primeiro `init` abre o assistente, ele pergunta também o objetivo.
+Passe `init --purpose document` para indicar documentação por opção.
 O [guia de instalação](docs/guides/installation.md) cobre pnpm, Yarn, Bun e
 [GitHub Packages com autenticação][github-install].
 
@@ -36,6 +38,9 @@ O [guia de instalação](docs/guides/installation.md) cobre pnpm, Yarn, Bun e
   `next --intent product` para identificar a próxima etapa de planejamento.
 - **Rodar uma aplicação existente.** Consulte `next --intent run` para
   receber orientação com base no estado atual do projeto.
+- **Documentar um sistema existente.** Rode
+  `npx @pathbit/agentdevkit document` para ver o inventário local, inclusive
+  antes da instalação. Siga o [guia de documentação](docs/guides/documentation.md).
 - **Adotar só em alguns clientes.** Use `init --agents codex,claude` com os
   IDs de que precisa.
 
@@ -48,6 +53,7 @@ de consultar o próximo passo para seu objetivo:
 ```console
 npx @pathbit/agentdevkit next --intent product
 npx @pathbit/agentdevkit next --intent run
+npx @pathbit/agentdevkit next --intent document
 ```
 
 O `next` indica o próximo passo. Para seguir a orientação no seu agente, peça

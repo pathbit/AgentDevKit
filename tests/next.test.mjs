@@ -12,6 +12,7 @@ import { getNextSteps } from '../src/next.mjs';
 import { main, parseArgs } from '../src/cli.mjs';
 import { packageInfo } from '../src/config.mjs';
 import { findNpmCli } from '../.pbai4devs/scripts/lib/npm.mjs';
+import { startProjectRecovery } from '../.pbai4devs/scripts/lib/project-recovery.mjs';
 import { inspectDocumentation, inspectProject } from '../.pbai4devs/scripts/inspecionar-projeto/SCRIPT.mjs';
 import { testGitConfig } from '../.pbai4devs/scripts/lib/test-git-environment.mjs';
 
@@ -496,12 +497,278 @@ function guidanceFixture(t) {
     const result = spawnSync(program, args, { cwd: target, env, encoding: 'utf8', timeout: 180000, maxBuffer: 8 * 1024 * 1024 });
     assert.ifError(result.error);
     assert.equal(result.status, expected, result.stderr || result.stdout);
-    return result.stdout;
+    return result;
   }
-  const cli = (args, expected) => invoke(process.execPath, [join(root, 'bin/agentdevkit.mjs'), ...args, '--target', target], expected);
-  return { target, write, cli, json: (args, expected) => JSON.parse(cli([...args, '--json'], expected)),
-    git: (...args) => invoke('git', args) };
+  const cliResult = (args, expected, destination = target) =>
+    invoke(process.execPath, [join(root, 'bin/agentdevkit.mjs'), ...args, '--target', destination], expected);
+  const cli = (args, expected) => cliResult(args, expected).stdout;
+  return { target, write, cli, cliResult, json: (args, expected) => JSON.parse(cli([...args, '--json'], expected)),
+    git: (...args) => invoke('git', args).stdout };
 }
+
+test('document inventaria aplicação legada e exporta somente evidências de um rascunho', {
+  timeout: process.platform === 'win32' ? 480000 : 180000,
+}, t => {
+  const { target, write, json, cli, git } = guidanceFixture(t);
+  const privateText = /ADK_PRIVATE|status:\s*aprovado/;
+  const executionProbe = 'import { writeFileSync } from "node:fs";\nwriteFileSync(new URL("../executed.flag", import.meta.url), "unexpected");\n';
+  git('init', '--quiet');
+  write('package.json', JSON.stringify({
+    name: 'ADK_PRIVATE_MANIFEST',
+    scripts: { test: 'node tests/app.test.mjs', start: 'node src/app.mjs # ADK_PRIVATE_SCRIPT' },
+  }));
+  write('package-lock.json', '{"name":"ADK_PRIVATE_LOCK","lockfileVersion":3}');
+  write('src/app.mjs', executionProbe + '// ADK_PRIVATE_SOURCE\n');
+  write('tests/app.test.mjs', executionProbe + '// ADK_PRIVATE_TEST\n');
+  write('infra/compose/compose.local.yml', 'services:\n  web:\n    image: ADK_PRIVATE_IMAGE\n');
+  write('Dockerfile', 'FROM ADK_PRIVATE_IMAGE\n');
+  write('.env', 'TOKEN=ADK_PRIVATE_ENV\n');
+  write('README.md', '# Projeto humano\n');
+  write('docs/PRD.md', '---\nstatus: aprovado\n---\n# ADK_PRIVATE_DOC\n');
+  git('add', '--', 'README.md', 'docs/PRD.md', 'package.json');
+  write('README.md', '# Projeto humano\nADK_PRIVATE_UNSTAGED\n');
+
+  const before = intentTree(target);
+  const result = json(['document']);
+  assert.equal(result.ok, true);
+  assert.equal(result.command, 'document');
+  assert.equal(result.version, packageInfo.version);
+  const { status, evidence, coverage, gaps } = result.documentation;
+  assert.equal(status, 'rascunho');
+  for (const [field, path] of [
+    ['manifests', 'package.json'], ['lockfiles', 'package-lock.json'], ['sources', 'src/app.mjs'],
+    ['tests', 'tests/app.test.mjs'], ['compose', 'infra/compose/compose.local.yml'], ['dockerfiles', 'Dockerfile'],
+  ]) assert.deepEqual(evidence[field], [path], field);
+  assert.deepEqual(evidence.commands, [{ file: 'package.json', names: ['start', 'test'] }]);
+  assert.deepEqual(evidence.documents.toSorted((left, right) => left.path.localeCompare(right.path)), [
+    { path: 'docs/PRD.md', roles: ['product'] }, { path: 'README.md', roles: ['readme'] },
+  ]);
+  assert.equal(coverage.inventoryComplete, true);
+  assert.equal(coverage.documentationComplete, true);
+  assert.equal(coverage.applicationDetected, true);
+  assert.deepEqual(coverage.sampledFields.toSorted(), ['sources', 'tests']);
+  assert.deepEqual(gaps, ['behavior-unverified']);
+  assert.doesNotMatch(JSON.stringify(result), privateText);
+  const markdown = cli(['document', '--markdown']);
+  assert.match(markdown, /^---\r?\ndescription: \S[^\r\n]+\r?\nstatus: rascunho\r?\n---\r?\n/);
+  assert.match(markdown, /^# Levantamento do sistema existente$/m);
+  for (const heading of ['Escopo', 'Evidências observadas', 'Comportamentos', 'Lacunas', 'Revisão']) {
+    assert.ok(markdown.split(/\r?\n/).includes('## ' + heading), heading);
+  }
+  for (const path of ['package.json', 'src/app.mjs', 'tests/app.test.mjs', 'docs/PRD.md']) assert.ok(markdown.includes(path), path);
+  assert.doesNotMatch(markdown, privateText);
+  assert.match(cli(['document']), /^# Levantamento do sistema existente/m);
+  assert.equal(fs.existsSync(join(target, 'executed.flag')), false);
+  assert.deepEqual(intentTree(target), before);
+});
+
+test('document distingue inventários parciais sem publicar dados dos arquivos ilegíveis', t => {
+  const { target, write, json } = guidanceFixture(t);
+  write('package.json', '{"scripts": "ADK_PRIVATE_INVALID_MANIFEST"');
+  write('README.md', 'ADK_PRIVATE_OVERSIZED_DOC'.padEnd(2 * 1024 * 1024 + 1, ' '));
+  const before = intentTree(target);
+  const result = json(['document']);
+  const { evidence, coverage, gaps } = result.documentation;
+  assert.equal(coverage.inventoryComplete, false);
+  assert.equal(coverage.documentationComplete, false);
+  assert.deepEqual(evidence.manifests, ['package.json']);
+  assert.deepEqual(evidence.commands, []);
+  assert.deepEqual(evidence.documents, []);
+  assert.ok(gaps.includes('behavior-unverified'));
+  assert.ok(gaps.includes('inventory-incomplete'));
+  assert.ok(gaps.includes('documentation-incomplete'));
+  assert.doesNotMatch(JSON.stringify(result), /ADK_PRIVATE/);
+  assert.deepEqual(intentTree(target), before);
+});
+
+test('document preserva evidência legível quando uma subpasta recusa acesso', async t => {
+  const { target, write } = guidanceFixture(t);
+  write('README.md', '# Documento existente\n');
+  write('restrito/package.json', '{"scripts":{"ADK_PRIVATE_RESTRICTED":"node app.js"}}');
+  write('restrito/README.md', '# Documento restrito\n');
+  const before = intentTree(target);
+  const restricted = join(target, 'restrito');
+  const open = fs.opendirSync;
+  let attempts = 0, stdout = '';
+  fs.opendirSync = (path, ...args) => {
+    if (path !== restricted) return open(path, ...args);
+    attempts++;
+    throw Object.assign(new Error('ADK_PRIVATE_ACCESS'), { code: 'EACCES', path });
+  };
+  try {
+    assert.equal(await main(['document', '--json', '--target', target], {
+      stdout: { write: text => { stdout += text; } },
+    }), 0, stdout);
+  } finally {
+    fs.opendirSync = open;
+  }
+  assert.ok(attempts > 0, 'A subpasta restrita precisa ser consultada');
+  const { evidence, coverage, gaps } = JSON.parse(stdout).documentation;
+  assert.deepEqual(evidence.documents, [{ path: 'README.md', roles: ['readme'] }]);
+  assert.deepEqual(evidence.manifests, []);
+  assert.equal(coverage.inventoryComplete, false);
+  assert.equal(coverage.documentationComplete, false);
+  assert.ok(gaps.includes('inventory-incomplete'));
+  assert.ok(gaps.includes('documentation-incomplete'));
+  assert.doesNotMatch(stdout, /ADK_PRIVATE/);
+  assert.deepEqual(intentTree(target), before);
+});
+
+test('document usa português com estado legado pt-BR e preserva seus bytes', t => {
+  const { target, write, cli, json } = guidanceFixture(t);
+  const stateFile = '.pbai4devs/estado/agentdevkit.json';
+  const legacyState = '{"schemaVersion":1,"version":"0.0.21","language":"pt-BR","files":{},"blocks":{}}\r\n';
+  write(stateFile, legacyState);
+  write('README.md', '# Documento legado\n');
+  const before = intentTree(target);
+  const report = json(['document']);
+  assert.equal(report.ok, true);
+  assert.equal(report.language, 'pt');
+  assert.equal(report.documentation.status, 'rascunho');
+  assert.match(cli(['document', '--markdown']), /^# Levantamento do sistema existente$/m);
+  assert.deepEqual(readFileSync(join(target, stateFile)), Buffer.from(legacyState));
+  assert.deepEqual(intentTree(target), before);
+});
+
+test('document mantém os artefatos de fixtures fora da evidência de aplicação', t => {
+  const { target, write, json } = guidanceFixture(t);
+  const mock = 'tests/fixtures/mock';
+  write(`${mock}/package.json`, '{"scripts":{"fixture-start":"node app.mjs"}}');
+  write(`${mock}/package-lock.json`, '{}');
+  write(`${mock}/compose.yml`, 'services: {}\n');
+  write(`${mock}/Dockerfile`, 'FROM scratch\n');
+  write(`${mock}/app.mjs`, 'export const fixture = true;\n');
+  write('tests/app.test.mjs', 'export const test = true;\n');
+  const before = intentTree(target);
+  const { evidence, coverage, gaps } = json(['document']).documentation;
+  for (const field of ['manifests', 'lockfiles', 'commands', 'compose', 'dockerfiles', 'sources']) {
+    assert.deepEqual(evidence[field], [], field);
+  }
+  assert.deepEqual(evidence.tests, ['tests/app.test.mjs']);
+  assert.equal(coverage.applicationDetected, false);
+  assert.ok(gaps.includes('no-application-evidence'));
+  assert.deepEqual(intentTree(target), before);
+});
+
+test('next documenta a rota antes e depois do init e inventário vazio explicita lacunas', {
+  timeout: process.platform === 'win32' ? 480000 : 180000,
+}, t => {
+  const { target, write, json, git } = guidanceFixture(t);
+  git('init', '--quiet');
+  const before = intentTree(target);
+  const { evidence, coverage, gaps } = json(['document']).documentation;
+  assert.ok(Object.values(evidence).every(items => Array.isArray(items) && items.length === 0));
+  assert.equal(coverage.applicationDetected, false);
+  assert.deepEqual(gaps.toSorted(), ['behavior-unverified', 'no-application-evidence', 'no-documents']);
+  const [preinstall] = json(['next', '--intent', 'document']).next;
+  assert.match(preinstall.command, /\bagentdevkit document\b/);
+  assert.equal(preinstall.skill, undefined);
+  assert.deepEqual(intentTree(target), before);
+
+  write('docs/README.md', '# Documento humano\n');
+  git('add', '--', 'docs/README.md');
+  const index = readFileSync(join(target, '.git/index'));
+  const init = json(['init', '--agents', 'codex', '--lang', 'pt', '--purpose', 'document', '--yes']);
+  assert.ok(init.next.some(step => /\bnext --intent document\b/.test(step.command ?? '')));
+  assert.equal(fs.existsSync(join(target, '.pbai4devs/skills/projeto/documentar-legado/SKILL.md')), true);
+  assert.deepEqual(fs.readdirSync(join(target, 'docs')), ['README.md']);
+  assert.equal(readFileSync(join(target, 'docs/README.md'), 'utf8'), '# Documento humano\n');
+  assert.deepEqual(readFileSync(join(target, '.git/index')), index);
+
+  const installed = intentTree(target);
+  const [postinstall] = json(['next', '--intent', 'document']).next;
+  assert.match(postinstall.command, /\bagentdevkit document\b/);
+  assert.equal(postinstall.skill, 'documentar-legado');
+  assert.deepEqual(intentTree(target), installed);
+});
+
+test('document e init com propósito documental respeitam as barreiras de recuperação', t => {
+  const { target, write, json, cliResult } = guidanceFixture(t);
+  write('package.json', '{"name":"ADK_PRIVATE_PROJECT","scripts":{"start":"node server.js"}}');
+  const tx = startProjectRecovery(target, []);
+  const verifyBlocked = (status, code) => {
+    const before = intentTree(target);
+    for (const args of [['document'], ['init', '--purpose', 'document', '--yes']]) {
+      const result = json(args, 1);
+      assert.equal(result.ok, false);
+      assert.equal(result.error.code, code);
+      assert.equal(result.recovery.status, status);
+      assert.equal(result.documentation, undefined);
+      assert.doesNotMatch(JSON.stringify(result), /ADK_PRIVATE/);
+    }
+    const { stdout, stderr } = cliResult(['document', '--markdown'], 1);
+    assert.equal(stdout, '');
+    assert.ok(stderr.includes(code), stderr);
+    assert.doesNotMatch(stderr, /^---|Levantamento do sistema existente|ADK_PRIVATE/m);
+    const result = json(['next', '--intent', 'document']);
+    assert.equal(result.next.length, 1);
+    assert.equal(result.next[0].stage, 'revisao');
+    assert.equal(result.next[0].skill, undefined);
+    assert.doesNotMatch(result.next[0].command ?? '', /\bagentdevkit document\b/);
+    assert.deepEqual(intentTree(target), before);
+  };
+  verifyBlocked('pending', 'E_RECOVERY_PENDING');
+  writeFileSync(join(tx.journal, 'records', 'invalido'), 'ADK_PRIVATE_JOURNAL');
+  verifyBlocked('invalid', 'E_RECOVERY_STORE');
+
+  const unreadable = guidanceFixture(t);
+  unreadable.write('.pbai4devs/state/agentdevkit.json', 'ADK_PRIVATE_STATE');
+  const before = intentTree(unreadable.target);
+  const result = unreadable.json(['document'], 1);
+  assert.equal(result.configurationStatus, 'unreadable');
+  assert.equal(result.error.code, 'E_STATE');
+  assert.equal(result.documentation, undefined);
+  assert.doesNotMatch(JSON.stringify(result), /ADK_PRIVATE/);
+  assert.deepEqual(intentTree(unreadable.target), before);
+});
+
+test('document markdown encaminha alvo inválido para stderr e mantém stdout vazio', t => {
+  const { target, write, cliResult } = guidanceFixture(t);
+  write('README.md', '# Bytes humanos\n');
+  const before = intentTree(target);
+  const { stdout, stderr } = cliResult(['document', '--markdown'], 1, join(target, 'README.md'));
+  assert.equal(stdout, '');
+  assert.match(stderr, /\bE_TARGET\b/);
+  assert.doesNotMatch(stderr, /^---|Levantamento do sistema existente/m);
+  assert.deepEqual(intentTree(target), before);
+});
+
+test('instalação 0.0.34 sem skill documental regular orienta atualização após o levantamento', async t => {
+  const { target, write, json } = guidanceFixture(t);
+  write('.pbai4devs/state/agentdevkit.json', JSON.stringify({
+    schemaVersion: 1, version: '0.0.34', language: 'pt', clients: ['codex'], files: {}, blocks: {},
+  }));
+  write('README.md', '# Projeto em 0.0.34\n');
+  function verify() {
+    const before = intentTree(target);
+    const next = json(['next', '--intent', 'document']).next;
+    assert.match(next[0].command, /\bagentdevkit document\b/);
+    assert.ok(next.every(step => step.skill === undefined));
+    const result = json(['document']);
+    assert.equal(result.documentation.status, 'rascunho');
+    assert.ok(result.next.some(step => /\bagentdevkit update\b/.test(step.command ?? '')));
+    assert.ok(result.next.every(step => step.skill === undefined));
+    assert.deepEqual(intentTree(target), before);
+  }
+  verify();
+  await t.test('diretório da skill é link para outra árvore', subtest => {
+    const outside = guidanceFixture(subtest);
+    outside.write('SKILL.md', '# Link para uma skill fora do projeto\n');
+    const link = join(target, '.pbai4devs/skills/projeto/documentar-legado');
+    mkdirSync(dirname(link), { recursive: true });
+    try { symlinkSync(outside.target, link, process.platform === 'win32' ? 'junction' : 'dir'); }
+    catch (error) {
+      if (['EPERM', 'EACCES', 'ENOSYS', 'ENOTSUP'].includes(error.code)) {
+        subtest.skip('A plataforma não permite criar links de diretório na fixture');
+        return;
+      }
+      throw error;
+    }
+    const before = intentTree(outside.target);
+    verify();
+    assert.deepEqual(intentTree(outside.target), before);
+  });
+});
 
 const integrationFixtures = {
   bmad: ['_bmad/config.toml', '_bmad/scripts/render_skill.py'],

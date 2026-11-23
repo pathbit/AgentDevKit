@@ -24,6 +24,7 @@ enquanto o usuário estiver preparando somente a estrutura dos agentes.
 | [Roadmap][roadmap] | Após design | Incrementos ou prioridades mudarem. |
 | [ADR][adr] | Design | Decisão estrutural for aceita/substituída. |
 | [Ambiente local][ambiente] | Configuração | Stack ou setup mudar. |
+| [Levantamento de legado][levantamento] | Documentar sistema em uso | Surgirem evidências ou dúvidas novas. |
 | [Contribuição][contrib] | Configuração | Fluxo de desenvolvimento mudar. |
 | [Spec][spec], [plano][plano] | Planejamento da entrega | Escopo, critérios ou execução mudarem. |
 | [Tarefas][tasks] | Implementação aprovada | Execução ou provas mudarem. |
@@ -60,6 +61,7 @@ Modelos, configurações e relatórios não são espelhados nas pastas dos agent
 [design]: design/TEMPLATE.md
 [adr]: adr/TEMPLATE.md
 [ambiente]: ambiente-local/TEMPLATE.md
+[levantamento]: levantamento-legado/TEMPLATE.md
 [contrib]: contribuicao/TEMPLATE.md
 [spec]: spec/TEMPLATE.md
 [plano]: plano-implementacao/TEMPLATE.md

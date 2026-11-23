@@ -65,6 +65,14 @@ registro escolhidos na [instalação][install]. [Diagnosticar][diagnose] inventa
 ambiente e projeto, e [preparar-dev][prepare] usa esse inventário quando o
 pedido inclui ajustes.
 Entregue os comandos para subir, verificar e parar a aplicação.
+
+Para **documentar um sistema em uso**, comece com
+`npx @pathbit/agentdevkit document --markdown`. A CLI oferece um rascunho
+de inventário. O comando [documentar-legado][legado] orienta o documentador
+a seguir os fluxos relevantes no código e nos testes e entregar fatos,
+inferências e lacunas com suas fontes. O trabalho de edição reaproveita
+os documentos existentes. [Guia de documentação](documentation.md#documentar-um-sistema-em-uso)
+
 Quando a tarefa depende de uma spec ou um plano existente, a skill
 [proximos-passos](../../.pbai4devs/skills/projeto/proximos-passos/SKILL.md)
 usa as indicações de `next --integrations` para encontrar referências no projeto.
@@ -117,6 +125,7 @@ sincronize e verifique os apontamentos. Para dúvidas de operação, consulte
 [tests]: tools-and-testing.md
 [compat]: ../../.pbai4devs/COMPATIBILIDADE.md
 [next]: ../../.pbai4devs/skills/projeto/proximos-passos/SKILL.md
+[legado]: ../../.pbai4devs/commands/documentar-legado/COMMAND.md
 [implement]: ../../.pbai4devs/commands/implementar-entrega/COMMAND.md
 [plan]: ../../.pbai4devs/commands/planejar-entrega/COMMAND.md
 [verify]: ../../.pbai4devs/skills/projeto/verificar-trabalho/SKILL.md

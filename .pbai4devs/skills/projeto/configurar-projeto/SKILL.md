@@ -6,10 +6,14 @@ description: Organiza a preparação do produto e, após as aprovações, compro
 # Configurar projeto
 
 Inspecione somente este repositório. Para rodar ou reparar projeto existente,
-use `preparar-dev`. Enquanto o usuário configurar só os agentes, mantenha modelos
+use `preparar-dev`. Se o objetivo é entender e documentar o sistema em uso,
+use [documentar-legado](../documentar-legado/SKILL.md).
+Enquanto o usuário configurar só os agentes, mantenha modelos
 em `.pbai4devs/templates/`. Ao configurar o kit, use os clientes do pedido ou
 do estado. Se faltar seleção, pergunte e aplique `--agents` ou `agents`
 pela CLI. Sem resposta disponível, use `all` para a seleção de clientes.
+No primeiro uso, passe o objetivo com `--purpose` ou responda à pergunta
+interativa para orientar a próxima ação.
 Confira Node e npm e prepare somente as ferramentas necessárias à tarefa.
 
 ## Preparar o produto

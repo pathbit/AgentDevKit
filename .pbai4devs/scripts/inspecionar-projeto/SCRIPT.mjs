@@ -19,6 +19,7 @@ const manifests = new Map([
   ['Package.swift', 'swift'], ['CMakeLists.txt', 'cpp']
 ]);
 const locks = new Set(['package-lock.json', 'npm-shrinkwrap.json', 'pnpm-lock.yaml', 'yarn.lock', 'bun.lock', 'bun.lockb', 'deno.lock', 'uv.lock', 'poetry.lock', 'Pipfile.lock', 'Cargo.lock', 'go.sum', 'composer.lock', 'Gemfile.lock', 'mix.lock', 'pubspec.lock', 'Package.resolved', 'packages.lock.json', 'gradle.lockfile']);
+const surveyFixtures = new Set(['fixtures', '__fixtures__', 'snapshots', '__snapshots__']);
 const requiredDirectories = ['.pbai4devs', 'src', 'tests', 'infra'];
 function agentRoots(root) {
   const file = path.join(root, '.pbai4devs/espelhos.conf');
@@ -318,13 +319,14 @@ const documentRole = file => {
 };
 
 // Names, kinds and bounded hashes only. A guessed role is never an approval.
-export function inspectDocumentation(root, limits = {}) {
+export function inspectDocumentation(root, limits = {}, { excludeFixtures = false } = {}) {
   root = fs.realpathSync(path.resolve(root));
   const bounds = { ...documentLimits, ...limits };
   for (const [key, value] of Object.entries(bounds)) {
     if (!(key in documentLimits) || !Number.isSafeInteger(value) || value < 0 || value > documentLimits[key]) throw new Error('Limite documental invalido.');
   }
   const ignored = new Set([...defaultExcluded, ...documentClients, ...agentRoots(root)].filter(name => !['examples', '.github'].includes(name)).map(name => name.toLowerCase()));
+  if (excludeFixtures) for (const name of surveyFixtures) ignored.add(name);
   const excludedPaths = ['examples/generated', '.context/runtime', '.context/workflow', '.context/harness',
     ...['skills', 'agents', 'commands', 'rules', 'instructions', 'prompts'].map(name => `.github/${name}`)];
   const files = new Map();
@@ -444,7 +446,7 @@ export function inspectDocumentation(root, limits = {}) {
   };
 }
 
-export function inspectProject(root = repository, { check = false, documentationLimits } = {}) {
+export function inspectProject(root = repository, { check = false, documentationLimits, survey = false } = {}) {
   requireNode();
   root = fs.realpathSync(path.resolve(root));
   if (!fs.statSync(root).isDirectory()) throw new Error('A origem deve ser um diretorio.');
@@ -452,6 +454,7 @@ export function inspectProject(root = repository, { check = false, documentation
   const planningRoots = new Set(['_bmad', '_bmad-output', '.specify', '.specs', '.context']);
   const configuredAgents = agentRoots(root); configuredAgents.forEach(name => excluded.add(name));
   const report = { mode: 'agentes-sem-aplicacao', languages: [], manifests: [], lockfiles: [], commands: [], compose: [], dockerfiles: [], sources: [], structure: { present: [], missing: [] }, scan: { maxDepth: 6, truncated: false }, warnings: [] };
+  if (survey) report.testSources = [];
   const languages = new Set(); let entries = 0;
   const warning = (file, reason) => report.warnings.push({ file, reason });
   function commands(file, name) {
@@ -483,7 +486,12 @@ export function inspectProject(root = repository, { check = false, documentation
     } catch { warning(file, 'manifest-nao-interpretado'); }
   }
   function walk(directory = '', depth = 0) {
-    const listing = stableDirectory(root, directory, Math.max(0, 25000 - entries));
+    let listing;
+    try { listing = stableDirectory(root, directory, Math.max(0, 25000 - entries)); }
+    catch (error) {
+      if (!['EACCES', 'EPERM', 'ENOENT', 'ENOTDIR'].includes(error.code)) throw error;
+      report.scan.truncated = true; warning(directory || '.', 'unreadable-directory'); return;
+    }
     if (listing.changed) { report.scan.truncated = true; warning(directory || '.', 'changed-during-read'); return; }
     if (listing.truncated) report.scan.truncated = true;
     const children = listing.entries.sort((a, b) => a.name.localeCompare(b.name));
@@ -494,6 +502,7 @@ export function inspectProject(root = repository, { check = false, documentation
       if (item.isSymbolicLink()) continue;
       if (item.isDirectory()) {
         if (excluded.has(item.name) || excluded.has(item.name.toLowerCase())
+          || (survey && surveyFixtures.has(item.name.toLowerCase()))
           || (!directory && planningRoots.has(item.name.toLowerCase())) || /^\.?playwright/i.test(item.name)) continue;
         if (!listing.verify()) { report.scan.truncated = true; warning(directory || '.', 'changed-during-read'); return; }
         if (depth < report.scan.maxDepth) walk(file, depth + 1); else report.scan.truncated = true;
@@ -508,7 +517,13 @@ export function inspectProject(root = repository, { check = false, documentation
       if (locks.has(item.name)) report.lockfiles.push(file);
       if (/^(?:docker-)?compose(?:\.[A-Za-z0-9_-]+)*\.ya?ml$/i.test(item.name)) report.compose.push(file);
       if (/^Dockerfile(?:\.[A-Za-z0-9_-]+)?$/.test(item.name) || /\.Dockerfile$/.test(item.name)) report.dockerfiles.push(file);
-      if (/\.(?:[cm]?[jt]sx?|py|go|rs|java|kt|cs|fs|vb|php|rb|ex|exs|dart|swift|c|cpp|cc|h|hpp|vue|svelte)$/.test(item.name) && !/(^|\/)(?:tests?|spec|fixtures)(\/|$)|\.(?:test|spec)\./.test(file) && report.sources.length < 12) report.sources.push(file);
+      if (/\.(?:[cm]?[jt]sx?|py|go|rs|java|kt|cs|fs|vb|php|rb|ex|exs|dart|swift|c|cpp|cc|h|hpp|vue|svelte)$/.test(item.name)) {
+        const fixture = /(^|\/)fixtures\//.test(file);
+        const testSource = /(^|\/)(?:tests?|spec)\/|\.(?:test|spec)\./.test(file)
+          || survey && /(^|\/)__tests__\/|(?:^|\/)test_|_test\.[^.]+$|Test\.[^.]+$/.test(file);
+        if (!fixture && !testSource && report.sources.length < 12) report.sources.push(file);
+        if (survey && !fixture && testSource && report.testSources.length < 12) report.testSources.push(file);
+      }
       commands(file, item.name);
     }
   }
@@ -521,8 +536,8 @@ export function inspectProject(root = repository, { check = false, documentation
   if (report.manifests.length || report.lockfiles.length || report.sources.length) report.mode = 'aplicacao-detectada';
   report.languages = [...languages].sort();
   report.contract = { checked: check, complete: report.structure.missing.length === 0 };
-  report.maturity = maturity(root, report);
-  report.documentation = inspectDocumentation(root, documentationLimits);
+  if (!survey) report.maturity = maturity(root, report);
+  report.documentation = inspectDocumentation(root, documentationLimits, { excludeFixtures: survey });
   return report;
 }
 

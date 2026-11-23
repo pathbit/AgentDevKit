@@ -31,6 +31,7 @@ atendido; lá os comandos de manutenção usam o pacote por `npx`.
 | `recovery resolve <geração> <id>` | Encerra a pendência revisada. |
 | `next` | Mostra a próxima etapa, sem iniciá-la. |
 | `next --integrations` | Indica onde consultar artefatos de outros métodos. |
+| `document` | Inventaria um sistema existente em leitura local. |
 | `lang [idioma]` | Consulta ou altera o idioma: pt, en ou es. |
 | `agents` | Mostra os clientes disponíveis e a seleção salva. |
 | `agents codex,claude` | Altera a seleção e os apontamentos necessários. |
@@ -57,12 +58,19 @@ antes de executar `recovery resolve`.
 | `--dry-run` | Exibe o plano sem aplicar alterações. |
 | `--force` | Solicita reparos gerenciados permitidos, com backup. |
 | `--json` | Produz uma resposta JSON para automação. |
-| `--intent product\|run` | Em `next`: produto ou execução. |
+| `--intent` | Objetivo da consulta `next`. |
+| `--purpose` | Objetivo que orienta o próximo passo em `init`. |
+| `--markdown` | Em `document`, emite o inventário em Markdown. |
 | `--integrations` | Em `next`: consulta de referências externas no projeto. |
 
-O primeiro uso interativo reúne idioma e clientes. Sem interação, valem as
-opções explícitas, a escolha local salva e, por último, `all`. Confira os
-[IDs e dependências](../../.pbai4devs/COMPATIBILIDADE.md).
+No primeiro uso em terminal, o assistente pergunta o idioma ou os clientes
+que faltam e o objetivo. Com idioma e clientes explícitos, use `--purpose`
+para indicar o objetivo. Sem interação, valem as opções explícitas, a
+seleção salva e, por último, `all`. Confira os [IDs e dependências](../../.pbai4devs/COMPATIBILIDADE.md).
+
+Use `init --purpose agents|product|run|document` para indicar se quer preparar
+os agentes, planejar produto, rodar a aplicação ou documentar o que existe.
+O objetivo orienta a próxima ação da CLI.
 
 `update` usa a versão executada; para escolher outra, fixe-a no nome do
 pacote. `sync` usa o que já está em `.pbai4devs`: ele não baixa outra versão.
@@ -139,7 +147,7 @@ do separador. `--help` e `--version` do kit não exigem um projeto instalado.
 
 ## JSON e retorno
 
-As respostas incluem `ok`, `command`, `version`, `language`, `target` e
+As respostas JSON incluem `ok`, `command`, `version`, `language`, `target` e
 `next`. Conforme a operação, há seleção, plano, conflitos, backup e erros.
 Leia os campos estruturados, não dependa da tradução da mensagem.
 Em `next --intent product`, após uma inspeção concluída, `stage` identifica a
@@ -191,5 +199,18 @@ os avisos e decida após verificar os arquivos relevantes.
 Use a [comparação de métodos](comparacao.md) para decidir se vale consultar
 um artefato externo. Quando `next` encontra referências, a consulta adicional
 preserva a etapa e a skill indicadas para o projeto.
+
+## Inventário de um sistema existente
+
+`document` funciona antes da instalação. Na pasta do projeto, use
+`npx @pathbit/agentdevkit document` para consultar o inventário local, ou
+acrescente `--json` para automação. São apresentados manifestos, nomes de
+scripts, infraestrutura, amostras de arquivos, testes, documentos e lacunas.
+
+`document --markdown` emite na saída um levantamento com
+`status: rascunho`. Os comportamentos ficam pendentes até a leitura das
+fontes. `next --intent document` indica `document` e, com o kit instalado,
+a skill `documentar-legado`. Veja como transformar o inventário em trabalho
+documental no [guia de documentação](documentation.md#documentar-um-sistema-em-uso).
 
 [Wiki](../README.md) · [Solução de problemas](troubleshooting.md)

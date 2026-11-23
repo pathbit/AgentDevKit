@@ -28,7 +28,9 @@ npx @pathbit/agentdevkit init
 Choose your coding agents when prompted, or pass `--agents codex,claude`.
 Your project saves the choice, and `agents` lets you change it. With no explicit
 or saved choice, a non-interactive run uses `all`. The CLI supports `pt`, `en`
-and `es`. See the [installation guide](docs/guides/installation.md) for pnpm,
+and `es`. The first-run wizard also asks what you want to do. Pass
+`init --purpose document` to select documentation explicitly.
+See the [installation guide](docs/guides/installation.md) for pnpm,
 Yarn, Bun and [GitHub Packages authentication][github-install].
 
 ## Choose what to do
@@ -37,6 +39,9 @@ Yarn, Bun and [GitHub Packages authentication][github-install].
   next planning step.
 - **Run an existing application.** Use `next --intent run` for guidance
   based on the current project state.
+- **Document an existing system.** Run `npx @pathbit/agentdevkit document`
+  for a local inventory, even before installing. See the
+  [documentation guide](docs/guides/documentation.md).
 - **Adopt the kit for selected clients.** Use `init --agents codex,claude`
   with the IDs you need.
 
@@ -49,6 +54,7 @@ In a Git repository, follow the terminal guidance through `doctor` and
 ```console
 npx @pathbit/agentdevkit next --intent product
 npx @pathbit/agentdevkit next --intent run
+npx @pathbit/agentdevkit next --intent document
 ```
 
 `next` suggests a step for you to take. Ask your agent to read `AGENTS.md`

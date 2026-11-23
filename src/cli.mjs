@@ -6,6 +6,7 @@ import { packageInfo, statePath, legacyStatePath } from './config.mjs';
 import { text, normalizeLanguage, explainError } from './i18n.mjs';
 import { resolveTarget, loadState, planInstallation, applyPlan, inspect, inspectRemovalHistory } from './install.mjs';
 import { getNextSteps, integrationHints, integrationNext, nextCommand, operationalNext } from './next.mjs';
+import { legacyDocumentation, renderLegacyDocumentation } from './legacy-documentation.mjs';
 import { availableClients, normalizeClients } from './adapters/index.mjs';
 import { isBlockingLocalIgnore } from '../.pbai4devs/scripts/lib/gitignore.mjs';
 import { assertUnredirectedGitEnvironment } from '../.pbai4devs/scripts/lib/git-environment.mjs';
@@ -18,6 +19,7 @@ function selectedClients(value) {
   try { return normalizeClients(value); }
   catch (error) { usage(error.message); }
 }
+const purposes = ['agents', 'product', 'run', 'document'];
 
 function worktreeWarning(language) {
   return {
@@ -76,9 +78,17 @@ export function parseArgs(argv) {
       options.integrations = true;
     } else if (arg === '--intent' && options.command !== 'tools') {
       const value = argv[++index];
-      if (!value || !['product', 'run'].includes(value)) usage('Use --intent product or run.');
+      if (!['product', 'run', 'document'].includes(value)) usage('Use --intent product, run or document.');
       if (options.intent !== undefined) usage('Use --intent once.');
       options.intent = value;
+    } else if (arg === '--purpose' && options.command !== 'tools') {
+      const value = argv[++index];
+      if (!purposes.includes(value)) usage('Use --purpose agents, product, run or document.');
+      if (options.purpose !== undefined) usage('Use --purpose once.');
+      options.purpose = value;
+    } else if (arg === '--markdown' && options.command !== 'tools') {
+      if (options.markdown) usage('Use --markdown once.');
+      options.markdown = true;
     } else if (['--target', '--lang', '--agents', '--clients'].includes(arg)) {
       const value = argv[++index]; if (!value || value.startsWith('-')) usage(`Missing value: ${arg}`);
       if (arg === '--target') options.target = value;
@@ -99,7 +109,7 @@ export function parseArgs(argv) {
   if (!options.command) options.command = options.version ? 'version' : options.help ? 'help' : 'init';
   if (options.command === 'language') options.command = 'lang';
   if (options.command === 'clients') options.command = 'agents';
-  if (!['init', 'update', 'doctor', 'sync', 'lang', 'agents', 'next', 'tools', 'help', 'version', 'recovery'].includes(options.command)) usage(`Unknown command: ${options.command}`);
+  if (!['init', 'update', 'doctor', 'sync', 'lang', 'agents', 'next', 'document', 'tools', 'help', 'version', 'recovery'].includes(options.command)) usage(`Unknown command: ${options.command}`);
   if (options.command === 'recovery' && (options.help || options.version)) options.positionals = [];
   if (options.help) options.command = 'help';
   if (options.version) options.command = 'version';
@@ -115,6 +125,9 @@ export function parseArgs(argv) {
   if (options.clients !== undefined && !['init', 'update', 'sync', 'lang', 'agents', 'help', 'version'].includes(options.command)) usage('--agents requires an installation or configuration command.');
   if (options.intent !== undefined && !['next', 'help', 'version'].includes(options.command)) usage('--intent requires next.');
   if (options.integrations && !['next', 'help', 'version'].includes(options.command)) usage('--integrations requires next.');
+  if (options.purpose !== undefined && !['init', 'help', 'version'].includes(options.command)) usage('--purpose requires init.');
+  if (options.markdown && (options.json || !['document', 'help', 'version'].includes(options.command))) usage('--markdown requires document without --json.');
+  if (options.command === 'document' && (options.force || options.yes)) usage('document is a read-only command.');
   if (options.check && options.command !== 'sync') usage('--check requires sync.');
   if (options.dryRun && (!['init', 'update', 'sync', 'lang', 'agents'].includes(options.command) || (options.command === 'agents' && options.clients === undefined))) usage('--dry-run requires an installation or configuration change.');
   return options;
@@ -122,7 +135,10 @@ export function parseArgs(argv) {
 
 export function print(result, options, output) {
   if (options.json) { output.write(`${JSON.stringify(result)}\n`); return; }
-  output.write(`${result.message}\n`);
+  if (result.documentation) {
+    output.write(`${renderLegacyDocumentation(result.documentation, result.language, { frontmatter: Boolean(options.markdown) })}\n`);
+    if (options.markdown) return;
+  } else output.write(`${result.message}\n`);
   for (const method of result.integrations || []) {
     output.write(`\n${method.name}\n  ${method.paths.join(', ')}\n  ${method.instruction}\n  ${method.url}\n`);
   }
@@ -335,7 +351,8 @@ function recoveryReport(options, target, recovery, previous, configurationStatus
 export async function main(argv = process.argv.slice(2), context = {}) {
   const output = context.stdout || process.stdout, input = context.stdin || process.stdin, errorOutput = context.stderr || process.stderr;
   const separator = argv.indexOf('--'), globalArgs = separator < 0 ? argv : argv.slice(0, separator);
-  let options = { json: globalArgs.includes('--json') }, language = normalizeLanguage(globalArgs[globalArgs.indexOf('--lang') + 1]) || 'pt', target = resolve(context.cwd || process.cwd()), clients = ['all'], operationUncertain = false, removalBeforePlan = [];
+  let options = { json: globalArgs.includes('--json'), markdown: globalArgs.includes('document') && globalArgs.includes('--markdown') };
+  let language = normalizeLanguage(globalArgs[globalArgs.indexOf('--lang') + 1]) || 'pt', target = resolve(context.cwd || process.cwd()), clients = ['all'], operationUncertain = false, removalBeforePlan = [];
   const preparePlan = input => {
     operationUncertain = true;
     const plan = planInstallation(input);
@@ -366,10 +383,10 @@ export async function main(argv = process.argv.slice(2), context = {}) {
         };
       }
       if (options.command === 'recovery' || recovery.status !== 'ready' || configurationStatus === 'unreadable') {
-        return recoveryReport(options, target, recovery, previous, configurationStatus, configurationError, output);
+        return recoveryReport(options, target, recovery, previous, configurationStatus, configurationError, options.markdown ? errorOutput : output);
       }
     }
-    language = options.language || previous?.language || 'pt';
+    language = options.language || normalizeLanguage(previous?.language) || 'pt';
     clients = options.clients ?? previous?.clients ?? ['all'];
     if (options.command === 'init' && !previous && !options.yes && !options.json && !options.dryRun && input.isTTY && output.isTTY && (!options.language || options.clients === undefined)) {
       const prompt = context.ask ? null : createInterface({ input, output: errorOutput });
@@ -380,6 +397,12 @@ export async function main(argv = process.argv.slice(2), context = {}) {
           const ids = availableClients.map(client => client.id).join(', ');
           clients = selectedClients((await ask(`${text(language, 'clientsAvailable')}: ${ids}\n${text(language, 'clientsSelect')}`)).trim() || 'all');
           options.clients = clients;
+        }
+        if (options.purpose === undefined) {
+          const value = (await ask(text(language, 'purposeSelect'))).trim();
+          const purpose = /^[1-4]$/.test(value) ? purposes[Number(value) - 1] : value || 'agents';
+          if (!purposes.includes(purpose)) usage('Choose 1, 2, 3 or 4.');
+          options.purpose = purpose;
         }
       } finally { prompt?.close(); }
     }
@@ -468,8 +491,12 @@ export async function main(argv = process.argv.slice(2), context = {}) {
       }
       result.issues = found.issues; result.ok = found.installed && found.issues.length === 0;
       result.message = text(language, result.ok ? 'healthy' : found.installed ? 'unhealthy' : 'missing'); exitCode = result.ok ? 0 : 1;
+    } else if (options.command === 'document') {
+      result.documentation = legacyDocumentation(target);
+      result.message = text(language, 'document');
     } else if (options.command === 'next') {
-      const hints = integrationHints({ target, language, intent: options.intent });
+      const hints = options.intent === 'document' && !options.integrations ? []
+        : integrationHints({ target, language, intent: options.intent });
       if (options.integrations) {
         result.integrations = hints;
         result.message = text(language, hints.length ? 'integrationsFound' : 'integrationsEmpty');
@@ -478,7 +505,8 @@ export async function main(argv = process.argv.slice(2), context = {}) {
           result.next = [{ label: text(language, 'workflow'), command: nextCommand(action, target, language), stage: 'fluxo' }];
         }
       } else {
-        result.message = installed ? text(language, 'workflow') : text(language, 'missing');
+        result.message = options.intent === 'document' ? text(language, 'document')
+          : installed ? text(language, 'workflow') : text(language, 'missing');
         result.next = getNextSteps({ command: 'next', language, target, installed, intent: options.intent });
         if (hints.length) result.next.push(integrationNext(result, options.intent));
       }
@@ -568,7 +596,10 @@ export async function main(argv = process.argv.slice(2), context = {}) {
     }
     if (removalBeforePlan.length) result.issues = removalBeforePlan.map(issue => ({ ...issue, observedBeforePlanFailure: true }));
     if (options.command === 'doctor' || options.command === 'sync' && options.check) result.warnings = [claudeInspectionWarning(language)];
+    if (options.command === 'document' && !result.recovery && !possiblePartial) {
+      result.next = getNextSteps({ command: 'document-error', language, target });
+    }
     if (!options.json) result.message += ` (${code})`;
-    print(result, options, output); return error.exitCode || primary?.exitCode || 1;
+    print(result, options, options.markdown && !options.json ? errorOutput : output); return error.exitCode || primary?.exitCode || 1;
   }
 }

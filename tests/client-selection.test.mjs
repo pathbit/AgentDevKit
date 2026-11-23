@@ -472,18 +472,46 @@ test('estado legado equivale a all e consultas não escrevem migração', t => {
   assert.deepEqual(ruleSnapshot(root), rulesBefore); assert.deepEqual(gitSnapshot(root), gitBefore);
 });
 
-test('TTY pergunta idioma e clientes; execução semTTY e opções não perguntam', async t => {
-  const root = fixture(t), questions = [], answers = ['es', 'claude']; let output = '';
+test('TTY pergunta idioma, clientes e propósito; execução sem TTY e opções não perguntam', async t => {
+  const root = fixture(t), questions = [], answers = ['es', 'claude', '4']; let output = '';
+  put(root, 'docs/existente.md', '# Documento existente\n');
   const status = await main(['init', '--target', root], { stdin: { isTTY: true }, stdout: { isTTY: true, write: value => { output += value; } }, ask: async question => { questions.push(question); return answers.shift(); } });
-  assert.equal(status, 0, output); assert.equal(questions.length, 2); assert.match(questions[0], /Idioma/); assert.match(questions[1], /Agentes/);
+  assert.equal(status, 0, output);
+  assert.equal(questions.length, 3);
+  assert.match(questions[0], /Idioma/);
+  assert.match(questions[1], /Agentes/);
+  assert.match(questions[2], /4[^\r\n]*document/i);
+  assert.match(output, /\bnext --intent document\b/);
   assert.equal(state(root).language, 'es'); assert.deepEqual(state(root).clients, ['claude']);
-  for (const args of [[], ['--yes'], ['--json'], ['--dry-run']]) await t.test(args.join(' ') || 'sem TTY', async subtest => {
+  assert.deepEqual(readdirSync(join(root, 'docs')), ['existente.md']);
+  assert.equal(read(root, 'docs/existente.md'), '# Documento existente\n');
+  for (const args of [[], ['--yes'], ['--json'], ['--dry-run'], ['--lang', 'en', '--agents', 'codex']]) await t.test(args.join(' ') || 'sem TTY', async subtest => {
     const target = fixture(subtest); const tty = args.length > 0; let text = '';
     const code = await main(['init', '--target', target, ...args], { stdin: { isTTY: tty }, stdout: { isTTY: tty, write: value => { text += value; } }, ask: () => { throw new Error('Unexpected prompt'); } });
     assert.equal(code, 0, text);
     if (args.includes('--dry-run')) assert.deepEqual(readdirSync(target).filter(name => name !== '.git'), []);
-    else assert.deepEqual(state(target).clients, ['all']);
+    else if (args.includes('--agents')) {
+      assert.deepEqual(state(target).clients, ['codex']);
+      assert.equal(state(target).language, 'en');
+    } else assert.deepEqual(state(target).clients, ['all']);
   });
+});
+
+test('propósito explícito mantém as perguntas de idioma e clientes e orienta a rota escolhida', async t => {
+  const root = fixture(t), questions = [], answers = ['en', 'codex']; let output = '';
+  const code = await main(['init', '--target', root, '--purpose', 'run'], {
+    stdin: { isTTY: true },
+    stdout: { isTTY: true, write: value => { output += value; } },
+    ask: async question => { questions.push(question); return answers.shift(); },
+  });
+  assert.equal(code, 0, output);
+  assert.equal(questions.length, 2);
+  assert.match(questions[0], /Idioma/);
+  assert.match(questions[1], /Agents/i);
+  assert.equal(state(root).language, 'en');
+  assert.deepEqual(state(root).clients, ['codex']);
+  assert.match(output, /\bnext --intent run\b/);
+  assert.equal(existsSync(join(root, 'docs')), false);
 });
 
 test('clientes não selecionados com links próprios não são visitados', t => {

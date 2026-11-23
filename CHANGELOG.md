@@ -4,6 +4,14 @@ description: Alterações verificáveis por versão do AgentDevKit.
 
 # Changelog
 
+## 0.0.35
+
+- O primeiro uso identifica se a equipe quer configurar agentes, planejar,
+  executar ou documentar um sistema existente.
+- `document` reúne evidências locais e gera um rascunho Markdown ou JSON.
+- O fluxo de documentação por módulo liga fontes, testes e lacunas aos
+  documentos que o projeto já mantém.
+
 ## 0.0.34
 
 - Guia a verificação no terminal da instalação até a próxima etapa do projeto.

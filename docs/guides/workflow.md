@@ -37,7 +37,13 @@ documentos, não comprova comportamento e não autoriza substituir decisões.
 | Só está instalando os agentes | Manter modelos; não iniciar o produto. |
 | Projeto novo, ainda sem decisões | [configurar-projeto][configurar]. |
 | Aplicação existente que precisa rodar | [preparar-dev][preparar]. |
+| Sistema em uso que precisa ser documentado | [documentar-legado][legado]. |
 | Nova funcionalidade em projeto existente | Reutilizar documentos e planejar. |
+
+Para documentar um sistema existente, comece com `agentdevkit document` ou
+consulte `agentdevkit next --intent document`. Leia os fluxos relevantes
+antes de atribuir comportamentos ao sistema. Use as evidências para completar
+os documentos já adotados. [Guia de documentação](documentation.md#documentar-um-sistema-em-uso)
 
 ## 2. Reunir as perguntas no início
 
@@ -129,4 +135,5 @@ decisões existentes. Consulte [recursos](resources.md) se faltar um fluxo.
 [implementar]: ../../.pbai4devs/skills/specs/implementar-spec/SKILL.md
 [verificar]: ../../.pbai4devs/skills/projeto/verificar-trabalho/SKILL.md
 [documentacao]: ../../.pbai4devs/skills/projeto/atualizar-documentacao/SKILL.md
+[legado]: ../../.pbai4devs/commands/documentar-legado/COMMAND.md
 [revisao]: ../../.pbai4devs/commands/revisar-entrega/COMMAND.md

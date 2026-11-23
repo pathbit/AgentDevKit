@@ -28,8 +28,10 @@ npx @pathbit/agentdevkit init
 Elige tus agentes en la pregunta inicial o usa `--agents codex,claude`.
 El proyecto guarda la selección y puedes cambiarla con `agents`.
 En modo no interactivo, `all` es el valor predeterminado si no hay una
-selección explícita o guardada. La CLI admite `pt`, `en` y `es`. La
-[guía de instalación](docs/guides/installation.md) cubre pnpm, Yarn, Bun y
+selección explícita o guardada. La CLI admite `pt`, `en` y `es`. El asistente
+de primer uso también pregunta por el objetivo. Usa `init --purpose document`
+para indicar que quieres documentar.
+La [guía de instalación](docs/guides/installation.md) cubre pnpm, Yarn, Bun y
 [GitHub Packages con autenticación][github-install].
 
 ## Elige qué quieres hacer
@@ -38,6 +40,9 @@ selección explícita o guardada. La CLI admite `pt`, `en` y `es`. La
   para identificar el siguiente paso de planificación.
 - **Ejecutar una aplicación existente.** Usa `next --intent run` para
   orientarte según el estado actual del proyecto.
+- **Documentar un sistema existente.** Ejecuta `npx @pathbit/agentdevkit document`
+  para consultar el inventario local, incluso antes de instalar el kit.
+  Consulta la [guía de documentación](docs/guides/documentation.md).
 - **Adoptar el kit para algunos clientes.** Usa `init --agents codex,claude`
   con los identificadores que necesites.
 
@@ -50,6 +55,7 @@ proyecto. Con Git, sigue las indicaciones de la terminal para `doctor` y
 ```console
 npx @pathbit/agentdevkit next --intent product
 npx @pathbit/agentdevkit next --intent run
+npx @pathbit/agentdevkit next --intent document
 ```
 
 `next` te propone un paso. Pide a tu agente que lea `AGENTS.md` y use la

@@ -3,7 +3,7 @@ import { types } from 'node:util';
 
 const keys = new Set([
   'command', 'positionals', 'toolArgs', 'target', 'language', 'clients',
-  'yes', 'json', 'dryRun', 'force', 'check', 'help', 'version', 'intent', 'integrations',
+  'yes', 'json', 'dryRun', 'force', 'check', 'help', 'version', 'intent', 'integrations', 'purpose', 'markdown',
 ]);
 const required = ['command', 'positionals', 'toolArgs', 'target', 'language',
   'clients', 'yes', 'json', 'dryRun', 'force', 'check'];
@@ -38,19 +38,21 @@ export function classifyRecoveryEffects(options) {
   if (![positionals, toolArgs].every(stringArray)
     || clients !== undefined && !stringArray(clients)
     || !['yes', 'json', 'dryRun', 'force', 'check'].every(key => typeof get(key) === 'boolean')
-    || !['help', 'version', 'integrations'].every(key => get(key) === undefined || typeof get(key) === 'boolean')
+    || !['help', 'version', 'integrations', 'markdown'].every(key => get(key) === undefined || typeof get(key) === 'boolean')
     || ![null, 'pt', 'en', 'es'].includes(get('language'))
     || !(get('target') === null || typeof get('target') === 'string')
-    || !(get('intent') === undefined || ['product', 'run'].includes(get('intent')))) return 'unsupported';
+    || !(get('intent') === undefined || ['product', 'run', 'document'].includes(get('intent')))
+    || !(get('purpose') === undefined || ['agents', 'product', 'run', 'document'].includes(get('purpose')))) return 'unsupported';
 
   const command = get('command');
   if (command === 'recovery') {
-    if (clients !== undefined || get('intent') !== undefined || get('integrations') !== undefined || toolArgs.length
+    if (clients !== undefined || get('intent') !== undefined || get('integrations') !== undefined
+      || get('purpose') !== undefined || get('markdown') !== undefined || toolArgs.length
       || get('check') || get('dryRun') || get('force') || get('yes')) return 'unsupported';
     if (!positionals.length) return 'query';
     return validRecoveryResolution(positionals) ? 'resolution' : 'unsupported';
   }
-  const known = ['init', 'update', 'sync', 'lang', 'agents', 'doctor', 'next', 'tools', 'help', 'version'];
+  const known = ['init', 'update', 'sync', 'lang', 'agents', 'doctor', 'next', 'document', 'tools', 'help', 'version'];
   if (!known.includes(command)
     || positionals.length > 1 || positionals.length && !['init', 'lang', 'agents'].includes(command)
     || command === 'init' && get('target') !== null && positionals.length
@@ -59,11 +61,14 @@ export function classifyRecoveryEffects(options) {
     || clients !== undefined && !['init', 'update', 'sync', 'lang', 'agents', 'help', 'version'].includes(command)
     || get('intent') !== undefined && !['next', 'help', 'version'].includes(command)
     || get('integrations') !== undefined && !['next', 'help', 'version'].includes(command)
+    || get('purpose') !== undefined && !['init', 'help', 'version'].includes(command)
+    || get('markdown') !== undefined && (get('json') || !['document', 'help', 'version'].includes(command))
+    || command === 'document' && (get('force') || get('yes'))
     || get('check') && command !== 'sync'
     || get('dryRun') && (!['init', 'update', 'sync', 'lang', 'agents'].includes(command)
       || command === 'agents' && clients === undefined)) return 'unsupported';
   if (command === 'tools') return 'opaque';
-  if (['help', 'version', 'doctor', 'next'].includes(command)) return 'query';
+  if (['help', 'version', 'doctor', 'next', 'document'].includes(command)) return 'query';
   if (command === 'agents' && clients === undefined) return 'query';
   if (command === 'lang' && positionals.length === 0 && get('language') === null
     && clients === undefined) return 'query';

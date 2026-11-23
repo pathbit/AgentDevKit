@@ -8,6 +8,33 @@ O pacote instala as skills, as definições das ferramentas e o inventário
 de documentos. O agente usa esses recursos para ler o projeto e propor
 complementos nos documentos autorizados. Os binários são preparados à parte.
 
+## Documentar um sistema em uso
+
+Consulte o inventário direto na raiz do projeto, inclusive antes de instalar
+o kit. Use `--json` para automação e `--markdown` para obter um rascunho.
+
+```console
+npx @pathbit/agentdevkit document
+npx @pathbit/agentdevkit document --markdown
+```
+
+A consulta local reúne manifestos, nomes de scripts, amostras de fontes e
+testes, infraestrutura e documentos. Use o resultado para escolher os módulos
+e fluxos a ler. Com o kit instalado, `next --intent document` encaminha à
+[skill documentar-legado][legado].
+
+Em cada fluxo relevante, parta de uma entrada de código, siga os efeitos
+e confira os testes. Cite arquivo, linha, símbolo ou teste para os fatos.
+Explique quais evidências sustentam cada inferência e qual fonte pode
+responder às perguntas pendentes. Julgue o que uma leitura estática sustenta
+e registre resultados de execução apenas quando realmente verificados.
+
+Use o [modelo de levantamento][levantamento] para consolidar a análise.
+Para mudanças autorizadas, complemente os documentos existentes com
+`atualizar-documentacao`. Use design, ADR ou SPEC quando precisar documentar,
+respectivamente, a arquitetura, uma decisão estrutural ou um incremento.
+O levantamento continua em rascunho até a revisão dos fatos e das lacunas.
+
 ## Começar pelo que existe
 
 Depois de instalar o kit, peça ao seu agente:
@@ -61,4 +88,6 @@ Use `verificar-trabalho` e `revisar-entrega`; salve as provas em `.agent-tests/`
 [Wiki](../README.md) · [Skill compartilhada][skill] · [Testes][tests]
 
 [skill]: ../../.pbai4devs/skills/projeto/atualizar-documentacao/SKILL.md
+[legado]: ../../.pbai4devs/skills/projeto/documentar-legado/SKILL.md
+[levantamento]: ../../.pbai4devs/templates/levantamento-legado/TEMPLATE.md
 [tests]: https://github.com/pathbit/AgentDevKit/blob/master/tests/README.md
