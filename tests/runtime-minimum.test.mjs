@@ -2,7 +2,8 @@ import '../.pbai4devs/scripts/lib/test-git-environment.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -12,7 +13,7 @@ const repository = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 test('runtime de entrada preserva Git e skill própria em init, sync e update', { timeout: 900000 }, async t => {
   if (process.env.ADK_EXPECT_NODE18 === '1') assert.equal(process.versions.node, '18.20.8');
   const base = mkdtempSync(join(tmpdir(), 'adk-runtime-'));
-  t.after(() => rmSync(base, { recursive: true, force: true }));
+  t.after(() => rm(base, { recursive: true, force: true, maxRetries: 6, retryDelay: 250 }));
   const root = join(base, 'project'), template = join(base, 'template');
   mkdirSync(root); mkdirSync(template);
   const env = Object.fromEntries(Object.entries(process.env).filter(([key]) =>

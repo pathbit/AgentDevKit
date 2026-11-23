@@ -59,7 +59,8 @@ function runSynchronization({ root = projectRoot, check = false, force = false, 
   const { absolute, safe, firstFileStats, captureInput } = workspace;
   const config = '.pbai4devs/espelhos.conf';
   const configExists = stat(safe(config));
-  captureInput(config, configExists ? readFileSync(absolute(config)) : null);
+  const configBytes = configExists ? readFileSync(absolute(config)) : null;
+  captureInput(config, configBytes);
   const stateRoot = stateDirectory(root);
   const stateFile = `${stateRoot}/agentdevkit.json`;
   const installedBytes = stat(safe(stateFile)) ? readFileSync(safe(stateFile)) : null;
@@ -109,7 +110,7 @@ function runSynchronization({ root = projectRoot, check = false, force = false, 
     migratedClaude.add(target);
     claudeMigrationInputs.set(stateFile, installedBytes);
     claudeMigrationInputs.set(entryRegistry, registryBytes);
-    claudeMigrationInputs.set(config, mergedInputs.get(config));
+    claudeMigrationInputs.set(config, configBytes);
     for (const [path, expected] of claudeRuleInputs.get(target)) {
       const previous = claudeMigrationInputs.get(path);
       if (previous && !previous.equals(expected)) fail(`Arquivo mudou apos planejar: ${path}`);
