@@ -25,6 +25,8 @@ node .pbai4devs/scripts/preparar-ferramentas/SCRIPT.mjs setup
 Aceita `base`, grupo ou nome; sem seleção, usa `all`. Incompatibilidades na
 seleção geral são informadas como não aplicáveis; pedir uma delas pelo nome
 falha. Falhas de instalação/verificação são relatadas e retornam código 1.
+A seleção `all` omite ferramentas com `optIn: true`. Use `setup workflow`
+para preparar o grupo opcional ou `install <nome>` para um item.
 Sem npm funcional, o preparo para antes de alterar as ferramentas.
 Ao mover o hub, preserve suas pastas `.local` e `.cache`; `setup` reutiliza os
 pacotes e cria os atalhos locais ausentes com imports relativos. Se um
@@ -47,9 +49,12 @@ node .pbai4devs/scripts/preparar-ferramentas/SCRIPT.mjs check all
 node .pbai4devs/scripts/preparar-ferramentas/SCRIPT.mjs unlock skills
 ```
 
-`info <nome>` mostra configuração e estado; `run <nome> [argumentos]` executa
-sem instalar. Sem ação, há ajuda. Cada ferramenta tem uma única entrada
+`info <nome>` mostra configuração e estado. `check <nome>` executa a
+sondagem da instalação existente, e `run <nome> [argumentos]` chama a ferramenta.
+Sem ação, há ajuda. Cada ferramenta tem uma única entrada
 `SCRIPT.mjs`, executada com Node em qualquer sistema.
+Na CLI do kit instalado, `plugins install <id>` e `plugins check <id>`
+também usam esse gerenciador para uma ferramenta por vez.
 
 `unlock <nome>` recupera somente um lock local com PID comprovadamente morto.
 Locks ativos, de outro host ou sem metadados verificáveis são preservados.

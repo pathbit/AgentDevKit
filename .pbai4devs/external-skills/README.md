@@ -7,10 +7,13 @@ description: Catálogo revisado e cópias locais de skills externas.
 [CATALOG.json](CATALOG.json) registra origem, commit imutável, arquivo,
 nome, licença, finalidade e revisão local. `reviewed` indica curadoria para o
 uso descrito. As instruções do usuário e as regras do projeto prevalecem.
+Entradas `candidate` ficam disponíveis para consulta e avaliação de origem.
 
 Use o [gerenciador](../scripts/gerenciar-skills-externas/README.md) para listar,
 descobrir, instalar, verificar ou ler uma entrada. Instale antes o CLI `skills`
 pelo gerenciador de ferramentas. Node.js 24+ é o runtime comum.
+Na CLI, `agentdevkit plugins list` e `plugins info <id>` mostram origem,
+licença e revisão. O gerenciador detalha o preparo de uma entrada revisada.
 
 As cópias completas ficam em `.local/<id>/`, com referências e licenças
 incluídas pela origem. O CLI oficial faz o download e a cópia; nenhuma skill

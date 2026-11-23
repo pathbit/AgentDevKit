@@ -5,7 +5,8 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { cli, fixture, put, read, state, statePath } from './fixtures/client-selection-helpers.mjs';
-import { mergeTomlContent, stripTomlContent } from '../.pbai4devs/scripts/lib/managed-toml.mjs';
+import { stripTomlContent } from '../.pbai4devs/scripts/lib/managed-toml.mjs';
+import { mergeTomlContent } from './fixtures/legacy-toml-writer.mjs';
 
 const digest = value => createHash('sha256').update(value).digest('hex');
 
@@ -59,6 +60,22 @@ test('sync direto orienta a atualização de manifesto gerado antigo', { timeout
   }
 });
 
+test('sync direto de instalação atual não reativa Gemini em manifesto manual', { timeout: 120000 }, t => {
+  const root = fixture(t);
+  cli(root, ['init', '--agents', 'codex']);
+  const manifest = '.pbai4devs/espelhos.conf';
+  const script = '.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs';
+  for (const custom of ['agente|.gemini|agrupado\n', 'agente|.Gemini|agrupado\n', 'agente|.codex|agrupado\ngitignore|.Gemini\n']) {
+    put(root, manifest, custom);
+    const result = spawnSync(process.execPath, [join(root, script), '--root', root], { encoding: 'utf8' });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /agentdevkit update --dry-run/);
+    assert.equal(read(root, manifest), custom);
+    for (const path of ['.gemini', '.Gemini']) assert.equal(existsSync(join(root, path)), false, path);
+  }
+  assert.equal(cli(root, ['agents', 'add', 'gemini'], 2).error.code, 'E_ARGS');
+});
+
 for (const clients of [['gemini'], ['codex', 'gemini']]) {
   test(`atualiza a seleção legada ${clients.join(',')}`, { timeout: 120000 }, t => {
     const root = fixture(t);
@@ -71,6 +88,7 @@ for (const clients of [['gemini'], ['codex', 'gemini']]) {
     assert.deepEqual(selectionInfo.clients, onlyRetired ? [] : ['codex']);
     const selection = onlyRetired ? ['--agents', 'codex'] : [];
     if (onlyRetired) {
+      assert.equal(cli(root, ['agents', 'remove', 'codex', '--dry-run'], 1).error.code, 'E_CLIENTS_RETIRED');
       const blocked = cli(root, ['update', '--dry-run'], 1);
       assert.equal(blocked.error.code, 'E_CLIENTS_RETIRED');
       assert.match(blocked.message, /update --agents/);

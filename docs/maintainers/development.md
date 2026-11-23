@@ -81,12 +81,22 @@ e diretórios `playwright*` também excluem código com esses nomes no contexto.
 | [`.pbai4devs/`](../../.pbai4devs/README.md) | Recursos compartilhados dos agentes. |
 | [`docs/`](../README.md) | Guias, decisões e especificações. |
 
+O executável em `bin/` verifica o runtime antes de carregar a entrada em
+`src/cli.mjs`. A CLI aplica a barreira de recuperação antes de despachar
+as operações. `src/install.mjs` expõe o planejamento e a aplicação usados
+pela CLI e pelos testes. Veja a [arquitetura dos módulos][architecture].
+
+Ao mudar um comando, confira argumentos, ajuda, saída JSON e idiomas.
+Ao mudar um utilitário de propriedade, publicação ou recuperação em
+`.pbai4devs/scripts/lib/`, confira o fluxo da CLI e o
+[sincronizador instalado][sync].
+
 ## Escolha a próxima ação
 
 | Objetivo | Comando |
 | --- | --- |
 | Conhecer os comandos da CLI local | `npm run cli -- --help` |
-| Gerar exemplos com `.claude`, `.codex` e outros | `npm run examples` |
+| Gerar exemplos a partir das fontes publicáveis | `npm run examples` |
 | Executar os oito cenários de exemplo | `npm run test:examples` |
 | Conferir recursos e documentação | `npm run check` |
 | Testar o produto | `npm test` |
@@ -95,7 +105,9 @@ e diretórios `playwright*` também excluem código com esses nomes no contexto.
 
 `generate` é um alias para gerar os exemplos. `agents:sync` sincroniza uma
 configuração local de agentes do próprio checkout, quando adotada de forma
-explícita. O projeto não precisa de todas as pastas de clientes na raiz.
+explícita. Os comandos npm de exemplos usam as fontes publicáveis do hub.
+Para avaliar a seleção de um projeto, execute o [script de maturidade][maturity]
+instalado nele.
 
 Edite fontes e templates, não os arquivos gerados. Testes e fixtures entram
 no Git; relatórios e caches ficam locais. Os exemplos gerados vão para uma pasta
@@ -107,6 +119,9 @@ artefato aprovado pelo CI.
 [Wiki](../README.md) · [Exemplos][examples]
 
 [review]: ../../.pbai4devs/commands/revisar-entrega/COMMAND.md
+[architecture]: ../../src/README.md
+[sync]: ../../.pbai4devs/scripts/sincronizar-agentes/README.md
+[maturity]: ../../.pbai4devs/scripts/testar-maturidade/README.md
 [tests]: https://github.com/pathbit/AgentDevKit/tree/main/tests
 [scripts]: https://github.com/pathbit/AgentDevKit/tree/main/scripts
 [examples]: https://github.com/pathbit/AgentDevKit/tree/main/examples

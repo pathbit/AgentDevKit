@@ -22,6 +22,8 @@ test('classifica comandos reais sem tratar ferramentas opacas como consulta', ()
     [['agents'], 'query'],
     [['agents', '--lang', 'pt'], 'query'],
     [['agents', 'codex'], 'mutation'],
+    [['agents', 'add', 'codex'], 'mutation'],
+    [['agents', 'remove', 'codex', '--dry-run'], 'planning'],
     [['clients', 'codex', '--dry-run'], 'planning'],
     [['language', 'pt'], 'mutation'],
     [['doctor'], 'query'],
@@ -34,6 +36,10 @@ test('classifica comandos reais sem tratar ferramentas opacas como consulta', ()
     [['--version'], 'query'],
     [['tools', '--help'], 'opaque'],
     [['tools', 'check', 'agent-browser'], 'opaque'],
+    [['plugins', 'list'], 'query'],
+    [['plugins', 'info', 'agent-browser'], 'query'],
+    [['plugins', 'install', 'agent-browser'], 'opaque'],
+    [['plugins', 'check', 'agent-browser'], 'opaque'],
     [['tools', 'run', 'agent-browser', '--', '--check'], 'opaque'],
     [['--help', 'tools', 'run'], 'query'],
     [['recovery'], 'query'],
@@ -54,6 +60,9 @@ test('parser e classificador restringem o propósito e os formatos aos comandos 
     ['next', '--markdown'], ['document', '--dry-run'], ['document', '--check'],
     ['document', '--force'], ['document', '--yes'],
     ['document', '--markdown', '--json'], ['document', '--json', '--markdown'],
+    ['agents', 'add', 'none'], ['agents', 'remove', 'all'], ['agents', 'none,codex'],
+    ['plugins', 'list', 'extra'], ['plugins', 'info'], ['plugins', 'install', '../tool'],
+    ['plugins', 'check', 'gitleaks', '--dry-run'],
   ];
   for (const args of invalid) assert.throws(() => parseArgs(args), { code: 'E_ARGS' }, args.join(' '));
   const childArgs = ['--', '--purpose', 'document', '--markdown'];

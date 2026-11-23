@@ -21,6 +21,11 @@ usando o CLI oficial. `install` reutiliza a cópia verificada; `update <id>`
 aplica o pin revisado do catálogo ou restaura conteúdo local alterado. Revise
 origem, licença e instruções antes de mudar uma entrada para `reviewed`.
 
+Na CLI do kit instalado, prepare o pré-requisito com
+`agentdevkit plugins install skills`. Use `plugins info <id>` para consultar
+a origem e a revisão, e `plugins install <id>` ou `plugins check <id>`
+para operar sobre a entrada revisada. Entradas candidatas servem à avaliação.
+
 Downloads usam `skills add` com `--agent universal --copy --yes`, em pasta
 isolada. O gerenciador confere origem, SHA, caminho e conteúdo; preserva a
 instalação anterior quando o preparo falha. Ele não chama `skills update`,

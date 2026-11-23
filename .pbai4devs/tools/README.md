@@ -26,9 +26,18 @@ aplica esse pin. Pacotes e estado ficam em `<nome>/.local/`; cache em
 | [gitleaks](gitleaks/README.md) | security | Segredos em arquivos e Git. |
 | [osv-scanner](osv-scanner/README.md) | security | Dependências com base local. |
 | [opengrep](opengrep/README.md) | security | Código com regras locais. |
+| [openspec](openspec/README.md) | workflow | Validação e arquivamento de deltas. |
+| [dotcontext-mcp](dotcontext-mcp/README.md) | workflow | Servidor local MCP via stdio. |
 
-`setup` instala e verifica todos os CLIs compatíveis. O grupo `base` limita a
-seleção a navegador e lint; `security` seleciona os três scanners.
+`setup` instala e verifica os CLIs compatíveis da seleção geral. O grupo
+`base` seleciona navegador e lint. O grupo `security` seleciona os três
+scanners. As ferramentas do grupo `workflow` exigem seleção explícita pelo
+nome ou pelo grupo. A seleção geral `all` pula essas entradas.
+
+```console
+node .pbai4devs/scripts/preparar-ferramentas/SCRIPT.mjs setup workflow
+```
+
 As bases de vulnerabilidades são preparadas separadamente; instalar o CLI
 não transforma uma base ausente em resultado limpo.
 Confira Node/npm pelo [primeiro uso][manager] antes de executar os scripts.

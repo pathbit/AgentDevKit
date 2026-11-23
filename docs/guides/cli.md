@@ -13,10 +13,11 @@ npx @pathbit/agentdevkit --help
 Para GitHub Packages, autentique conforme a [instalação](installation.md#github-packages)
 e use o prefixo `npx --registry=https://npm.pkg.github.com` nos mesmos comandos.
 
-Nas tabelas, `agentdevkit` representa esse executável. No checkout das fontes,
-use `npm run cli -- <comando>` ou `node bin/agentdevkit.mjs`.
-Esse código não é copiado ao projeto
-atendido; lá os comandos de manutenção usam o pacote por `npx`.
+Nas tabelas, `agentdevkit` representa `npx @pathbit/agentdevkit`. Execute os
+exemplos na pasta do projeto ou indique `--target <pasta>`.
+Se estiver trabalhando no checkout do AgentDevKit, execute
+`npm run cli -- <comando>` ou `node bin/agentdevkit.mjs <comando>` para testar
+o código local. No projeto atendido, use `npx` para executar o pacote.
 
 ## Comandos
 
@@ -34,8 +35,12 @@ atendido; lá os comandos de manutenção usam o pacote por `npx`.
 | `document` | Inventaria um sistema existente em leitura local. |
 | `lang [idioma]` | Consulta ou altera o idioma: pt, en ou es. |
 | `agents` | Mostra os clientes disponíveis e a seleção salva. |
-| `agents codex,claude` | Altera a seleção e os apontamentos necessários. |
+| `agents codex,claude` | Substitui a seleção e sincroniza os apontamentos. |
+| `agents add <ids>`, `agents remove <ids>` | Alteram os IDs indicados. |
 | `agents all` | Seleciona todos os clientes compatíveis. |
+| `agents none` | Mantém o hub sem cliente específico. |
+| `plugins list`, `plugins info <id>` | Consulta plugins e suas origens. |
+| `plugins install <id>`, `plugins check <id>` | Prepara ou verifica plugins. |
 | `tools <ação>` | Consulta, instala, atualiza ou executa ferramentas. |
 | `--help`, `--version` | Ajuda ou versão do pacote. |
 
@@ -52,10 +57,11 @@ antes de executar `recovery resolve`.
 | --- | --- |
 | `--target <pasta>` | Projeto-alvo; não combine com a pasta de `init`. |
 | `--lang <idioma>` | Idioma desta execução. |
-| `--agents <lista>` | IDs separados por vírgula, ou `all`. |
+| `--agents <lista>` | IDs separados por vírgula, `all` ou `none`. |
 | `--clients <lista>` | Alias de `--agents`. |
 | `--yes`, `-y` | Evita perguntas iniciais; não força conflitos. |
 | `--dry-run` | Exibe o plano sem aplicar alterações. |
+| `--check` | Em `sync`, confere o projeto sem aplicar a sincronização. |
 | `--force` | Solicita reparos gerenciados permitidos, com backup. |
 | `--json` | Produz uma resposta JSON para automação. |
 | `--intent` | Objetivo da consulta `next`. |
@@ -66,11 +72,24 @@ antes de executar `recovery resolve`.
 No primeiro uso em terminal, o assistente pergunta o idioma ou os clientes
 que faltam e o objetivo. Com idioma e clientes explícitos, use `--purpose`
 para indicar o objetivo. Sem interação, valem as opções explícitas, a
-seleção salva e, por último, `all`. Confira os [IDs e dependências](../../.pbai4devs/COMPATIBILIDADE.md).
+seleção salva e, por último, `none`. Confira os [IDs e dependências](../../.pbai4devs/COMPATIBILIDADE.md).
+
+`agents --json` informa `kitInstalled`, `configuredClients`, `clientRoots`
+e, quando houver uma instalação, `statePath`. A seleção indica quais
+clientes recebem recursos do kit. Use `doctor` e `sync --check` para
+conferir os arquivos gerados.
+
+Com `none`, `clients` contém `["none"]` e `configuredClients` fica vazio.
+`clientRoots` inclui caminhos compartilhados que o cliente selecionado usa.
+Para alterar apenas alguns clientes, passe IDs individuais separados por
+vírgula a `agents add` ou `agents remove`. Use `agents all` ou `agents none`
+para substituir a seleção inteira.
 
 Use `init --purpose agents|product|run|document` para indicar se quer preparar
 os agentes, planejar produto, rodar a aplicação ou documentar o que existe.
 O objetivo orienta a próxima ação da CLI.
+
+## Atualização e prévia
 
 `update` usa a versão executada; para escolher outra, fixe-a no nome do
 pacote. `sync` usa o que já está em `.pbai4devs`: ele não baixa outra versão.
@@ -87,13 +106,11 @@ antes de executar esses comandos nessa versão. Nas fixtures testadas, `init`
 da `0.0.21` também acrescentou regras a `.git/info/exclude`; confira esse
 arquivo se precisar manter a configuração Git intacta.
 
-Antes de aplicar em projeto existente, confira o plano e depois o diagnóstico:
+Antes de aplicar em projeto existente, confira o plano com a versão que
+pretende usar. O [guia de atualização][update] mostra a sequência completa.
 
 ```console
 npx @pathbit/agentdevkit update --dry-run --json
-npx @pathbit/agentdevkit update
-npx @pathbit/agentdevkit doctor
-npx @pathbit/agentdevkit sync --check
 ```
 
 Use `init --dry-run --json`, `sync --dry-run --json` ou
@@ -117,6 +134,14 @@ Registros históricos de remoção seguem a política anterior e exigem revisão
 As verificações não são atômicas com outras alterações no sistema de arquivos:
 evite editar os arquivos envolvidos enquanto a operação estiver em andamento.
 
+## Diagnóstico e sincronização
+
+Use `doctor` para verificar a instalação e `sync --check` para detectar
+divergências em relação às fontes instaladas. Os dois comandos só consultam
+o projeto. Se houver mudanças propostas, examine `sync --dry-run --json`
+antes de executar `sync`. Sem Git, a CLI pode indicar pendência de Git
+em `sync --check`.
+
 O sincronizador independente também pode ser executado pelo
 [script local](../../.pbai4devs/scripts/sincronizar-agentes/README.md). Seu
 `--check` apenas confere e `--force` é explícito na linha de comando. O
@@ -130,6 +155,11 @@ cópia original. A configuração e o índice Git permanecem preservados, e
 para as condições e os avisos de visibilidade.
 
 ## Ferramentas
+
+Para preparar um item específico, use `plugins list`, `plugins info <id>`
+e depois `plugins install <id>`. Antes do `init`, `list` e `info` consultam o
+catálogo empacotado. `install` e `check` usam o kit instalado no projeto.
+Veja origens, licenças e requisitos no [guia de plugins](plugins.md).
 
 As ações são `list`, `setup`, `install`, `update`, `check`, `info`, `run`
 e `unlock`. Consultar ou executar não instala silenciosamente.
@@ -155,6 +185,7 @@ etapa sugerida e `maturity` indica a maturidade detectada. Sem kit instalado ou
 com inventário incompleto, `maturity` não é informado. Não são aprovações.
 `next --integrations` acrescenta `integrations` à resposta normal, com
 `id`, `name`, `url`, `paths` relativos à raiz e `instruction` por método.
+Quando há um plugin correspondente, `plugin` indica o ID para `plugins info`.
 A consulta funciona antes da instalação. Ela indica apenas caminhos padrão
 reconhecidos e não abre documentos externos, baixa pacotes ou executa ferramentas.
 `preserved` lista caminhos mantidos pelo projeto e o motivo.
@@ -214,3 +245,5 @@ a skill `documentar-legado`. Veja como transformar o inventário em trabalho
 documental no [guia de documentação](documentation.md#documentar-um-sistema-em-uso).
 
 [Wiki](../README.md) · [Solução de problemas](troubleshooting.md)
+
+[update]: installation.md#atualizar-e-escolher-agentes

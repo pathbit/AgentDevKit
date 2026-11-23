@@ -590,6 +590,23 @@ test('setup padrao prepara todas as ferramentas compativeis e confirma cada inst
   assert.equal(state.installs, 1); assert.equal(state.fetches, 1); assert.ok(existsSync(join(local, 'CURRENT.json')));
 });
 
+test('setup geral preserva opt-in e grupo explícito prepara o plugin pedido', async t => {
+  const optional = { ...tool('workflow-tool'), group: 'workflow', optIn: true };
+  const { root, manager, state } = fixture(t, { 'test-tool': tool(), 'workflow-tool': optional });
+  manager.npm = () => setupNpm(root);
+  assert.throws(() => validateToolConfig('workflow-tool', { ...optional, optIn: 'true' }), /Selecao explicita/);
+  assert.equal(loadCatalog(root)['workflow-tool'].optIn, true);
+  const general = await manager.setup();
+  assert.equal(general.exitCode, 0);
+  assert.deepEqual(general.results.map(item => item.name), ['test-tool']);
+  assert.equal(state.fetches, 1);
+  assert.equal(existsSync(join(root, '.pbai4devs/tools/workflow-tool/.local')), false);
+  const explicit = await manager.setup('workflow');
+  assert.equal(explicit.exitCode, 0);
+  assert.deepEqual(explicit.results.map(item => item.name), ['workflow-tool']);
+  assert.equal(state.fetches, 2);
+});
+
 test('setup verifica npm antes de mutar mesmo quando a ferramenta ja esta saudavel', async t => {
   const { root, manager, state, local } = fixture(t); await manager.install('test-tool');
   const before = readFileSync(join(local, 'CURRENT.json'), 'utf8');

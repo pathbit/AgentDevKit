@@ -6,7 +6,8 @@ description: Prepara o runtime quando necessário e instala as ferramentas locai
 
 Entrada: `base`, `all`, grupo ou nome do [índice](../../tools/README.md).
 Escolha a seleção pelo pedido e pelos requisitos do fluxo. O gerenciador usa
-`all` quando a seleção é omitida.
+`all` quando a seleção é omitida. Para os plugins de fluxo, escolha
+`workflow` ou o ID de uma ferramenta.
 
 Sem Node, instale Node e npm pelo mecanismo do sistema operacional. Com
 Node 18+ disponível e runtime incompatível, siga o

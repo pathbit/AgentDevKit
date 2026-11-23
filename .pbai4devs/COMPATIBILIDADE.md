@@ -10,10 +10,12 @@ orienta a leitura, sem garantir que o cliente importe seu conteúdo.
 
 ## Escolher clientes
 
-Use `--agents codex,claude` na instalação ou `agents codex,claude` para alterar
-depois. `--clients` e `clients` são aliases. A CLI salva os IDs no projeto;
-`all` inclui todos os clientes atuais. Sem seleção explícita, reutiliza a
-salva; sem ambas, usa `all`. Não há detecção automática do agente em execução.
+Use `--agents codex,claude` na instalação. Depois, consulte `agents` ou
+altere a seleção com `agents add <ids>`, `agents remove <ids>` ou
+`agents <lista>`. A CLI registra a seleção no estado local do projeto.
+`all` inclui todos os clientes ativos. `none` instala apenas o hub e
+`AGENTS.md` e é o padrão de uma instalação sem seleção. Atualizações e
+sincronizações reutilizam a seleção salva.
 
 | Cliente | ID | Pastas necessárias |
 | --- | --- | --- |
@@ -44,8 +46,9 @@ permanece.
 
 O Gemini CLI saiu da seleção ativa do AgentDevKit. Em uma instalação que
 também usa outros clientes, `update` conserva esses IDs. Em uma instalação
-exclusiva do Gemini CLI, consulte `agents` e escolha um cliente ativo com
-`update --agents <id> --dry-run`. O plano identifica os apontamentos antigos
+exclusiva do Gemini CLI, consulte `agents` e use `update --agents <id> --dry-run`
+com outro cliente ou `update --agents none --dry-run` para usar o hub.
+O plano identifica os apontamentos antigos
 cuja propriedade o kit consegue comprovar e preserva arquivos do projeto.
 `GEMINI.md` continua sendo um ponto de entrada do adaptador Antigravity.
 [Transição anunciada pelo Google][gemini-transition]
@@ -57,8 +60,9 @@ representa categorias opcionais; `nome` é o identificador único do recurso.
 Os caminhos são relativos à pasta do cliente, exceto onde indicado.
 
 - Codex: `.agents/skills/grupo/nome/SKILL.md` e referências agrupadas em
-  `.codex`. Se a rota principal de uma skill estiver obstruída, ela usa
-  `.codex/skills` como alternativa. `AGENTS.md` apresenta o hub.
+  `.codex`. Selecionar só o Codex usa `.agents` apenas para as skills.
+  Se essa rota estiver obstruída, a skill usa `.codex/skills`. `AGENTS.md`
+  apresenta o hub.
 - Claude: `skills/nome/SKILL.md`, `commands/grupo/nome.md`,
   `rules/grupo/nome/RULE.md` e `agents/nome.md`.
 - Cursor: `skills/grupo/nome/SKILL.md`, `rules/grupo/nome.mdc`,

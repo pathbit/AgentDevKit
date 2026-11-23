@@ -87,7 +87,7 @@ export function executeNode(root, args, env = process.env) {
 
 // Each named profile is an independent CI job; `portable` runs all locally.
 export const portableProfiles = Object.freeze({
-  'portable-cli': Object.freeze(['cli.test.mjs', 'adapters.test.mjs', 'development-ecosystem.test.mjs', 'security-ecosystem.test.mjs', 'file-modes.test.mjs', 'runtime-minimum.test.mjs']),
+  'portable-cli': Object.freeze(['cli.test.mjs', 'adapters.test.mjs', 'development-ecosystem.test.mjs', 'security-ecosystem.test.mjs', 'file-modes.test.mjs', 'runtime-minimum.test.mjs', 'plugins.test.mjs']),
   'portable-source-integration': Object.freeze(['source-integration.test.mjs']),
   'portable-selection': Object.freeze(['client-selection.test.mjs']),
   'portable-selection-lifecycle': Object.freeze([
@@ -131,7 +131,7 @@ export const portableProfiles = Object.freeze({
   'portable-claude-rule-cli': Object.freeze(['claude-rule-cli.test.mjs']),
   'portable-resources-managed': Object.freeze([
     'managed-content-helper.test.mjs', 'managed-toml.test.mjs',
-    'toml-prompt-equivalence.test.mjs', 'toml-composite.test.mjs', 'toml-human-after.test.mjs',
+    'toml-composite.test.mjs', 'toml-human-after.test.mjs',
     'toml-marker-context.test.mjs', 'sync-skill-collision.test.mjs', 'managed-preservation.test.mjs',
   ]),
   'portable-managed-content': Object.freeze(['managed-content.test.mjs']),
@@ -139,7 +139,7 @@ export const portableProfiles = Object.freeze({
   'portable-managed-protection': Object.freeze(['managed-content-protection.test.mjs']),
   'portable-legacy-toml': Object.freeze([
     'gemini-command-fixture.test.mjs', 'gemini-derived-diagnostic.test.mjs',
-    'gemini-reference-body.test.mjs', 'gemini-toml-lifecycle-reader.test.mjs',
+    'gemini-toml-lifecycle-reader.test.mjs',
   ]),
   'portable-retired-client-migration': Object.freeze(['retired-client-migration.test.mjs']),
   'portable-layout': Object.freeze(['source-layout.test.mjs']),

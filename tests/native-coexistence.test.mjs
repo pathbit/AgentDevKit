@@ -66,7 +66,7 @@ test('regra de sobreposição do Windows permite destino distinto de um link sta
   assert.equal(gitPathsOverlap('CLAUDE.md', 'AGENTS.md', { root, platform: 'win32' }), true);
   assert.equal(gitPathsOverlap('CLAUDE.md', 'AGENTS.md', { root, platform: 'win32', allowMissingTarget: true }), false);
   assert.equal(gitPathsOverlap('CLAUDE.md/nested', '.agents/agents/revisor.md', { root, platform: 'win32', allowMissingTarget: true }), true);
-  const plan = planInstallation({ target: root, mode: 'init', clients: ['codex', 'claude', 'copilot'] });
+  const plan = planInstallation({ target: root, mode: 'init', clients: ['antigravity', 'codex', 'claude', 'copilot'] });
   assert.ok(plan.changes.some(change => change.path === '.agents/agents/revisor.md' && change.action === 'create'));
   assert.ok(plan.preserved.some(item => item.path === 'CLAUDE.md' && item.reason === 'symbolic-link'));
   applyPlan(plan);
@@ -222,7 +222,7 @@ test('preserva configuração JSON nativa mesmo quando tem o formato de um índi
   const { root } = fixture(t);
   const path = '.agents/skills.json', content = '{"entries":[{"path":"my-skills/private"}]}\n';
   put(root, path, content);
-  const installed = await cli(root, ['init', '--yes', '--agents', 'codex']);
+  const installed = await cli(root, ['init', '--yes', '--agents', 'antigravity']);
   assert.ok(installed.preserved.some(item => item.path === path));
   const state = JSON.parse(readFileSync(join(root, '.pbai4devs/state/agentdevkit.json')));
   assert.equal(state.files[path], undefined);
@@ -233,16 +233,20 @@ test('preserva configuração JSON nativa mesmo quando tem o formato de um índi
 test('migra índices comprovadamente gerados por sincronização standalone', async t => {
   const { root } = fixture(t);
   const path = '.agents/skills.json';
-  const preparation = planInstallation({ target: root, clients: ['codex'] });
+  const preparation = planInstallation({ target: root, clients: ['antigravity', 'claude'] });
+  const installedPath = '.pbai4devs/state/agentdevkit.json';
   const generated = new Set(['.pbai4devs/.gitignore', '.pbai4devs/espelhos.conf', '.pbai4devs/catalog.json', '.pbai4devs/skills.json', '.pbai4devs/agents.json', '.pbai4devs/rules.json']);
   // The standalone sync must create these outputs itself to prove ownership.
-  for (const change of preparation.changes) if (change.path.startsWith('.pbai4devs/') && change.path !== '.pbai4devs/state/agentdevkit.json' && !generated.has(change.path)) put(root, change.path, change.content);
-  assert.equal(existsSync(join(root, '.pbai4devs/state/agentdevkit.json')), false);
+  for (const change of preparation.changes) if (change.path.startsWith('.pbai4devs/') && change.path !== installedPath && !generated.has(change.path)) put(root, change.path, change.content);
+  // Supply the standalone client's selection without precreating its outputs.
+  const { schemaVersion, version, language, clients } = preparation.manifest;
+  put(root, installedPath, JSON.stringify({ schemaVersion, version, language, clients, files: {}, blocks: {} }));
   const standalone = synchronize({ root, output() {} });
   assert.equal(standalone.exitCode, 0);
+  rmSync(join(root, installedPath));
   const derived = JSON.parse(readFileSync(join(root, '.pbai4devs/state/derived.json')));
   assert.equal(derived.outputs[path], hash(readFileSync(join(root, path))));
-  const installed = await cli(root, ['init', '--yes', '--agents', 'codex']);
+  const installed = await cli(root, ['init', '--yes', '--agents', 'antigravity,codex']);
   assert.ok(!installed.preserved.some(item => item.path === path));
   const state = JSON.parse(readFileSync(join(root, '.pbai4devs/state/agentdevkit.json')));
   assert.equal(state.files[path], hash(readFileSync(join(root, path))));
@@ -259,7 +263,7 @@ test('migra índices comprovadamente gerados por sincronização standalone', as
 
 test('reconhece índice regenerado por standalone e atualiza o estado pela CLI', async t => {
   const { root } = fixture(t);
-  await cli(root, ['init', '--yes', '--agents', 'codex']);
+  await cli(root, ['init', '--yes', '--agents', 'antigravity']);
   put(root, '.pbai4devs/skills/projeto/local-extra/SKILL.md', '---\nname: local-extra\ndescription: Native coexistence fixture.\n---\n\n# Local extra\n\nUse this local skill.\n');
   const changed = synchronize({ root, output() {} });
   assert.equal(changed.exitCode, 0);
@@ -273,7 +277,7 @@ test('preserva arquivo humano que ocupa uma pasta de skills e omite entradas ind
   const { root } = fixture(t);
   const path = '.agents/skills', content = 'Existing native configuration\n';
   put(root, path, content);
-  const installed = await cli(root, ['init', '--yes', '--agents', 'codex']);
+  const installed = await cli(root, ['init', '--yes', '--agents', 'antigravity,codex']);
   assert.ok(installed.preserved.some(item => item.path === path && item.reason === 'non-directory'));
   assert.deepEqual(JSON.parse(readFileSync(join(root, '.agents/skills.json'))).entries, []);
   await cli(root, ['doctor']); await cli(root, ['sync', '--check']);

@@ -697,7 +697,7 @@ test('projeto dentro de submódulo inicializado usa seu próprio índice', { tim
   put(project, 'humano.txt', 'conteúdo staged\n'); git(project, 'add', 'humano.txt');
   const outerIndex = readFileSync(join(root, '.git/index')), innerIndex = readFileSync(join(project, '.git/index'));
   applyPlan(planInstallation({ target: project, mode: 'init', clients: ['codex'] }));
-  assert.ok(existsSync(join(project, '.agents/agents/analista-performance.md')));
+  assert.ok(existsSync(join(project, '.agents/skills/projeto/criar-skill/SKILL.md')));
   assert.deepEqual(readFileSync(join(root, '.git/index')), outerIndex);
   assert.deepEqual(readFileSync(join(project, '.git/index')), innerIndex);
   assert.equal(git(project, 'show', ':humano.txt'), 'conteúdo staged');
@@ -716,7 +716,7 @@ test('gitlink não relacionado não bloqueia o cliente selecionado', { timeout: 
   assert.equal(readFileSync(join(nested, 'human.txt'), 'utf8'), 'preservar\n');
   assert.deepEqual(readFileSync(join(root, '.git/index')), index);
   assert.deepEqual(readFileSync(join(nested, '.git/index')), inner);
-  assert.ok(existsSync(join(root, '.agents/agents/analista-performance.md')));
+  assert.ok(existsSync(join(root, '.agents/skills/projeto/criar-skill/SKILL.md')));
 });
 
 test('gitlink não inicializado não autoriza acrescentar bloco a arquivo interno', { timeout: 120000 }, t => {
@@ -727,7 +727,7 @@ test('gitlink não inicializado não autoriza acrescentar bloco a arquivo intern
   git(source, 'config', 'user.name', 'Fixture'); git(source, 'config', 'user.email', 'fixture@example.invalid');
   put(source, 'seed', 'base\n'); git(source, 'add', 'seed'); git(source, 'commit', '-qm', 'base');
   git(root, 'update-index', '--add', '--cacheinfo', `160000,${git(source, 'rev-parse', 'HEAD')},.agents`);
-  const file = '.agents/agents/analista-performance.md', content = '# Documento humano\n'; put(root, file, content);
+  const file = '.agents/skills/projeto/criar-skill/SKILL.md', content = '# Documento humano\n'; put(root, file, content);
   const index = readFileSync(join(root, '.git/index'));
   assert.throws(() => planInstallation({ target: root, mode: 'init', clients: ['codex'] }), error => error.code === 'E_STAGED');
   assert.equal(readFileSync(join(root, file), 'utf8'), content);

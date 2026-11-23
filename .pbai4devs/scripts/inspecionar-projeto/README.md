@@ -40,6 +40,9 @@ apontamentos gerados em `.github/skills`, agentes e comandos ficam de fora.
 O script não cria nem altera arquivos. Leia os documentos relevantes antes de
 planejar complementos; preserve sua estrutura e use templates só para lacunas.
 `--check` confere a estrutura técnica e as raízes de agentes declaradas no
-manifesto. A pasta `.vscode/` depende da adoção do editor. Uma entrada de
-ignore para ela, por si só, não exige que exista. `--root` aceita somente as fixtures
+manifesto. O manifesto canônico com apenas o cabeçalho identifica a seleção
+`none` e dispensa pastas de clientes. Sem manifesto, a checagem conserva as
+raízes padrão para o layout anterior. A pasta `.vscode/` depende da adoção
+do editor. Uma entrada de ignore para ela, por si só, não exige que exista.
+`--root` aceita somente as fixtures
 documentadas pelo próprio comando, sem ampliar o acesso a outros projetos.

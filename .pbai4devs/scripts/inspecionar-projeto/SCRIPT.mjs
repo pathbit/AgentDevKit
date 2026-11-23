@@ -7,10 +7,11 @@ import { fileURLToPath } from 'node:url';
 import { requireNode, isMain } from '../lib/runtime.mjs';
 import { stateDirectory } from '../lib/state-path.mjs';
 import { parseProjectMetadata } from '../lib/project-metadata.mjs';
+import { adapterManifestHeader } from '../lib/adapter-manifest.mjs';
 
 const repository = fs.realpathSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..'));
-const defaultAgents = ['.agents', '.agent', '.gemini', '.claude', '.codex', '.cursor', '.github', '.opencode'];
-const defaultExcluded = ['.git', '.pbai4devs', '.agent-tests', ...defaultAgents, '.vscode', 'node_modules', 'vendor', 'target', 'dist', 'build', 'bin', 'obj', '.venv', 'venv', '.cache', '.next', '.nuxt', 'coverage', 'test-results', 'playwright-report', 'blob-report', 'tmp', 'temp', 'examples'];
+const defaultAgents = ['.agents', '.claude', '.codex', '.cursor', '.github', '.opencode'];
+const defaultExcluded = ['.git', '.pbai4devs', '.agent-tests', ...defaultAgents, '.agent', '.gemini', '.vscode', 'node_modules', 'vendor', 'target', 'dist', 'build', 'bin', 'obj', '.venv', 'venv', '.cache', '.next', '.nuxt', 'coverage', 'test-results', 'playwright-report', 'blob-report', 'tmp', 'temp', 'examples'];
 const manifests = new Map([
   ['package.json', 'javascript'], ['deno.json', 'javascript'], ['deno.jsonc', 'javascript'],
   ['pyproject.toml', 'python'], ['Pipfile', 'python'], ['setup.py', 'python'], ['setup.cfg', 'python'],
@@ -24,9 +25,11 @@ const requiredDirectories = ['.pbai4devs', 'src', 'tests', 'infra'];
 function agentRoots(root) {
   const file = path.join(root, '.pbai4devs/espelhos.conf');
   if (!present(root, '.pbai4devs/espelhos.conf', false)) return defaultAgents;
-  const values = fs.readFileSync(file, 'utf8').split(/\r?\n/).filter(line => line.startsWith('agente|')).map(line => line.split('|')[1]);
+  const manifest = fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
+  const values = manifest.split('\n').filter(line => line.startsWith('agente|')).map(line => line.split('|')[1]);
   const roots = [...new Set(values.filter(value => /^\.[a-z0-9][a-z0-9.-]*$/.test(value) && !['.git', '.pbai4devs', '.agent-tests'].includes(value)))];
-  return roots.length ? roots : defaultAgents;
+  if (roots.length || manifest === adapterManifestHeader) return roots;
+  return defaultAgents;
 }
 const requiredFiles = ['.gitignore', '.gitattributes', '.editorconfig', '.dockerignore', 'Makefile', 'README.md'];
 const localCompose = ['infra/compose/compose.local.yml', 'infra/compose/docker-compose.local.yml'];

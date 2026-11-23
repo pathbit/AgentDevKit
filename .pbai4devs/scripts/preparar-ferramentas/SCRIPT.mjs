@@ -19,7 +19,8 @@ const failureCode = error => Number.isInteger(error?.exitCode) && error.exitCode
 
 function selectTools(catalog, selected) {
   const grouped = Object.keys(catalog).filter(name => catalog[name].group === selected);
-  const names = selected === 'all' ? Object.keys(catalog) : selected === 'base' ? grouped : Object.hasOwn(catalog, selected) || !grouped.length ? [selected] : grouped;
+  const names = selected === 'all' ? Object.keys(catalog).filter(name => !catalog[name].optIn)
+    : selected === 'base' ? grouped : Object.hasOwn(catalog, selected) || !grouped.length ? [selected] : grouped;
   if (!names.length) fail(`Nenhuma ferramenta definida para: ${selected}`);
   return names;
 }
@@ -32,6 +33,7 @@ export function platformKey(platform = process.platform, arch = process.arch) {
 export function validateToolConfig(name, value) {
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name) || value?.name !== name) fail(`Nome de ferramenta invalido: ${name}`);
   if (typeof value.description !== 'string' || !value.description.trim() || value.description.includes('\0')) fail(`Descricao ausente ou invalida: ${name}`);
+  if (value.optIn !== undefined && typeof value.optIn !== 'boolean') fail(`Selecao explicita invalida: ${name}`);
   const download = value.download;
   if (!['npm', 'github-release'].includes(download?.provider)) fail(`Download nao suportado: ${name}`);
   if (download.provider === 'npm') {

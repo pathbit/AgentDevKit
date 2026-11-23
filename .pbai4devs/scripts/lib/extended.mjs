@@ -2,10 +2,9 @@ import { createHash } from 'node:crypto';
 import smol from './smol-toml.cjs';
 const { parse } = smol;
 import { locatePrompt } from './managed-toml-parser.mjs';
-import { extractManagedBlock, mergeManagedContent } from './managed-content.mjs';
+import { extractManagedBlock } from './managed-content.mjs';
 const digest = value => createHash('sha256').update(value).digest('hex');
 const fail = message => { throw Object.assign(new Error(message), { code: 'E_PROTOTYPE_CONFLICT' }); };
-const tag = '# ADK-TOML-META-V3 ';
 function checked(input) {
   const info = locatePrompt(input);
   let parsed;
@@ -78,55 +77,4 @@ function remove(input, expectedHash) {
   if (meta.origin === 'missing' && human === '' ? restored.prompt !== null : !restored.prompt || restored.prompt.value !== human || extractManagedBlock(restored.prompt.value) !== null) fail('remoção não comprovada');
   return output;
 }
-function add(input, body) {
-  const initial = checked(input), original = initial.text;
-  let p = initial, origin = 'existing', pre = '', stmtEol = '';
-  if (!p.prompt) {
-    origin = 'missing';
-    const eol = original.match(/\r\n|\n/)?.[0] || '\n';
-    stmtEol = eol;
-    pre = p.insertion && !/[\r\n]$/.test(original.slice(0, p.insertion)) ? eol : '';
-    const inserted = original.slice(0, p.insertion) + pre + 'prompt = ""' + eol + original.slice(p.insertion);
-    p = checked(inserted);
-  } else if (p.style === 'literal-one') {
-    origin = 'literal-one';
-    const raw = original.slice(p.prompt.start + 1, p.prompt.end - 1);
-    const converted = original.slice(0, p.prompt.start) + "'''" + raw + "'''" + original.slice(p.prompt.end);
-    p = checked(converted);
-    if (p.prompt.value !== initial.prompt.value) fail('conversão literal alterou conteúdo');
-  }
-  if (extractManagedBlock(p.prompt.value)) fail('bloco existente não é adotado');
-  const probe = mergeManagedContent(p.prompt.value, body, { eolMode: 'toml' });
-  const offset = probe.text.indexOf(probe.block, p.prompt.value.length);
-  if (offset < p.prompt.value.length || !probe.text.startsWith(p.prompt.value)) fail('inserção ambígua');
-  const separator = probe.text.slice(p.prompt.value.length, offset), eol = probe.text.slice(offset + probe.block.length);
-  const merged = probe;
-  const lineEol = p.text.match(/\r\n|\n/)?.[0] || '\n';
-  const meta = { v: 3, origin, style: p.style, separator, eol, pre, stmtEol, blockHash: merged.sha256, lineEol };
-  const suffix = merged.text.slice(p.prompt.value.length);
-  if (suffix !== separator + merged.block + eol) fail('estrutura de inserção divergente');
-  const changed = p.text.slice(0, p.end) + rawFor(suffix, p.style) + p.text.slice(p.end);
-  const nl = p.text.lastIndexOf('\n', p.prompt.start - 1);
-  const lineStart = nl < 0 ? (p.text.startsWith('\ufeff') ? 1 : 0) : nl + 1;
-  const output = changed.slice(0, lineStart) + tag + encode(meta) + lineEol + changed.slice(lineStart);
-  if (checked(output).prompt.value !== merged.text || remove(output, merged.sha256) !== original) fail('round-trip não comprovado');
-  return { text: output, blockHash: merged.sha256 };
-}
-export function merge(input, body, expectedHash) {
-  if (!expectedHash) return add(input, body);
-  const p = checked(input), block = p.prompt && extractManagedBlock(p.prompt.value);
-  if (!block || digest(block) !== expectedHash) fail('bloco sem procedência ou alterado');
-  const info = metadata(p, expectedHash), { meta } = info;
-  remove(input, expectedHash);
-  const result = mergeManagedContent(p.prompt.value, body, { expectedHash, eolMode: 'toml' });
-  const literalStart = p.prompt.start + (p.style === 'basic-one' ? 1 : 3), literal = p.text.slice(literalStart, p.end);
-  const encoded = rawFor(block, p.style), offset = literal.indexOf(encoded);
-  if (offset < 0 || literal.indexOf(encoded, offset + 1) >= 0) fail('forma bruta ambígua ou alterada');
-  const start = literalStart + offset;
-  const changed = p.text.slice(0, start) + rawFor(result.block, p.style) + p.text.slice(start + encoded.length);
-  const nextMeta = { ...meta, blockHash: result.sha256 };
-  const text = changed.slice(0, info.start) + tag + encode(nextMeta) + meta.lineEol + changed.slice(info.end);
-  if (checked(text).prompt.value !== result.text) fail('valor resultante divergente');
-  return { text, blockHash: result.sha256 };
-}
-export { remove };
+export { checked, rawFor, metadata, remove };

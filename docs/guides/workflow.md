@@ -7,55 +7,46 @@ description: Do preparo do kit à implementação e revisão de uma entrega.
 [Documentação](../README.md) · [Instalação](installation.md) ·
 [Recursos](resources.md) · [Ferramentas e testes](tools-and-testing.md)
 
-O AgentDevKit organiza o trabalho; ele não substitui decisões do projeto.
-Instalar o kit cria sua estrutura de apoio, sem criar um produto, escolher
-uma stack ou gerar PRD, design e specs automaticamente.
+Instalar o AgentDevKit prepara as instruções e modelos. O fluxo de trabalho
+parte do seu objetivo e das decisões que o projeto já registrou.
 
 ## 1. Identificar a situação
 
-Na preparação do kit, escolha os agentes que usa: a CLI pergunta em um terminal
-interativo ou aceita `--agents codex,claude`. Um agente de desktop deve reunir
-essa escolha com você antes de executar a instalação; não deve deduzi-la pelo
-nome do aplicativo ou pelas pastas existentes. Sem resposta disponível, o
-padrão é `all`. A seleção salva continua nas atualizações e sincronizações.
-Use `agents` para consultar ou alterar depois; veja a [referência](cli.md).
-
-Na raiz do projeto atendido, confira o kit e consulte a próxima etapa:
+Escolha os clientes que usa durante a [instalação](installation.md). No chat
+de um agente desktop, informe quais clientes deseja preparar. Na raiz do
+projeto instalado com Git, confira o kit e consulte a próxima etapa:
 
 ```console
 npx @pathbit/agentdevkit doctor
+npx @pathbit/agentdevkit sync --check
 npx @pathbit/agentdevkit next
 ```
 
-No checkout do AgentDevKit, indique o projeto com
-`npm run cli -- doctor --target <caminho-do-projeto>`.
-[Referência da CLI](cli.md)
+`next` usa o estado encontrado para sugerir uma ação. No cliente de IA, peça
+que o agente leia `AGENTS.md` e siga a skill indicada para seu objetivo.
+O inventário mostra os arquivos e estados declarados. A aprovação depende
+das decisões e evidências correspondentes. [Referência da CLI](cli.md)
 
-O diagnóstico descreve sinais e arquivos existentes. Ele não aprova
-documentos, não comprova comportamento e não autoriza substituir decisões.
-
-| Situação | Comece por |
+| Situação | Comando ou recurso inicial |
 | --- | --- |
-| Só está instalando os agentes | Manter modelos; não iniciar o produto. |
-| Projeto novo, ainda sem decisões | [configurar-projeto][configurar]. |
-| Aplicação existente que precisa rodar | [preparar-dev][preparar]. |
-| Sistema em uso que precisa ser documentado | [documentar-legado][legado]. |
-| Nova funcionalidade em projeto existente | Reutilizar documentos e planejar. |
+| Só preparar os agentes | `init --purpose agents`. |
+| Projeto novo, ainda sem decisões | `next --intent product` · [configurar-projeto][configurar]. |
+| Aplicação existente que precisa rodar | `next --intent run` · [preparar-dev][preparar]. |
+| Sistema em uso que precisa ser documentado | `next --intent document` · [documentar-legado][legado]. |
+| Evoluir um projeto | `next --intent product` com os documentos já adotados. |
 
-Para documentar um sistema existente, comece com `agentdevkit document` ou
-consulte `agentdevkit next --intent document`. Leia os fluxos relevantes
-antes de atribuir comportamentos ao sistema. Use as evidências para completar
-os documentos já adotados. [Guia de documentação](documentation.md#documentar-um-sistema-em-uso)
+Os comandos da tabela usam o prefixo `npx @pathbit/agentdevkit`. Para
+inventariar antes de instalar, use `npx @pathbit/agentdevkit document`.
+O [guia de documentação][inventario] mostra como comprovar comportamentos
+no código e nos testes e completar os documentos existentes.
 
 ## 2. Reunir as perguntas no início
 
 Antes de criar documentos, [inventarie e leia o que existe](documentation.md).
 Reutilize os caminhos e complemente lacunas, sem substituir pelo template.
-Antes de escrever documentos ou código, leia o contexto já disponível.
 Reúna as dúvidas que alteram objetivo, escopo, dependências ou critérios.
-Não pergunte novamente o que o usuário já decidiu ou o projeto já registra.
-Escolha clientes ao instalar ou reconfigurar o kit. Ferramentas, início do
-produto e mudanças na aplicação seguem o objetivo do pedido.
+Use as respostas já registradas pelo usuário ou pelo projeto. Escolha os
+documentos e as ferramentas conforme o objetivo do pedido.
 
 ```text
 Use configurar-projeto. Primeiro leia o repositório e reúna as dúvidas.
@@ -137,5 +128,6 @@ decisões existentes. Consulte [recursos](resources.md) se faltar um fluxo.
 [implementar]: ../../.pbai4devs/skills/specs/implementar-spec/SKILL.md
 [verificar]: ../../.pbai4devs/skills/projeto/verificar-trabalho/SKILL.md
 [documentacao]: ../../.pbai4devs/skills/projeto/atualizar-documentacao/SKILL.md
+[inventario]: documentation.md#documentar-um-sistema-em-uso
 [legado]: ../../.pbai4devs/commands/documentar-legado/COMMAND.md
 [revisao]: ../../.pbai4devs/commands/revisar-entrega/COMMAND.md

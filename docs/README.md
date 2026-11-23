@@ -3,42 +3,35 @@ description: Wiki do AgentDevKit, do primeiro uso à manutenção do kit.
 language: pt
 ---
 
-# Wiki do AgentDevKit
+# Documentação do AgentDevKit
 
-O AgentDevKit organiza instruções de trabalho para agentes de código. A pasta
-`.pbai4devs` guarda a origem; as pastas dos clientes apontam para ela. Você
-pode trocar de agente sem manter várias cópias das mesmas instruções.
+O AgentDevKit guarda instruções para agentes de código em `.pbai4devs` e
+gera apontamentos para os clientes escolhidos.
 
-## Organização
+## Primeiro uso
 
-| Pasta | Conteúdo |
-| --- | --- |
-| [Guias](guides/README.md) | Instalação, uso, comandos e solução de problemas. |
-| [Produto](product/README.md) | Requisitos, experiência, arquitetura e roadmap. |
-| [Manutenção](maintainers/README.md) | Desenvolvimento, comunidade e publicação. |
-| [Specs](specs/README.md) | Escopo e critérios de aceite de cada incremento. |
-| [Tarefas](tasks/README.md) | Trabalho e provas das entregas em andamento. |
+1. [Prepare Node.js e npm](guides/prerequisites.md).
+2. [Instale e confira o kit][install]. Se o projeto já tem arquivos,
+   [simule antes de aplicar][preview].
+3. [Escolha um fluxo][flow] para planejar produto, rodar uma aplicação ou
+   documentar um sistema existente.
 
-## Comece pelo seu objetivo
+## Consulte por objetivo
 
 | Objetivo | Caminho |
 | --- | --- |
-| Preparar o computador | [Node/npm no Windows, macOS e Linux](guides/prerequisites.md) |
-| Primeiro uso | [Instalar via npm ou GitHub Packages][install] → [seguir o fluxo][flow] |
-| Projeto em andamento | [Simular a instalação][preview] → [retomar pelo objetivo][flow] |
+| Atualizar o kit ou mudar clientes | [Atualizar e escolher agentes][update] |
 | Já uso outro fluxo de planejamento ou contexto | [Comparar funcionalidades](guides/comparacao.md) |
 | Evoluir documentação existente | [Inventariar e complementar](guides/documentation.md) |
 | Personalizar agentes | [Recursos][resources] → [compatibilidade][clients] |
 | Entender cada peça com um exemplo | [Recursos na prática](guides/recursos-na-pratica.md) |
 | Escolher especialistas e distribuir trabalho | [Perfis e colaboração](guides/resources.md#especialistas-e-colaboração) |
 | Revisar segurança | [Scanners locais e controles](guides/security.md) |
-| Executar ou verificar algo | [CLI](guides/cli.md) → [ferramentas e testes][tests] |
+| Consultar comandos e respostas JSON | [Referência da CLI](guides/cli.md) |
+| Escolher e verificar ferramentas para uma tarefa | [Plugins e créditos](guides/plugins.md) · [Ferramentas e testes][tests] |
 | Corrigir uma dificuldade | [Soluções e recuperação](guides/troubleshooting.md) |
-| Contribuir com o kit | [Contribuir][contrib] → [design](product/design.md) |
-| Desenvolver e experimentar | [Guia rápido][development] → [exemplos][examples] |
-| Preparar uma versão | [Manutenção e releases](maintainers/maintenance.md) |
-| Publicar o pacote nos dois registries | [npm e GitHub Packages](maintainers/packages.md) |
-| Relatar um bug ou propor melhoria | [Participar](maintainers/community.md) |
+
+O [índice de guias](guides/README.md) reúne essas referências em ordem de uso.
 
 ## Entenda os termos
 
@@ -60,13 +53,17 @@ não comprova que determinado cliente carregou ou executou a skill.
 O [guia de recursos](guides/resources.md) mostra como esses componentes se
 combinam; não existe uma proporção obrigatória entre suas quantidades.
 
-## Conheça este produto
+## Produto e manutenção
 
 - [PRD](product/prd.md): problema, público, requisitos e limites.
 - [Experiência da CLI](product/ux-ui.md): interação, idiomas e saídas.
 - [Design técnico](product/design.md): componentes, estado e preservação de arquivos.
 - [Roadmap](product/roadmap.md) e [specs](specs/README.md): escopo das entregas.
+- [Tarefas](tasks/README.md): trabalho e evidências por incremento.
 - [Changelog](../CHANGELOG.md): mudanças por versão.
+- [Contribuir][contrib] · [Desenvolvimento][development] · [Exemplos][examples].
+- [Manutenção](maintainers/README.md) · [Releases](maintainers/maintenance.md) ·
+  [Publicação](maintainers/packages.md) · [Comunidade](maintainers/community.md).
 
 Esta wiki documenta **o AgentDevKit** e fica versionada junto ao código.
 Os projetos que recebem o kit usam os
@@ -82,6 +79,7 @@ CLI orienta a comunicação dos agentes, sem traduzir documentos existentes.
 
 [install]: guides/installation.md#instalar
 [preview]: guides/installation.md#simular-em-um-projeto-existente
+[update]: guides/installation.md#atualizar-e-escolher-agentes
 [flow]: guides/workflow.md
 [clients]: ../.pbai4devs/COMPATIBILIDADE.md
 [tests]: guides/tools-and-testing.md

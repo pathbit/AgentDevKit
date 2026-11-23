@@ -4,16 +4,25 @@ description: Guias de instalação, uso e verificação do AgentDevKit.
 
 # Guias de uso
 
-- [Pré-requisitos: Node/npm no Windows, macOS e Linux](prerequisites.md)
-- [Instalação: npm e GitHub Packages](installation.md)
-- [Comandos da CLI](cli.md)
-- [Fluxo de trabalho](workflow.md)
-- [Comparação de funcionalidades](comparacao.md)
-- [Evoluir documentação existente](documentation.md)
-- [Recursos dos agentes](resources.md)
-- [Recursos na prática: do pedido à entrega](recursos-na-pratica.md)
-- [Segurança local](security.md)
-- [Ferramentas e testes](tools-and-testing.md)
-- [Solução de problemas](troubleshooting.md)
+## Preparar o projeto
+
+- [Pré-requisitos no Windows, macOS e Linux](prerequisites.md).
+- [Instalação via npm ou GitHub Packages](installation.md).
+- [Atualização e seleção de clientes][update].
+- [Referência da CLI](cli.md) · [Solução de problemas](troubleshooting.md).
+
+## Trabalhar com os agentes
+
+- [Planejar, preparar a execução e revisar entregas](workflow.md).
+- [Documentar um sistema existente](documentation.md).
+- [Recursos na prática](recursos-na-pratica.md) · [Criar e manter recursos](resources.md).
+
+## Escolher ferramentas e verificações
+
+- [Plugins, origens e créditos](plugins.md).
+- [Ferramentas e testes](tools-and-testing.md) · [Segurança local](security.md).
+- [Comparação de funcionalidades](comparacao.md).
 
 [Voltar à documentação](../README.md)
+
+[update]: installation.md#atualizar-e-escolher-agentes

@@ -21,6 +21,18 @@ aplicação inicial, configurada, manutenção, legado e monorepo com caminhos e
 português. Use
 `--case` para executar apenas um.
 
+Os comandos npm do checkout passam `--source-only`. Esse modo usa
+`npm pack --dry-run` em modo offline, com scripts desativados, para listar as
+fontes publicáveis do hub. A cópia começa sem manifesto, índices, seleção
+local, espelhos ou entradas do checkout. O relatório marca
+`sourceMode: "package-source"`.
+
+Ao executar o script instalado diretamente, o modo padrão é `"project"`.
+Ele usa o manifesto ou a seleção salva no projeto e copia as entradas
+locais com as verificações descritas abaixo.
+Uma rota antiga para `.gemini` impede a execução do sincronizador da cópia.
+Revise a configuração antes de testar esse layout.
+
 O harness copia recursos e configurações reais; exclui pacotes, caches, logs,
 resultados de testes, Playwright e pastas temporárias em qualquer caixa,
 `.git` e nomes conhecidos de credenciais/overrides locais. Não faz varredura
@@ -59,9 +71,10 @@ uma escrita ou versioná-la entre verificações. Em saída local, alterar o ign
 ou executar `git add -f` também pode versionar os exemplos. Use uma área
 temporária privada, sem acesso concorrente; a pasta é criada com modo 0700
 quando o SO o suporta.
-O hub `.pbai4devs` e os clientes registrados são copiados, incluindo comandos
-nativos em TOML. Sem manifesto local, os templates definem os clientes em
-memória, respeitando a seleção salva. `.vscode` exige registro. As entradas
+O hub `.pbai4devs` e os clientes registrados são copiados. O manifesto local
+tem precedência. Sem ele, os templates respeitam a seleção salva.
+Um estado legado sem seleção mantém a opção `all`. Sem manifesto nem estado,
+a cópia trabalha só com o hub. `.vscode` exige registro. As entradas
 regulares `AGENTS.md`, `CLAUDE.md` e `GEMINI.md` presentes na origem são copiadas
 para a raiz. Quando uma delas é um link simbólico, a cópia não segue o destino:
 ela omite a entrada original e registra seu nome em `omittedEntrypoints` no
@@ -78,8 +91,13 @@ mesma pasta. O relatório identifica cada cópia: o cenário não é um teste do
 projeto original no local.
 Não copiam o código do produto em `bin/`, `src/`, `scripts/` ou `tests/`,
 nem essas pastas na localização antiga dentro do hub.
-Executam sincronização/reparo/idempotência, catálogo, verificação de
-recursos, diagnóstico, inspeção e gates negativos/positivo. Em dois casos,
+Executam sincronização, reparo, idempotência, verificação de recursos,
+diagnóstico, inspeção e gates negativos e positivo. Com clientes selecionados,
+a prova de reparo remove um espelho gerenciado da cópia. Se a seleção for só
+o hub, remove o catálogo `.pbai4devs/catalog.json`. Nos dois casos, confirma que
+`--check` detecta a ausência, restaura os bytes originais e repete a verificação.
+O campo `syncRepair` do relatório identifica o arquivo reparado e seu log.
+Em dois casos,
 criação, edição, renomeação, remoção e preservação de índices alterados
 exercitam o ciclo todo.
 Aplicações executam testes HTTP reais em

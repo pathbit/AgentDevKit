@@ -3,7 +3,9 @@ import { dirname, join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { resourcePath } from './resource-path.mjs';
 import { isGeneratedOutput } from './gitignore.mjs';
+import { adapterManifestHeader } from './adapter-manifest.mjs';
 
+// agentdevkit-manifest: selective-clients-v1
 const policyText = readFileSync(new URL('../../templates/clients/ADAPTERS.json', import.meta.url), 'utf8');
 let policy;
 try { policy = JSON.parse(policyText); }
@@ -19,8 +21,9 @@ const safeRoot = value => typeof value === 'string' && /^\.[a-z0-9][a-z0-9-]*$/.
 const stringList = value => Array.isArray(value) && value.every(item => typeof item === 'string');
 if (policy.schemaVersion !== 1 || !Array.isArray(policy.adapters) || !policy.adapters.length || !stringList(policy.entrypoints) || policy.entrypoints.some(name => !entryNames.has(name))) throw new Error('Politica de clientes invalida.');
 const ids = new Set(), roots = new Set(), aliases = {};
+const selectionModes = ['all', 'none'];
 for (const adapter of policy.adapters) {
-  if (!adapter || typeof adapter.id !== 'string' || !/^[a-z][a-z0-9-]*$/.test(adapter.id) || adapter.id === 'all' || ids.has(adapter.id) || typeof adapter.name !== 'string' || !safeRoot(adapter.root) || roots.has(adapter.root) || !adapter.formats || Object.entries(adapter.formats).some(([kind, layout]) => !kinds.has(kind) || !layouts.has(layout) || layout === 'nenhum' && kind !== 'skills')) throw new Error('Adaptador invalido.');
+  if (!adapter || typeof adapter.id !== 'string' || !/^[a-z][a-z0-9-]*$/.test(adapter.id) || selectionModes.includes(adapter.id) || ids.has(adapter.id) || typeof adapter.name !== 'string' || !safeRoot(adapter.root) || roots.has(adapter.root) || !adapter.formats || Object.entries(adapter.formats).some(([kind, layout]) => !kinds.has(kind) || !layouts.has(layout) || layout === 'nenhum' && kind !== 'skills')) throw new Error('Adaptador invalido.');
   if (/[\r\n]/.test(adapter.name) || typeof adapter.reason !== 'string' || /[\r\n]/.test(adapter.reason) || (adapter.discovery !== undefined && adapter.discovery !== 'antigravity')) throw new Error('Descricao ou descoberta de adaptador invalida.');
   if (adapter.skillFallback !== undefined && (!safeRoot(adapter.skillFallback) || adapter.skillFallback === adapter.root || adapter.formats.skills !== 'nenhum')) throw new Error('Fallback de skills invalido.');
   for (const field of ['aliases', 'requires', 'extraRoots', 'entrypoints', 'sources']) if (!stringList(adapter[field])) throw new Error('Lista invalida no adaptador: ' + field);
@@ -30,15 +33,16 @@ for (const adapter of policy.adapters) {
 }
 for (const adapter of policy.adapters) {
   if (adapter.requires.some(id => !ids.has(id))) throw new Error('Dependencia de adaptador desconhecida.');
-  if (adapter.skillFallback && !policy.adapters.some(other => other.root === adapter.skillFallback && adapter.requires.includes(other.id))) throw new Error('Fallback exige cliente de origem.');
+  if (adapter.skillFallback && !policy.adapters.some(other => other.root === adapter.skillFallback && ['agrupado', 'plano', undefined].includes(other.formats.skills))) throw new Error('Fallback exige uma raiz com layout de skills.');
   for (const alias of adapter.aliases) {
-    if (!/^[a-z][a-z0-9-]*$/.test(alias) || ids.has(alias) || alias === 'all' || Object.hasOwn(aliases, alias)) throw new Error('Alias de adaptador invalido.');
+    if (!/^[a-z][a-z0-9-]*$/.test(alias) || ids.has(alias) || selectionModes.includes(alias) || Object.hasOwn(aliases, alias)) throw new Error('Alias de adaptador invalido.');
     aliases[alias] = adapter.id;
   }
 }
 export const adapters = Object.freeze(policy.adapters.map(adapter => Object.freeze(adapter)));
 export const availableClients = Object.freeze([
   Object.freeze({ id: 'all', name: 'Todos os clientes', aliases: Object.freeze([]) }),
+  Object.freeze({ id: 'none', name: 'Somente recursos compartilhados', aliases: Object.freeze([]) }),
   ...adapters.map(({ id, name, root, aliases }) => Object.freeze({ id, name, root, aliases })),
 ]);
 const activeRoots = new Set(adapters.flatMap(adapter => [adapter.root, ...adapter.extraRoots]));
@@ -60,23 +64,39 @@ export function normalizeClients(input, { stored = false } = {}) {
     if (!retired && !availableClients.some(client => client.id === id)) throw new Error('Cliente desconhecido: ' + (part || '(vazio)'));
     selected.add(id);
   }
-  if (selected.has('all')) {
-    if (selected.size !== 1) throw new Error('all nao pode ser combinado com outros clientes.');
-    return ['all'];
+  for (const mode of selectionModes) if (selected.has(mode)) {
+    if (selected.size !== 1) throw new Error(mode + ' nao pode ser combinado com outros clientes.');
+    return [mode];
   }
   return adapters.filter(adapter => selected.has(adapter.id)).map(adapter => adapter.id);
 }
 
 export function resolveAdapters(input, options) {
   const clients = normalizeClients(input, options), all = clients.includes('all');
-  const requested = all ? adapters.map(adapter => adapter.id) : clients;
+  const requested = all ? adapters.map(adapter => adapter.id) : clients.filter(id => id !== 'none');
   const selected = new Set(requested);
   for (const id of selected) for (const required of adapters.find(adapter => adapter.id === id).requires) selected.add(required);
   const resolved = adapters.filter(adapter => selected.has(adapter.id));
-  const roots = [...new Set(resolved.flatMap(adapter => [adapter.root, ...adapter.extraRoots]))];
+  const clientRoots = new Set(resolved.flatMap(adapter => [adapter.root, ...adapter.extraRoots]));
+  const skillRoots = [...new Set(resolved.map(adapter => adapter.skillFallback))]
+    .filter(root => root && !clientRoots.has(root));
+  const roots = [...skillRoots, ...clientRoots];
   const selectedEntries = new Set([...policy.entrypoints, ...adapters.filter(adapter => requested.includes(adapter.id)).flatMap(adapter => adapter.entrypoints)]);
   const entrypoints = [...entryNames].filter(name => selectedEntries.has(name));
-  return { clients, adapters: resolved, roots, entrypoints };
+  return { clients, adapters: resolved, roots, skillRoots, entrypoints };
+}
+
+export function changeClientSelection(current, action, clients) {
+  if (!['add', 'remove'].includes(action) || clients.some(client => selectionModes.includes(client))) {
+    throw new Error('Escolha IDs individuais para adicionar ou remover clientes.');
+  }
+  if (current.includes('all') && action === 'add') return current;
+  const selected = new Set(resolveAdapters(current.length ? current : ['none']).adapters.map(adapter => adapter.id));
+  for (const client of clients) {
+    if (action === 'add') selected.add(client);
+    else selected.delete(client);
+  }
+  return selected.size ? normalizeClients([...selected]) : ['none'];
 }
 const principal = { skills: 'SKILL.md', agents: 'AGENT.md', commands: 'COMMAND.md', rules: 'RULE.md' };
 const stat = path => { try { return lstatSync(path); } catch (error) { if (error.code === 'ENOENT') return null; throw error; } };
@@ -113,8 +133,14 @@ function sources(root, kind) {
 export function adapterManifest(root, { clients } = {}) {
   const selection = resolveAdapters(clients);
   root = realpathSync(resolve(root));
-  const rows = ['# Gerado por AgentDevKit; sincronizacao instalada nao depende do pacote npm.', '# tipo|cliente|recurso ou layout|formato ou metadados'];
+  if (!selection.adapters.length) return adapterManifestHeader;
+  const rows = [];
   const resources = Object.fromEntries(Object.keys(principal).map(kind => [kind, sources(root, kind)]));
+  for (const skillRoot of selection.skillRoots) {
+    const layout = adapters.find(adapter => adapter.root === skillRoot).formats.skills || 'agrupado';
+    rows.push(`agente|${skillRoot}|${layout}`);
+    for (const kind of kinds) if (kind !== 'skills') rows.push(`formato|${skillRoot}|${kind}|nenhum`);
+  }
   for (const adapter of selection.adapters) {
     rows.push(`# ${adapter.id}: ${adapter.reason}`, `agente|${adapter.root}|agrupado`);
     for (const [kind, mode] of Object.entries(adapter.formats)) rows.push(`formato|${adapter.root}|${kind}|${mode}`);
@@ -131,7 +157,7 @@ export function adapterManifest(root, { clients } = {}) {
     }
   }
   if (selection.roots.includes('.vscode')) rows.push('gitignore|.vscode');
-  return rows.join('\n') + '\n';
+  return adapterManifestHeader + rows.join('\n') + '\n';
 }
 
 // Somente configura a politica. O chamador decide quando planejar/aplicar o sync.

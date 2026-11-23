@@ -43,7 +43,10 @@ test('seleção valida aliases e entradas antes de escrever; consulta é somente
   for (const args of [['init', '--agents', ''], ['agents', 'unknown'], ['init', '--agents', 'all,codex'], ['doctor', '--agents', 'codex'], ['agents', '--dry-run']]) assert.throws(() => parseArgs(args), { code: 'E_ARGS' });
   const root = fixture(t);
   const result = cli(root, ['agents']);
-  assert.deepEqual(result.clients, ['all']); assert.ok(result.availableClients.some(client => client.id === 'codex'));
+  assert.deepEqual(result.clients, ['none']); assert.ok(result.availableClients.some(client => client.id === 'codex'));
+  assert.equal(result.kitInstalled, false);
+  assert.deepEqual(result.configuredClients, []);
+  assert.deepEqual(result.clientRoots, []);
   cli(root, ['init', '--agents', 'unknown'], 2);
   cli(root, ['agents', 'claude'], 1);
   assert.deepEqual(readdirSync(root).filter(name => name !== '.git'), []);
@@ -115,7 +118,7 @@ test('update aposenta referências próprias antigas e preserva conteúdo humano
   });
 });
 
-test('claude isolado, dependência do codex e persistência não criam clientes extras', t => {
+test('claude isolado, skills do codex e persistência não criam clientes extras', t => {
   const root = fixture(t);
   cli(root, ['init', '--agents', 'claude']);
   assert.deepEqual(state(root).clients, ['claude']); assert.ok(existsSync(join(root, 'CLAUDE.md')));
@@ -124,7 +127,10 @@ test('claude isolado, dependência do codex e persistência não criam clientes 
   cli(root, ['agents', 'codex', '--dry-run']);
   assert.deepEqual(state(root).clients, ['claude']); assert.equal(existsSync(join(root, '.codex')), false);
   cli(root, ['agents', 'codex,claude']);
-  assert.ok(existsSync(join(root, '.agents/skills.json'))); assert.equal(existsSync(join(root, '.codex/skills')), false);
+  assert.ok(existsSync(join(root, '.agents/skills/projeto/criar-skill/SKILL.md')));
+  for (const path of ['.agents/skills.json', '.agents/agents', '.agents/commands', '.agents/rules', '.codex/skills']) {
+    assert.equal(existsSync(join(root, path)), false, path);
+  }
   assert.equal(cli(root, ['agents', 'claude,codex']).changed, false);
   cli(root, ['update']); cli(root, ['sync']); cli(root, ['lang', 'es']);
   assert.deepEqual(state(root).clients, ['claude', 'codex']);
@@ -446,7 +452,7 @@ test('desmarcar preserva arquivos com texto humano e remove somente derivados in
 });
 
 test('estado legado equivale a all e consultas não escrevem migração', t => {
-  const root = fixture(t); cli(root, ['init', '--yes']);
+  const root = fixture(t); cli(root, ['init', '--yes', '--agents', 'all']);
   const previous = state(root); delete previous.clients; put(root, statePath, `${JSON.stringify(previous, null, 2)}\n`);
   const before = read(root, statePath);
   assert.deepEqual(cli(root, ['agents']).clients, ['all']);
@@ -493,8 +499,88 @@ test('TTY pergunta idioma, clientes e propósito; execução sem TTY e opções 
     else if (args.includes('--agents')) {
       assert.deepEqual(state(target).clients, ['codex']);
       assert.equal(state(target).language, 'en');
-    } else assert.deepEqual(state(target).clients, ['all']);
+    } else assert.deepEqual(state(target).clients, ['none']);
   });
+});
+
+test('hub inicial, adição incremental e sincronização respeitam os clientes escolhidos', { timeout: 120000 }, t => {
+  const root = fixture(t);
+  const direct = () => spawnSync(process.execPath, [join(root, '.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs')], { cwd: root, encoding: 'utf8' });
+  const clientInfo = () => cli(root, ['agents']);
+  cli(root, ['init', '--yes']);
+  assert.deepEqual(clientInfo().configuredClients, []);
+  assert.equal(clientInfo().statePath, statePath);
+  assert.ok(existsSync(join(root, 'AGENTS.md')));
+  for (const path of ['.codex', '.agents', '.claude', '.gemini', 'GEMINI.md']) assert.equal(existsSync(join(root, path)), false, path);
+  cli(root, ['doctor']);
+  cli(root, ['sync', '--check']);
+  const hubSync = direct();
+  assert.equal(hubSync.status, 0, hubSync.stderr || hubSync.stdout);
+  const preview = cli(root, ['agents', 'add', 'codex', '--dry-run']);
+  assert.deepEqual(preview.clients, ['codex']);
+  assert.match(preview.next[0].command, /\bagents add codex\b/);
+  assert.deepEqual(state(root).clients, ['none']);
+  assert.equal(existsSync(join(root, '.codex')), false);
+  cli(root, ['agents', 'add', 'codex']);
+  assert.deepEqual(clientInfo().configuredClients, ['codex']);
+  assert.deepEqual(clientInfo().clientRoots, ['.agents', '.codex']);
+  const source = 'skills/projeto/skill-da-equipe/SKILL.md';
+  const mirror = `.agents/${source}`;
+  put(root, `.pbai4devs/${source}`, '---\nname: skill-da-equipe\ndescription: Skill do projeto.\n---\n\n# Skill da equipe\n');
+  cli(root, ['sync']);
+  assert.match(read(root, mirror), /\.pbai4devs\/skills\/projeto\/skill-da-equipe\/SKILL\.md/);
+  assert.equal(existsSync(join(root, '.claude')), false);
+  cli(root, ['agents', 'add', 'antigravity']);
+  assert.deepEqual(clientInfo().configuredClients, ['antigravity', 'codex']);
+  assert.ok(existsSync(join(root, '.agents/skills.json')));
+  const human = '.agents/agents/agente-da-equipe.md';
+  put(root, human, '# Agente humano\n');
+  cli(root, ['agents', 'remove', 'antigravity']);
+  assert.deepEqual(clientInfo().configuredClients, ['codex']);
+  assert.equal(existsSync(join(root, '.agents/skills.json')), false);
+  assert.ok(existsSync(join(root, mirror)));
+  assert.equal(read(root, human), '# Agente humano\n');
+  cli(root, ['agents', 'remove', 'codex']);
+  assert.deepEqual(state(root).clients, ['none']);
+  assert.equal(existsSync(join(root, mirror)), false);
+  assert.equal(read(root, human), '# Agente humano\n');
+  cli(root, ['sync', '--check']);
+});
+
+test('manifesto seletivo exige runtime compatível e preserva um script antigo editado', { timeout: 120000 }, t => {
+  const root = fixture(t);
+  const relative = '.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs';
+  const manifest = '.pbai4devs/espelhos.conf';
+  cli(root, ['init', '--agents', 'cursor']);
+  const original = read(root, relative);
+  const older = original.replace('// agentdevkit-manifest: selective-clients-v1\n', '');
+  assert.notEqual(older, original);
+  put(root, relative, older);
+  const recorded = state(root);
+  recorded.files[relative] = createHash('sha256').update(older).digest('hex');
+  const saved = JSON.stringify(recorded);
+  put(root, statePath, saved);
+  const previousManifest = read(root, manifest);
+  for (const args of [['agents', 'add', 'codex'], ['sync', '--agents', 'none']]) {
+    const result = cli(root, args, 1);
+    assert.equal(result.error.code, 'E_UPGRADE');
+    assert.equal(result.error.path, relative);
+    assert.match(result.next[0].command, /update --dry-run/);
+    assert.equal(read(root, statePath), saved);
+    assert.equal(read(root, manifest), previousManifest);
+  }
+  const edited = older + '\n// Nota da equipe.\n';
+  put(root, relative, edited);
+  const blocked = cli(root, ['update', '--agents', 'codex'], 1);
+  assert.equal(blocked.error.path, relative);
+  assert.equal(blocked.next[0].command, undefined);
+  assert.equal(read(root, relative), edited);
+  assert.equal(read(root, statePath), saved);
+  put(root, relative, older);
+  cli(root, ['update', '--agents', 'codex']);
+  cli(root, ['sync', '--check']);
+  assert.equal(read(root, relative), original);
+  assert.deepEqual(state(root).clients, ['codex']);
 });
 
 test('propósito explícito mantém as perguntas de idioma e clientes e orienta a rota escolhida', async t => {

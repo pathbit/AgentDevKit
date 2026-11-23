@@ -4,12 +4,22 @@ description: Alterações verificáveis por versão do AgentDevKit.
 
 # Changelog
 
-## Em desenvolvimento
+## 0.0.36
 
-- Retira o Gemini CLI da seleção ativa. Instalações antigas podem atualizar
-  a seleção e preservar os arquivos próprios do projeto.
-- Inclui uma matriz de funcionalidades e consolida a integração em `develop`
-  e a branch pública em `main`.
+- Retira o Gemini CLI da seleção e da geração de recursos. Na atualização,
+  remove referências comprovadamente gerenciadas e preserva arquivos próprios
+  do projeto. O Antigravity continua usando `GEMINI.md`.
+- Pergunta quais clientes vão usar o kit e salva a escolha por projeto.
+  Sem seleção explícita ou salva, prepara a estrutura compartilhada.
+  `agents add` e `agents remove` ajustam a seleção existente.
+- Apresenta uma matriz de funcionalidades e reúne licenças e créditos no
+  guia de plugins. OpenSpec e dotcontext MCP são integrações opcionais.
+- Organiza instalação, sincronização e CLI em módulos com responsabilidades
+  específicas. Conserva os pontos de entrada e o formato do estado local.
+- Enxuga as skills de entrega, validação, sincronização e ferramentas.
+  Comandos e manuais concentram procedimentos e decisões por caso.
+- Revisa a documentação de primeiro uso e a referência de manutenção para
+  conectar instalação, configuração, validação e atualização.
 
 ## 0.0.35
 

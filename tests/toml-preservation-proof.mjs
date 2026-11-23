@@ -2,7 +2,8 @@
 import { realpathSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { extractTomlManagedBlock, mergeTomlContent, stripTomlContent } from '../.pbai4devs/scripts/lib/managed-toml.mjs';
+import { extractTomlManagedBlock, stripTomlContent } from '../.pbai4devs/scripts/lib/managed-toml.mjs';
+import { mergeTomlContent } from './fixtures/legacy-toml-writer.mjs';
 
 // Synthetic, deterministic examples; this does not validate all TOML syntax.
 const inputs = [

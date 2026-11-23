@@ -111,13 +111,15 @@ Escolha as ferramentas necessárias à tarefa. Para preparar e verificar
 somente lint Markdown, por exemplo:
 
 ```console
-npx @pathbit/agentdevkit tools install markdownlint-cli2
-npx @pathbit/agentdevkit tools check markdownlint-cli2
+npx @pathbit/agentdevkit plugins info markdownlint-cli2
+npx @pathbit/agentdevkit plugins install markdownlint-cli2
+npx @pathbit/agentdevkit plugins check markdownlint-cli2
 ```
 
 Para usar GitHub Packages, acrescente `--registry=https://npm.pkg.github.com`
 antes do nome do pacote, como no [guia de instalação](installation.md#github-packages).
-`tools setup` prepara e verifica as ferramentas compatíveis.
+O [guia de plugins](plugins.md) explica como escolher um item pelo ID.
+`tools setup` prepara e verifica as ferramentas compatíveis de uma seleção.
 `tools setup base` limita o preparo a navegador e lint. A instalação dos CLIs
 não instala browsers, FFmpeg nem concede permissões desktop; veja os requisitos
 da tarefa em [ferramentas e testes](tools-and-testing.md).

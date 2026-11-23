@@ -187,7 +187,7 @@ export function operationalNext(result, options, { installed, planCanApply }) {
   if (result.clients?.length === 0 && command === 'agents') {
     return [{ label: strings.preview, instruction: result.message, stage: 'revisao' }];
   }
-  if (result.clients?.length === 0 && (command === 'doctor' || result.error?.code === 'E_CLIENTS_RETIRED')) {
+  if (result.error?.code === 'E_CLIENTS_RETIRED' || result.clients?.length === 0 && command === 'doctor') {
     return [{ label: cliText(language, 'clientsAvailable'), command: nextCommand('agents', target, language), stage: 'revisao' }];
   }
   const selection = options.clients ? ` --agents ${options.clients.join(',')}` : '';
@@ -204,7 +204,9 @@ export function operationalNext(result, options, { installed, planCanApply }) {
     if (installed && !result.plan.length) return step('next', 'next', 'fluxo');
     const purpose = options.purpose ? ` --purpose ${options.purpose}` : '';
     const yes = command === 'init' ? ' --yes' : '';
-    return step('apply', `${command}${selection}${purpose}${yes}`, 'aplicacao');
+    const action = command === 'agents' && options.positionals?.length === 2
+      ? `agents ${options.positionals[0]} ${options.clients.join(',')}` : `${command}${selection}`;
+    return step('apply', `${action}${purpose}${yes}`, 'aplicacao');
   }
   if (options.check || options.dryRun) {
     return [{ label: strings.review, stage: 'revisao' }];
@@ -226,6 +228,7 @@ const methods = {
   },
   openspec: {
     name: 'OpenSpec', url: 'https://github.com/Fission-AI/OpenSpec',
+    plugin: 'openspec',
     product: ['Use as specs vigentes para entender o comportamento atual.', 'Use the current specs to understand existing behavior.', 'Use las specs vigentes para entender el comportamiento actual.'],
     run: ['Revise a proposta e os deltas da mudança em questão.', 'Review the proposal and deltas for the change at hand.', 'Revise la propuesta y los deltas del cambio en cuestión.'],
   },
@@ -241,6 +244,7 @@ const methods = {
   },
   dotcontext: {
     name: 'Dotcontext (AI Context)', url: 'https://github.com/vinilana/dotcontext',
+    plugin: 'dotcontext-mcp',
     product: ['Use os docs e planos relevantes como contexto do produto.', 'Use the relevant docs and plans as product context.', 'Use los docs y planes pertinentes como contexto del producto.'],
     run: ['Consulte o plano e o contexto técnico da mudança.', 'Consult the plan and technical context for the change.', 'Consulte el plan y el contexto técnico del cambio.'],
   },
@@ -249,8 +253,8 @@ const methods = {
 export function integrationHints({ target, language, intent }) {
   const index = ['pt', 'en', 'es'].indexOf(language);
   return Object.entries(inspectIntegrations(target)).map(([id, paths]) => {
-    const { name, url, product, run } = methods[id];
-    return { id, name, url, paths, instruction: (intent === 'product' ? product : run)[index] };
+    const { name, url, product, run, plugin } = methods[id];
+    return { id, name, url, paths, instruction: (intent === 'product' ? product : run)[index], ...(plugin ? { plugin } : {}) };
   });
 }
 

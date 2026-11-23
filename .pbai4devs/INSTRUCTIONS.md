@@ -25,10 +25,11 @@ lacunas e organize por índices, sem substituir documentos pelos modelos.
 
 Ao instalar ou reconfigurar o kit, pergunte quais clientes o usuário usa se
 não houver escolha no pedido ou no estado. A CLI aceita
-`--agents codex,claude`; `agents` consulta ou altera a seleção depois.
+`--agents codex,claude`. Consulte `agents` e use `agents add <id>` ou
+`agents remove <id>` para alterar a seleção depois.
 Use os IDs da [compatibilidade](COMPATIBILIDADE.md), sem deduzir o agente pelo
 aplicativo, SO ou pastas. Sem resposta disponível, mantenha a escolha salva ou
-`all`. Registre pela CLI, sem editar hashes do estado manualmente.
+`none` para preparar apenas o hub. Registre as escolhas pela CLI.
 
 No primeiro uso, indique o objetivo com `init --purpose agents|product|run|document`
 ou responda no assistente interativo quando ele abrir. Se você passou idioma e

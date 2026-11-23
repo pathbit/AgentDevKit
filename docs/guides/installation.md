@@ -7,6 +7,10 @@ description: Instalação do AgentDevKit e geração local dos agentes.
 O pacote traz o gerador e as fontes compartilhadas. A instalação prepara
 `.pbai4devs` e cria somente os apontamentos dos agentes escolhidos.
 
+- [Instalar pela primeira vez](#instalar).
+- [Simular em um projeto existente](#simular-em-um-projeto-existente).
+- [Atualizar ou mudar clientes](#atualizar-e-escolher-agentes).
+
 ## Pré-requisitos
 
 Prepare [Node.js 24+ com npm e npx](prerequisites.md) no Windows, macOS ou Linux.
@@ -81,7 +85,9 @@ No aplicativo desktop, reúna as escolhas pelo chat e passe-as à CLI.
 
 Consulte [CLI](cli.md) para acrescentar seleção, destino e simulação. `--json`,
 `--yes`, `--dry-run` ou ausência de terminal interativo evitam perguntas.
-Sem escolha explícita ou salva, `all` mantém todos os clientes compatíveis.
+Sem escolha explícita ou salva, o modo `none` prepara o hub sem criar
+pastas de clientes. Use `--agents all` para selecionar todos os
+clientes ativos deliberadamente.
 
 Após instalar, confirme a versão, o diagnóstico e os apontamentos:
 
@@ -90,6 +96,10 @@ npx @pathbit/agentdevkit --version
 npx @pathbit/agentdevkit doctor
 npx @pathbit/agentdevkit sync --check
 ```
+
+Sem Git, use `doctor` para conferir o kit. `sync --check` pode indicar
+pendência de Git. Para as diferenças entre diagnóstico e sincronização,
+consulte a [CLI](cli.md#diagnóstico-e-sincronização).
 
 Se escolheu GitHub Packages, use o mesmo prefixo
 `npx --registry=https://npm.pkg.github.com` nesses comandos. Para fixar uma
@@ -100,15 +110,18 @@ tarefa exigir.
 
 ### Simular em um projeto existente
 
-Na raiz do projeto, confira os arquivos e conflitos sem aplicar as mudanças:
+Na raiz do projeto, simule com os clientes e o idioma que serão aplicados.
+Por exemplo, para preparar Codex e Claude em português:
 
 ```console
-npx @pathbit/agentdevkit init --dry-run --json
+npx @pathbit/agentdevkit init --lang pt --agents codex,claude --dry-run
 ```
 
-Depois de decidir como tratar o plano, aplique `init` com os clientes e o
-objetivo escolhidos. Para um kit já instalado, simule `update` antes de usar
-uma versão nova. [Referência da CLI](cli.md)
+O plano lista mudanças e conflitos. Acrescente `--json` para consultar a lista
+completa e os motivos de preservação. Depois da revisão, execute o mesmo
+`init` sem `--dry-run`. Se só quiser os recursos compartilhados, use
+`--agents none` no plano e na aplicação. Se o kit já está instalado, simule
+[`update`](#atualizar-e-escolher-agentes).
 
 ## O que fica no projeto
 
@@ -153,16 +166,48 @@ rastreamento. `--dry-run` e `sync --check` não alteram o índice.
 
 ## Atualizar e escolher agentes
 
-Use a versão desejada do pacote para executar `update`. A escolha salva
-continua válida; `agents` consulta e `agents codex,claude` altera a seleção.
-`agents all` habilita os clientes ativos. Antigravity usa `.agents`, que
-também serve ao Codex, e Kimi usa `.kimi-code`. A atualização remove
-apontamentos comprovadamente gerados em `.agent` e `.kimi`.
+Use a versão desejada do pacote para planejar e aplicar a atualização. Por
+exemplo, para usar a versão marcada como `latest` no npm:
 
-Confira `update --dry-run --json` antes de atualizar um projeto existente.
-Revise arquivos criados, atualizados e removidos, conflitos e `preserved`.
+```console
+npx @pathbit/agentdevkit@latest update --dry-run --json
+```
+
+Revise `plan`, `conflicts` e `preserved`. Depois da revisão, aplique o plano
+usando a versão indicada no campo `version` da resposta JSON. No comando
+abaixo, substitua `VERSÃO` pelo número exibido:
+
+```text
+npx @pathbit/agentdevkit@VERSÃO update
+```
+
+Use `doctor` e, com Git, `sync --check` depois da atualização.
+
+A seleção salva continua válida. Para ajustá-la, consulte `agents`, então
+use `agents add cursor` para acrescentar ou `agents remove cursor` para
+retirar apenas esse cliente. `agents codex,claude` substitui a lista
+completa e `agents none` mantém só os recursos compartilhados. As mudanças
+de seleção aceitam `--dry-run`.
+
+`E_UPGRADE` indica que o formato precisa de scripts locais atualizados.
+Se o plano apontar um script próprio, concilie-o com a versão do pacote
+antes de aplicar a mudança de seleção.
 `sync` usa as fontes já instaladas e não baixa uma nova versão. Consulte a
 [referência da CLI](cli.md) para todos os comandos.
+
+Antigravity usa `.agents`, que também abriga as skills do Codex, e Kimi usa
+`.kimi-code`. A atualização remove apontamentos comprovadamente gerados em
+`.agent` e `.kimi`.
+
+A partir da versão `0.0.36`, o kit deixa de criar ou renovar apontamentos em
+`.gemini/`. Se uma instalação usava somente Gemini CLI, escolha outro cliente
+ou `none` com `update --agents <id> --dry-run`. Nas instalações com outros
+clientes salvos, `update` conserva esses IDs. A migração retira somente a
+contribuição do kit que for comprovada e preserva conteúdo próprio.
+`GEMINI.md` continua sendo a entrada do Antigravity. Consulte a
+[migração de clientes][migracao].
+
+## Preservação dos arquivos
 
 Skills e outros recursos próprios podem coexistir com os do kit. Um nome
 igual não comprova propriedade: conteúdo humano e arquivos adicionais não
@@ -171,8 +216,8 @@ ficam restritas a arquivos obsoletos cuja propriedade possa ser comprovada.
 `--force` não autoriza substituir conteúdo próprio; backups ficam em
 `.agent-tests/` e devem ser revisados quando houver reparo gerenciado.
 
-Em entradas como `AGENTS.md`, `claude.md` e `GEMINI.md`, e em recursos nativos
-compatíveis, o kit pode acrescentar apenas uma referência delimitada:
+Em entradas como `AGENTS.md` ou `CLAUDE.md` e em recursos nativos compatíveis,
+o kit pode acrescentar uma referência delimitada:
 
 ```markdown
 <!-- BEGIN AGENTDEVKIT -->
@@ -183,15 +228,11 @@ Leia e siga [origem](caminho/para/.pbai4devs/recurso.md).
 O texto e o frontmatter humanos permanecem; a referência usa o caminho real
 do recurso. Um arquivo que não possa receber o bloco é preservado e informado,
 sem prometer a adição do apontamento. Repetir a operação não duplica o bloco.
-Edite suas instruções fora
-dele: atualizações alteram somente a contribuição do kit. Nomes de entradas
+Edite suas instruções fora do bloco gerado. Nomes de entradas
 com caixa diferente são reaproveitados quando há uma única opção.
 Configurações que não são instruções não recebem uma mesclagem arbitrária.
 Arquivos mistos não passam a pertencer ao kit. Sua visibilidade para o Git
 também depende da regra aplicada à pasta do cliente.
-
-Para atualizar uma instalação com o Gemini CLI selecionado, confira a
-[migração de clientes](../../.pbai4devs/COMPATIBILIDADE.md#escolher-clientes).
 
 Links simbólicos preexistentes são preservados sem atravessá-los. O campo
 `preserved` lista caminhos próprios encontrados no planejamento ou em colisões,
@@ -217,6 +258,7 @@ Se houver erro, consulte [solução de problemas](troubleshooting.md).
 [Wiki](../README.md) · [Spec de segurança][spec]
 
 [bootstrap]: ../../.pbai4devs/scripts/preparar-ferramentas/BOOTSTRAP.md
+[migracao]: ../../.pbai4devs/COMPATIBILIDADE.md#escolher-clientes
 [spec]: ../specs/security-ecosystem/SPEC.md
 [tokens]: https://github.com/settings/tokens
 [github-auth]: https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-npm-registry#authenticating-to-github-packages

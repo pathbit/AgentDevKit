@@ -125,6 +125,7 @@ test('remover recurso ou cliente retira somente bloco próprio de Markdown misto
 
 test('entradas raiz com caixa existente recebem só a referência e mantêm alterações humanas', t => {
   const root = fixture(t), paths = ['agents.md', 'claude.md', 'Gemini.md'];
+  put(root, '.pbai4devs/espelhos.conf', read(root, '.pbai4devs/espelhos.conf') + 'agente|.agents|plano\ndescoberta|.agents|antigravity\n');
   for (const path of paths) put(root, path, `# Minhas instrucoes de ${path}\n\nNao apague.\n`);
   const before = Object.fromEntries(paths.map(path => [path, read(root, path)]));
   const result = run(root);
@@ -142,22 +143,31 @@ test('entradas raiz com caixa existente recebem só a referência e mantêm alte
   assert.equal(hash(read(root, 'agents.md')), beforeRepeat);
 });
 
-test('comando TOML existente recebe referência dentro do prompt e mantém metadados', t => {
+test('sync retira somente bloco TOML legado comprovado e restaura bytes humanos', t => {
   const root = fixture(t), path = '.gemini/commands/check.toml';
-  put(root, '.pbai4devs/espelhos.conf', 'agente|.gemini|plano\n');
-  put(root, '.pbai4devs/commands/check/COMMAND.md', '---\ndescription: Check.\n---\n\n# Check\n');
   const before = 'description = "Escolha humana"\r\nprompt = \'Meu comando {{args}}\'\r\n# Comentario humano\r\n';
-  put(root, path, before);
+  // Fixture congelada no formato V3 antes de aposentar o escritor Gemini CLI.
+  const metadata = [
+    'eyJ2IjozLCJvcmlnaW4iOiJsaXRlcmFsLW9uZSIsInN0eWxlIjoibGl0ZXJhbC1tdWx0aSIs',
+    'InNlcGFyYXRvciI6IlxuXG4iLCJlb2wiOiJcbiIsInByZSI6IiIsInN0bXRFb2wiOiIiLCJi',
+    'bG9ja0hhc2giOiIzOWI4MTlkN2VmODk3YTIxNDkyOGIzN2Q2MWJjMmMwMjQxNTEzZWU4NmE2',
+    'ZWRhMDM1YmRiMjhlNjQ4ODExMGRkIiwibGluZUVvbCI6IlxyXG4ifQ',
+  ].join('');
+  const legacy = `description = "Escolha humana"\r\n# ADK-TOML-META-V3 ${metadata}\r\n`
+    + "prompt = '''Meu comando {{args}}\n\n<!-- BEGIN AGENTDEVKIT -->\n"
+    + "@{.pbai4devs/commands/check/COMMAND.md}\n<!-- END AGENTDEVKIT -->\n'''\r\n# Comentario humano\r\n";
+  const digest = 'f674f511d9461e9038c62c2f97caac940b508f5d7c942292db5f8a16d0336f29';
+  put(root, path, legacy);
+  assert.match(extractTomlManagedBlock(read(root, path)), /@\{\.pbai4devs\/commands\/check\/COMMAND\.md\}/);
+  put(root, '.pbai4devs/state/agentdevkit.json', JSON.stringify({ schemaVersion: 1, files: {}, blocks: { [path]: digest } }));
+  assert.equal(run(root, { check: true }).exitCode, 1);
+  assert.equal(read(root, path), legacy);
   const result = run(root);
-  const after = read(root, path);
-  assert.ok(after.startsWith('description = "Escolha humana"\r\n'));
-  assert.ok(after.endsWith('\r\n# Comentario humano\r\n'));
-  assert.match(after, /Meu comando \{\{args\}\}/);
-  assert.match(extractTomlManagedBlock(after), /@\{\.pbai4devs\/commands\/check\/COMMAND\.md\}/);
-  assert.ok(result.managedBlocks[path]);
+  assert.equal(read(root, path), before);
+  assert.equal(result.managedBlocks[path], undefined);
   assert.ok(!result.ownedOutputs.includes(path));
+  assert.ok(JSON.parse(read(root, '.pbai4devs/state/derived.json')).removedBlocks.includes(path));
   assert.equal(run(root, { check: true }).exitCode, 0);
-  run(root, { force: true }); assert.equal(read(root, path), after);
 });
 
 test('retirada standalone registra tombstone para bloco do estado instalado', t => {

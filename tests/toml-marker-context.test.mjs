@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mergeTomlContent, stripTomlContent } from '../.pbai4devs/scripts/lib/managed-toml.mjs';
+import { stripTomlContent } from '../.pbai4devs/scripts/lib/managed-toml.mjs';
+import { mergeTomlContent } from './fixtures/legacy-toml-writer.mjs';
 
 const body = '@{.pbai4devs/commands/demo/COMMAND.md}';
 

@@ -14,6 +14,7 @@ import { buildCatalog } from '../lib/catalog.mjs';
 import { adapterManifest } from '../lib/adapters.mjs';
 import { stateDirectory } from '../lib/state-path.mjs';
 import { nativePathBoundary } from '../lib/native-paths.mjs';
+import { listPackageHubFiles } from './package-source.mjs';
 
 const assets = join(dirname(fileURLToPath(import.meta.url)), 'assets');
 const owner = 'testar-maturidade';
@@ -215,7 +216,7 @@ function manifest(root) {
   const state = join(root, stateDirectory(root), 'agentdevkit.json');
   const file = join(root, '.pbai4devs/espelhos.conf');
   if (existsSync(file)) return readFileSync(file, 'utf8');
-  return adapterManifest(root, { clients: existsSync(state) ? json(state).clients : undefined });
+  return adapterManifest(root, { clients: existsSync(state) ? json(state).clients : ['none'] });
 }
 
 export function registeredRoots(root) {
@@ -226,7 +227,11 @@ export function registeredRoots(root) {
 }
 
 export function resourceTargets(root, source, kind = 'skills') {
-  const rows = manifest(root).split(/\r?\n/).filter(line => line && !line.startsWith('#')).map(line => line.split('|'));
+  const geminiPath = value => /^\.gemini(?:[\\/]|$)/i.test(value);
+  const rows = manifest(root).split(/\r?\n/)
+    .filter(line => line && !line.startsWith('#'))
+    .map(line => line.split('|'))
+    .filter(([type, target, primary]) => !geminiPath(target) && !(type === 'fallback' && geminiPath(primary)));
   const targets = [], suppressed = new Set();
   const rule = kind === 'rules' ? buildCatalog(root).catalog.rules.find(entry => entry.path === source) : undefined;
   for (const [type, fallback, primary, resource] of rows) {
@@ -252,8 +257,7 @@ export function resourceTargets(root, source, kind = 'skills') {
     const explicitMetadata = rows.some(([entry, target, origin, metadata]) => entry === 'nativo' && target === defaultTarget && origin === source && metadata);
     const relativeTarget = clientResourcePath(source, kind, format, agent, rule, explicitMetadata);
     if (relativeTarget === null) continue;
-    let target = `${agent}/${relativeTarget}`;
-    if (agent === '.gemini' && kind === 'commands') target = target.replace(/\.md$/, '.toml');
+    const target = `${agent}/${relativeTarget}`;
     if (!suppressed.has(target)) targets.push(target);
   }
   for (const [type, target, origin] of rows) if (type === 'nativo' && origin === source) targets.push(target);
@@ -280,10 +284,10 @@ function copyAllowed(relativePath, directory = false) {
   return true;
 }
 
-export function copyAgentStructure(sourceRoot, destination, { archiveCatalogs = false, archiveOverrides = new Set(), archiveEntrypoints = false } = {}) {
-  const roots = ['.pbai4devs', ...registeredRoots(sourceRoot)];
-  const stateFile = join(sourceRoot, stateDirectory(sourceRoot), 'agentdevkit.json');
-  const stateInfo = stat(stateFile);
+export function copyAgentStructure(sourceRoot, destination, { archiveCatalogs = false, archiveOverrides = new Set(), archiveEntrypoints = false, packageFiles } = {}) {
+  const roots = packageFiles ? ['.pbai4devs'] : ['.pbai4devs', ...registeredRoots(sourceRoot)];
+  const stateFile = packageFiles ? null : join(sourceRoot, stateDirectory(sourceRoot), 'agentdevkit.json');
+  const stateInfo = stateFile ? stat(stateFile) : null;
   if (stateInfo && (!stateInfo.isFile() || stateInfo.isSymbolicLink())) fail('Estado da instalação deve ser arquivo regular.');
   const installation = stateInfo ? json(stateFile) : null;
   if (stateInfo && (!installation || !installation.blocks || typeof installation.blocks !== 'object' || Array.isArray(installation.blocks))) fail('Estado da instalação deve registrar os blocos gerenciados.');
@@ -298,9 +302,11 @@ export function copyAgentStructure(sourceRoot, destination, { archiveCatalogs = 
     return finish > start && digest(content.slice(start, finish + end.length)) === expected;
   }
   const files = []; const entrypoints = {}; const omittedEntrypoints = []; const catalogSnapshots = []; const overriddenSnapshots = []; const seenSources = new Set(); let skipped = 0;
-  function copy(file, targetFile = file) {
+  function copy(file, targetFile = file, inventoried = false) {
     const source = join(sourceRoot, file);
-    const item = stat(source); if (!item) return;
+    const item = stat(source);
+    if (inventoried && !item?.isFile()) fail('O inventário do pacote mudou durante a cópia.');
+    if (!item) return;
     if (!copyAllowed(file, item.isDirectory())) { skipped++; return; }
     if (item.isSymbolicLink()) fail(`A cópia recusa links simbólicos: ${file}`);
     if (item.isDirectory()) {
@@ -318,8 +324,15 @@ export function copyAgentStructure(sourceRoot, destination, { archiveCatalogs = 
       const target = join(destination, targetFile); mkdirSync(dirname(target), { recursive: true }); copyFileSync(source, target); files.push(portable(targetFile));
     } else fail(`Arquivo não regular na origem: ${file}`);
   }
-  for (const file of [...roots, 'README.md', '.gitignore', '.gitattributes', '.editorconfig', '.dockerignore', '.env.example', '.env.sample', '.env.template', 'Makefile']) copy(file);
-  for (const name of ['AGENTS.md', 'CLAUDE.md', 'GEMINI.md']) {
+  if (packageFiles) {
+    for (const file of packageFiles) {
+      noLinks(sourceRoot, join(sourceRoot, file));
+      copy(file, file, true);
+    }
+  } else {
+    for (const file of [...roots, 'README.md', '.gitignore', '.gitattributes', '.editorconfig', '.dockerignore', '.env.example', '.env.sample', '.env.template', 'Makefile']) copy(file);
+  }
+  for (const name of packageFiles ? [] : ['AGENTS.md', 'CLAUDE.md', 'GEMINI.md']) {
     const installed = stat(join(sourceRoot, name));
     if (!installed) continue;
     if (installed.isSymbolicLink()) { omittedEntrypoints.push(name); skipped++; continue; }
@@ -337,7 +350,7 @@ export function copyAgentStructure(sourceRoot, destination, { archiveCatalogs = 
   }
   // A fixture can create files belonging to an unselected client; archive
   // those source files as well, without traversing symbolic-link ancestors.
-  for (const path of archiveOverrides) if (!seenSources.has(path)) {
+  for (const path of packageFiles ? [] : archiveOverrides) if (!seenSources.has(path)) {
     noLinks(sourceRoot, join(sourceRoot, path));
     copy(path);
   }
@@ -345,8 +358,8 @@ export function copyAgentStructure(sourceRoot, destination, { archiveCatalogs = 
   return { roots, copiedFiles: files.length, skipped, files, sourceDigest, entrypoints, omittedEntrypoints, catalogSnapshots, overriddenSnapshots, toolDefinitions: files.filter(file => /^\.pbai4devs\/tools\/[^/]+\/TOOL\.json$/.test(file)).length };
 }
 
-function fixtureOverrides(scenario, sourceRoot) {
-  const paths = ['README.md', '.pbai4devs/.gitignore', ...registeredRoots(sourceRoot).map(root => `${root}/.gitignore`), '.pbai4devs/state/configuracao/ESTADO.md', '.pbai4devs/estado/configuracao/ESTADO.md'];
+function fixtureOverrides(scenario, nativeRoots) {
+  const paths = ['README.md', '.pbai4devs/.gitignore', ...nativeRoots.map(root => `${root}/.gitignore`), '.pbai4devs/state/configuracao/ESTADO.md', '.pbai4devs/estado/configuracao/ESTADO.md'];
   if (scenario.planning !== 'none' || scenario.app) paths.push('.pbai4devs/state/README.md', '.pbai4devs/estado/README.md');
   if (scenario.configured) paths.push('.dockerignore', '.env.example', 'Makefile');
   if (scenario.layout === 'legacy') paths.push('Makefile', '.github/workflows/legacy.yml', '.vscode/settings.json');
@@ -513,7 +526,7 @@ export function createExampleOutput({ sourceRoot = projectRoot, outputRoot, pref
   return { outputRoot, verifyOutput };
 }
 
-export function prepareExamples({ sourceRoot = projectRoot, outputRoot, scenarios = SCENARIOS, initializeGit = true, renderResources = prepareResources } = {}) {
+export function prepareExamples({ sourceRoot = projectRoot, outputRoot, scenarios = SCENARIOS, initializeGit = true, renderResources = prepareResources, sourceOnly = false } = {}) {
   requireNode(); sourceRoot = realpathSync(resolve(sourceRoot));
   const ids = new Set();
   if (!Array.isArray(scenarios) || !scenarios.length) fail('Selecione pelo menos um cenário.');
@@ -521,6 +534,8 @@ export function prepareExamples({ sourceRoot = projectRoot, outputRoot, scenario
     if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(scenario.id) || ids.has(scenario.id)) fail('Cenários devem ter IDs únicos e seguros.');
     ids.add(scenario.id);
   }
+  const packageFiles = sourceOnly ? listPackageHubFiles(sourceRoot) : undefined;
+  const sourceMode = sourceOnly ? 'package-source' : 'project';
   const createdOutput = createExampleOutput({ sourceRoot, outputRoot, allowMissingGit: !initializeGit });
   outputRoot = createdOutput.outputRoot;
   const verifyOutput = createdOutput.verifyOutput;
@@ -532,7 +547,11 @@ export function prepareExamples({ sourceRoot = projectRoot, outputRoot, scenario
     const destination = join(outputRoot, scenario.id);
     guarded(outputRoot, () => mkdirSync(destination));
     guarded(destination, () => write(destination, marker, JSON.stringify({ owner, version: 1, id: scenario.id }, null, 2) + '\n'));
-    const copied = guarded(destination, () => copyAgentStructure(sourceRoot, destination, { archiveCatalogs: true, archiveOverrides: fixtureOverrides(scenario, sourceRoot), archiveEntrypoints: true }));
+    const copied = guarded(destination, () => copyAgentStructure(sourceRoot, destination, {
+      archiveCatalogs: true,
+      archiveOverrides: fixtureOverrides(scenario, sourceOnly ? [] : registeredRoots(sourceRoot)),
+      archiveEntrypoints: true, packageFiles,
+    }));
     guarded(destination, () => {
       // This belongs to the new fixture. The source .gitignore is not changed.
       const directory = join(destination, '.agent-tests'), ignore = join(directory, '.gitignore');
@@ -548,7 +567,7 @@ export function prepareExamples({ sourceRoot = projectRoot, outputRoot, scenario
     if (initializeGit) guarded(destination, () => gitInit(destination));
     examples.push({ ...scenario, root: destination, copied, application: app });
   }
-  guarded(outputRoot, () => write(outputRoot, 'REPORT.json', JSON.stringify({ owner, version: 1, status: 'prepared', scenarios: [...ids], copies: examples.map(example => ({ id: example.id, omittedEntrypoints: example.copied.omittedEntrypoints, catalogSnapshots: example.copied.catalogSnapshots, overriddenSnapshots: example.copied.overriddenSnapshots })), results: [] }, null, 2) + '\n'));
+  guarded(outputRoot, () => write(outputRoot, 'REPORT.json', JSON.stringify({ owner, version: 1, sourceMode, status: 'prepared', scenarios: [...ids], copies: examples.map(example => ({ id: example.id, omittedEntrypoints: example.copied.omittedEntrypoints, catalogSnapshots: example.copied.catalogSnapshots, overriddenSnapshots: example.copied.overriddenSnapshots })), results: [] }, null, 2) + '\n'));
   guarded(outputRoot, () => writeIndex(outputRoot, examples, 'prepared'));
   Object.defineProperty(examples, 'verifyOutput', { value: verifyOutput });
   return examples;
@@ -579,6 +598,20 @@ function pointer(root, roots) {
   if (!entry) fail('Catálogo copiado não contém uma skill para provar reparação.');
   for (const file of resourceTargets(root, `${entry}/SKILL.md`)) if (roots.includes(file.split('/')[0]) && existsSync(join(root, file))) return file;
   fail('Nenhum apontamento copiado encontrado.');
+}
+
+export function verifySyncRepair(root, roots, run) {
+  const sync = '.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs';
+  const clients = roots.filter(path => path !== '.pbai4devs');
+  const kind = clients.length ? 'pointer' : 'catalog';
+  const path = clients.length ? pointer(root, clients) : '.pbai4devs/catalog.json';
+  const file = join(root, path), before = readFileSync(file);
+  rmSync(file);
+  run(sync, ['--check'], 1, 'sync-damage-detected');
+  run(sync, [], 0, 'sync-repair');
+  const proof = run(sync, ['--check'], 0, 'sync-repaired');
+  if (!readFileSync(file).equals(before)) fail(`Sincronização não restaurou os bytes de ${path}.`);
+  return { kind, path, log: proof.log };
 }
 
 export function runner(root, logRoot, commands) {
@@ -653,7 +686,7 @@ function reviewContract(example, run, proof) {
   const evidence = `.agent-tests/${id}/${execution}/proof.log`;
   write(example.root, evidence, readFileSync(join(example.root, proof.log)));
   for (const item of report.documentation) Object.assign(item, { decision: 'no-impact', reason: 'Documento de cenário sintético inspecionado para simulação contratual do gate.' });
-  report.validation = example.application.criteria.map(criterion => ({ criterion, method: proof.method, prerequisite: 'Node.js 24+; somente fixtures locais, sem pacotes externos.', assertion: criterion === 'AC-001' ? (example.app ? 'GET /health retorna HTTP 200 e status ok.' : 'Os apontamentos copiados passam em sync --check.') : criterion === 'AC-002' ? 'POST /sum calcula 2+3 e rejeita entrada inválida.' : 'O módulo cálculo valida soma e cancelamento.', evidence: [evidence], status: 'passed' }));
+  report.validation = example.application.criteria.map(criterion => ({ criterion, method: proof.method, prerequisite: 'Node.js 24+; somente fixtures locais, sem pacotes externos.', assertion: criterion === 'AC-001' ? (example.app ? 'GET /health retorna HTTP 200 e status ok.' : proof.assertion) : criterion === 'AC-002' ? 'POST /sum calcula 2+3 e rejeita entrada inválida.' : 'O módulo cálculo valida soma e cancelamento.', evidence: [evidence], status: 'passed' }));
   report.review = { status: 'approved', reviewer: 'testar-maturidade:simulacao-contratual-sem-revisao-humana', findings: [] };
   report.simulation = { kind: 'gate-contract-test', humanReview: false, productApproval: false };
   const save = () => write(example.root, reportFile, JSON.stringify(report, null, 2) + '\n');
@@ -684,12 +717,10 @@ export function testExample(example) {
     const sync = '.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs';
     run(sync, [], 0, 'sync-prepare-copy');
     run(sync, ['--check'], 0, 'sync-initial');
-    const damaged = pointer(example.root, example.copied.roots); rmSync(join(example.root, damaged));
-    run(sync, ['--check'], 1, 'sync-damage-detected'); run(sync, [], 0, 'sync-repair');
-    const proofSync = run(sync, ['--check'], 0, 'sync-repaired');
+    result.syncRepair = verifySyncRepair(example.root, example.copied.roots, run);
     const before = managedHashes(example.root, example.copied.roots);
     run(sync, [], 0, 'sync-idempotent');
-    if (JSON.stringify(before) !== JSON.stringify(managedHashes(example.root, example.copied.roots))) fail('A segunda sincronização alterou os espelhos.');
+    if (JSON.stringify(before) !== JSON.stringify(managedHashes(example.root, example.copied.roots))) fail('A segunda sincronização alterou os arquivos gerenciados.');
     if (['somente-agentes', 'manutencao'].includes(example.id)) result.resourceLifecycle = resourceLifecycle(example, run);
     const resourceCheck = run('.pbai4devs/scripts/verificar-recursos/SCRIPT.mjs', [], 0, 'resources-check');
     if (!resourceCheck.output.includes('recursos=passed') || !resourceCheck.output.includes('markdownlint-cli2=missing')) fail('Verificação nativa/linter ausente não foi reportada como esperado.');
@@ -708,7 +739,7 @@ export function testExample(example) {
       for (const file of ['apps/painel com espaços/package.json', 'packages/cálculo/package.json']) if (!inspection.manifests.includes(file)) fail(`Monorepo não detectou ${file}`);
       if (existsSync(join(example.root, 'src'))) fail('O cenário monorepo não deve criar scaffold src na raiz.');
     }
-    let proof = { log: proofSync.log, method: 'node .pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs --check' };
+    let proof = { log: result.syncRepair.log, method: 'node .pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs --check', assertion: `A sincronização restaura ${result.syncRepair.path} com os bytes originais e passa em sync --check.` };
     if (example.app) {
       const tested = run('--test', example.application.tests, 0, 'http-tests');
       for (const criterion of example.application.criteria) if (!tested.output.includes(criterion)) fail(`Teste real não registrou ${criterion}.`);
@@ -729,7 +760,7 @@ export function runExamples(options = {}) {
   const examples = prepareExamples(options);
   const results = examples.map(example => { examples.verifyOutput(example.root); const result = testExample(example); examples.verifyOutput(example.root); console.log(`${example.id}=${result.status}${result.error ? ': ' + result.error : ''}`); return result; });
   const outputRoot = dirname(examples[0].root);
-  const report = { owner, version: 1, status: results.every(item => item.status === 'passed') ? 'passed' : 'failed', platform: process.platform, arch: process.arch, node: process.version, results, limits: ['Provas reais somente das operações descritas e APIs locais.', 'Pareceres do gate são simulações explícitas, sem revisão humana.', 'Não certifica produção nem sistemas operacionais não executados.'] };
+  const report = { owner, version: 1, sourceMode: options.sourceOnly ? 'package-source' : 'project', status: results.every(item => item.status === 'passed') ? 'passed' : 'failed', platform: process.platform, arch: process.arch, node: process.version, results, limits: ['Provas reais somente das operações descritas e APIs locais.', 'Pareceres do gate são simulações explícitas, sem revisão humana.', 'Não certifica produção nem sistemas operacionais não executados.'] };
   examples.verifyOutput();
   write(outputRoot, 'REPORT.json', JSON.stringify(report, null, 2) + '\n');
   examples.verifyOutput();
@@ -740,19 +771,21 @@ export function runExamples(options = {}) {
 
 export function main(args = process.argv.slice(2)) {
   requireNode(); const [mode = 'help', ...rest] = args;
-  if (['help', '--help', '-h'].includes(mode)) { console.log('Uso: testar-maturidade prepare|run [--case <id>] [--output <caminho-novo>]. A saída padrão fica na pasta temporária do sistema, fora de Git; destinos locais explícitos precisam estar ignorados.'); return 0; }
+  if (['help', '--help', '-h'].includes(mode)) { console.log('Uso: testar-maturidade prepare|run [--source-only] [--case <id>] [--output <caminho-novo>]. A saída padrão fica na pasta temporária do sistema, fora de Git; destinos locais explícitos precisam estar ignorados.'); return 0; }
   if (!['prepare', 'run'].includes(mode)) fail('Use prepare ou run.');
-  let scenarios = SCENARIOS, outputRoot, selected;
-  for (let i = 0; i < rest.length; i += 2) {
-    const [flag, value] = [rest[i], rest[i + 1]];
-    if (!value || value.startsWith('--')) fail('Use --case <id> e/ou --output <caminho-novo>.');
+  let scenarios = SCENARIOS, outputRoot, selected, sourceOnly = false;
+  for (let i = 0; i < rest.length; i++) {
+    const flag = rest[i];
+    if (flag === '--source-only' && !sourceOnly) { sourceOnly = true; continue; }
+    const value = rest[++i];
+    if (!value || value.startsWith('--')) fail('Use --source-only, --case <id> e/ou --output <caminho-novo>.');
     if (flag === '--case' && selected === undefined) selected = value;
     else if (flag === '--output' && outputRoot === undefined) outputRoot = value;
-    else fail('Use --case <id> e/ou --output <caminho-novo> uma única vez.');
+    else fail('Use --source-only, --case <id> e/ou --output <caminho-novo> uma única vez.');
   }
   if (selected !== undefined) { scenarios = SCENARIOS.filter(item => item.id === selected); if (!scenarios.length) fail('Cenário desconhecido.'); }
-  if (mode === 'prepare') { const examples = prepareExamples({ scenarios, outputRoot }); console.log(`prepared=${examples.length}\noutput=${dirname(examples[0].root)}`); return 0; }
-  const result = runExamples({ scenarios, outputRoot }); console.log(`output=${result.outputRoot}`);
+  if (mode === 'prepare') { const examples = prepareExamples({ scenarios, outputRoot, sourceOnly }); console.log(`prepared=${examples.length}\noutput=${dirname(examples[0].root)}`); return 0; }
+  const result = runExamples({ scenarios, outputRoot, sourceOnly }); console.log(`output=${result.outputRoot}`);
   return result.report.status === 'passed' ? 0 : 1;
 }
 

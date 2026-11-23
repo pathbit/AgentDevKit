@@ -72,9 +72,14 @@ de caminhos ou ACLs não detectadas.
 Cada [ferramenta](../tools/README.md) tem `TOOL.json` e um `SCRIPT.mjs`,
 com ações `install`, `update`, `check`, `info` e `run`.
 Esses scripts delegam ao mesmo instalador; downloads ficam em `.local/`.
-`preparar-ferramentas setup` instala e verifica todos os CLIs compatíveis.
+`preparar-ferramentas setup` instala e verifica os CLIs compatíveis da
+seleção geral. Ferramentas com `optIn: true` exigem o ID ou grupo explícito,
+como `setup workflow`.
 Para um grupo, use `setup base`, `install base` ou `update base`;
 `check base` não instala nem consulta novas versões.
+Na CLI, `plugins list` e `plugins info <id>` consultam os catálogos.
+`plugins install <id>` e `plugins check <id>` delegam aos gerenciadores do hub
+instalado e operam em uma entrada por vez.
 
 O teste `preparar-ferramentas/tests/SMOKE_VERCEL.mjs` verifica CLIs opcionais
 instaladas com fixtures locais. Execute com Node; resultados ficam em

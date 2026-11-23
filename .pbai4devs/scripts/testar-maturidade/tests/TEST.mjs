@@ -11,7 +11,8 @@ import test from 'node:test';
 import { projectRoot, requireNode } from '../../lib/runtime.mjs';
 import { adapterManifest } from '../../lib/adapters.mjs';
 import { findNpmCli } from '../../lib/npm.mjs';
-import { copyAgentStructure, createExampleOutput, mayAliasPath, prepareExamples as prepare, registeredRoots, resourceTargets, runner, SCENARIOS } from '../SCRIPT.mjs';
+import { synchronize } from '../../sincronizar-agentes/SCRIPT.mjs';
+import { copyAgentStructure, createExampleOutput, mayAliasPath, prepareExamples as prepare, registeredRoots, resourceTargets, runner, SCENARIOS, verifySyncRepair } from '../SCRIPT.mjs';
 
 const isolatedGitSettings = { GIT_CONFIG_GLOBAL: process.env.GIT_CONFIG_GLOBAL, GIT_CONFIG_NOSYSTEM: '1', GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0' };
 const isolatedGitEnvironment = (source = process.env) => ({ ...Object.fromEntries(Object.entries(source).filter(([key]) => !/^GIT_/i.test(key))), ...isolatedGitSettings });
@@ -51,6 +52,7 @@ function fixture(t) {
   const sourceIgnore = join(projectRoot, '.gitignore');
   put('.gitignore', existsSync(sourceIgnore) ? readFileSync(sourceIgnore) : '/tmp/\n/temp/\n');
   put('.pbai4devs/scripts/inspecionar-projeto/SCRIPT.mjs', readFileSync(join(projectRoot, '.pbai4devs/scripts/inspecionar-projeto/SCRIPT.mjs')));
+  put('.pbai4devs/scripts/lib/adapter-manifest.mjs', readFileSync(join(projectRoot, '.pbai4devs/scripts/lib/adapter-manifest.mjs')));
   put('.pbai4devs/scripts/lib/runtime.mjs', readFileSync(join(projectRoot, '.pbai4devs/scripts/lib/runtime.mjs')));
   put('.pbai4devs/scripts/lib/state-path.mjs', readFileSync(join(projectRoot, '.pbai4devs/scripts/lib/state-path.mjs')));
   put('.pbai4devs/scripts/lib/project-metadata.mjs', readFileSync(join(projectRoot, '.pbai4devs/scripts/lib/project-metadata.mjs')));
@@ -1013,6 +1015,42 @@ test('fixture ignora artefatos locais sem alterar o gitignore da origem', t => {
   assert.equal(git.status, 0, git.stderr);
 });
 
+test('modo de fontes do pacote ignora seleção, espelhos e preferências locais', t => {
+  const { root, put, outputRoot } = fixture(t);
+  put('package.json', JSON.stringify({
+    name: '@pathbit/agentdevkit', version: '1.0.0', files: ['.pbai4devs/'],
+    scripts: { prepack: 'node -e "require(\'fs\').writeFileSync(\'prepack-called\', \'\')"' },
+  }));
+  put('.pbai4devs/.npmignore', '/local-note.md\n');
+  const state = put('.pbai4devs/state/agentdevkit.json', '{estado local inválido');
+  const excludes = [
+    '.pbai4devs/skills.json', '.pbai4devs/catalog.json',
+    '.pbai4devs/state/derived.json', '.pbai4devs/state/configuracao/ESTADO.md',
+    '.pbai4devs/local-note.md', '.pbai4devs/tools/demo/.local/control.txt',
+    '.claude/rules/git/RULE.md', '.codex/skills/demo/SKILL.md', '.gemini/commands/demo.toml',
+    'AGENTS.md', 'CLAUDE.md', 'GEMINI.md',
+  ];
+  for (const path of excludes) put(path, `original local: ${path}`);
+  const manualManifest = 'agente|.claude|agrupado\nagente|.gemini|agrupado\n';
+  const manifest = put('.pbai4devs/espelhos.conf', manualManifest);
+  const [example] = prepareExamples({ sourceRoot: root, outputRoot, scenarios: [SCENARIOS[0]], initializeGit: false, sourceOnly: true });
+  assert.deepEqual(example.copied.roots, ['.pbai4devs']);
+  assert.deepEqual(example.copied.catalogSnapshots, []);
+  assert.deepEqual(example.copied.entrypoints, {});
+  const source = '.pbai4devs/skills/projeto/demo/SKILL.md';
+  assert.deepEqual(readFileSync(join(example.root, source)), readFileSync(join(root, source)));
+  for (const path of excludes) {
+    assert.equal(existsSync(join(example.root, path)), false, path);
+    assert.equal(readFileSync(join(root, path), 'utf8'), `original local: ${path}`);
+  }
+  assert.equal(existsSync(join(example.root, '.agent-tests/testar-maturidade/original-catalogs')), false);
+  assert.equal(existsSync(join(example.root, '.pbai4devs/espelhos.conf')), false);
+  assert.equal(readFileSync(manifest, 'utf8'), manualManifest);
+  assert.equal(readFileSync(state, 'utf8'), '{estado local inválido');
+  assert.equal(existsSync(join(root, 'prepack-called')), false);
+  assert.equal(JSON.parse(readFileSync(join(outputRoot, 'REPORT.json'), 'utf8')).sourceMode, 'package-source');
+});
+
 test('sem estado comprovado conserva entradas humanas mesmo com template', t => {
   const { root, put } = fixture(t);
   const template = '---\ndescription: Entrada genérica.\n---\n\n# Agentes do projeto\n';
@@ -1108,20 +1146,22 @@ test('localiza apontamentos pelo formato de cada tipo e por overrides nativos', 
   ]);
 });
 
-test('respeita tipo sem espelho e o formato TOML nativo dos comandos Gemini', t => {
+test('respeita tipo sem espelho e exclui rotas Gemini do manifesto manual', t => {
   const { root, put } = fixture(t);
   put('.pbai4devs/espelhos.conf', [
     'agente|.agents|agrupado',
     'agente|.codex|agrupado', 'formato|.codex|skills|nenhum',
     'agente|.gemini|agrupado', 'formato|.gemini|commands|arquivo',
+    'fallback|.gemini|.agents|skills', 'fallback|.codex|.gemini|skills',
+    'nativo|.GeMiNi/commands/demo.toml|.pbai4devs/commands/projeto/demo/COMMAND.md',
   ].join('\n') + '\n');
+  mkdirSync(join(root, '.agents/skills/projeto/demo/SKILL.md'), { recursive: true });
+  mkdirSync(join(root, '.gemini/skills/projeto/demo/SKILL.md'), { recursive: true });
   const skill = resourceTargets(root, '.pbai4devs/skills/projeto/demo/SKILL.md');
-  assert.deepEqual(skill, ['.agents/skills/projeto/demo/SKILL.md', '.gemini/skills/projeto/demo/SKILL.md']);
-  assert.ok(!skill.some(target => target.startsWith('.codex/')));
+  assert.deepEqual(skill, ['.agents/skills/projeto/demo/SKILL.md']);
   const command = resourceTargets(root, '.pbai4devs/commands/projeto/demo/COMMAND.md', 'commands');
   assert.ok(command.includes('.codex/commands/projeto/demo/COMMAND.md'));
-  assert.ok(command.includes('.gemini/commands/projeto/demo.toml'));
-  assert.ok(!command.includes('.gemini/commands/projeto/demo.md'));
+  assert.ok(!command.some(target => /^\.gemini\//i.test(target)));
 });
 
 test('identifica o fallback Codex apenas para a skill cuja rota primária está obstruída', t => {
@@ -1140,31 +1180,51 @@ test('identifica o fallback Codex apenas para a skill cuja rota primária está 
   assert.deepEqual(resourceTargets(root, blocked), ['.agents/skills/projeto/demo/SKILL.md']);
 });
 
-test('checkout de fontes sem manifesto deriva clientes em memória', t => {
+test('checkout sem manifesto usa apenas o hub até haver seleção salva', t => {
   const { root, put } = fixture(t);
   const manifest = join(root, '.pbai4devs/espelhos.conf');
   rmSync(manifest);
-  assert.ok(registeredRoots(root).includes('.claude'));
   const source = '.pbai4devs/skills/projeto/demo/SKILL.md';
-  assert.ok(resourceTargets(root, source).includes('.claude/skills/demo/SKILL.md'));
+  assert.deepEqual(registeredRoots(root), []);
+  assert.deepEqual(resourceTargets(root, source), []);
+  put('.pbai4devs/state/agentdevkit.json', '{}');
+  assert.ok(registeredRoots(root).includes('.claude'), 'Estado legado sem seleção preserva all.');
   put('.pbai4devs/state/agentdevkit.json', JSON.stringify({ clients: ['claude'] }));
   assert.deepEqual(registeredRoots(root), ['.claude']);
   assert.deepEqual(resourceTargets(root, source), ['.claude/skills/demo/SKILL.md']);
   assert.equal(existsSync(manifest), false);
 });
 
-test('prepare gera apontamentos reais mesmo sem pastas de clientes na origem', t => {
+for (const selection of ['none', 'claude']) test(`maturidade verifica reparo de saída gerenciada com seleção ${selection}`, t => {
   const { root } = fixture(t);
-  const sourceRoot = join(root, 'source-only');
+  const sourceRoot = join(root, `source-${selection}`);
   copyAgentStructure(controlledSource(root), sourceRoot);
-  // Model a clean source checkout regardless of ignored local developer data.
-  for (const path of ['.pbai4devs/espelhos.conf', '.pbai4devs/catalog.json', '.pbai4devs/skills.json', '.pbai4devs/agents.json', '.pbai4devs/rules.json', '.pbai4devs/state/agentdevkit.json', '.pbai4devs/state/derived.json', '.pbai4devs/estado/agentdevkit.json', '.pbai4devs/estado/derived.json']) rmSync(join(sourceRoot, path), { force: true });
+  const statePath = join(sourceRoot, '.pbai4devs/state/agentdevkit.json');
+  mkdirSync(dirname(statePath), { recursive: true });
+  writeFileSync(statePath, JSON.stringify({ schemaVersion: 1, version: '0.0.35', clients: [selection], files: {}, blocks: {} }));
   const roots = registeredRoots(sourceRoot);
-  for (const client of roots) rmSync(join(sourceRoot, client), { recursive: true, force: true });
-  const [example] = prepare({ sourceRoot, scenarios: [SCENARIOS[0]], initializeGit: false });
-  const skill = '.pbai4devs/skills/projeto/criar-skill/SKILL.md';
-  for (const target of resourceTargets(sourceRoot, skill)) assert.ok(existsSync(join(example.root, target)), target);
+  assert.deepEqual(roots, selection === 'none' ? [] : ['.claude']);
   for (const client of roots) assert.equal(existsSync(join(sourceRoot, client)), false, client);
+  const [example] = prepare({ sourceRoot, scenarios: [SCENARIOS[0]], initializeGit: false });
+  assert.deepEqual(example.copied.roots, ['.pbai4devs', ...roots]);
+  const skill = '.pbai4devs/skills/projeto/criar-skill/SKILL.md';
+  const hubOnly = selection === 'none';
+  const mirror = '.claude/skills/criar-skill/SKILL.md';
+  assert.deepEqual(resourceTargets(example.root, skill), hubOnly ? [] : [mirror]);
+  const path = hubOnly ? '.pbai4devs/catalog.json' : mirror;
+  const before = readFileSync(join(example.root, path));
+  const steps = [];
+  const repair = verifySyncRepair(example.root, example.copied.roots, (script, args, expected, label) => {
+    assert.equal(script, '.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs');
+    const result = synchronize({ root: example.root, check: args.includes('--check'), localIgnores: false, output() {} });
+    assert.equal(result.exitCode, expected, label);
+    steps.push([label, result.exitCode]);
+    return { log: `${label}.log` };
+  });
+  assert.deepEqual(steps, [['sync-damage-detected', 1], ['sync-repair', 0], ['sync-repaired', 0]]);
+  assert.deepEqual(repair, { kind: hubOnly ? 'catalog' : 'pointer', path, log: 'sync-repaired.log' });
+  assert.deepEqual(readFileSync(join(example.root, path)), before);
+  if (hubOnly) for (const client of ['.agents', '.claude', '.codex', '.gemini']) assert.equal(existsSync(join(example.root, client)), false, client);
   for (const file of ['src/cli.mjs', 'bin/agentdevkit.mjs', 'scripts/release/pipeline.mjs', 'tests/cli.test.mjs']) assert.equal(existsSync(join(example.root, file)), false, file);
 });
 

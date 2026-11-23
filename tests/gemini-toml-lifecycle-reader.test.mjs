@@ -2,7 +2,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { inspectFixture } from './gemini-toml-lifecycle-reader.mjs';
-import { mergeTomlContent, tomlManagedBlockDigest } from '../.pbai4devs/scripts/lib/managed-toml.mjs';
+import { tomlManagedBlockDigest } from '../.pbai4devs/scripts/lib/managed-toml.mjs';
+import { mergeTomlContent } from './fixtures/legacy-toml-writer.mjs';
 import { mergeManagedContent } from '../.pbai4devs/scripts/lib/managed-content.mjs';
 
 const reference = '@{.pbai4devs/commands/revisar-entrega/COMMAND.md}';

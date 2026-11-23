@@ -7,6 +7,8 @@ export function normalizeLanguage(value) {
 
 const messages = {
   pt: {
+    reviewUpdate: 'Confira o plano de atualização',
+    reviewSyncSource: 'Compare o arquivo preservado com a versão do pacote e concilie as alterações locais.',
     recoveryReady: 'O diário está pronto para uma nova operação.',
     recoveryPending: 'O diário registra uma operação pendente.',
     recoveryInvalid: 'O diário está inválido ou ilegível. Preserve os registros para revisão.',
@@ -24,16 +26,18 @@ const messages = {
     gitPending: 'Git indisponível ou não inicializado; após instalar e inicializar Git, execute sync --check para verificar arquivos visíveis.',
     trackedLocal: 'Artefatos locais já estão versionados; revise o índice sem excluir conteúdo automaticamente.',
     preserved: 'Caminhos existentes preservados', preservedDetails: 'Use --json para consultar os caminhos e motivos.',
-    help: 'AgentDevKit: init [diretório], update, doctor, sync [--check], lang [pt|en|es], agents [lista], next [--intent product|run|document] [--integrations], document [--markdown], tools <ação>, recovery [resolve <geração> <id>].\nOpções: --target <diretório>, --lang <idioma>, --agents <lista>, --purpose <agents|product|run|document>, --yes, --dry-run, --force, --json.\nAliases: --clients e clients.',
-    clientsCurrent: 'Agentes selecionados', clientsAvailable: 'Agentes disponíveis', clientsSelect: 'Agentes (IDs separados por vírgula ou all) [all]: ', agents: 'Seleção de agentes atualizada.',
+    help: 'AgentDevKit: init [diretório], update, doctor, sync [--check], lang [pt|en|es], agents [lista|add <ids>|remove <ids>], next [--intent product|run|document] [--integrations], document [--markdown], tools <ação>, plugins list|info|install|check, recovery [resolve <geração> <id>].\nOpções: --target <diretório>, --lang <idioma>, --agents <lista>, --purpose <agents|product|run|document>, --yes, --dry-run, --force, --json.\nAliases: --clients e clients.',
+    clientsCurrent: 'Agentes selecionados', clientsAvailable: 'Agentes disponíveis', clientsSelect: 'Agentes (IDs separados por vírgula, all ou none) [none]: ', agents: 'Seleção de agentes atualizada.',
     purposeSelect: 'O que você quer fazer? 1) Configurar agentes  2) Planejar produto  3) Rodar o projeto  4) Documentar sistema existente [1]: ',
     document: 'Levantamento para documentar o sistema existente.',
     next: 'Próximo passo', integrationsFound: 'Referências locais para consultar conforme a tarefa.', integrationsEmpty: 'Nenhum artefato reconhecido nos caminhos padrão. Siga com a etapa indicada.', init: 'Estrutura instalada.', update: 'Estrutura atualizada.', sync: 'Apontamentos sincronizados.', lang: 'Idioma configurado.', unchanged: 'Estrutura já atualizada.', plan: 'Plano calculado; nenhum arquivo alterado.', conflict: 'Há arquivos próprios ou alterados em conflito. Revise o plano e resolva os conflitos; --force não substitui conteúdo próprio.',
     healthy: 'Estrutura verificada.', unhealthy: 'A estrutura precisa de ajustes.', missing: 'AgentDevKit ainda não foi inicializado neste diretório.', error: 'Não foi possível concluir a operação.', invalid: 'Argumentos inválidos.', language: 'Idioma atual', version: 'Versão', select: 'Idioma / Language / Idioma [pt/en/es] (pt): ',
     project: 'Projeto', readme: 'AgentDevKit instalado. Leia AGENTS.md e siga as etapas de produto, design e implementação.', state: 'Estado local do AgentDevKit e configuração compartilhada do projeto.',
-    agentLanguage: 'Responda em português, salvo quando o usuário solicitar outro idioma.', inspect: 'Verifique a instalação', workflow: 'Consulte a próxima etapa', install: 'Inicialize este projeto', repair: 'Confira a sincronização', review: 'Revise os arquivos em conflito', tools: 'Resultado da ferramenta',
+    agentLanguage: 'Responda em português, salvo quando o usuário solicitar outro idioma.', inspect: 'Verifique a instalação', workflow: 'Consulte a próxima etapa', install: 'Inicialize este projeto', repair: 'Confira a sincronização', review: 'Revise os arquivos em conflito', tools: 'Resultado da ferramenta', plugins: 'Plugins do AgentDevKit', ready: 'Verificação concluída.', installed: 'Instalado.', 'already-installed': 'Já instalado.',
   },
   en: {
+    reviewUpdate: 'Review the update plan',
+    reviewSyncSource: 'Compare the preserved file with the packaged version and reconcile the local changes.',
     recoveryReady: 'The journal is ready for a new operation.',
     recoveryPending: 'The journal records a pending operation.',
     recoveryInvalid: 'The journal is invalid or unreadable. Preserve its records for review.',
@@ -51,16 +55,18 @@ const messages = {
     gitPending: 'Git is unavailable or not initialized; after installing and initializing Git, run sync --check to inspect visible files.',
     trackedLocal: 'Local artifacts are already tracked; review the index without automatically deleting content.',
     preserved: 'Existing paths preserved', preservedDetails: 'Use --json to inspect paths and reasons.',
-    help: 'AgentDevKit: init [directory], update, doctor, sync [--check], lang [pt|en|es], agents [list], next [--intent product|run|document] [--integrations], document [--markdown], tools <action>, recovery [resolve <generation> <id>].\nOptions: --target <directory>, --lang <language>, --agents <list>, --purpose <agents|product|run|document>, --yes, --dry-run, --force, --json.\nAliases: --clients and clients.',
-    clientsCurrent: 'Selected agents', clientsAvailable: 'Available agents', clientsSelect: 'Agents (comma-separated IDs or all) [all]: ', agents: 'Agent selection updated.',
+    help: 'AgentDevKit: init [directory], update, doctor, sync [--check], lang [pt|en|es], agents [list|add <ids>|remove <ids>], next [--intent product|run|document] [--integrations], document [--markdown], tools <action>, plugins list|info|install|check, recovery [resolve <generation> <id>].\nOptions: --target <directory>, --lang <language>, --agents <list>, --purpose <agents|product|run|document>, --yes, --dry-run, --force, --json.\nAliases: --clients and clients.',
+    clientsCurrent: 'Selected agents', clientsAvailable: 'Available agents', clientsSelect: 'Agents (comma-separated IDs, all or none) [none]: ', agents: 'Agent selection updated.',
     purposeSelect: 'What do you want to do? 1) Set up agents  2) Plan product  3) Run the project  4) Document an existing system [1]: ',
     document: 'Survey for documenting the existing system.',
     next: 'Next step', integrationsFound: 'Local references to consult for the task at hand.', integrationsEmpty: 'No recognized artifacts in the standard locations. Continue with the indicated step.', init: 'Structure installed.', update: 'Structure updated.', sync: 'Pointers synchronized.', lang: 'Language configured.', unchanged: 'Structure is already current.', plan: 'Plan calculated; no files changed.', conflict: 'User files or edits conflict with this plan. Review and resolve the conflicts; --force does not replace user content.',
     healthy: 'Structure verified.', unhealthy: 'The structure needs attention.', missing: 'AgentDevKit has not been initialized in this directory.', error: 'The operation could not be completed.', invalid: 'Invalid arguments.', language: 'Current language', version: 'Version', select: 'Idioma / Language / Idioma [pt/en/es] (pt): ',
     project: 'Project', readme: 'AgentDevKit installed. Read AGENTS.md and follow the product, design and implementation stages.', state: 'AgentDevKit state and shared project configuration.',
-    agentLanguage: 'Respond in English unless the user requests another language.', inspect: 'Check the installation', workflow: 'Review the next stage', install: 'Initialize this project', repair: 'Check synchronization', review: 'Review conflicting files', tools: 'Tool result',
+    agentLanguage: 'Respond in English unless the user requests another language.', inspect: 'Check the installation', workflow: 'Review the next stage', install: 'Initialize this project', repair: 'Check synchronization', review: 'Review conflicting files', tools: 'Tool result', plugins: 'AgentDevKit plugins', ready: 'Check complete.', installed: 'Installed.', 'already-installed': 'Already installed.',
   },
   es: {
+    reviewUpdate: 'Revise el plan de actualización',
+    reviewSyncSource: 'Compare el archivo conservado con la versión del paquete y concilie los cambios locales.',
     recoveryReady: 'El diario está listo para una nueva operación.',
     recoveryPending: 'El diario registra una operación pendiente.',
     recoveryInvalid: 'El diario no es válido o no se puede leer. Conserve los registros para su revisión.',
@@ -78,14 +84,14 @@ const messages = {
     gitPending: 'Git no está disponible o no está inicializado; tras instalar e inicializar Git, ejecute sync --check para verificar archivos visibles.',
     trackedLocal: 'Hay artefactos locales versionados; revise el índice sin eliminar contenido automáticamente.',
     preserved: 'Rutas existentes preservadas', preservedDetails: 'Use --json para consultar las rutas y los motivos.',
-    help: 'AgentDevKit: init [directorio], update, doctor, sync [--check], lang [pt|en|es], agents [lista], next [--intent product|run|document] [--integrations], document [--markdown], tools <acción>, recovery [resolve <generación> <id>].\nOpciones: --target <directorio>, --lang <idioma>, --agents <lista>, --purpose <agents|product|run|document>, --yes, --dry-run, --force, --json.\nAlias: --clients y clients.',
-    clientsCurrent: 'Agentes seleccionados', clientsAvailable: 'Agentes disponibles', clientsSelect: 'Agentes (IDs separados por coma o all) [all]: ', agents: 'Selección de agentes actualizada.',
+    help: 'AgentDevKit: init [directorio], update, doctor, sync [--check], lang [pt|en|es], agents [lista|add <ids>|remove <ids>], next [--intent product|run|document] [--integrations], document [--markdown], tools <acción>, plugins list|info|install|check, recovery [resolve <generación> <id>].\nOpciones: --target <directorio>, --lang <idioma>, --agents <lista>, --purpose <agents|product|run|document>, --yes, --dry-run, --force, --json.\nAlias: --clients y clients.',
+    clientsCurrent: 'Agentes seleccionados', clientsAvailable: 'Agentes disponibles', clientsSelect: 'Agentes (IDs separados por coma, all o none) [none]: ', agents: 'Selección de agentes actualizada.',
     purposeSelect: '¿Qué quiere hacer? 1) Configurar agentes  2) Planificar producto  3) Ejecutar el proyecto  4) Documentar sistema existente [1]: ',
     document: 'Relevamiento para documentar el sistema existente.',
     next: 'Próximo paso', integrationsFound: 'Referencias locales para consultar según la tarea.', integrationsEmpty: 'No se reconocieron artefactos en las rutas estándar. Continúe con el paso indicado.', init: 'Estructura instalada.', update: 'Estructura actualizada.', sync: 'Referencias sincronizadas.', lang: 'Idioma configurado.', unchanged: 'La estructura ya está actualizada.', plan: 'Plan calculado; ningún archivo modificado.', conflict: 'Hay archivos propios o cambios en conflicto. Revise y resuelva los conflictos; --force no reemplaza contenido propio.',
     healthy: 'Estructura verificada.', unhealthy: 'La estructura necesita ajustes.', missing: 'AgentDevKit no se ha inicializado en este directorio.', error: 'No se pudo completar la operación.', invalid: 'Argumentos inválidos.', language: 'Idioma actual', version: 'Versión', select: 'Idioma / Language / Idioma [pt/en/es] (pt): ',
     project: 'Proyecto', readme: 'AgentDevKit instalado. Lea AGENTS.md y siga las etapas de producto, diseño e implementación.', state: 'Estado de AgentDevKit y configuración compartida del proyecto.',
-    agentLanguage: 'Responde en español salvo que el usuario solicite otro idioma.', inspect: 'Compruebe la instalación', workflow: 'Consulte la siguiente etapa', install: 'Inicialice este proyecto', repair: 'Compruebe la sincronización', review: 'Revise los archivos en conflicto', tools: 'Resultado de la herramienta',
+    agentLanguage: 'Responde en español salvo que el usuario solicite otro idioma.', inspect: 'Compruebe la instalación', workflow: 'Consulte la siguiente etapa', install: 'Inicialice este proyecto', repair: 'Compruebe la sincronización', review: 'Revise los archivos en conflicto', tools: 'Resultado de la herramienta', plugins: 'Plugins de AgentDevKit', ready: 'Verificación completada.', installed: 'Instalado.', 'already-installed': 'Ya instalado.',
   },
 };
 export const text = (language, key) => messages[language || 'pt'][key] || key;
@@ -129,15 +135,15 @@ export function explainError(language, code, error, { possiblePartial = false } 
     es: 'Cambie las rutas .pbai4devs/estado por .pbai4devs/state en la configuración antes de ejecutar update.',
   }[language || 'pt'];
   if (code === 'E_UPGRADE') return {
-    pt: 'Execute agentdevkit update antes de sincronizar ou alterar a configuração legada.',
-    en: 'Run agentdevkit update before syncing or changing the legacy configuration.',
-    es: 'Ejecute agentdevkit update antes de sincronizar o cambiar la configuración anterior.',
+    pt: 'Confira agentdevkit update --dry-run para atualizar a configuração e os scripts instalados.',
+    en: 'Review agentdevkit update --dry-run to update the configuration and installed scripts.',
+    es: 'Revise agentdevkit update --dry-run para actualizar la configuración y los scripts instalados.',
   }[language || 'pt'];
   if (code === 'E_MIGRATION_REVIEW') return migrationReview;
   if (code === 'E_CLIENTS_RETIRED') return {
-    pt: 'A seleção anterior foi aposentada. Consulte agents e escolha um cliente com update --agents <id> --dry-run.',
-    en: 'The previous selection was retired. Run agents and choose a client with update --agents <id> --dry-run.',
-    es: 'La selección anterior se retiró. Consulte agents y elija un cliente con update --agents <id> --dry-run.',
+    pt: 'A seleção anterior foi aposentada. Consulte agents e escolha um cliente com update --agents <id|none> --dry-run.',
+    en: 'The previous selection was retired. Run agents and choose a client with update --agents <id|none> --dry-run.',
+    es: 'La selección anterior se retiró. Consulte agents y elija un cliente con update --agents <id|none> --dry-run.',
   }[language || 'pt'];
   const value = {
     pt: { E_ARGS: 'Argumentos inválidos; consulte --help.', E_STATE: 'O estado do AgentDevKit está inválido.', E_SYMLINK: 'Um link simbólico impede a operação segura.', E_TARGET: 'Escolha uma pasta real e segura como destino.', E_PATH: 'Um caminho gerenciado é inválido.', E_BLOCK: 'Os marcadores do bloco gerenciado estão inválidos.', E_CHANGED: 'Um arquivo mudou depois do planejamento; execute novamente.', E_TEMPLATE: 'Um template necessário está inválido.' },

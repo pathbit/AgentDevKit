@@ -802,7 +802,11 @@ test('next identifica cinco estruturas de integração antes e depois da instala
     assert.deepEqual(result.integrations.map(item => item.id).sort(), Object.keys(integrationFixtures).sort());
     assert.doesNotMatch(JSON.stringify(result), new RegExp(privateFixtureText), phase);
     for (const item of result.integrations) {
-      assert.deepEqual(Object.keys(item).sort(), ['id', 'instruction', 'name', 'paths', 'url']);
+      const plugin = { openspec: 'openspec', dotcontext: 'dotcontext-mcp' }[item.id];
+      const keys = ['id', 'instruction', 'name', 'paths', 'url'];
+      if (plugin) keys.push('plugin');
+      assert.deepEqual(Object.keys(item).sort(), keys.sort());
+      assert.equal(item.plugin, plugin);
       assert.ok(item.name.trim() && item.instruction.trim(), item.id);
       assert.equal(new URL(item.url).protocol, 'https:', item.id);
       assert.ok(Array.isArray(item.paths) && item.paths.length, item.id);
@@ -938,13 +942,14 @@ test('integrações são uma opção de next e o diagnóstico limpo encaminha se
   assert.ok(guidance.next.every(step => !integrationHint.test(step.command || '')));
   assert.deepEqual(intentTree(target), before);
 
-  unlinkSync(join(target, '.agents/agents/analista-performance.md'));
+  const output = '.codex/agents/analista-performance/AGENT.md';
+  unlinkSync(join(target, output));
   const missing = intentTree(target);
   assert.match(json(['doctor'], 1).next[0].command, /\bsync --dry-run --json\b/);
   assert.match(json(['sync', '--check', '--agents', 'codex'], 1).next[0].command,
     /\bsync --dry-run --json --agents codex\b/);
   const preview = json(['sync', '--dry-run', '--agents', 'codex']);
-  assert.ok(preview.plan.some(entry => entry.path === '.agents/agents/analista-performance.md'));
+  assert.ok(preview.plan.some(entry => entry.path === output));
   assert.match(preview.next[0].command, /\bsync --agents codex --target\b/);
   assert.doesNotMatch(preview.next[0].command, /--force/);
   assert.deepEqual(intentTree(target), missing);

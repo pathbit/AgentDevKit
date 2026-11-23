@@ -16,67 +16,59 @@ Copilot, OpenCode y otros clientes compatibles][clients].
 
 ## Empezar en tu proyecto
 
-Usa Node.js 24+ con npm. La [guía de requisitos][prerequisites] explica
-la instalación en Windows, macOS y Linux.
-
-Desde la carpeta de tu proyecto, instala mediante **npm**, sin iniciar sesión:
+Prepara [Node.js 24+ y npm][prerequisites] en Windows, macOS o Linux. Abre la
+terminal en la carpeta del proyecto. Si ya tiene archivos, [simula la
+instalación][preview] para revisar los cambios. Instala desde el **npm público**,
+sin iniciar sesión:
 
 ```console
 npx @pathbit/agentdevkit init
 ```
 
-Elige tus agentes en la pregunta inicial o usa `--agents codex,claude`.
-El proyecto guarda la selección y puedes cambiarla con `agents`.
-En modo no interactivo, `all` es el valor predeterminado si no hay una
-selección explícita o guardada. La CLI admite `pt`, `en` y `es`. El asistente
-de primer uso también pregunta por el objetivo. Usa `init --purpose document`
-para indicar que quieres documentar.
-La [guía de instalación](docs/guides/installation.md) cubre pnpm, Yarn, Bun y
+El asistente inicial pregunta por el idioma, los clientes y el objetivo. Si ya
+sabes qué clientes usas, indica `--agents codex,claude`. Sin una selección
+explícita o guardada, `none` prepara los recursos compartidos y `AGENTS.md`
+sin crear carpetas de clientes. El proyecto guarda la selección y la CLI
+admite `pt`, `en` y `es`. Consulta
+las [opciones de instalación][install], que incluyen pnpm, Yarn, Bun y
 [GitHub Packages con autenticación][github-install].
+
+En un proyecto con Git, comprueba la instalación y la sincronización:
+
+```console
+npx @pathbit/agentdevkit doctor
+npx @pathbit/agentdevkit sync --check
+```
 
 ## Elige qué quieres hacer
 
-- **Planificar un producto nuevo o un cambio.** Usa `next --intent product`
-  para identificar el siguiente paso de planificación.
-- **Ejecutar una aplicación existente.** Usa `next --intent run` para
-  orientarte según el estado actual del proyecto.
-- **Documentar un sistema existente.** Ejecuta `npx @pathbit/agentdevkit document`
-  para consultar el inventario local, incluso antes de instalar el kit.
-  Consulta la [guía de documentación](docs/guides/documentation.md).
-- **Adoptar el kit para algunos clientes.** Usa `init --agents codex,claude`
-  con los identificadores que necesites.
+| Quiero… | Ejecuta en la terminal |
+| --- | --- |
+| Planificar el producto | `npx @pathbit/agentdevkit next --intent product` |
+| Ejecutar la aplicación | `npx @pathbit/agentdevkit next --intent run` |
+| Documentar el sistema | `npx @pathbit/agentdevkit next --intent document` |
+| Inventariar antes de instalar | `npx @pathbit/agentdevkit document` |
 
-La instalación prepara los recursos de los agentes. En un repositorio
-existente, `npx @pathbit/agentdevkit init --dry-run` muestra los cambios
-previstos y los conflictos. El kit conserva las instrucciones y skills del
-proyecto. Con Git, sigue las indicaciones de la terminal para `doctor` y
-`sync --check` antes de consultar el siguiente paso según tu objetivo:
+`next` sugiere una acción. Pide a tu agente que lea `AGENTS.md` y use la skill
+`proximos-passos` con tu objetivo. La [guía de flujo][workflow] explica cómo
+empezar en cada caso.
 
-```console
-npx @pathbit/agentdevkit next --intent product
-npx @pathbit/agentdevkit next --intent run
-npx @pathbit/agentdevkit next --intent document
-```
+## Actualizar y personalizar
 
-`next` te propone un paso. Pide a tu agente que lea `AGENTS.md` y use la
-skill `proximos-passos` con tu objetivo.
-
-### Elige las herramientas para tu flujo
-
-AgentDevKit comparte instrucciones entre agentes de código, sugiere el
-siguiente paso en la terminal y ayuda a reutilizar la documentación del
-proyecto. Usa `npx @pathbit/agentdevkit next --integrations` para localizar
-referencias que ya están en tu repositorio. La
-[guía comparativa](docs/guides/comparacao.md) recoge los puntos fuertes de cada
-enfoque y cuándo usarlo.
+- **Revisar y actualizar.** Consulta [cómo simular y aplicar un `update`][update].
+  Usa `sync` para regenerar referencias con los recursos ya instalados.
+- **Cambiar los clientes.** Consulta la selección con `agents` y ajusta los
+  IDs con `agents add <id>` o `agents remove <id>`. Consulta la [CLI][cli].
+- **Elegir herramientas opcionales.** Ejecuta
+  `npx @pathbit/agentdevkit plugins list` y consulta la [guía de plugins][plugins].
+- **Reutilizar documentos de otro flujo.** Usa `next --integrations` para
+  localizar referencias en el proyecto. Consulta la [guía comparativa][comparison].
 
 ## Explorar
 
 | Quiero… | Leer |
 | --- | --- |
-| Preparar Node.js y npm | [Requisitos][prerequisites] |
-| Entender el kit | [Wiki](docs/README.md) |
-| Planificar o retomar un proyecto | [Flujo](docs/guides/workflow.md) |
+| Conocer los conceptos y encontrar una guía | [Documentación](docs/README.md) |
 | Mejorar documentación existente | [Inventario y complementos](docs/guides/documentation.md) |
 | Crear una skill o comando | [Recursos](docs/guides/resources.md) |
 | Elegir un flujo según el objetivo | [Recursos en la práctica](docs/guides/recursos-na-pratica.md) |
@@ -106,6 +98,7 @@ La instalación incluye la licencia del kit en `.pbai4devs/LICENSE` y conserva
 la licencia y los archivos propios de tu proyecto.
 
 [Changelog](CHANGELOG.md) · [Roadmap](docs/product/roadmap.md)
+· [Plugins y créditos](docs/guides/plugins.md)
 
 ¿Encontraste un problema o tienes una idea? [Abre una issue][issues] con los
 formularios. Consulta [cómo participar](docs/maintainers/community.md).
@@ -121,4 +114,10 @@ formularios. Consulta [cómo participar](docs/maintainers/community.md).
 [issues]: https://github.com/pathbit/AgentDevKit/issues/new/choose
 [packages]: docs/maintainers/packages.md
 [prerequisites]: docs/guides/prerequisites.md
+[install]: docs/guides/installation.md
+[preview]: docs/guides/installation.md#simular-em-um-projeto-existente
+[update]: docs/guides/installation.md#atualizar-e-escolher-agentes
+[workflow]: docs/guides/workflow.md
+[plugins]: docs/guides/plugins.md
+[comparison]: docs/guides/comparacao.md
 [github-install]: docs/guides/installation.md#github-packages

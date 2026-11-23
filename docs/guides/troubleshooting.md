@@ -4,26 +4,28 @@ description: Diagnóstico, conflitos, backups e recuperação do AgentDevKit.
 
 # Solução de problemas
 
-Comece pelo erro completo e pelo diretório usado. Nos exemplos, `agentdevkit`
-representa o executável obtido por npx, conforme a [referência da CLI][cli].
-O comando completo está na [instalação](installation.md).
+Comece pelo comando, pelo erro e pela pasta do projeto. Os exemplos de
+diagnóstico abaixo usam o npm público. Nas demais seções, substitua
+`agentdevkit` por `npx @pathbit/agentdevkit`. Veja a [CLI][cli] para usar o
+checkout local e a [instalação](installation.md) para GitHub Packages.
 
 ## Diagnóstico rápido
 
 ```console
-agentdevkit --version
-agentdevkit doctor --target "./meu projeto" --json
-agentdevkit sync --check --target "./meu projeto" --json
+npx @pathbit/agentdevkit --version
+npx @pathbit/agentdevkit doctor --target "./meu projeto" --json
+npx @pathbit/agentdevkit sync --check --target "./meu projeto" --json
 ```
 
 `doctor` verifica a instalação do kit. Para as ferramentas, use
-`agentdevkit tools check <nome>`; para o aplicativo, use os testes do projeto.
+`agentdevkit plugins check <id>` ou `agentdevkit tools check <nome>`;
+para o aplicativo, use os testes do próprio projeto.
 Antes de compartilhar uma saída, remova dados privados e caminhos pessoais.
 
-Se a instalação usava só o Gemini CLI, consulte `agentdevkit agents` e gere
-um plano com `agentdevkit update --agents <id> --dry-run`. Confira os
-arquivos gerenciados e preservados antes de aplicar.
-[Compatibilidade e migração](../../.pbai4devs/COMPATIBILIDADE.md#escolher-clientes)
+Se a instalação usava só o Gemini CLI, consulte `agentdevkit agents`.
+Simule `agentdevkit update --agents none --dry-run` para ficar com o hub ou
+troque `none` pelo ID de outro cliente. Confira os arquivos gerenciados e
+preservados antes de aplicar. [Migração de clientes][clients]
 
 No OpenCode 2, uma consulta imediata isolada de `skill.list` pode retornar uma
 lista vazia mesmo com os arquivos presentes. Confira novamente no servidor já
@@ -33,10 +35,12 @@ Uma lista vazia isolada não comprova que os arquivos estejam ausentes. O modo
 [documentação do cliente][opencode-cli].
 
 Se faltarem recursos, confira a seleção com `agentdevkit agents`.
-Para incluir um cliente, use `agentdevkit agents codex,claude` com a lista
-completa, ou `agentdevkit agents all`. Reabra a sessão do cliente quando ele
-exigir recarregar as skills. Pastas compartilhadas podem atender mais de um
-agente; arquivos próprios também podem manter uma pasta após a desmarcação.
+Para incluir um cliente, simule `agentdevkit agents add cursor --dry-run`
+com o ID desejado. Após revisar, execute o mesmo comando sem `--dry-run`.
+A seleção `none` mantém os recursos compartilhados e `AGENTS.md`.
+Reabra a sessão do cliente se ele exigir recarregar as skills. Pastas de
+clientes podem permanecer por conter arquivos próprios ou recursos usados
+por outro cliente. [Seleção de clientes][clients]
 
 | Sintoma ou código | Próxima ação |
 | --- | --- |
@@ -45,6 +49,8 @@ agente; arquivos próprios também podem manter uma pasta após a desmarcação.
 | `E404` ao baixar o pacote | Confira registry, versão e permissão. |
 | `E_ARGS` | Confira comando e aspas com `agentdevkit --help`. |
 | `E_MISSING` | Confirme `--target`; inicialize o projeto correto. |
+| `E_CLIENTS_RETIRED` | Simule `update --agents <id> --dry-run`. |
+| `E_UPGRADE` | Simule `update --dry-run` e confira os scripts locais. |
 | `E_TARGET`, `E_SYMLINK` | Use a pasta real, fora dos diretórios reservados. |
 | `E_CONFLICT` ou lista `conflicts` | Revise o plano e os arquivos afetados. |
 | `E_STATE`, `E_BLOCK`, `E_TEMPLATE` | Restaure o arquivo; não invente hashes. |
@@ -55,6 +61,7 @@ agente; arquivos próprios também podem manter uma pasta após a desmarcação.
 | `E_RECOVERY_STATE` | Confira a geração e o ID da pendência atual. |
 | `plan-inspection-failed` | Revise a falha do planejamento. |
 | `E_MIGRATION_REVIEW` | Preserve o estado legado e revise a reativação. |
+| `E_PLUGIN` | Confira o ID e a origem com `plugins info <id>`. |
 
 No macOS, `/tmp` e `/var/folders` são aceitos quando forem os aliases de
 sistema esperados. Destinos que atravessam links humanos continuam recusados,
@@ -138,6 +145,11 @@ O campo `preserved` pode detalhar o motivo observado. Por exemplo,
 `claude-metadata-unverified` pede revisão da referência e seus metadados; ele
 não comprova propriedade nem que a regra esteja ativa. Uma referência idêntica
 indicada por `existing-reference-satisfied` continua sem adoção pelo kit.
+
+Ao desmarcar Claude, algumas regras são preservadas. A reativação pode
+indicar `claude-metadata-unverified` para esses arquivos. Confira-os no plano
+com `agents add claude --dry-run --json` e compare com as fontes no hub.
+[Escopo de regras Claude](resources.md#sincronizar-e-conferir)
 
 Para regras legadas em `.claude/rules/`, compare o conteúdo e o escopo de
 ativação da referência preservada com a origem indicada. Verifique também se
@@ -415,6 +427,7 @@ comando executado, código de saída e trecho relevante do JSON, sem segredos.
 Use as [issues do projeto][issues] ou volte ao [índice](../README.md).
 
 [cli]: cli.md
+[clients]: installation.md#atualizar-e-escolher-agentes
 [runtime]: installation.md#pré-requisitos
 [tools]: ../../.pbai4devs/scripts/preparar-ferramentas/README.md
 [issues]: https://github.com/pathbit/AgentDevKit/issues

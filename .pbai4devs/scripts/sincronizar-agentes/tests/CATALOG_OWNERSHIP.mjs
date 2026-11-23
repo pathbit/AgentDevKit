@@ -8,7 +8,6 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { synchronize } from '../SCRIPT.mjs';
 import { entrypointReference, mergeManagedContent } from '../../lib/managed-content.mjs';
-import { mergeTomlContent } from '../../lib/managed-toml.mjs';
 
 const catalogs = ['catalog.json', 'skills.json', 'agents.json', 'rules.json'].map(name => `.pbai4devs/${name}`);
 const state = '.pbai4devs/state/derived.json';
@@ -151,17 +150,9 @@ test('bloco idêntico em AGENTS.md sem registro não é adotado', t => {
   assert.equal(get(root, path).toString('utf8'), content);
 });
 
-for (const kind of ['markdown', 'toml']) test(`bloco nativo ${kind} idêntico sem registro não é adotado`, t => {
-  const root = fixture(t);
-  const path = kind === 'markdown' ? '.claude/skills/demo/SKILL.md' : '.gemini/commands/demo.toml';
-  let content;
-  if (kind === 'markdown') {
-    content = mergeManagedContent('# Instruções humanas\n', 'Leia e siga [origem](../../../.pbai4devs/skills/demo/SKILL.md).').text;
-  } else {
-    put(root, '.pbai4devs/espelhos.conf', 'agente|.claude|plano\nagente|.gemini|plano\n');
-    put(root, '.pbai4devs/commands/demo/COMMAND.md', '---\ndescription: Demo.\n---\n\n# Demo\n');
-    content = mergeTomlContent('description = "Humano"\nprompt = "Meu prompt"\n', '@{.pbai4devs/commands/demo/COMMAND.md}').text;
-  }
+test('bloco nativo Markdown idêntico sem registro não é adotado', t => {
+  const root = fixture(t), path = '.claude/skills/demo/SKILL.md';
+  const content = mergeManagedContent('# Instruções humanas\n', 'Leia e siga [origem](../../../.pbai4devs/skills/demo/SKILL.md).').text;
   put(root, path, content);
   const result = sync(root, { force: true });
   assert.ok(result.preserved.some(entry => entry.path === path && entry.reason === 'existing-managed-block'));
@@ -171,6 +162,22 @@ for (const kind of ['markdown', 'toml']) test(`bloco nativo ${kind} idêntico se
   assert.equal(registry.files?.[path], undefined);
   assert.equal(sync(root, { force: true }).exitCode, 0);
   assert.equal(get(root, path).toString('utf8'), content);
+});
+
+test('TOML do Gemini anterior sem registro permanece intacto e sem propriedade atribuída', t => {
+  const root = fixture(t), path = '.gemini/commands/demo.toml';
+  const prompt = 'Meu prompt\n\n<!-- BEGIN AGENTDEVKIT -->\n@{.pbai4devs/commands/demo/COMMAND.md}\n<!-- END AGENTDEVKIT -->';
+  const content = `description = "Humano"\nprompt = ${JSON.stringify(prompt)}\n`;
+  put(root, path, content);
+  for (const force of [false, true]) {
+    const result = sync(root, { force });
+    assert.equal(result.exitCode, 0);
+    assert.equal(get(root, path).toString('utf8'), content);
+    assert.ok(!result.ownedOutputs.includes(path));
+    const registry = JSON.parse(get(root, state));
+    assert.equal(registry.blocks?.[path], undefined);
+    assert.equal(registry.files?.[path], undefined);
+  }
 });
 
 for (const force of [false, true]) test(`configuração humana não é alterada nem adotada: force=${force}`, t => {

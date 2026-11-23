@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { adapterManifest } from '../../lib/adapters.mjs';
 import { skill, source, read, write, run, snapshot, fixture, rejected, assertCheckReadonly } from './fixtures.mjs';
 
 test('metadados humanos editados bloqueiam sync; fontes sem conflito atualizam', t => {
@@ -67,7 +68,7 @@ test('atualiza fontes, adiciona clientes, remove recursos e migra agrupado para 
   assertCheckReadonly(root, {}, 0);
 });
 
-test('gera manifesto e entradas sem estado e atualiza apenas entradas integralmente próprias', t => {
+test('sem estado ou manifesto gera apenas a entrada comum e atualiza o que é próprio', t => {
   const root = fixture(t, true);
   write(root, source, skill);
   rmSync(join(root, '.pbai4devs/espelhos.conf'));
@@ -77,9 +78,10 @@ test('gera manifesto e entradas sem estado e atualiza apenas entradas integralme
   const first = run(root, { generateEntrypoints: true });
   assert.ok(first.ownedOutputs.includes('AGENTS.md'));
   assert.equal(first.ownedOutputs.includes('CLAUDE.md'), false);
-  assert.ok(read(root, 'CLAUDE.md').startsWith('# Instruções humanas\n'));
-  assert.match(read(root, 'CLAUDE.md'), /<!-- BEGIN AGENTDEVKIT -->/);
-  assert.ok(existsSync(join(root, '.agents/skills/projeto/demo/SKILL.md')));
+  assert.equal(read(root, 'CLAUDE.md'), '# Instruções humanas\n');
+  for (const path of ['.agents', '.claude', '.codex', '.gemini', 'GEMINI.md']) {
+    assert.equal(existsSync(join(root, path)), false, path);
+  }
   assertCheckReadonly(root, { generateEntrypoints: true }, 0);
   write(root, '.pbai4devs/templates/entrypoints/AGENTS.md', '---\ndescription: Entrada.\n---\n\n# Atualizada\n');
   run(root, { generateEntrypoints: true });
@@ -88,6 +90,40 @@ test('gera manifesto e entradas sem estado e atualiza apenas entradas integralme
   const second = run(root, { generateEntrypoints: true });
   assert.equal(second.ownedOutputs.includes('AGENTS.md'), false);
   assert.match(read(root, 'AGENTS.md'), /Texto humano/);
+});
+
+test('sem estado, manifesto Codex ativa skills compartilhadas sem entrada do Antigravity', t => {
+  const root = fixture(t, true);
+  write(root, source, skill);
+  for (const name of ['AGENTS.md', 'GEMINI.md']) write(root, `.pbai4devs/templates/entrypoints/${name}`, `---\ndescription: Entrada.\n---\n\n# ${name}\n`);
+  write(root, '.pbai4devs/espelhos.conf', adapterManifest(root, { clients: ['codex'] }));
+  const result = run(root, { generateEntrypoints: true });
+  assert.ok(result.ownedOutputs.includes('AGENTS.md'));
+  assert.ok(result.ownedOutputs.includes('.agents/skills/projeto/demo/SKILL.md'));
+  assert.equal(existsSync(join(root, 'GEMINI.md')), false);
+  assertCheckReadonly(root, { generateEntrypoints: true }, 0);
+});
+
+test('troca do Antigravity para Codex retira só projeções derivadas intactas', t => {
+  const root = fixture(t, true);
+  const config = '.pbai4devs/espelhos.conf';
+  const edited = '.agents/agents.json';
+  const retired = ['GEMINI.md', '.agents/skills.json', '.agents/rules.json'];
+  write(root, source, skill);
+  for (const name of ['AGENTS.md', 'GEMINI.md']) write(root, `.pbai4devs/templates/entrypoints/${name}`, `---\ndescription: Entrada.\n---\n\n# ${name}\n`);
+  write(root, config, adapterManifest(root, { clients: ['antigravity'] }));
+  run(root, { generateEntrypoints: true });
+  for (const path of [...retired, edited]) assert.ok(existsSync(join(root, path)), path);
+  const human = '{"entries":[],"nota":"Mantida pela equipe"}\n';
+  write(root, edited, human);
+  write(root, config, adapterManifest(root, { clients: ['codex'] }));
+  assertCheckReadonly(root, { generateEntrypoints: true }, 1);
+  const changed = run(root, { generateEntrypoints: true });
+  for (const path of retired) assert.equal(existsSync(join(root, path)), false, path);
+  assert.equal(read(root, edited), human);
+  assert.ok(changed.preserved.some(item => item.path === edited));
+  assert.ok(existsSync(join(root, '.agents/skills/projeto/demo/SKILL.md')));
+  assertCheckReadonly(root, { generateEntrypoints: true }, 0);
 });
 
 test('manifestos Antigravity acompanham skills, regras e agentes agrupados', t => {

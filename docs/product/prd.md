@@ -51,8 +51,9 @@ extraído do projeto de origem como produto independente.
 Execuções repetidas devem ser idempotentes; a CLI oferece simulação e JSON.
 As instruções permanecem concisas, com detalhes opcionais em referências.
 Na configuração interativa, o usuário escolhe seus agentes. Em automações,
-a opção explícita ou a escolha salva orientam o instalador; sem escolha,
-todos os clientes são mantidos para compatibilidade.
+a opção explícita ou a escolha salva orientam o instalador. Na versão deste
+PRD, a ausência de escolha selecionava todos os clientes por compatibilidade.
+O [guia de instalação][install] documenta os padrões atuais e de migração.
 
 ## Limites e sucesso
 
@@ -75,3 +76,5 @@ própria e não são considerados concluídos por esta aprovação.
 
 [Wiki](../README.md) · [Design](design.md) ·
 [Fluxo de uso](../guides/workflow.md)
+
+[install]: ../guides/installation.md#opções-e-verificação

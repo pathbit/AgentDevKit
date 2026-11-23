@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { mergeManagedContent } from '../.pbai4devs/scripts/lib/managed-content.mjs';
-import { mergeTomlContent } from '../.pbai4devs/scripts/lib/managed-toml.mjs';
+import { mergeTomlContent } from './fixtures/legacy-toml-writer.mjs';
 import { planLocalIgnore, applyLocalIgnore, checkLocalIgnore } from '../.pbai4devs/scripts/lib/gitignore.mjs';
 import { checkManagedBlocks } from '../.pbai4devs/scripts/verificar-recursos/SCRIPT.mjs';
 

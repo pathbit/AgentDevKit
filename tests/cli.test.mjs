@@ -207,7 +207,7 @@ test('sem comando inicializa; dry-run nao cria destino; init e update sao idempo
   const root = fixture(t), target = join(root, 'new project');
   const preview = cli(target, ['init', '--dry-run', '--lang', 'en']);
   assert.ok(preview.plan.length); assert.equal(existsSync(target), false);
-  const first = cli(target, ['--yes', '--lang', 'en']); assert.equal(first.command, 'init'); assert.equal(first.changed, true);
+  const first = cli(target, ['--yes', '--lang', 'en', '--agents', 'antigravity']); assert.equal(first.command, 'init'); assert.equal(first.changed, true);
   const state = JSON.parse(readFileSync(join(target, '.pbai4devs/state/agentdevkit.json')));
   assert.equal(state.language, 'en');
   for (const name of ['skills', 'agents', 'rules']) assert.ok(state.files[`.agents/${name}.json`]);
@@ -245,7 +245,7 @@ test('arquivo gerenciado com edição humana é preservado inclusive com force',
 });
 
 test('migração preserva apontamentos sem ownership e limpa apenas o legado comprovado', t => {
-  const root = fixture(t); cli(root, ['init', '--yes']);
+  const root = fixture(t); cli(root, ['init', '--yes', '--agents', 'codex']);
   const grouped = '.codex/skills/projeto/configurar-projeto/SKILL.md';
   const native = readFileSync(join(root, '.agents/skills/projeto/configurar-projeto/SKILL.md'), 'utf8');
   put(root, grouped, native);

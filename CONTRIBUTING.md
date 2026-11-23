@@ -64,9 +64,9 @@ enviar e confirme que ele contém somente fontes e mudanças intencionais.
 Atualize a documentação e use a [revisão de entrega][review] para reunir
 critérios, evidências e revisão independente. O PR deve explicar problema,
 solução e validação. Siga as [regras Git][git]. A [publicação][release] reutiliza
-o artifact aprovado do CI; não cria um pacote diferente na hora de publicar.
-O mesmo artifact segue para o [npm público][package], usando a autenticação
-do workflow. Nunca inclua tokens no código ou no `.npmrc` versionado.
+o artifact aprovado do CI da `main`. O mesmo tarball segue para o
+[npm público e o GitHub Packages][package], com autenticação do workflow.
+Mantenha tokens fora do código e do `.npmrc` versionado.
 
 [Wiki](docs/README.md) · [Licença MIT](LICENSE)
 

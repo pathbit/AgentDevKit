@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mergeTomlContent, stripTomlContent, tomlManagedBlockDigest } from '../.pbai4devs/scripts/lib/managed-toml.mjs';
+import { stripTomlContent, tomlManagedBlockDigest } from '../.pbai4devs/scripts/lib/managed-toml.mjs';
+import { mergeTomlContent } from './fixtures/legacy-toml-writer.mjs';
 
 const body = '@{.pbai4devs/commands/demo/COMMAND.md}\n\n{{args}}';
 const source = 'description = "humano"\nprompt = "texto humano"\n';

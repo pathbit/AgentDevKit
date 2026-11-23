@@ -14,6 +14,12 @@ export function validRecoveryResolution(positionals) {
     && typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(id);
 }
 
+export function validPluginRequest(positionals) {
+  const [action, id] = positionals;
+  return action === 'list' && positionals.length === 1
+    || ['info', 'install', 'check'].includes(action) && positionals.length === 2 && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(id);
+}
+
 function stringArray(value) {
   if (types.isProxy(value) || !Array.isArray(value)
     || Object.getPrototypeOf(value) !== Array.prototype || value.length > 10000) return false;
@@ -52,9 +58,14 @@ export function classifyRecoveryEffects(options) {
     if (!positionals.length) return 'query';
     return validRecoveryResolution(positionals) ? 'resolution' : 'unsupported';
   }
-  const known = ['init', 'update', 'sync', 'lang', 'agents', 'doctor', 'next', 'document', 'tools', 'help', 'version'];
+  const pluginRequest = command === 'plugins' && validPluginRequest(positionals);
+  const clientDelta = command === 'agents' && positionals.length === 2
+    && ['add', 'remove'].includes(positionals[0]) && clients?.length > 0
+    && clients.every(id => /^[a-z][a-z0-9-]*$/.test(id) && !['all', 'none'].includes(id));
+  const known = ['init', 'update', 'sync', 'lang', 'agents', 'doctor', 'next', 'document', 'tools', 'plugins', 'help', 'version'];
   if (!known.includes(command)
-    || positionals.length > 1 || positionals.length && !['init', 'lang', 'agents'].includes(command)
+    || !pluginRequest && !clientDelta && (positionals.length > 1 || positionals.length && !['init', 'lang', 'agents'].includes(command))
+    || command === 'plugins' && (!pluginRequest || get('force') || get('yes'))
     || command === 'init' && get('target') !== null && positionals.length
     || command === 'agents' && positionals.length && clients === undefined
     || toolArgs.length && !['tools', 'help', 'version'].includes(command)
@@ -68,6 +79,7 @@ export function classifyRecoveryEffects(options) {
     || get('dryRun') && (!['init', 'update', 'sync', 'lang', 'agents'].includes(command)
       || command === 'agents' && clients === undefined)) return 'unsupported';
   if (command === 'tools') return 'opaque';
+  if (command === 'plugins') return ['list', 'info'].includes(positionals[0]) ? 'query' : 'opaque';
   if (['help', 'version', 'doctor', 'next', 'document'].includes(command)) return 'query';
   if (command === 'agents' && clients === undefined) return 'query';
   if (command === 'lang' && positionals.length === 0 && get('language') === null

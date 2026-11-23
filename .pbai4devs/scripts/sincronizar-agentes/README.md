@@ -54,8 +54,10 @@ hash desse bloco; edições externas continuam permitidas. Um bloco alterado
 não é sobrescrito por `--force`. Links humanos continuam opacos.
 Instalações legadas do Gemini CLI podem ter uma contribuição do kit no
 `prompt` TOML. O sincronizador reconhece seu formato na migração.
-Se o manifesto instalado ainda registra o Gemini CLI, use o plano de
-`agentdevkit update` da [migração de clientes][migration] antes do sync direto.
+O sync direto recusa linhas do manifesto que apontam para `.gemini`, inclusive
+em configurações manuais. Em instalações antigas, revise o plano de
+`agentdevkit update` conforme a [migração de clientes][migration].
+Arquivos próprios da equipe permanecem no projeto.
 
 Metadados vêm da fonte ou do YAML nativo declarado no manifesto. Regras exigem
 `trigger` válido; `glob` exige `globs`. Origens nativas precisam pertencer ao
@@ -67,20 +69,28 @@ antigas estão descritos em [Compatibilidade](../../COMPATIBILIDADE.md).
 `formato|pasta|tipo|formato` e registrar `descoberta|.agents|antigravity`.
 `agrupado` preserva a árvore; `plano` retira categorias; `arquivo` preserva
 categorias e usa `nome.md`. `mdc`, `instrucoes`, `prompt` e `agente` produzem as
-extensões nativas; `nenhum` desativa a derivação de skills naquela rota.
+extensões nativas; `nenhum` desativa a derivação do tipo na rota indicada.
+Com `agents none`, o manifesto mantém apenas o catálogo do hub e as
+instruções comuns. Sem Antigravity na seleção, o Codex usa `.agents`
+apenas para skills.
 `fallback|destino|origem|skills` usa o destino para cada skill cuja rota de
 origem estiver obstruída. A descoberta gera os três manifestos JSON do Antigravity.
 Veja os motivos e limites em [Compatibilidade](../../COMPATIBILIDADE.md).
 
 Sem manifesto, o sincronizador gera a política de
-`templates/clients/ADAPTERS.json`, usando a seleção salva ou `all`.
+`templates/clients/ADAPTERS.json` usando a seleção salva. Um estado legado sem
+seleção mantém `all`. Sem manifesto nem estado instalado, gera apenas o hub.
 Após a instalação, depende somente de Node e do hub local, sem o pacote npm.
-Ele respeita os clientes escolhidos, sem recriar os desmarcados. Para trocar
-a seleção, use `agentdevkit agents <lista>`; não edite o manifesto gerado.
-Em instalações antigas, use `agentdevkit update` para migrar a seleção
-e o manifesto de Antigravity e Kimi aos formatos atuais.
+Ele respeita os clientes escolhidos. Use `agentdevkit agents <lista>` para
+trocar a seleção, ou `agents add <id>` e `agents remove <id>` para ajustá-la.
+O manifesto gerado acompanha essas operações da CLI.
+Em instalações antigas, use `agentdevkit update` para revisar a migração
+do manifesto Antigravity ou a retirada dos apontamentos legados do Kimi.
 
-O kit preserva os ignores existentes, `.git/info/exclude` e o índice Git.
+O sync direto preserva as regras humanas de ignore e o índice Git. O bloco
+legado da versão 0.0.21 em `.git/info/exclude` pode ser migrado quando houver
+prova de autoria e uma única worktree. O original fica em
+`.agent-tests/agentdevkit/ignore-migrations/`.
 Apontamentos e artefatos podem ficar visíveis; confira o status antes de
 adicionar arquivos. O diagnóstico informa arquivos privados expostos e blocos
 antigos no exclude que ainda possam afetar outras worktrees.
@@ -100,5 +110,24 @@ arquivos e pastas próprios, inclusive os adicionais dentro do mesmo recurso,
 devem permanecer.
 O estado derivado registra remoções comprovadas para reconciliá-las no próximo
 `update`; campos adicionais existentes no estado são preservados.
+
+## Manutenção do sincronizador
+
+- [SCRIPT.mjs](SCRIPT.mjs) fornece a CLI, as exportações públicas e a entrada
+  para o estágio privado. [private-stage.mjs](private-stage.mjs) confere a
+  identidade do estágio antes de permitir operações nesse modo.
+  [synchronize.mjs](synchronize.mjs) monta o plano, verifica as pré-condições
+  e produz o relatório de `--check`.
+- [manifest.mjs](manifest.mjs) resolve a seleção de clientes e os destinos.
+  [references.mjs](references.mjs) trata os formatos das referências.
+  [projections.mjs](projections.mjs) deriva os catálogos e entradas raiz,
+  incluindo a retirada de arquivos de propriedade comprovada.
+- [workspace.mjs](workspace.mjs) confere limites e identidade dos caminhos.
+  [operations.mjs](operations.mjs) ordena as escritas e remoções, captura
+  os bytes esperados e usa [git-safety.mjs](git-safety.mjs) nas consultas Git.
+  [derived-state.mjs](derived-state.mjs) preserva os registros de propriedade.
+- [metadata.mjs](metadata.mjs) concentra as verificações de metadados.
+  [apply.mjs](apply.mjs) aplica o plano e registra a recuperação.
+  [backup.mjs](backup.mjs) verifica as cópias adicionais pedidas por `--force`.
 
 [migration]: ../../COMPATIBILIDADE.md#escolher-clientes

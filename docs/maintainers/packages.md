@@ -98,9 +98,11 @@ commit exato apontado pela tag.
 release existente; cada registry recusa versões com bytes diferentes e pula
 a publicação se a mesma versão já estiver correta.
 
-Depois do envio ao npm, o job usa um ambiente sem credenciais e cache novo para
-executar `--version`, `init`, `doctor` e `sync --check` pelo nome e versão
-publicados. Assim, a verificação comprova o acesso de um usuário comum.
+Depois do envio ao npm, o job consulta o nome e a versão publicados e baixa
+o tarball sem credenciais, em cache inicialmente vazio. Confere o SHA-256
+dos bytes baixados com o artefato aprovado e reutiliza o cache isolado para
+executar `--version`, `init`, `doctor` e `sync --check` offline a partir
+do tarball verificado. A resolução pelo nome e a execução são provas separadas.
 Confirme também que `latest` aponta para a versão estável e que o tarball é
 baixável; metadados visíveis sozinhos não comprovam uma instalação funcional.
 Se o registro ainda não disponibilizar o pacote, aguarde a verificação sem

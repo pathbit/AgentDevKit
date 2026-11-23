@@ -44,7 +44,7 @@ function fixture(t, minimal = false) {
   write(root, '.pbai4devs/templates/gitignore/clients.json', '{}\n');
   write(root, '.pbai4devs/templates/gitignore/shared.ignore', '# Estado compartilhado\n/tools/*/.local/\n/tools/.cache/\n');
   write(root, '.pbai4devs/espelhos.conf', minimal ? 'agente|.codex|plano\n' : [
-    '# Clientes da fixture', 'agente|.claude', 'agente|.opencode', 'agente|.github|plano', 'agente|.codex|plano', 'agente|.cursor|plano', 'agente|.kimi-code|plano', 'agente|.vscode|plano', 'agente|.agents|plano', 'agente|.agent|plano', 'agente|.gemini|plano',
+    '# Clientes da fixture', 'agente|.claude', 'agente|.opencode', 'agente|.github|plano', 'agente|.codex|plano', 'agente|.cursor|plano', 'agente|.kimi-code|plano', 'agente|.vscode|plano', 'agente|.agents|plano', 'agente|.agent|plano',
     `nativo|.github/instructions/demo.instructions.md|${source}`,
     'nativo|.kimi-code/agents/revisor.md|.pbai4devs/agents/revisor/AGENT.md|.pbai4devs/agents/revisor/kimi-code.yaml',
     'nativo|.opencode/agents/revisor/AGENT.md|.pbai4devs/agents/revisor/AGENT.md|.pbai4devs/agents/revisor/opencode.yaml',

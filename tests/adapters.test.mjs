@@ -162,7 +162,7 @@ test('cada excecao de layout tem motivo e fontes oficiais', () => {
 });
 
 test('clientes disponiveis e aliases derivam da mesma politica', () => {
-  assert.deepEqual(availableClients.map(client => client.id), ['all', ...adapters.map(adapter => adapter.id)]);
+  assert.deepEqual(availableClients.map(client => client.id), ['all', 'none', ...adapters.map(adapter => adapter.id)]);
   assert.equal(new Set(availableClients.map(client => client.id)).size, availableClients.length);
   for (const client of availableClients) assert.ok(client.name);
   assert.deepEqual(normalizeClients(), ['all']);
@@ -196,10 +196,13 @@ test('selecao resolve dependencias, pontos de entrada e fallback all', () => {
     assert.deepEqual(selection.clients, [id]);
     assert.deepEqual(selection.roots, roots, client);
     assert.deepEqual(selection.entrypoints, entrypoints, client);
-    assert.deepEqual(selection.adapters.map(adapter => adapter.root), roots.filter(root => root !== '.vscode'));
+    const supporting = id === 'codex' ? ['.agents'] : [];
+    assert.deepEqual(selection.skillRoots, supporting, client);
+    assert.deepEqual(selection.adapters.map(adapter => adapter.root), roots.filter(root => root !== '.vscode' && !supporting.includes(root)));
   }
   assert.deepEqual(adapterRoots.filter(root => !resolveAdapters().roots.includes(root)), ['.agent', '.gemini', '.kimi']);
   assert.deepEqual(resolveAdapters('all').entrypoints, ['AGENTS.md', 'CLAUDE.md', 'GEMINI.md']);
+  assert.deepEqual(resolveAdapters('none'), { clients: ['none'], adapters: [], roots: [], skillRoots: [], entrypoints: ['AGENTS.md'] });
   assert.deepEqual(resolveAdapters(['codex', 'antigravity', 'vscode']).roots, ['.agents', '.codex', '.github', '.vscode']);
   assert.deepEqual(resolveAdapters(['antigravity', 'claude']).entrypoints, ['AGENTS.md', 'CLAUDE.md', 'GEMINI.md']);
 });

@@ -9,11 +9,24 @@ Este diretório não faz parte dos recursos instalados nos projetos.
 
 | Módulo | Responsabilidade |
 | --- | --- |
-| `cli.mjs` | Comandos, opções e saída para pessoas ou automações. |
-| `install.mjs` | Planejamento e aplicação segura da instalação. |
+| `cli.mjs` | Entrada estável para a CLI. |
+| `cli/` | Argumentos, execução, saída, avisos e relatório de recuperação. |
+| `install.mjs` | API de instalação, sync e diagnóstico usada pela CLI. |
+| `installation/` | Plano, estágio, arquivos gerenciados e transação. |
 | `config.mjs` | Caminhos, versão e metadados do pacote. |
 | `adapters/` | Acesso aos layouts compartilhados dos agentes. |
 | `i18n.mjs` e `next.mjs` | Idiomas e orientação da próxima ação. |
+| `plugins.mjs` | Catálogo opcional e encaminhamento aos gerenciadores locais. |
+
+Em `installation/`, `plan.mjs` coordena o plano. `prepare-stage.mjs`
+prepara a cópia privada e `stage-cleanup.mjs` trata sua limpeza e seus
+diagnósticos. `plan-state.mjs` concilia a proposta com o estado registrado
+e `native-outputs.mjs` concilia referências com os destinos do projeto.
+`apply.mjs` revalida o plano antes de escrever e usa `publish-file.mjs`
+para publicar arquivos. `state.mjs`, `legacy-state.mjs`, `ownership.mjs`
+e `git-index.mjs` concentram leitura, migração, propriedade e verificações
+do índice. Os controles compartilhados de Git, metadados e recuperação
+moram em `.pbai4devs/scripts/lib/`.
 
 Antes de aplicar alterações, o instalador recusa arquivos com múltiplos
 hardlinks detectados ou cuja contagem não possa ser verificada. A contagem é

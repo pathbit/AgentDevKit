@@ -40,7 +40,7 @@ function fixture(t) {
   put(root, '.gitignore', ignore);
   put(root, 'AGENTS.md', '# Instruções humanas\n\nNão substituir.\n');
   put(root, 'README.md', '# Projeto humano\n');
-  cli(root, ['init', '--agents', 'codex,claude', '--lang', 'es']);
+  cli(root, ['init', '--agents', 'antigravity,codex,claude', '--lang', 'es']);
   const manifestPath = `${newRoot}/agentdevkit.json`;
   const manifest = JSON.parse(read(root, manifestPath));
   manifest.version = '0.0.16';
@@ -88,7 +88,7 @@ test('migra estado legado preservando dados humanos, seleção, índice e ignore
   assert.equal(git(root, 'ls-files', '--stage', '-z'), f.index);
   const manifest = JSON.parse(read(root, `${newRoot}/agentdevkit.json`));
   assert.equal(manifest.language, 'es');
-  assert.deepEqual([...manifest.clients].sort(), ['claude', 'codex']);
+  assert.deepEqual([...manifest.clients].sort(), ['antigravity', 'claude', 'codex']);
   assert.equal(cli(root, ['update', '--dry-run']).plan.length, 0);
   assert.equal(cli(root, ['update']).changed, false);
   assert.equal(git(root, 'ls-files', '--stage', '-z'), f.index);

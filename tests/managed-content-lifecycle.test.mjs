@@ -7,7 +7,8 @@ import { join } from 'node:path';
 import { applyPlan, inspect, planInstallation } from '../src/install.mjs';
 import { synchronize } from '../.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs';
 import { extractManagedBlock, managedBlockDigest } from '../.pbai4devs/scripts/lib/managed-content.mjs';
-import { extractTomlManagedBlock, mergeTomlContent } from '../.pbai4devs/scripts/lib/managed-toml.mjs';
+import { extractTomlManagedBlock } from '../.pbai4devs/scripts/lib/managed-toml.mjs';
+import { mergeTomlContent } from './fixtures/legacy-toml-writer.mjs';
 
 test('edição humana num apontamento previamente gerado migra para ownership de bloco sem desindexar', async t => {
   const { root, git, put, read } = fixture(t);

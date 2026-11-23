@@ -5,6 +5,11 @@ status: rascunho
 
 # Preservação de prompts TOML
 
+> Rascunho histórico. Desde `0.0.36`, o kit deixa de criar ou renovar
+> apontamentos em `.gemini/`. As provas abaixo registram o comportamento de
+> versões e protótipos anteriores. Na [migração][migration], o kit preserva
+> conteúdo próprio e pode retirar somente a contribuição comprovada do kit.
+
 A edição de um comando Gemini deve acrescentar, atualizar ou retirar o bloco
 AgentDevKit sem reserializar conteúdo humano do `prompt`. Este documento propõe
 um contrato; ainda não aprova uma implementação nem comprova compatibilidade.
@@ -156,3 +161,4 @@ segurança de rollback, permissões, ACLs e recuperação após interrupção pe
 comprovada por este contrato de TOML.
 
 [gemini-command]: https://geminicli.com/docs/cli/custom-commands/
+[migration]: ../../guides/installation.md#atualizar-e-escolher-agentes

@@ -27,7 +27,7 @@ O CI verifica Linux e distribui a portabilidade em grupos independentes:
 | Windows / Node 24 | CLI, projetos, recursos e layout em jobs separados. |
 | macOS / Node 24 | Os mesmos grupos de portabilidade em jobs separados. |
 | Linux / Node 26 | Smoke de compatibilidade. |
-| Três sistemas / Node 18.20.8 | Launcher prepara Node 24.13.1. |
+| Três sistemas / Node 18.20.8 | Launcher seleciona o Node 24.13.1 do CI. |
 | macOS / Node 24 | Gate nativo de metadados, além dos grupos portáteis. |
 
 O perfil macOS usa o runner padrão `macos-15-intel`. O label `macos-latest`
@@ -85,7 +85,8 @@ provas obrigatórias na própria plataforma e falha se forem puladas.
 O [CI][ci] roda em pushes e PRs; também pode ser iniciado em **Run workflow**.
 O perfil completo produz `agentdevkit-<versão>.tgz`, `SHA256SUMS`, notas e
 manifesto. O artifact inclui commit, execução e checksum para identificar
-exatamente o que foi testado. Downloads do Actions exigem login e expiram.
+exatamente o que foi testado. O nome inclui o SHA e a tentativa do run.
+Downloads do Actions exigem login, com retenção de 14 dias.
 A instalação usa o pacote nomeado no [npm público](packages.md);
 as releases preservam artefatos e checksums para auditoria.
 
@@ -99,6 +100,17 @@ O resultado fica em `.agent-tests/release/<versão>/`. Esse comando não publica
 nada. Nunca versione o tarball ou seus relatórios.
 `pack:release` permanece disponível com o mesmo comportamento.
 
+O perfil `verify` testa o tarball que construiu. Para usar o mesmo candidato
+em verificações dirigidas, passe o caminho absoluto do arquivo `.tgz` como
+`AGENTDEVKIT_TARBALL` a `npm run test:distribution`. O teste registra a
+verificação em `.agent-tests/release-artifact-verification.json`. Sem a
+variável, o teste de distribuição gera seu próprio pacote temporário.
+
+Nas suítes de compatibilidade, informe `--tarball <arquivo>` a
+`npm run test:oss --` ou `npm run test:docs --`. Para testar a atualização,
+informe `--from-version <versão publicada> --to-tarball <arquivo>` a
+`npm run test:upgrade --`. Registre o SHA-256 do candidato com as provas.
+
 ## Publicar uma versão
 
 1. Atualize versão e lockfile, changelog, exemplos e escopo da entrega.
@@ -109,8 +121,8 @@ nada. Nunca versione o tarball ou seus relatórios.
 3. Valide o commit em `develop` e promova-o à `main`. Acompanhe o CI da
    `main` e, quando a versão mudar, o workflow de release.
 
-O perfil completo exige os testes estritos de recuperação concorrente. Enquanto
-eles falharem, não há artefato certificado para publicação; consulte o
+O perfil completo exige os testes estritos de recuperação concorrente. Se algum
+falhar, o pacote permanece sem aprovação para publicação. Consulte o
 [roadmap](../product/roadmap.md) e os [testes](https://github.com/pathbit/AgentDevKit/blob/main/tests/README.md).
 
 Após toda a matriz de CI passar, a automação cria a tag `v<versão>` no

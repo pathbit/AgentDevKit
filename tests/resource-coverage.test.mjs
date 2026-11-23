@@ -117,16 +117,12 @@ test('cada recurso instalado aponta à origem em cada cliente selecionado', asyn
           destination = `${client}/${source.slice('.pbai4devs/'.length)}`;
         }
       }
-      if (client === '.gemini' && kind === 'commands') destination = destination.replace(/\.md$/, '.toml');
       const full = join(root, destination);
       assert.ok(statSync(full).isFile(), `${destination} não é arquivo`);
       const text = readFileSync(full, 'utf8');
-      if (destination.endsWith('.toml')) assert.ok(text.includes(`@{${source}}`), `${destination} não aponta à origem`);
-      else {
-        const link = text.match(/\[origem\]\(([^)]+)\)/);
-        assert.ok(link, `${destination} sem referência`);
-        assert.equal(relative(root, resolve(dirname(full), decodeURIComponent(link[1]))).split('\\').join('/'), source, `${destination} aponta para outra origem`);
-      }
+      const link = text.match(/\[origem\]\(([^)]+)\)/);
+      assert.ok(link, `${destination} sem referência`);
+      assert.equal(relative(root, resolve(dirname(full), decodeURIComponent(link[1]))).split('\\').join('/'), source, `${destination} aponta para outra origem`);
       verified++;
     }
   });
@@ -175,13 +171,16 @@ test('todas as combinações de clientes preservam dependências e seleção det
     const closure = new Set(chosen);
     for (const id of closure) for (const dependency of byId.get(id).requires) closure.add(dependency);
     const expectedAdapters = policy.adapters.filter(adapter => closure.has(adapter.id));
-    const expectedRoots = [...new Set(expectedAdapters.flatMap(adapter => [adapter.root, ...adapter.extraRoots]))];
+    const clientRoots = new Set(expectedAdapters.flatMap(adapter => [adapter.root, ...adapter.extraRoots]));
+    const skillRoots = [...new Set(expectedAdapters.map(adapter => adapter.skillFallback).filter(root => root && !clientRoots.has(root)))];
+    const expectedRoots = [...skillRoots, ...clientRoots];
     const requestedEntries = new Set([...policy.entrypoints, ...chosen.flatMap(id => byId.get(id).entrypoints)]);
     const expectedEntries = ['AGENTS.md', 'CLAUDE.md', 'GEMINI.md'].filter(name => requestedEntries.has(name));
     const selection = resolveAdapters(chosen);
     assert.deepEqual(selection.clients, chosen, `seleção ${mask}`);
     assert.deepEqual(selection.adapters.map(adapter => adapter.id), expectedAdapters.map(adapter => adapter.id), `dependências ${mask}`);
     assert.deepEqual(selection.roots, expectedRoots, `raízes ${mask}`);
+    assert.deepEqual(selection.skillRoots, skillRoots, `raízes de skills ${mask}`);
     assert.deepEqual(selection.entrypoints, expectedEntries, `entradas ${mask}`);
     assert.deepEqual(resolveAdapters([...chosen].reverse()).roots, expectedRoots, `ordem ${mask}`);
   }

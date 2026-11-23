@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 // O parser é distribuído com o kit; não é uma verificação independente.
 import toml from '../.pbai4devs/scripts/lib/smol-toml.cjs';
-import { mergeTomlContent, stripTomlContent } from '../.pbai4devs/scripts/lib/managed-toml.mjs';
+import { stripTomlContent } from '../.pbai4devs/scripts/lib/managed-toml.mjs';
+import { mergeTomlContent } from './fixtures/legacy-toml-writer.mjs';
 
 const body = '@{.pbai4devs/commands/demo/COMMAND.md}';
 const formats = [

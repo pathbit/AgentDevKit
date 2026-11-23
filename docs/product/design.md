@@ -46,8 +46,10 @@ do projeto consumidor permanece intacta. Alterações na licença gerenciada
 seguem a mesma proteção de conflitos e backup dos demais arquivos do hub.
 
 A escolha salva determina as derivações. Atualizações e sincronizações não
-reativam clientes desmarcados. `all` preserva a intenção de usar todos; estados
-antigos sem escolha explícita mantêm esse comportamento.
+reativam clientes desmarcados. Em uma instalação nova, `none` deixa apenas
+os recursos compartilhados, incluindo `AGENTS.md`. O manifesto gerado tem
+somente o cabeçalho. `all` preserva a intenção de usar todos; estados antigos
+sem seleção registrada mantêm esse comportamento.
 
 ## Instalação e propriedade
 
@@ -59,8 +61,10 @@ externo, frontmatter e nome existente são preservados; somente o hash do bloco
 é registrado. Alterações externas continuam permitidas; alterações dentro do
 bloco exigem revisão e não autorizam sobrescrever o arquivo com `--force`.
 Arquivos novos e integralmente gerados continuam com propriedade integral.
-O leitor de comandos TOML legados reconhece a contribuição gerenciada em
-`prompt`. Configurações nativas permanecem sob controle humano.
+O leitor de TOML legado reconhece a contribuição gerenciada em `prompt` na
+migração. Desde `0.0.36`, o kit desativa criação e renovação em `.gemini/`.
+`GEMINI.md` permanece como entrada do Antigravity. Configurações nativas
+permanecem sob controle humano.
 Nunca é possível ignorar somente um trecho de arquivo no Git. Veja a
 [spec de integração][additive].
 
@@ -71,6 +75,11 @@ possíveis arquivos privados expostos. A equipe decide as regras do projeto.
 O estado registra versão, escolha e propriedade local. Índices e manifesto
 podem ser reconstruídos. Downloads, credenciais e relatórios ficam fora do
 pacote; confira os ignores do projeto antes de preparar alterações Git.
+
+O catálogo de plugins usa as definições de ferramentas e skills externas.
+`plugins list` e `plugins info` consultam o pacote antes do `init` e o catálogo
+local após a instalação. `plugins install` e `plugins check` encaminham a
+operação ao gerenciador correspondente. [Plugins e créditos](../guides/plugins.md)
 
 ## Inventário e evolução documental
 

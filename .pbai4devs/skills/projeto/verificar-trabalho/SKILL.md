@@ -1,52 +1,44 @@
 ---
 name: verificar-trabalho
-description: Comprova uma alteração pronta com testes e execução real e registra evidências por critério.
+description: Valida uma alteração pronta por critério de aceite com testes, execução real e evidências.
 ---
 
 # Verificar trabalho
 
-Reúna critérios, impacto e provas existentes. Reutilize provas do mesmo estado
-e ambiente quando cobrirem o critério. Execute o que faltar ou estiver desatualizado.
-Use `executar-script` para identificar ferramentas e
-`usar-skills-externas` para referências pertinentes à stack existente.
-Quando precisar definir os casos, use
-[planejar-qa](../../qualidade/planejar-qa/SKILL.md). Para uma suspeita de falha
-específica, use [validar-adversarial](../../qualidade/validar-adversarial/SKILL.md).
+Mapeie critérios, riscos e provas disponíveis. Reaproveite evidências do mesmo
+estado e ambiente que cubram o critério. Use [planejar-qa][qa] para escolher
+casos e [validar-adversarial][adversarial] para investigar uma falha específica.
+[executar-script][execucao] identifica os comandos reais do projeto.
 
-1. **Estrutura:** para recursos dos agentes, execute `verificar-recursos`;
-   ele confere espelhos, frontmatter/H1 e links, além do Markdown lint quando
-   instalado. Se houver divergência, use o [comando sincronizar][sync] para
-   conferir o plano e aplique apenas quando o pedido incluir a correção.
-2. **Comportamento:** execute testes relevantes, lint, tipos e build definidos
-   no projeto; para automações dos agentes, execute `testar-infraestrutura`.
-   Ao alterar catálogo, sincronizador, instalador ou cópia de projetos, execute
-   também `testar-maturidade run` e confira os cenários na pasta temporária informada.
-   Confira resultados e códigos de saída; não instale ferramentas
-   ou invente metas de cobertura sem decisões do projeto.
-3. **Navegador:** obrigatório para alterações que afetem a web. Abra a URL
-   real e percorra o fluxo na matriz de navegadores do projeto. Confira
-   resultados visíveis, console e rede em desktop e celular quando aplicável.
-   Siga o [comando testar-navegador][navegador] para escolher a ferramenta.
-4. **Desktop/artefato:** abra a aplicação ou o arquivo gerado com a ferramenta
-   adequada, como agent-desktop ou um conector compatível; execute o fluxo
-   afetado ou renderize e inspecione o resultado.
+- **Comportamento.** Rode os testes do projeto que cubram os aceites.
+  Confira lint, tipos e build quando aplicáveis.
+- **Recursos agênticos.** Rode [verificar-recursos][recursos]. Em divergências,
+  [revise o plano][sync] e aplique só se a correção estiver no escopo.
+- **Automações do kit.** Rode [testar-infraestrutura][infra]. Para catálogo,
+  sync, instalação ou cópia, rode também [`testar-maturidade run`][maturidade].
+- **Interface web.** [Abra a aplicação real][navegador], percorra os fluxos
+  afetados e confira tela, console e rede na matriz do projeto.
+- **Desktop ou artefato.** Abra ou renderize e inspecione o resultado.
+  Execute o fluxo afetado quando houver aplicação.
+- **Catálogo Vercel.** Rode o [teste funcional e confira seus limites][vercel].
 
-Relate cada critério como **passou**, **falhou** ou **não verificado**, com
-evidência e limites. Se uma prova foi pulada, registre o motivo e o ambiente
-ou recurso necessário para executá-la. Comportamento só passa com execução
-que cubra o critério inteiro. Inspeção estática, fixtures e capturas podem
-complementar a prova.
-Se estiver validando, devolva falhas ao responsável pela implementação.
-Quem implementa resolve falhas no escopo e versiona testes e fixtures.
-Mantenha resultados em destino ignorado. Use IDs como AC-001 e salve as provas em
-`.agent-tests/<referencia>/<execucao>/`. Devolva as provas ao fluxo que
-solicitou a verificação. Revisão pendente ou critério sem prova impedem
-concluir uma entrega.
+Confirme resultados e códigos de saída. Marque cada critério como **passou**,
+**falhou** ou **não verificado**. Um aceite de comportamento exige uma execução
+que cubra o critério inteiro. Registre ambiente, comando, evidência e lacunas.
+Quando faltar uma ferramenta ou acesso, indique o pré-requisito e siga com
+as provas viáveis.
 
-Para o catálogo Vercel, execute o teste funcional
-`node .pbai4devs/scripts/preparar-ferramentas/tests/SMOKE_VERCEL.mjs` após instalar
-as ferramentas citadas nele. Ele verifica descoberta, shell virtual e roteiros;
-probes de Portless não comprovam proxy/TLS, nem dry-run comprova vídeo gravado.
+Arquive as saídas em `.agent-tests/<referencia>/<execucao>/` e vincule-as a
+IDs como AC-001. Testes e fixtures podem ser versionados. Devolva falhas ao
+implementador e encaminhe as provas ao fluxo que pediu a verificação.
+Critério pendente ou revisão independente em aberto impede concluir a entrega.
 
-[navegador]: ../../../commands/testar-navegador/COMMAND.md
+[execucao]: ../executar-script/SKILL.md
+[qa]: ../../qualidade/planejar-qa/SKILL.md
+[adversarial]: ../../qualidade/validar-adversarial/SKILL.md
+[recursos]: ../../../scripts/verificar-recursos/README.md
 [sync]: ../../../commands/sincronizar/COMMAND.md
+[infra]: ../../../scripts/README.md#script-de-infraestrutura
+[maturidade]: ../../../scripts/testar-maturidade/README.md
+[navegador]: ../../../commands/testar-navegador/COMMAND.md
+[vercel]: ../../../scripts/preparar-ferramentas/README.md#operações-individuais

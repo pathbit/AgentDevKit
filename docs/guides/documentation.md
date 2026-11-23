@@ -4,9 +4,10 @@ description: Evoluir documentos existentes e criar somente o que falta.
 
 # Documentação sem perder o contexto
 
-O pacote instala as skills, as definições das ferramentas e o inventário
-de documentos. O agente usa esses recursos para ler o projeto e propor
-complementos nos documentos autorizados. Os binários são preparados à parte.
+Use `document` para começar um levantamento de sistema e
+`atualizar-documentacao` para revisar os documentos afetados por uma entrega.
+O agente usa o inventário como ponto de partida para ler as fontes e propor
+complementos nos caminhos autorizados.
 
 ## Documentar um sistema em uso
 
@@ -51,10 +52,10 @@ O inventário pode ser consultado na raiz do projeto:
 node .pbai4devs/scripts/inspecionar-projeto/SCRIPT.mjs
 ```
 
-O campo `documentation` lista documentos encontrados, possíveis papéis e
-limitações da busca. Os papéis são indícios: o agente ainda precisa ler e
-confirmar o conteúdo. Um nome como `ARCHITECTURE.md` pode servir ao design;
-não é necessário renomeá-lo nem recriá-lo em outra pasta.
+No JSON do inspetor, `documentation.files` lista documentos e seus papéis
+prováveis, e `documentation.scan` informa os limites da busca. Leia os
+arquivos antes de usar seus papéis para decidir. Se `ARCHITECTURE.md` já
+descreve o desenho do sistema, mantenha esse caminho.
 
 ## Planejar o complemento
 

@@ -24,15 +24,18 @@ O mesmo JavaScript atende aos sistemas suportados. Não há bootstrap PowerShell
 SH ou Bash no kit. O executável nativo `tar` é usado sem shell para extrair o
 arquivo oficial após conferir SHA-256. Veja o [guia do bootstrap][bootstrap].
 
-Quando a tarefa pedir instalação das ferramentas:
+Para preparar uma ferramenta do catálogo, consulte o [guia de plugins][plugins].
+Se precisar preparar um grupo de ferramentas, execute a partir do hub:
 
 ```console
 node .pbai4devs/scripts/preparar-ferramentas/SCRIPT.mjs setup
 ```
 
 `setup` reutiliza instalações saudáveis e verifica as compatíveis. Um nome
-ou grupo limita a seleção. `check`, `info` e `run` não trocam uma consulta
-por instalação. Downloads, caches e recibos permanecem locais e ignorados.
+ou grupo limita a seleção. Ferramentas com seleção obrigatória, como as do
+grupo `workflow`, exigem um ID ou grupo explícito. `check`, `info` e `run`
+operam sobre a instalação disponível. Downloads, caches e recibos permanecem
+locais e ignorados.
 O gerenciador recusa links simbólicos nos caminhos que escreve ou usa como
 estado local; a atualização não segue esses links para fora da instalação.
 
@@ -80,6 +83,7 @@ feche a entrega pela [revisão][review].
 [Wiki](../README.md) · [Recursos](resources.md)
 
 [tools]: ../../.pbai4devs/tools/README.md
+[plugins]: plugins.md#consultar-e-instalar
 [bootstrap]: ../../.pbai4devs/scripts/preparar-ferramentas/BOOTSTRAP.md
 [verify]: ../../.pbai4devs/skills/projeto/verificar-trabalho/SKILL.md
 [browser]: ../../.pbai4devs/tools/agent-browser/README.md

@@ -9,6 +9,7 @@ import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 import { projectRoot, requireNode } from '../../lib/runtime.mjs';
 import { inspectDocumentation, inspectProject } from '../SCRIPT.mjs';
+import { adapterManifest } from '../../lib/adapters.mjs';
 
 requireNode();
 const script = join(projectRoot, '.pbai4devs/scripts/inspecionar-projeto/SCRIPT.mjs');
@@ -206,6 +207,22 @@ test('aceita estrutura completa e raízes de agentes configuradas', t => {
   assert.deepEqual(missingEditor.report.structure.missing, ['.vscode']);
   directory('.vscode');
   assert.equal(run('--check').status, 0);
+});
+
+test('estrutura completa com seleção none dispensa todas as pastas de clientes', t => {
+  const { root, directory, file, run } = fixture(t);
+  for (const name of ['.pbai4devs', 'src', 'tests', 'infra']) directory(name);
+  for (const name of ['.gitignore', '.gitattributes', '.editorconfig', '.dockerignore', 'README.md', 'Makefile']) file(name);
+  file('infra/compose/compose.local.yml', 'services: {}\n');
+  const legacy = run('--check');
+  assert.equal(legacy.status, 1, 'Sem manifesto, vale a compatibilidade dos clientes ativos.');
+  assert.ok(legacy.report.structure.missing.includes('.codex'));
+  for (const retired of ['.agent', '.gemini']) assert.ok(!legacy.report.structure.missing.includes(retired));
+  file('.pbai4devs/espelhos.conf', adapterManifest(root, { clients: ['none'] }));
+  const result = run('--check');
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.report.contract.complete, true);
+  assert.deepEqual(result.report.structure.missing, []);
 });
 
 test('manifests inválidos geram aviso sem revelar seu conteúdo', t => {

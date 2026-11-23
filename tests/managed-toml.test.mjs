@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import smol from '../.pbai4devs/scripts/lib/smol-toml.cjs';
-import { extractTomlManagedBlock, mergeTomlContent, stripTomlContent, tomlManagedBlockDigest } from '../.pbai4devs/scripts/lib/managed-toml.mjs';
+import { extractTomlManagedBlock, stripTomlContent, tomlManagedBlockDigest } from '../.pbai4devs/scripts/lib/managed-toml.mjs';
+import { mergeTomlContent } from './fixtures/legacy-toml-writer.mjs';
 
 const body = '@{.pbai4devs/commands/revisar-entrega/COMMAND.md}';
 // Parser distribuido com o kit: valida semantica, sem alegar independencia.

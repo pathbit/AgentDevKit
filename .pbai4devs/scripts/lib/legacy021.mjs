@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import smol from './smol-toml.cjs';
 const { parse } = smol;
 import { locatePrompt } from './managed-toml-parser.mjs';
-import { extractManagedBlock, mergeManagedContent } from './managed-content.mjs';
+import { extractManagedBlock } from './managed-content.mjs';
 const digest = value => createHash('sha256').update(value).digest('hex');
 const fail = message => { throw Object.assign(new Error(message), { code: 'E_PROTOTYPE_CONFLICT' }); };
 const encode = value => JSON.stringify(value).slice(1, -1).replace(/\x7f/g, '\\u007F');
@@ -40,9 +40,4 @@ export function removeLegacy(input, expectedHash) {
   const p = prepare(input, expectedHash);
   const expected = p.prompt.value.slice(0, p.decodedStart) + p.prompt.value.slice(p.decodedStart + p.block.length);
   return { text: apply(p, '', expected), status: 'removed' };
-}
-export function updateLegacy(input, body, expectedHash) {
-  const p = prepare(input, expectedHash);
-  const merged = mergeManagedContent(p.prompt.value, body, { expectedHash });
-  return { text: apply(p, merged.block, merged.text), blockHash: merged.sha256 };
 }

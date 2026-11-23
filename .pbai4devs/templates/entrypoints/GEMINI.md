@@ -1,7 +1,7 @@
 ---
-description: Instruções compartilhadas para Gemini.
+description: Instruções compartilhadas para Antigravity.
 ---
 
-# Instruções para Gemini
+# Instruções para Antigravity
 
 @./AGENTS.md

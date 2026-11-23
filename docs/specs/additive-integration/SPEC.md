@@ -10,6 +10,11 @@ version: 0.0.12
 > `.git/info/exclude` nem criar ou alterar ignores na raiz ou nos clientes.
 > Os ignores existentes no hub também são preservados. A revisão dos critérios
 > e sua validação estão pendentes no [roadmap](../../product/roadmap.md).
+>
+> O critério AC-006 registra a integração TOML de versões anteriores. Desde
+> `0.0.36`, o kit deixa de criar ou renovar apontamentos em `.gemini/`. Na
+> [migração][migration], o kit preserva conteúdo próprio e pode retirar
+> somente sua contribuição comprovada. `GEMINI.md` permanece no Antigravity.
 
 ## Objetivo
 
@@ -56,3 +61,5 @@ comandos estruturados. Testar perda de origem, rollback, `--force`, simulação,
 
 Testes são versionados. Backups, snapshots e relatórios ficam ignorados em
 `.agent-tests/` ou `tmp/`; não alterar projetos consumidores nesta entrega.
+
+[migration]: ../../guides/installation.md#atualizar-e-escolher-agentes

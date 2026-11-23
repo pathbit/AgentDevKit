@@ -4,7 +4,9 @@ import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, symlinkSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { header, isReference, resourcePath, synchronize } from '../SCRIPT.mjs';
+import { createPrivateSyncStage, header, isReference, resourcePath, synchronize, synchronizePrivateStage } from '../SCRIPT.mjs';
+import * as syncEngine from '../synchronize.mjs';
+import { applySynchronization } from '../apply.mjs';
 import { buildCatalog } from '../../lib/catalog.mjs';
 import { resourceTargets } from '../../testar-maturidade/SCRIPT.mjs';
 import { toolWrapper } from '../../preparar-ferramentas/SCRIPT.mjs';
@@ -12,6 +14,19 @@ import { mergeGitignore, ignoreBegin, ignoreEnd, validateIgnoreClients } from '.
 import { validateCatalog as validateExternalCatalog } from '../../gerenciar-skills-externas/SCRIPT.mjs';
 import { stateDirectory } from '../../lib/state-path.mjs';
 import { project, cli, marker, skill, source, read, write, pointer, recordOwned, toolConfig, externalConfig, run, snapshot, fixture, rejected, assertCheckReadonly } from './fixtures.mjs';
+
+test('somente estágio privado autenticado pode dispensar o diário', t => {
+  const root = fixture(t, true);
+  const handle = createPrivateSyncStage();
+  t.after(() => rmSync(handle.path, { recursive: true, force: true }));
+  const before = snapshot(root);
+  assert.equal(Object.hasOwn(syncEngine, 'runSynchronization'), false);
+  for (const invalid of [true, { path: root }, handle]) {
+    assert.throws(() => synchronizePrivateStage({ root }, invalid), /Estágio privado inválido/);
+    assert.throws(() => applySynchronization({ root, stageHandle: invalid }), /Estágio privado inválido/);
+  }
+  assert.deepEqual(snapshot(root), before);
+});
 
 test('sincronização direta conserva estado legado e recusa duas pastas de estado', t => {
   const root = fixture(t, true);
@@ -47,7 +62,7 @@ test('sincroniza somente principais, preserva metadados e usa referências UTF-8
   assert.match(read(root, '.opencode/agents/revisor/AGENT.md'), /edit: deny/);
   assert.match(read(root, '.kimi-code/agents/revisor.md'), /tools: \[Read, Grep, Glob\]/);
   assert.ok(existsSync(join(root, '.claude/skills/projeto/demo/SKILL.md')));
-  for (const client of ['.claude', '.opencode', '.github', '.codex', '.cursor', '.kimi-code', '.vscode', '.agents', '.agent', '.gemini']) {
+  for (const client of ['.claude', '.opencode', '.github', '.codex', '.cursor', '.kimi-code', '.vscode', '.agents', '.agent']) {
     for (const kind of ['templates', 'scripts', 'tools', 'external-skills', 'state', 'estado', 'tests', 'docs', 'adapters', 'extra', 'README.md', 'INSTRUCTIONS.md']) {
       if (client === '.claude' && ['templates', 'scripts', 'tools', 'external-skills', 'state', 'tests', 'docs', 'adapters'].includes(kind)) {
         assert.equal(existsSync(join(root, client, kind, 'demo/REFERENCE.md')), false);
@@ -69,17 +84,15 @@ test('sincroniza somente principais, preserva metadados e usa referências UTF-8
   assert.deepEqual(snapshot(root), before, 'A segunda sincronização deve ser idempotente.');
 });
 
-test('hub unico permite tres novos clientes, regras por inclusao e metadados nativos', t => {
+test('hub único deriva regras por inclusão e metadados nativos do Antigravity', t => {
   const root = fixture(t);
   write(root, '.pbai4devs/agents/revisor/antigravity.yaml', '---\nname: revisor\nmainAgent: false\nsubagent: true\n---\n');
-  write(root, '.pbai4devs/agents/revisor/gemini.yaml', '---\nname: revisor\nkind: local\n---\n');
   write(root, '.pbai4devs/espelhos.conf', read(root, '.pbai4devs/espelhos.conf') + [
     'nativo|.agents/agents/revisor.md|.pbai4devs/agents/revisor/AGENT.md|.pbai4devs/agents/revisor/antigravity.yaml',
     'nativo|.agent/agents/revisor.md|.pbai4devs/agents/revisor/AGENT.md|.pbai4devs/agents/revisor/antigravity.yaml',
-    'nativo|.gemini/agents/revisor.md|.pbai4devs/agents/revisor/AGENT.md|.pbai4devs/agents/revisor/gemini.yaml',
   ].join('\n') + '\n');
   run(root);
-  for (const client of ['.agents', '.agent', '.gemini']) {
+  for (const client of ['.agents', '.agent']) {
     assert.ok(existsSync(join(root, client, 'skills/demo/SKILL.md')));
     assert.equal(existsSync(join(root, client, '.gitignore')), false);
     for (const extra of ['tools', 'scripts', 'templates', 'docs', 'external-skills']) assert.equal(existsSync(join(root, client, extra)), false);
@@ -91,7 +104,6 @@ test('hub unico permite tres novos clientes, regras por inclusao e metadados nat
     const target = read(root, `${client}/rules/example.md`).match(/@\[origem\]\(([^)]+)\)/)[1];
     assert.ok(existsSync(resolve(root, client, 'rules', decodeURIComponent(target))));
   }
-  assert.match(read(root, '.gemini/agents/revisor.md'), /kind: local/);
   const catalog = JSON.parse(read(root, '.pbai4devs/catalog.json'));
   assert.equal(catalog.agents.length, 1);
   assert.deepEqual(JSON.parse(read(root, '.pbai4devs/agents.json')), { entries: [{ path: '.pbai4devs/agents/revisor/AGENT.md' }] });
@@ -101,56 +113,28 @@ test('hub unico permite tres novos clientes, regras por inclusao e metadados nat
   assert.throws(() => validateIgnoreClients({ '.pbai4devs': {} }));
 });
 
-test('Gemini preserva TOML humano equivalente sem adicionar bloco nem adotar', t => {
-  for (const force of [false, true]) {
-    const root = fixture(t);
-    write(root, '.pbai4devs/commands/check/COMMAND.md', '---\ndescription: "Verifica \\"aspas\\" e regras."\n---\n\n# Check\n');
-    write(root, '.gemini/commands/check.md', pointer('../../.pbai4devs/commands/check/COMMAND.md'));
-    recordOwned(root, ['.gemini/commands/check.md']);
-    run(root);
-    const target = '.gemini/commands/check.toml', text = read(root, target);
-    const lines = text.trimEnd().split('\n');
-    assert.equal(lines[0], '# gerado: sincronizar-agentes');
-    assert.equal(JSON.parse(lines[1].slice('description = '.length)), 'Verifica "aspas" e regras.');
-    assert.equal(JSON.parse(lines[2].slice('prompt = '.length)), '@{.pbai4devs/commands/check/COMMAND.md}\n\n{{args}}');
-    assert.ok(isReference(text));
-    assert.equal(existsSync(join(root, '.gemini/commands/check.md')), false);
-
-    const human = text + '# instrucao propria\n';
-    write(root, target, human);
-    const stateBefore = JSON.parse(read(root, '.pbai4devs/state/derived.json'));
-    const beforeCheck = snapshot(root), check = run(root, { check: true, force });
-    assert.notEqual(check.exitCode, 0);
-    assert.ok(check.preserved.some(item => item.path === target && item.reason === 'existing-prompt-satisfied'));
-    assert.deepEqual(snapshot(root), beforeCheck);
-    const result = run(root, { force });
-    assert.deepEqual(readFileSync(join(root, target)), Buffer.from(human));
-    assert.equal(result.managedBlocks[target], undefined);
-    assert.ok(!result.ownedOutputs.includes(target));
-    const state = JSON.parse(read(root, '.pbai4devs/state/derived.json'));
-    assert.equal(state.blocks?.[target], stateBefore.blocks?.[target]);
-    assert.equal(stateBefore.files?.[target], createHash('sha256').update(text).digest('hex'));
-    assert.equal(state.files?.[target], undefined);
-
-    rmSync(join(root, '.pbai4devs/commands/check'), { recursive: true });
-    run(root);
-    assert.deepEqual(readFileSync(join(root, target)), Buffer.from(human));
-    assert.match(read(root, '.github/workflows/ci.yml'), /workflow-preservado/);
+test('manifesto sem estado recusa a raiz aposentada com qualquer capitalização', t => {
+  const config = '.pbai4devs/espelhos.conf';
+  for (const row of [
+    'agente|.gemini|plano', 'agente|.Gemini|plano', 'gitignore|.GEMINI',
+    'formato|.gemini|commands|arquivo', 'fallback|.codex|.Gemini|skills',
+    'nativo|.Gemini/commands/check.toml|.pbai4devs/commands/check/COMMAND.md',
+    'nativo|.codex/commands/check.md|.gemini/commands/check/COMMAND.md',
+  ]) {
+    const root = fixture(t, true);
+    write(root, config, read(root, config) + row + '\n');
+    write(root, '.gemini/commands/human.toml', 'description = "Humano"\nprompt = "Meu comando"\n');
+    for (const options of [{ check: true }, { force: true }]) rejected(root, options, /agentdevkit update --dry-run/);
+    assert.equal(existsSync(join(root, '.pbai4devs/state/agentdevkit.json')), false);
   }
 });
 
-test('nativos TOML ficam restritos aos comandos Gemini e ponteiros falsos nao sao apagados como gerados', t => {
-  for (const row of [
-    'nativo|.claude/commands/check.toml|.pbai4devs/commands/check/COMMAND.md',
-    'nativo|.gemini/agents/revisor.toml|.pbai4devs/agents/revisor/AGENT.md',
-    'nativo|.gemini/commands/check.toml|.pbai4devs/rules/example/RULE.md',
-    'nativo|.gemini/commands/check.md|.pbai4devs/commands/check/COMMAND.md',
-    'nativo|.gemini/commands/check.toml|.pbai4devs/commands/check/COMMAND.md|.pbai4devs/agents/revisor/kimi-code.yaml',
-  ]) {
-    const root = fixture(t); write(root, '.pbai4devs/espelhos.conf', read(root, '.pbai4devs/espelhos.conf') + row + '\n');
-    rejected(root, { force: true });
-  }
-  assert.equal(isReference('# gerado: sincronizar-agentes\ndescription = "teste"\nprompt = "!{rm -rf .}"\n'), false);
+test('TOML novo não é destino nativo e referências legadas falsas não são reconhecidas', t => {
+  const root = fixture(t);
+  const row = 'nativo|.claude/commands/check.toml|.pbai4devs/commands/check/COMMAND.md';
+  write(root, '.pbai4devs/espelhos.conf', read(root, '.pbai4devs/espelhos.conf') + row + '\n');
+  rejected(root, { force: true }, /Destino nativo nao permitido/);
+  assert.equal(isReference('# gerado: sincronizar-agentes\ndescription = "teste"\nprompt = "!{comando-local}"\n'), false);
   assert.equal(isReference('# gerado: sincronizar-agentes\ndescription = "teste"\nprompt = "@{.pbai4devs/commands/../private/COMMAND.md}\\n\\n{{args}}"\n'), false);
   assert.equal(isReference('---\ndescription: regra\n---\n\n# Regra\n\n@[../../.pbai4devs/rules/demo/RULE.md]\nTexto proprio\n'), false);
 });
@@ -794,10 +778,9 @@ test('formatos por tipo preservam grupos e geram apenas o formato nativo escolhi
   write(root, '.pbai4devs/rules/projeto/style/RULE.md', '---\ntrigger: glob\nglobs: "**/*.js"\ndescription: Estilo.\n---\n\n# Estilo\n');
   write(root, '.pbai4devs/agents/review/security/AGENT.md', '---\nname: security\ndescription: Perfil.\n---\n\n# Perfil\n');
   write(root, '.pbai4devs/espelhos.conf', [
-    'agente|.codex|agrupado', 'agente|.claude|agrupado', 'agente|.cursor|agrupado', 'agente|.github|agrupado', 'agente|.gemini|agrupado',
+    'agente|.codex|agrupado', 'agente|.claude|agrupado', 'agente|.cursor|agrupado', 'agente|.github|agrupado',
     'formato|.claude|skills|plano', 'formato|.claude|commands|arquivo',
     'formato|.cursor|rules|mdc', 'formato|.github|rules|instrucoes', 'formato|.github|commands|prompt', 'formato|.github|agents|agente',
-    'formato|.gemini|commands|arquivo',
   ].join('\n') + '\n');
   run(root);
   assert.ok(existsSync(join(root, '.codex/skills/projeto/demo/SKILL.md')));
@@ -806,7 +789,6 @@ test('formatos por tipo preservam grupos e geram apenas o formato nativo escolhi
   assert.ok(existsSync(join(root, '.github/agents/review/security.agent.md')));
   assert.ok(existsSync(join(root, '.github/prompts/projeto/check.prompt.md')));
   assert.ok(existsSync(join(root, '.github/instructions/projeto/style.instructions.md')));
-  assert.ok(existsSync(join(root, '.gemini/commands/projeto/check.toml')));
   assert.match(read(root, '.cursor/rules/projeto/style.mdc'), /globs: "\*\*\/\*\.js"/);
   assert.equal(existsSync(join(root, '.github/commands/projeto/check/COMMAND.md')), false);
   assert.equal(existsSync(join(root, '.cursor/rules/projeto/style/RULE.md')), false);
@@ -1040,7 +1022,6 @@ test('formatos desconhecidos ou fora do cliente falham antes de mutar', t => {
   for (const row of [
     'formato|.missing|skills|agrupado', 'formato|.codex|unknown|agrupado',
     'formato|.codex|skills|mdc', 'formato|.codex|rules|prompt',
-    'formato|.codex|agents|nenhum', 'formato|.codex|commands|nenhum',
     'fallback|.codex|.missing|skills', 'fallback|.codex|.codex|skills',
     'fallback|.codex|.agents|rules',
     'formato|.codex|skills|plano\nformato|.codex|skills|agrupado',

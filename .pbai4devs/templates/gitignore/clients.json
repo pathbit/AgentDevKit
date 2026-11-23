@@ -1,7 +1,6 @@
 {
   ".agents": { "allow": ["skills.json", "rules.json", "agents.json"] },
   ".agent": { "allow": [] },
-  ".gemini": { "allow": ["settings.json", "GEMINI.md"] },
   ".claude": { "allow": ["settings.json", "CLAUDE.md"] },
   ".codex": { "allow": ["config.toml", "requirements.toml"] },
   ".cursor": { "allow": ["mcp.json"] },

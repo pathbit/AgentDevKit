@@ -13,6 +13,8 @@ revisão humana e testes continuam necessários no projeto atendido.
 
 Consulte o [guia instalado][start] para escolher por intenção. Ele aponta
 para o comando que recebe o pedido e informa o que deve sair de cada etapa.
+Se o cliente não mostrar um comando ou perfil, peça ao agente para ler a
+fonte em `.pbai4devs` e seguir as instruções pertinentes ao pedido.
 
 | Recurso | Para que serve | Exemplo concreto |
 | --- | --- | --- |
@@ -31,6 +33,10 @@ conforme suas capacidades e permissões. Consulte a
 [compatibilidade por cliente][compat] antes de depender de um atalho.
 
 ## Como as etapas se conectam
+
+Use a sequência abaixo para uma entrega de produto. Se o objetivo imediato
+for rodar ou documentar um sistema existente, use os caminhos específicos
+ao fim desta seção.
 
 1. Use [proximos-passos][next] para identificar a fase e as pendências.
 2. Defina produto, experiência quando aplicável e design técnico com o usuário.

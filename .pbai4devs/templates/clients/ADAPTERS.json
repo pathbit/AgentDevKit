@@ -73,9 +73,7 @@
         "https://github.com/openai/codex/blob/392ced7d3a9160fd35d40c606359869215f50522/codex-rs/ext/skills/src/loader/host.rs"
       ],
       "aliases": [],
-      "requires": [
-        "antigravity"
-      ],
+      "requires": [],
       "extraRoots": [],
       "entrypoints": []
     },

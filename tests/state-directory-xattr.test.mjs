@@ -43,7 +43,7 @@ function fixture(t) {
   put(root, '.gitignore', ignore);
   put(root, 'AGENTS.md', '# Instruções humanas\n\nNão substituir.\n');
   put(root, 'README.md', '# Projeto humano\n');
-  cli(root, ['init', '--agents', 'codex,claude', '--lang', 'es']);
+  cli(root, ['init', '--agents', 'antigravity,codex,claude', '--lang', 'es']);
   const manifestPath = `${newRoot}/agentdevkit.json`;
   const manifest = JSON.parse(read(root, manifestPath));
   manifest.version = '0.0.16';

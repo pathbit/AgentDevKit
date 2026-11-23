@@ -47,8 +47,8 @@ description: Incrementos verificáveis do AgentDevKit.
   arquivos existentes durante a sincronização.
 - [Backup privado](backup-privado/SPEC.md): isolamento da pasta de cópias do
   instalador, com limites explícitos por plataforma.
-- [Preservação TOML](toml-preservacao/SPEC.md): rascunho para manter bytes e
-  semântica ao tratar prompts humanos de instalações legadas.
+- [Preservação TOML](toml-preservacao/SPEC.md): rascunho histórico com provas
+  de edição e retirada seletiva em instalações legadas.
 - [Experiência guiada](experiencia-guiada/SPEC.md): primeiro uso e próximos
   passos conforme o estado do projeto.
 - [Documentação de legado](documentacao-legado/SPEC.md): inventário,
@@ -56,9 +56,11 @@ description: Incrementos verificáveis do AgentDevKit.
 
 Cada incremento vincula requisitos, critérios, testes e evidências locais.
 O [roadmap](../product/roadmap.md) distingue releases publicadas de trabalho
-pendente. Algumas specs registram decisões históricas de exclusão Git. A decisão
-atual é manter a configuração Git intacta; a atualização dos critérios afetados
-e sua validação permanecem pendentes para a próxima entrega.
+pendente. As specs registram o contrato da época, incluindo os padrões
+históricos de seleção de clientes e exclusão do Git. Os guias de
+[instalação](../guides/installation.md) e [CLI](../guides/cli.md) documentam
+o comportamento atual. O [controle das specs](../product/spec-audit.md)
+registra os critérios cuja revisão e validação estão pendentes.
 
 Estes são os incrementos do próprio AgentDevKit. Para criar uma spec do seu
 projeto, siga o [fluxo](../guides/workflow.md) e use os

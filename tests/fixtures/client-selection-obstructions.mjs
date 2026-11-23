@@ -74,7 +74,7 @@ export function registerObstructionTests(selection, kinds = obstructionKinds) {
     cli(root, ['update']);
     assert.ok(existsSync(join(root, primary)), 'rota nativa volta quando a obstrução é removida');
     assert.equal(existsSync(join(root, fallback)), false, 'fallback intacto é removido após recuperação');
-    assert.equal(cli(root, ['update', '--dry-run']).plan.length, 0);
+    assert.deepEqual(cli(root, ['update', '--dry-run']).plan, []);
     assert.equal(cli(root, ['doctor']).ok, true);
     const checkedAgain = spawnSync(process.execPath, [syncScript, '--check'], { cwd: root, encoding: 'utf8', timeout: 180000 });
     assert.equal(checkedAgain.status, 0, checkedAgain.stderr || checkedAgain.stdout);

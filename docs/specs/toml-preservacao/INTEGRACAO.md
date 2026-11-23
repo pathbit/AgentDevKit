@@ -5,6 +5,10 @@ status: rascunho
 
 # Integração da preservação TOML
 
+> Registro histórico de uma candidata. Desde `0.0.36`, o kit deixa de criar
+> ou renovar apontamentos em `.gemini/`. Para atualizar versões anteriores,
+> siga a [migração de clientes][migration].
+
 Este mapa complementa a [spec](SPEC.md). Uma candidata local integra a edição
 ao instalador e ao sync; ela ainda precisa cumprir os critérios de aceite e
 não representa uma release publicada.
@@ -74,3 +78,5 @@ arquivo e não comprova permissões ou metadados do sistema de arquivos.
 
 Não considerar esses pontos aprovados com base apenas em um helper ou teste
 em memória; os fluxos públicos e suas limitações precisam de evidências.
+
+[migration]: ../../guides/installation.md#atualizar-e-escolher-agentes

@@ -16,65 +16,58 @@ and other supported clients][clients].
 
 ## Start in your project
 
-Use Node.js 24+ with npm. The [prerequisites guide][prerequisites] explains
-installation on Windows, macOS and Linux.
-
-From your project folder, install through **npm**, without logging in:
+Set up [Node.js 24+ and npm][prerequisites] on Windows, macOS or Linux. Open a
+terminal in your project folder. For an existing project, [preview the
+installation][preview] to see what will change. Install through **public npm**
+without logging in:
 
 ```console
 npx @pathbit/agentdevkit init
 ```
 
-Choose your coding agents when prompted, or pass `--agents codex,claude`.
-Your project saves the choice, and `agents` lets you change it. With no explicit
-or saved choice, a non-interactive run uses `all`. The CLI supports `pt`, `en`
-and `es`. The first-run wizard also asks what you want to do. Pass
-`init --purpose document` to select documentation explicitly.
-See the [installation guide](docs/guides/installation.md) for pnpm,
-Yarn, Bun and [GitHub Packages authentication][github-install].
+The first-run wizard asks for a language, clients and a goal. If you know which
+clients you use, pass `--agents codex,claude`. With no explicit or saved choice,
+`none` prepares shared resources and `AGENTS.md` without creating client
+directories. The choice is saved per project, and the CLI supports `pt`, `en`
+and `es`. See the [installation
+options][install] for pnpm, Yarn, Bun and [GitHub Packages][github-install].
+
+In a Git project, check the installation and synchronization:
+
+```console
+npx @pathbit/agentdevkit doctor
+npx @pathbit/agentdevkit sync --check
+```
 
 ## Choose what to do
 
-- **Plan a new product or change.** Use `next --intent product` to find the
-  next planning step.
-- **Run an existing application.** Use `next --intent run` for guidance
-  based on the current project state.
-- **Document an existing system.** Run `npx @pathbit/agentdevkit document`
-  for a local inventory, even before installing. See the
-  [documentation guide](docs/guides/documentation.md).
-- **Adopt the kit for selected clients.** Use `init --agents codex,claude`
-  with the IDs you need.
+| I want to… | Run in the terminal |
+| --- | --- |
+| Plan a product | `npx @pathbit/agentdevkit next --intent product` |
+| Run the application | `npx @pathbit/agentdevkit next --intent run` |
+| Document the system | `npx @pathbit/agentdevkit next --intent document` |
+| Inventory before installing | `npx @pathbit/agentdevkit document` |
 
-Installation sets up agent resources. In an existing repository,
-`npx @pathbit/agentdevkit init --dry-run` shows proposed changes and
-conflicts. The kit preserves project instructions and skills.
-In a Git repository, follow the terminal guidance through `doctor` and
-`sync --check`, then ask for the next step for your goal:
+`next` suggests an action. Ask your coding agent to read `AGENTS.md` and use
+the `proximos-passos` skill with your goal. The [workflow guide][workflow]
+shows where to start in each case.
 
-```console
-npx @pathbit/agentdevkit next --intent product
-npx @pathbit/agentdevkit next --intent run
-npx @pathbit/agentdevkit next --intent document
-```
+## Update and customize
 
-`next` suggests a step for you to take. Ask your agent to read `AGENTS.md`
-and use the `proximos-passos` skill with your goal.
-
-### Choose the tools for your workflow
-
-AgentDevKit shares instructions across coding agents, suggests the next step
-in the terminal, and helps you reuse project documentation. Run
-`npx @pathbit/agentdevkit next --integrations` to find references already
-present in your repository. The [comparison guide](docs/guides/comparacao.md)
-covers the strengths and use cases of each approach.
+- **Review and update.** See [how to preview and apply an update][update].
+  Use `sync` to regenerate references from the resources already installed.
+- **Change clients.** Check the selection with `agents` and change individual
+  IDs with `agents add <id>` or `agents remove <id>`. See the [CLI][cli].
+- **Choose optional tools.** Run `npx @pathbit/agentdevkit plugins list` and see
+  sources and installation steps in the [plugin guide][plugins].
+- **Reuse documents from another workflow.** Run `next --integrations` to
+  locate references in your project. See the [comparison guide][comparison].
 
 ## Explore
 
 | I want to… | Read |
 | --- | --- |
-| Prepare Node.js and npm | [Prerequisites][prerequisites] |
-| Understand the kit | [Documentation wiki](docs/README.md) |
-| Plan or resume a project | [Workflow](docs/guides/workflow.md) |
+| Learn the concepts and find a guide | [Documentation](docs/README.md) |
 | Improve existing documentation | [Inventory and additions](docs/guides/documentation.md) |
 | Create a skill or command | [Resources](docs/guides/resources.md) |
 | Choose a workflow by outcome | [Resources in practice](docs/guides/recursos-na-pratica.md) |
@@ -103,6 +96,7 @@ Installation includes the kit license in `.pbai4devs/LICENSE` and preserves
 your project's license and files.
 
 [Changelog](CHANGELOG.md) · [Roadmap](docs/product/roadmap.md)
+· [Plugins and credits](docs/guides/plugins.md)
 
 Found a bug or have an idea? [Open an issue][issues] using the contribution
 forms. See [how to participate](docs/maintainers/community.md).
@@ -118,4 +112,10 @@ forms. See [how to participate](docs/maintainers/community.md).
 [issues]: https://github.com/pathbit/AgentDevKit/issues/new/choose
 [packages]: docs/maintainers/packages.md
 [prerequisites]: docs/guides/prerequisites.md
+[install]: docs/guides/installation.md
+[preview]: docs/guides/installation.md#simular-em-um-projeto-existente
+[update]: docs/guides/installation.md#atualizar-e-escolher-agentes
+[workflow]: docs/guides/workflow.md
+[plugins]: docs/guides/plugins.md
+[comparison]: docs/guides/comparacao.md
 [github-install]: docs/guides/installation.md#github-packages

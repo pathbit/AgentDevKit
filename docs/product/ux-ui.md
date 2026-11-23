@@ -13,6 +13,7 @@ A experiência prioriza comandos curtos, resultados legíveis e continuidade.
 | Primeiro uso | Idioma, clientes e objetivo, com resumo e próxima etapa. |
 | Projeto existente | Mudanças propostas e preservação dos arquivos próprios. |
 | Atualização | O que mudou, conflitos/backups e como verificar o resultado. |
+| Plugins | Catálogo e origem antes de decidir o que preparar. |
 | Diagnóstico | Pendências observadas e próximos comandos ou skills. |
 | Automação | JSON único e código de saída, sem depender do texto traduzido. |
 
@@ -32,10 +33,19 @@ de arquivos antes de uma substituição. Veja [CLI](../guides/cli.md) e
 [recuperação](../guides/troubleshooting.md) para o comportamento observável.
 
 O comando `agents` consulta a seleção sem escrever arquivos. Sua alteração
-permite simular o plano antes de remover apontamentos gerados. Pastas próprias
-não são apagadas para aparentar uma instalação menor.
+permite simular o plano antes de remover apontamentos gerados. `agents add`
+e `agents remove` alteram só os IDs indicados. `none` é a opção inicial sem
+escolha explícita ou salva e mantém os recursos compartilhados. Pastas com
+arquivos próprios continuam no projeto. [Seleção de clientes][clients]
+
+O usuário pode consultar `plugins list` e `plugins info <id>` antes da
+instalação. Depois do `init`, `plugins install <id>` e `plugins check <id>`
+preparam e conferem apenas o item escolhido. [Guia de plugins][plugins]
 
 Escopo autorizado junto ao [PRD](prd.md). Testes verificam as jornadas reais;
 a aprovação do desenho não substitui as evidências de funcionamento.
 
 [Wiki](../README.md) · [Fluxo de uso](../guides/workflow.md)
+
+[clients]: ../guides/installation.md#atualizar-e-escolher-agentes
+[plugins]: ../guides/plugins.md

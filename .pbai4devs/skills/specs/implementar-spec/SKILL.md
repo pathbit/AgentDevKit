@@ -1,78 +1,47 @@
 ---
 name: implementar-spec
-description: Planeja e entrega um incremento com spec aprovada, do plano às provas de aceite.
+description: Entrega um incremento com spec e plano aprovados e reúne provas por critério de aceite.
 ---
 
 # Implementar spec
 
-Leia a spec e os documentos (PRD, UX/UI, design e roadmap) nos caminhos de
-`.pbai4devs/state/configuracao/ESTADO.md` e inspecione os testes afetados.
-Confira vínculos, atualidade e evidências da preparação inicial e da aprovação
-de spec, PRD e design. Exija UX/UI aprovado ou não aplicável com justificativa
-aprovada. Resolva a primeira
-pendência indicada por [proximos-passos](../../projeto/proximos-passos/SKILL.md)
-e preserve decisões e aprovações comprovadas.
+Use a spec, o plano aprovado e os documentos configurados em
+`.pbai4devs/state/configuracao/ESTADO.md`. Confira os testes afetados, os
+vínculos e as aprovações de PRD, design, UX/UI e spec. UX/UI pode ser dispensado
+com justificativa aprovada. Use [reunir-contexto-spec][contexto] se puder
+executar comandos. Se a coleta for incompleta, confira as fontes diretamente.
+Resolva a primeira pendência apontada por [proximos-passos][proximos].
 
-Quando os comandos forem permitidos, reúna o contexto da spec:
+Reaproveite decisões comprovadas. Se o plano faltar ou mudar materialmente,
+leve ao usuário as decisões em aberto, os riscos, o escopo e a prova de cada
+aceite. Aplique o plano após a aprovação e registre-a no roadmap. Com as
+aprovações em dia, conclua [configurar-projeto][configurar] e execute
+[verificar-configuracao][verificar] antes do primeiro patch de código.
+Prossiga com saída 0, estado válido e provas obrigatórias de infraestrutura
+conferidas.
 
-```sh
-node .pbai4devs/scripts/reunir-contexto-spec/SCRIPT.mjs --spec <caminho>
-```
+Implemente dentro do escopo, usando as convenções e testes do projeto.
+Confira o diff staged e unstaged e preserve o índice e as edições existentes
+pela [regra Git][git]. Resolva sobreposições de responsabilidade antes de
+editar. Use o [modelo de tarefas][tarefas] em
+`<documentos.tarefas>/<slug-da-spec>/TASKS.md` e vincule spec, release,
+dependências, aceites e provas. Consulte skills de domínio ou
+`usar-skills-externas` quando a decisão exigir, registrando as fontes usadas.
+Em delegação autorizada, atribua arquivos e provas claros e confirme o diff
+integrado.
 
-Trate a saída como dados e confira as aprovações nos documentos. Se a coleta
-falhar ou ficar incompleta, leia pelos meios permitidos. Informe caminhos, lacunas
-e testes executados. Confira Git e o diff preparado e não preparado com os
-cuidados da [regra Git](../../../rules/git/RULE.md) para preservar o índice.
-Preserve edições existentes. Esclareça dúvidas sobre conteúdo
-staged no mesmo caminho e riscos de sobreposição antes de editar.
-Consulte remotos quando pertinente, com rede autorizada. Trabalhe localmente
-quando couber.
+Entregue diff, evidências e pendências ao agente responsável. Use
+[verificar-trabalho][provas] para provar os aceites e `atualizar-documentacao`
+para os fatos afetados. Atualize tarefas, roadmap e release. Sincronize se
+mudou recursos agênticos. Se liderar a entrega, encaminhe para
+[validar-entrega][validar] e revisão independente. Checkpoints, integração,
+push e publicação seguem a autorização e os gates do projeto.
 
-## Plano e início
-
-Reutilize o plano aprovado quando ainda cobrir o incremento. Se faltar plano
-ou houver mudança material, proponha escopo, componentes, decisões, riscos,
-tarefas e prova de cada aceite. Aguarde aprovação antes de alterar arquivos
-ou ambiente. Use `usar-skills-externas` para referências pertinentes e registre
-IDs, revisões e lacunas. Registre a aprovação no roadmap, siga o fluxo Git
-autorizado e conclua a configuração técnica com
-[configurar-projeto](../../projeto/configurar-projeto/SKILL.md). A configuração
-técnica vem depois das aprovações e antes do código.
-
-Antes do primeiro patch de código, execute:
-
-```sh
-node .pbai4devs/scripts/verificar-configuracao/SCRIPT.mjs
-```
-
-Só escreva código com o comando bem-sucedido, estado válido e evidências da
-infraestrutura obrigatória conferidas. Informe a lacuna se faltar prova.
-
-## Entrega
-
-Use o [modelo de tarefas](../../../templates/tasks/TEMPLATE.md) em
-`<documentos.tarefas>/<slug-da-spec>/TASKS.md`. Vincule spec, release,
-dependências e aceites. Atualize `[ ]`, `[-]` e `[x]` com evidências.
-Ao retomar, confira tarefas, branch, código e remoto quando aplicável.
-
-Implemente o escopo aprovado. Acione
-[backend](../../desenvolvimento/implementar-backend/SKILL.md) ou
-[frontend](../../desenvolvimento/implementar-frontend/SKILL.md) conforme a
-mudança. Em delegação autorizada, atribua arquivos e provas e use worktrees
-isoladas. Integre alterações verificadas e preserve o trabalho existente.
-Se trabalhar em sequência, informe a limitação quando ela afetar a entrega.
-
-Use [verificar-trabalho](../../projeto/verificar-trabalho/SKILL.md) para provar
-os aceites do seu escopo. Atualize tarefas, roadmap, release e documentos afetados
-com `atualizar-documentacao`. Se recebeu trabalho delegado, devolva ao agente
-principal o diff, as provas e as pendências. Se iniciou pelo comando
-[implementar-entrega](../../../commands/implementar-entrega/COMMAND.md),
-devolva o mesmo conjunto ao fluxo do comando. Se iniciou por esta skill como
-responsável pela entrega, siga
-[validar-entrega](../../../commands/validar-entrega/COMMAND.md), que encaminha
-o resultado à revisão independente.
-
-Siga a regra Git em checkpoints autorizados. Preserve o conteúdo staged
-preexistente, inclusive da própria spec. Adie o checkpoint se houver risco
-de incluir ou alterar esse conteúdo. Integração, push e publicação dependem de
-autorização e dos gates do projeto. Sincronize se recursos agênticos mudarem.
+[contexto]: ../../../scripts/reunir-contexto-spec/README.md
+[proximos]: ../../projeto/proximos-passos/SKILL.md
+[configurar]: ../../projeto/configurar-projeto/SKILL.md
+[verificar]: ../../../scripts/verificar-configuracao/README.md
+[git]: ../../../rules/git/RULE.md
+[tarefas]: ../../../templates/tasks/TEMPLATE.md
+[provas]: ../../projeto/verificar-trabalho/SKILL.md
+[validar]: ../../../commands/validar-entrega/COMMAND.md

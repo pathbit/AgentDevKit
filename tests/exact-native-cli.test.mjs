@@ -61,7 +61,7 @@ test('overlay legítimo do sync direto é aceito pelo check da CLI', { timeout: 
 
 test('CLI mantém referência idêntica sem adoção, com descoberta e índice staged', { timeout: 180000 }, t => {
   const { root, reference } = setup(t), before = snapshot(root);
-  for (const args of [['init', '--agents', 'codex'], ['update'], ['sync'], ['sync', '--check'], ['sync'], ['sync', '--check']]) {
+  for (const args of [['init', '--agents', 'antigravity,codex'], ['update'], ['sync'], ['sync', '--check'], ['sync'], ['sync', '--check']]) {
     const result = cli(root, args); assert.equal(result.ok, true, args.join(' '));
     assert.deepEqual(snapshot(root), before); assert.deepEqual(bytes(root, target), reference);
     const entries = JSON.parse(bytes(root, discovery)).entries;
@@ -102,7 +102,7 @@ test('CLI não considera equivalentes texto ou metadados humanos diferentes', { 
 });
 
 test('CLI preserva índice staged diferente do apontamento presente no disco', { timeout: 180000 }, t => {
-  const { root, reference } = setup(t); cli(root, ['init', '--agents', 'codex']);
+  const { root, reference } = setup(t); cli(root, ['init', '--agents', 'antigravity,codex']);
   const staged = 'apontamento staged sintético diferente\n';
   put(root, target, staged); git(root, 'add', '--', target); put(root, target, reference);
   const before = snapshot(root), diff = git(root, 'diff', '--cached', '--binary', '--no-ext-diff', '--no-textconv');

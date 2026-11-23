@@ -9,7 +9,7 @@ description: Tipos de recursos, fontes compartilhadas e ciclo de manutenção.
 
 Edite a origem em `.pbai4devs`. As pastas dos clientes contêm referências e
 metadados de descoberta; editar uma cópia gerada cria divergência.
-O catálogo local `catalog.json` permite encontrar recursos por tipo.
+O catálogo `.pbai4devs/catalog.json` permite encontrar recursos por tipo.
 O hub permanece completo mesmo com poucos clientes selecionados. Apenas os
 apontamentos necessários são gerados; consulte ou altere a seleção com `agents`
 na [CLI](cli.md). Pastas compartilhadas podem atender mais de um cliente.
@@ -137,9 +137,9 @@ Um exemplo com possível link à origem pode gerar aviso conservador: a detecç�
 não interpreta todas as construções Markdown nem atribui propriedade ao arquivo.
 O manifesto instalado respeita os clientes escolhidos. Não o substitua por uma
 lista de todos para reparar recursos; altere a seleção pela CLI se necessário.
-Conflitos em arquivos gerenciados exigem revisão. Quando a substituição for
-intencional, `--force` faz backup local antes de reparar caminhos gerenciados.
-Não apague pastas inteiras para contornar um conflito.
+Se houver conflito, confira a propriedade, o escopo e os arquivos preservados.
+`--force` pede reparo somente para caminhos gerenciados elegíveis. Veja
+[conflitos e backups](troubleshooting.md#conflitos-e-backups) antes de aplicar.
 
 Recursos nativos humanos são preservados, inclusive com `--force` e nomes
 iguais aos do kit. Links humanos são tratados como caminhos opacos; o gerador
