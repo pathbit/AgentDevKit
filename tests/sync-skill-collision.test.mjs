@@ -10,10 +10,10 @@ import { fileURLToPath } from 'node:url';
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const cli = join(repo, 'bin/agentdevkit.mjs');
-const collision = '.gemini/skills/fixture-colisao/SKILL.md';
+const collision = '.claude/skills/fixture-colisao/SKILL.md';
 const collisionSource = '.pbai4devs/skills/projeto/fixture-colisao/SKILL.md';
 const freeSource = '.pbai4devs/skills/projeto/fixture-livre/SKILL.md';
-const freeTarget = '.gemini/skills/fixture-livre/SKILL.md';
+const freeTarget = '.claude/skills/fixture-livre/SKILL.md';
 const hash = value => createHash('sha256').update(value).digest('hex');
 
 // Compares persistent fixture names, modes and bytes; it does not capture
@@ -65,7 +65,7 @@ test('sync preserva conteúdo humano e índice staged em colisão de skill', { t
     assert.equal(hash(git('diff', '--cached', '--binary', '--no-ext-diff', '--no-textconv')), stagedDiff, `${phase}: diff staged`);
     assert.equal(git('show', `:${collision}`), staged, `${phase}: blob staged da colisão`);
   };
-  invoke('init', '--agents', 'gemini', '--yes');
+  invoke('init', '--agents', 'claude', '--yes');
   protectedState('init');
   assert.equal(read(collision).toString('utf8'), working, 'init preserva colisão humana');
 

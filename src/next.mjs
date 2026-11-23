@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { releaseCommand } from './config.mjs';
+import { text as cliText } from './i18n.mjs';
 import { hasLegacyDocumentationSkill } from './legacy-documentation.mjs';
 import { inspectIntegrations, inspectProject } from '../.pbai4devs/scripts/inspecionar-projeto/SCRIPT.mjs';
 
@@ -183,6 +184,12 @@ export function operationalNext(result, options, { installed, planCanApply }) {
   const { command, language, target, ok } = result;
   const strings = messages[language];
   const step = (key, action, stage = 'verificacao') => [{ label: strings[key], command: nextCommand(action, target, language), stage }];
+  if (result.clients?.length === 0 && command === 'agents') {
+    return [{ label: strings.preview, instruction: result.message, stage: 'revisao' }];
+  }
+  if (result.clients?.length === 0 && (command === 'doctor' || result.error?.code === 'E_CLIENTS_RETIRED')) {
+    return [{ label: cliText(language, 'clientsAvailable'), command: nextCommand('agents', target, language), stage: 'revisao' }];
+  }
   const selection = options.clients ? ` --agents ${options.clients.join(',')}` : '';
   if (command === 'doctor' && installed) {
     if (ok) return step('check', 'sync --check');

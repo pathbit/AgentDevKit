@@ -95,7 +95,7 @@ const fakePackage = (root, script, install = true, fault = null) => {
   put(join(pkg, 'package.json'), '{"name":"@pathbit/agentdevkit","version":"9.9.9","type":"module"}\n');
   const catalog = Object.fromEntries(['skills', 'agents', 'commands', 'rules'].map(type => [type, [{ id: 'synthetic', name: 'synthetic', path: `.pbai4devs/${type}/synthetic.txt` }]]));
   put(join(pkg, '.pbai4devs/catalog.json'), JSON.stringify({ skills: [], agents: [], commands: [], rules: [] }));
-  const ids = ['codex','claude','opencode','gemini','copilot','cursor','kimi','minimax','deepseek','antigravity','antigravity-legacy','zcode','kimi-legacy','mimo'];
+  const ids = ['codex','claude','opencode','vscode','copilot','cursor','kimi','minimax','deepseek','antigravity','antigravity-legacy','zcode','kimi-legacy','mimo'];
   const adapters = ids.map(id => ({ id, root: `.fake-${id}`, formats: {}, ...(id === 'cursor' ? { ruleMetadata: 'cursor.yaml' } : {}) }));
   put(join(pkg, '.pbai4devs/templates/clients/ADAPTERS.json'), JSON.stringify({schemaVersion:1,adapters}));
   put(join(pkg, '.pbai4devs/scripts/lib/catalog.mjs'), `export function buildCatalog(){return {catalog:${JSON.stringify(catalog)}}}`);
@@ -122,7 +122,18 @@ const fakePackage = (root, script, install = true, fault = null) => {
 const controlled = root => ({ ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^GIT_/i.test(key))), GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: join(root, 'no-global'), GIT_TERMINAL_PROMPT: '0' });
 // Corpos da fixture 0.0.21 autenticada; limitados ao teste, sem rede.
 const legacyBodies = { new: gunzipSync(Buffer.from('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', 'base64')).toString('utf8'), existing: gunzipSync(Buffer.from('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', 'base64')).toString('utf8') };
-const fakeLegacyPackage = (...args) => { const pkg = fakePackage(...args); for (const file of ['package.json', 'bin/agentdevkit.mjs']) { const path = join(pkg, file); writeFileSync(path, readFileSync(path, 'utf8').replaceAll('9.9.9', '0.0.21')); } return pkg; };
+const fakeLegacyPackage = (...args) => {
+  const pkg = fakePackage(...args);
+  for (const file of ['package.json', 'bin/agentdevkit.mjs']) {
+    const path = join(pkg, file);
+    writeFileSync(path, readFileSync(path, 'utf8').replaceAll('9.9.9', '0.0.21'));
+  }
+  const policyFile = join(pkg, '.pbai4devs/templates/clients/ADAPTERS.json');
+  const policy = JSON.parse(readFileSync(policyFile, 'utf8'));
+  policy.adapters.push({ id: 'gemini', root: '.fake-gemini', formats: {} });
+  writeFileSync(policyFile, JSON.stringify(policy));
+  return pkg;
+};
 const fakeExcludeAppend = `const id=(await import('node:crypto')).createHash('sha256').update((await import('node:fs')).realpathSync(target)).digest('hex').slice(0,16);const body=(await import('node:fs')).existsSync(join(target,'.claude/settings.json'))?${JSON.stringify(legacyBodies.existing)}:${JSON.stringify(legacyBodies.new)};appendFileSync(join(target,'.git/info/exclude'),'# BEGIN AGENTDEVKIT LOCAL '+id+'\\n'+body+'# END AGENTDEVKIT LOCAL '+id+'\\n')`;
 
 test('proveniência recusa entrada alterada ou indisponível após a leitura inicial', t => {
@@ -511,7 +522,7 @@ test('CLI não aprova cobertura ausente em etapa anterior e falhas prevalecem', 
   const lib = join(root, '.pbai4devs/scripts/lib'); mkdirSync(lib, { recursive: true });
   for (const name of runnerLibraries) copyFileSync(resolve(dirname(runner), '../.pbai4devs/scripts/lib', name), join(lib, name));
   const original = readFileSync(runner, 'utf8');
-  const reduced = original.replace('const cases = matrixCases(opts.rounds, opts.startRound);', 'const cases = matrixCases(opts.rounds, opts.startRound).slice(0, 1);');
+  const reduced = original.replace('const cases = matrixCases(opts.rounds, opts.startRound, matrixPlan);', 'const cases = matrixCases(opts.rounds, opts.startRound, matrixPlan).slice(0, 1);');
   const installation = /^([ \t]*)step\.installation = inspectInstallation\([^\r\n]*\);$/m;
   const injected = reduced.replace(installation, (statement, indent) =>
     statement + '\n' + indent + "if (name === 'init') delete step.installation.coverage;");
@@ -538,7 +549,7 @@ test('CLI registra falha e exit 1 quando o pacote muda durante um cenário aprov
   const lib = join(root, '.pbai4devs/scripts/lib'); mkdirSync(lib, { recursive: true });
   for (const name of runnerLibraries) copyFileSync(resolve(dirname(runner), '../.pbai4devs/scripts/lib', name), join(lib, name));
   const original = readFileSync(runner, 'utf8');
-  const reduced = original.replace('const cases = matrixCases(opts.rounds, opts.startRound);', 'const cases = matrixCases(opts.rounds, opts.startRound).slice(0, 1);');
+  const reduced = original.replace('const cases = matrixCases(opts.rounds, opts.startRound, matrixPlan);', 'const cases = matrixCases(opts.rounds, opts.startRound, matrixPlan).slice(0, 1);');
   assert.notEqual(reduced, original); writeFileSync(testRunner, reduced);
   const pkg = fakePackage(root, `if(process.argv[2]==='sync') { const fs=await import('node:fs'); for(const f of ['../package.json','../.pbai4devs/scripts/lib/catalog.mjs','../.pbai4devs/scripts/lib/resource-path.mjs','../.pbai4devs/templates/clients/ADAPTERS.json','../.pbai4devs/rules/cursor.yaml'])fs.appendFileSync(new URL(f,import.meta.url),' '); } console.log(JSON.stringify({ok:true,version:'9.9.9'}));`);
   const policyFile = join(pkg, '.pbai4devs/templates/clients/ADAPTERS.json');
@@ -564,7 +575,7 @@ test('CLI reprova proveniência quando apenas um sidecar Cursor muda', { skip: r
   const lib = join(root, '.pbai4devs/scripts/lib'); mkdirSync(lib, { recursive: true });
   for (const name of runnerLibraries) copyFileSync(resolve(dirname(runner), '../.pbai4devs/scripts/lib', name), join(lib, name));
   const original = readFileSync(runner, 'utf8');
-  const reduced = original.replace('const cases = matrixCases(opts.rounds, opts.startRound);', 'const cases = matrixCases(opts.rounds, opts.startRound).slice(0, 1);');
+  const reduced = original.replace('const cases = matrixCases(opts.rounds, opts.startRound, matrixPlan);', 'const cases = matrixCases(opts.rounds, opts.startRound, matrixPlan).slice(0, 1);');
   assert.notEqual(reduced, original); writeFileSync(testRunner, reduced);
   const pkg = fakePackage(root, `if(process.argv[2]==='sync') { const fs=await import('node:fs'); fs.appendFileSync(new URL('../.pbai4devs/rules/cursor.yaml',import.meta.url),' '); } console.log(JSON.stringify({ok:true,version:'9.9.9'}));`);
   const policyFile = join(pkg, '.pbai4devs/templates/clients/ADAPTERS.json'), policy = JSON.parse(readFileSync(policyFile, 'utf8'));
@@ -584,7 +595,7 @@ test('CLI comunica status não verificado quando apenas a cobertura está incomp
   const lib = join(root, '.pbai4devs/scripts/lib'); mkdirSync(lib, { recursive: true });
   for (const name of runnerLibraries) copyFileSync(resolve(dirname(runner), '../.pbai4devs/scripts/lib', name), join(lib, name));
   const original = readFileSync(runner, 'utf8');
-  const reduced = original.replace('const cases = matrixCases(opts.rounds, opts.startRound);', 'const cases = matrixCases(opts.rounds, opts.startRound).slice(0, 1);');
+  const reduced = original.replace('const cases = matrixCases(opts.rounds, opts.startRound, matrixPlan);', 'const cases = matrixCases(opts.rounds, opts.startRound, matrixPlan).slice(0, 1);');
   assert.notEqual(reduced, original); writeFileSync(testRunner, reduced);
   const pkg = fakePackage(root, `console.log(JSON.stringify({ok:true,version:'9.9.9'}));`, true, 'not-verified');
   const result = spawnSync(process.execPath, [testRunner, '--package', pkg, '--version', '9.9.9', '--output', output, '--jobs', '1'], { encoding: 'utf8', timeout: 25000 });
@@ -601,7 +612,7 @@ test('CLI registra exceção de preparação como falha no caso e no relatório 
   const lib = join(root, '.pbai4devs/scripts/lib'); mkdirSync(lib, { recursive: true });
   for (const name of runnerLibraries) copyFileSync(resolve(dirname(runner), '../.pbai4devs/scripts/lib', name), join(lib, name));
   const original = readFileSync(runner, 'utf8');
-  const reduced = original.replace('const cases = matrixCases(opts.rounds, opts.startRound);', "const cases = matrixCases(opts.rounds, opts.startRound).slice(0, 1); mkdirSync(join(directory, '01-new'));");
+  const reduced = original.replace('const cases = matrixCases(opts.rounds, opts.startRound, matrixPlan);', "const cases = matrixCases(opts.rounds, opts.startRound, matrixPlan).slice(0, 1); mkdirSync(join(directory, '01-new'));");
   assert.notEqual(reduced, original); writeFileSync(testRunner, reduced);
   const pkg = fakePackage(root, `console.log(JSON.stringify({ok:true,version:'9.9.9'}));`);
   const result = spawnSync(process.execPath, [testRunner, '--package', pkg, '--version', '9.9.9', '--output', output, '--jobs', '1'], { encoding: 'utf8', timeout: 25000 });
@@ -644,8 +655,8 @@ test('lotes reproduzem exatamente a matriz integral sem lacunas nem números rep
 });
 
 test('oráculo legado limita pares a 25 rodadas e mantém fórmulas distintas', () => {
-  assert.ok(matrixCases(25).every(item => /^[a-f0-9]{64}$/.test(expectedLegacyExclude(item, '0.0.21'))));
-  for (const start of [26, 27, 28, 29]) assert.ok(matrixCases(1, start).every(item => expectedLegacyExclude(item, '0.0.21') === null));
+  assert.ok(matrixCases(25, 1, 'with-gemini').every(item => /^[a-f0-9]{64}$/.test(expectedLegacyExclude(item, '0.0.21'))));
+  for (const start of [26, 27, 28, 29]) assert.ok(matrixCases(1, start, 'with-gemini').every(item => expectedLegacyExclude(item, '0.0.21') === null));
   const value = (kind, selection) => expectedLegacyExclude({ kind, selection, fixture: 0 }, '0.0.21');
   assert.notEqual(value('new', 'codex'), value('new', 'claude'));
   assert.notEqual(value('new', 'claude'), value('new', 'gemini,claude'));
@@ -655,7 +666,7 @@ test('oráculo legado limita pares a 25 rodadas e mantém fórmulas distintas', 
 });
 
 test('oráculo recusa toda a amostra se o gerador divergir dos 500 pares comprovados', () => {
-  const original = matrixCases(25);
+  const original = matrixCases(25, 1, 'with-gemini');
   assert.equal(verifiedLegacyPairs(original).size, 500);
   assert.equal(verifiedLegacyPairs([...original].reverse()).size, 500);
   assert.equal(verifiedLegacyPairs(original.slice(1)).size, 0);
@@ -675,13 +686,13 @@ test('troca kimi/mimo no gerador não autoriza pares novos nem os antigos', asyn
   const sourceLib = resolve(dirname(runner), '../.pbai4devs/scripts/lib');
   for (const name of runnerLibraries) copyFileSync(join(sourceLib, name), join(lib, name));
   const original = readFileSync(runner, 'utf8');
-  const changed = original.replace("'copilot', 'cursor', 'kimi',", "'copilot', 'cursor', 'mimo',").replace("'kimi-legacy', 'mimo', 'claude,codex'", "'kimi-legacy', 'kimi', 'claude,codex'");
+  const changed = original.replaceAll("'copilot', 'cursor', 'kimi',", "'copilot', 'cursor', 'mimo',").replaceAll("'kimi-legacy', 'mimo', 'claude,codex'", "'kimi-legacy', 'kimi', 'claude,codex'");
   assert.notEqual(changed, original); writeFileSync(changedRunner, changed);
   const mutated = await import(pathToFileURL(changedRunner).href);
-  const expected = new Set(matrixCases(25).map(item => `${item.fixture}|${item.selection}`));
-  const rogue = mutated.matrixCases(25).find(item => !expected.has(`${item.fixture}|${item.selection}`));
+  const expected = new Set(matrixCases(25, 1, 'with-gemini').map(item => `${item.fixture}|${item.selection}`));
+  const rogue = mutated.matrixCases(25, 1, 'with-gemini').find(item => !expected.has(`${item.fixture}|${item.selection}`));
   assert.ok(rogue, 'a troca deve produzir ao menos um par não observado');
-  assert.equal(mutated.verifiedLegacyPairs(mutated.matrixCases(25)).size, 0);
+  assert.equal(mutated.verifiedLegacyPairs(mutated.matrixCases(25, 1, 'with-gemini')).size, 0);
   assert.equal(mutated.expectedLegacyExclude(rogue, '0.0.21'), null);
   assert.equal(mutated.expectedLegacyExclude({ fixture: 0, selection: 'codex', kind: 'new' }, '0.0.21'), null);
 });

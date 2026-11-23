@@ -1,5 +1,5 @@
 ---
-description: Tarefas e evidências das entregas em andamento.
+description: Tarefas e evidências registradas para as entregas do AgentDevKit.
 ---
 
 # Tarefas
@@ -8,3 +8,9 @@ description: Tarefas e evidências das entregas em andamento.
 - [Pedidos agrupados e prioridades](evolucao-plataforma/GRUPOS.md).
 - [Permissões de temporários do sync](sync-permissoes/TASKS.md).
 - [Registro de recuperação](registro-recuperacao/TASKS.md).
+- [Diário em disco](diario-disco/TASKS.md).
+- [Manifesto de recuperação](manifesto-recuperacao/TASKS.md).
+- [Backup privado](backup-privado/TASKS.md).
+
+Para saber o que está publicado e o que depende de validação, consulte o
+[roadmap](../product/roadmap.md) e o [controle de specs](../product/spec-audit.md).

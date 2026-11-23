@@ -4,6 +4,13 @@ description: Alterações verificáveis por versão do AgentDevKit.
 
 # Changelog
 
+## Em desenvolvimento
+
+- Retira o Gemini CLI da seleção ativa. Instalações antigas podem atualizar
+  a seleção e preservar os arquivos próprios do projeto.
+- Inclui uma matriz de funcionalidades e consolida a integração em `develop`
+  e a branch pública em `main`.
+
 ## 0.0.35
 
 - O primeiro uso identifica se a equipe quer configurar agentes, planejar,

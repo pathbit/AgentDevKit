@@ -52,7 +52,10 @@ Recursos nativos humanos recebem um bloco curto com a referência ao hub.
 Texto, frontmatter e nomes existentes são preservados. O estado guarda só o
 hash desse bloco; edições externas continuam permitidas. Um bloco alterado
 não é sobrescrito por `--force`. Links humanos continuam opacos.
-Comandos Gemini recebem o complemento dentro do `prompt` TOML.
+Instalações legadas do Gemini CLI podem ter uma contribuição do kit no
+`prompt` TOML. O sincronizador reconhece seu formato na migração.
+Se o manifesto instalado ainda registra o Gemini CLI, use o plano de
+`agentdevkit update` da [migração de clientes][migration] antes do sync direto.
 
 Metadados vêm da fonte ou do YAML nativo declarado no manifesto. Regras exigem
 `trigger` válido; `glob` exige `globs`. Origens nativas precisam pertencer ao
@@ -97,3 +100,5 @@ arquivos e pastas próprios, inclusive os adicionais dentro do mesmo recurso,
 devem permanecer.
 O estado derivado registra remoções comprovadas para reconciliá-las no próximo
 `update`; campos adicionais existentes no estado são preservados.
+
+[migration]: ../../COMPATIBILIDADE.md#escolher-clientes

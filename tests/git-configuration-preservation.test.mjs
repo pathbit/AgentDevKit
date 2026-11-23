@@ -581,7 +581,7 @@ test('Windows não confunde diretórios staged existentes com ancestrais ausente
   git(outer, 'init', '-q');
   const root = join(outer, '.agent-tests', 'development-ecosystem-fixture'); mkdirSync(root, { recursive: true });
   git(root, 'init', '-q');
-  const humans = ['.claude/skills/planejar-qa/SKILL.md', '.cursor/skills/projeto/criar-spec/SKILL.md', '.gemini/skills/planejar-qa/SKILL.md'];
+  const humans = ['.claude/skills/planejar-qa/SKILL.md', '.cursor/skills/projeto/criar-spec/SKILL.md', '.github/skills/planejar-qa/SKILL.md'];
   for (const human of humans) put(root, human, 'conteúdo humano staged\n');
   git(root, 'add', '-f', ...humans);
   const index = readFileSync(join(root, '.git/index'));
@@ -590,19 +590,19 @@ test('Windows não confunde diretórios staged existentes com ancestrais ausente
   assert.equal(gitPathsOverlap(human, '.claude/agents/revisor.md', { root, platform: 'win32', allowMissingTarget: true }), false);
   assert.equal(gitPathsOverlap(human, '.claude/skills/git-diff/SKILL.md', { root, platform: 'win32', allowMissingTarget: true }), false);
   assert.equal(gitPathsOverlap(humans[1], '.cursor/agents/revisor.md', { root, platform: 'win32', allowMissingTarget: true }), false);
-  assert.equal(gitPathsOverlap(humans[2], '.gemini/skills/git-diff/SKILL.md', { root, platform: 'win32', allowMissingTarget: true }), false);
+  assert.equal(gitPathsOverlap(humans[2], '.github/skills/git-diff/SKILL.md', { root, platform: 'win32', allowMissingTarget: true }), false);
   assert.equal(gitPathsOverlap(human, '.claude/skills/planejar-qa/SKILL.md', { root, platform: 'win32', allowMissingTarget: true }), true);
   assert.equal(gitPathsOverlap('.claude/agents/revisor.md', human, { root, platform: 'win32', allowMissingTarget: true }), false);
-  const plan = planInstallation({ target: root, mode: 'init', clients: ['codex', 'claude', 'copilot', 'cursor', 'gemini'] });
-  for (const path of ['.claude/agents/revisor.md', '.claude/skills/git-diff/SKILL.md', '.cursor/agents/revisor.md', '.gemini/agents/revisor.md', '.gemini/skills/git-diff/SKILL.md']) {
+  const plan = planInstallation({ target: root, mode: 'init', clients: ['codex', 'claude', 'copilot', 'cursor'] });
+  for (const path of ['.claude/agents/revisor.md', '.claude/skills/git-diff/SKILL.md', '.cursor/agents/revisor.md', '.github/agents/revisor.agent.md', '.github/skills/git-diff/SKILL.md']) {
     assert.ok(plan.changes.some(change => change.path === path && change.action === 'create'), path);
   }
   for (const path of humans) assert.equal(readFileSync(join(root, path), 'utf8'), 'conteúdo humano staged\n');
   assert.deepEqual(readFileSync(join(root, '.git/index')), index);
   assert.deepEqual(readFileSync(join(root, '.git/config')), config);
-  stageSynthetic(root, '.gemini/agents/revisor.md', 'conteúdo humano apenas staged\n');
+  stageSynthetic(root, '.github/agents/revisor.agent.md', 'conteúdo humano apenas staged\n');
   const stagedIndex = readFileSync(join(root, '.git/index'));
-  assert.throws(() => planInstallation({ target: root, mode: 'init', clients: ['gemini'] }), error => error.code === 'E_STAGED' && error.message.includes('.gemini/agents/revisor.md'));
+  assert.throws(() => planInstallation({ target: root, mode: 'init', clients: ['copilot'] }), error => error.code === 'E_STAGED' && error.message.includes('.github/agents/revisor.agent.md'));
   assert.deepEqual(readFileSync(join(root, '.git/index')), stagedIndex);
   assert.deepEqual(readFileSync(join(root, '.git/config')), config);
   const legacy = '.pbai4devs/estado/outros/minhas-notas.txt';
@@ -616,12 +616,12 @@ test('protege índice quando caminho temporário e Git usam nomes físicos difer
   if (outer.toLowerCase() === physical.toLowerCase()) return t.skip('O diretório temporário não oferece alias físico neste sistema.');
   git(outer, 'init', '-q');
   const root = join(outer, 'nested'); mkdirSync(root);
-  const path = 'nested/.gemini/agents/revisor.md';
+  const path = 'nested/.github/agents/revisor.agent.md';
   stageSynthetic(outer, path, 'conteúdo humano apenas staged\n');
   const index = readFileSync(join(outer, '.git/index'));
-  assert.throws(() => planInstallation({ target: root, mode: 'init', clients: ['gemini'] }), error => error.code === 'E_STAGED' && error.message.includes('.gemini/agents/revisor.md'));
+  assert.throws(() => planInstallation({ target: root, mode: 'init', clients: ['copilot'] }), error => error.code === 'E_STAGED' && error.message.includes('.github/agents/revisor.agent.md'));
   assert.deepEqual(readFileSync(join(outer, '.git/index')), index);
-  assert.equal(existsSync(join(root, '.gemini/agents/revisor.md')), false);
+  assert.equal(existsSync(join(root, '.github/agents/revisor.agent.md')), false);
 });
 
 for (const marker of ['diretório', 'arquivo']) for (const committed of [false, true]) {

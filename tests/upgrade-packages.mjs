@@ -49,7 +49,7 @@ const scenarios = [
   { id: 'codex-without-claude-rule', client: 'codex', staged: true },
   { id: 'codex-untracked', client: 'codex', staged: false },
   { id: 'codex-staged-crlf', client: 'codex', staged: true, crlf: true },
-  ...['copilot', 'gemini', 'opencode', 'cursor'].map(client => ({ id: client, client, staged: true })),
+  ...['copilot', 'antigravity', 'opencode', 'cursor'].map(client => ({ id: client, client, staged: true })),
 ];
 
 const entrypoints = {

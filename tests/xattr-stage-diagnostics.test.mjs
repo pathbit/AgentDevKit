@@ -77,7 +77,7 @@ for (const code of ['E_PROTECTED_METADATA', 'E_METADATA_UNSUPPORTED']) for (cons
     const add = run('git', ['add', '--', '.gitignore', 'HUMAN.md']); assert.equal(add.status, 0, add.stderr);
     writeFileSync(join(root, 'HUMAN.md'), 'staged\nunstaged\n');
     const before = snapshot(root), cli = join(pkg, 'bin/agentdevkit.mjs');
-    const result = run(process.execPath, [cli, 'init', '--target', root, '--agents', 'gemini', '--lang', 'pt', '--yes', ...(json ? ['--json'] : [])]);
+    const result = run(process.execPath, [cli, 'init', '--target', root, '--agents', 'codex', '--lang', 'pt', '--yes', ...(json ? ['--json'] : [])]);
     assert.notEqual(result.status, 0); assert.equal(result.stdout.includes('SYNTHETIC_STAGE_ONLY'), false); assert.equal(result.stderr.includes('SYNTHETIC_STAGE_ONLY'), false);
     if (json) {
       const value = JSON.parse(result.stdout); assert.equal(value.ok, false); assert.equal(value.error.code, code); assert.equal(value.error.scope, 'staging');
@@ -92,7 +92,7 @@ for (const code of ['E_PROTECTED_METADATA', 'E_METADATA_UNSUPPORTED']) {
     const pkg = preparePackages(t)[code], root = realpathSync(mkdtempSync(join(work, 'cause-'))), env = environment(work);
     const init = execute('git', ['init', '--quiet'], { cwd: root, env }); assert.equal(init.status, 0, init.stderr);
     const before = snapshot(root), moduleUrl = pathToFileURL(join(pkg, 'src/install.mjs')).href;
-    const script = `import {planInstallation} from ${JSON.stringify(moduleUrl)}; try { planInstallation({target:${JSON.stringify(root)},mode:'init',clients:['gemini']}); process.exitCode=2; } catch (e) { console.log(JSON.stringify({code:e.code,scope:e.diagnosticsScope,path:e.path??null,detail:e.message,causeCode:e.cause?.code,causeMessage:e.cause?.message})); }`;
+    const script = `import {planInstallation} from ${JSON.stringify(moduleUrl)}; try { planInstallation({target:${JSON.stringify(root)},mode:'init',clients:['codex']}); process.exitCode=2; } catch (e) { console.log(JSON.stringify({code:e.code,scope:e.diagnosticsScope,path:e.path??null,detail:e.message,causeCode:e.cause?.code,causeMessage:e.cause?.message})); }`;
     const result = execute(process.execPath, ['--input-type=module', '-e', script], { cwd: root, env }); assert.equal(result.status, 0, result.stderr);
     const actual = JSON.parse(result.stdout); assert.equal(actual.code, code); assert.equal(actual.scope, 'staging'); assert.equal(actual.path, null);
     assert.match(actual.detail, /private staging/); assert.equal(actual.detail.includes('SYNTHETIC_STAGE_ONLY'), false);

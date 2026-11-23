@@ -10,7 +10,7 @@ import { extractManagedBlock, managedBlockDigest } from '../.pbai4devs/scripts/l
 test('entradas novas e geradas importam o nome real de agents.md', async t => {
   const { root, put, read } = fixture(t);
   put('agents.md', '# Instrucoes humanas\n');
-  await cli(root, ['init', '--agents', 'claude,gemini']);
+  await cli(root, ['init', '--agents', 'claude,antigravity']);
   assert.match(read('CLAUDE.md'), /^@agents\.md$/m);
   assert.match(read('GEMINI.md'), /^@\.\/agents\.md$/m);
   fs.renameSync(join(root, 'agents.md'), join(root, 'Agents.md'));
@@ -101,7 +101,7 @@ test('entradas humanas em caixa original recebem apenas o bloco e mantêm índic
   };
   for (const [path, content] of Object.entries(entries)) put(path, content);
   git('add', '--all'); const index = git('ls-files', '--stage', '-z');
-  const args = ['init', '--agents', 'claude,gemini,codex', '--yes'];
+  const args = ['init', '--agents', 'claude,antigravity,codex', '--yes'];
   const preview = await cli(root, [...args, '--dry-run']);
   assert.equal(existsSync(join(root, '.pbai4devs')), false);
   assert.ok(preview.plan.some(item => item.path === 'agents.md'));

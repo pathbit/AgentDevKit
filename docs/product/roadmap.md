@@ -19,7 +19,7 @@ do ambiente indicado, não apenas de uma marcação neste documento.
 
 ## Entregas publicadas
 
-As releases de `v0.0.1` a `v0.0.30` constam no [GitHub][releases]. O
+As releases de `v0.0.1` a `v0.0.35` constam no [GitHub][releases]. O
 [changelog][changelog] detalha cada versão; a tabela agrupa as entregas para
 facilitar a leitura. As versões registram comportamento histórico e não
 substituem as decisões mais recentes do projeto.
@@ -35,6 +35,9 @@ substituem as decisões mais recentes do projeto.
 | [x] | 0.0.22–0.0.23 | Descoberta, preservação, destinos e ordem de implementação. | [descoberta][discovery], [destinos][targets], [ordem][order] |
 | [x] | 0.0.24–0.0.27 | Proteção de conteúdo humano, revisão, índice e limites de consultas Git. | [descoberta][discovery], [sincronização][sync] |
 | [x] | 0.0.28–0.0.30 | Preparo e execução de scripts, bootstrap e matriz de projetos. | [desenvolvimento][development], [descoberta][discovery] |
+| [x] | 0.0.31–0.0.33 | Diário de recuperação, revisão por critérios e migração de adaptadores. | [recuperação][recovery], [diário][journal], [escopo Claude][claude-scope] |
+| [x] | 0.0.34 | Jornada guiada e referências a métodos já presentes no projeto. | [experiência guiada][guided] |
+| [x] | 0.0.35 | Inventário e jornada de documentação de sistemas existentes. | [documentação de legado][legacy-doc] |
 
 A [spec inicial][v1] organiza a primeira entrega; as demais estão no
 [índice de specs][specs]. Uma spec aprovada registra escopo, não comprova por
@@ -42,6 +45,31 @@ si só que seus critérios continuam atendidos em todas as versões ou clientes.
 O [controle das specs](spec-audit.md) reúne o estado da auditoria de cada uma.
 
 ## Prioridades e pendências
+
+| Frente | Próxima verificação |
+| --- | --- |
+| Preservação e recuperação | Revalidar os critérios das specs de recuperação com as provas de Git, metadados e concorrência para cada plataforma. [Controle das specs](spec-audit.md) |
+| Clientes, comandos e recursos | Conferir mudanças de descoberta, metadados e compatibilidade no cliente afetado e testar a preservação ao atualizar instalações existentes. [Compatibilidade](../../.pbai4devs/COMPATIBILIDADE.md) |
+| Documentação de sistemas existentes | Verificar a ligação entre inventário, comportamento do código e provas por fluxo. [Guia](../guides/documentation.md) |
+| Pipeline e distribuição | Executar as provas do commit candidato e comparar o artefato aprovado nos dois registries quando houver uma nova versão. [Manutenção](../maintainers/maintenance.md) |
+
+## Dependências para uma próxima publicação
+
+1. Concluir os ajustes e resolver os critérios pendentes das specs afetadas.
+2. Testar o estado final e registrar evidências, limitações e revisão independente.
+3. Aprovar a matriz de CI e verificar o artefato candidato antes da publicação.
+4. Definir a próxima versão e publicar release e pacotes associados à sua tag;
+   comparar os artefatos publicados e testar sua instalação nos dois registros.
+
+Nenhuma versão ou data futura é presumida. A aprovação de uma spec ou a
+existência de uma tag não substitui os testes da alteração em andamento.
+
+## Registro histórico de validações
+
+Os registros abaixo preservam resultados, hipóteses e pendências observadas
+em candidatas anteriores. Menções a um checkout, estado local ou CI se
+referem ao contexto de cada ensaio. Use as frentes acima e as evidências
+da versão correspondente para decidir o que ainda precisa ser verificado.
 
 ### 1. Preservação e confiabilidade
 
@@ -999,17 +1027,6 @@ que poderiam transformar metadados ambíguos em aprovação indevida.
   cópia separada. As suítes de release passaram no macOS e Linux; `full` foi
   simulado. Windows, Actions real e publicação do estado atual estão pendentes.
 
-## Dependências para uma próxima publicação
-
-1. Concluir os ajustes e resolver os critérios pendentes das specs afetadas.
-2. Testar o estado final e registrar evidências, limitações e revisão independente.
-3. Aprovar a matriz de CI e verificar o artefato candidato antes da publicação.
-4. Definir a próxima versão e publicar release e pacotes associados à sua tag;
-   comparar os artefatos publicados e testar sua instalação nos dois registros.
-
-Nenhuma versão ou data futura é presumida. A aprovação de uma spec ou a
-existência de uma tag não substitui os testes da alteração em andamento.
-
 [Wiki](../README.md) · [Produto](README.md) · [Specs][specs] ·
 [Processo de release](../maintainers/maintenance.md)
 
@@ -1046,3 +1063,8 @@ existência de uma tag não substitui os testes da alteração em andamento.
 [order]: ../specs/preimplementation-order/SPEC.md
 
 [testes-kit]: https://github.com/pathbit/AgentDevKit/blob/main/tests/README.md
+[recovery]: ../specs/recuperacao-conservadora/SPEC.md
+[journal]: ../specs/diario-disco/SPEC.md
+[claude-scope]: ../specs/escopo-regras-claude/SPEC.md
+[guided]: ../specs/experiencia-guiada/SPEC.md
+[legacy-doc]: ../specs/documentacao-legado/SPEC.md

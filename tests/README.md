@@ -12,6 +12,17 @@ ficam em `tmp/`, `.agent-tests/` ou diretório temporário, sem subir ao Git.
 pacote real, incluindo instalação, atualização e preservação de arquivos.
 Estes testes não são copiados para os projetos atendidos.
 
+Para executar a distribuição com o tarball candidato, indique o caminho
+absoluto no ambiente. Exemplo em shell POSIX:
+
+```console
+AGENTDEVKIT_TARBALL=/caminho/absoluto/agentdevkit-0.0.35.tgz npm run test:distribution
+```
+
+O modo com tarball informado registra os hashes antes e depois em
+`.agent-tests/release-artifact-verification.json`. `npm run verify` passa
+automaticamente o tarball que acabou de construir.
+
 `runtime-minimum.test.mjs` instala um pacote local offline em diretório
 temporário e verifica a preservação do índice, configuração, `info/exclude`,
 `HEAD` e de uma skill própria. Ao executá-lo
@@ -43,7 +54,7 @@ npm run test:upgrade -- --from-version "$published" --to-tarball "$archive"
 ```
 
 O teste confere a integridade da base publicada, a versão e o hash do candidato.
-Exercita Claude, Codex, Copilot, Gemini, OpenCode e Cursor em projetos
+Exercita Claude, Codex, Copilot, Antigravity, OpenCode e Cursor em projetos
 sintéticos e compara o Git e o conteúdo humano antes e depois da atualização.
 Uma fixture Codex prepara uma referência CRLF com conteúdo staged.
 Para reinstalar ou atualizar a partir de um arquivo local, use
@@ -58,71 +69,17 @@ comprova ACLs e atributos estendidos.
 `scoped-rule-clients.test.mjs` verifica os apontamentos de uma regra com glob
 para Claude e Copilot com Git staged; não comprova a ativação nos clientes.
 
-Para investigar a preservação de um comando Gemini humano com `{{args}}`:
+Para verificar a aposentadoria do Gemini CLI e a atualização de projetos
+que ainda têm sua seleção salva:
 
 ```console
-node tests/gemini-command-flow-proof.mjs
+node --test tests/retired-client-migration.test.mjs
 ```
 
-A prova opcional exige Node 24+ e Git e usa o checkout local para criar oito
-fixtures temporárias fora de Git. Para executar a CLI do tarball extraído,
-acrescente `--package /caminho/ao/pacote`. O comando pode estar não rastreado,
-ser uma adição staged, ser rastreado com edição unstaged ou ter conteúdos
-distintos staged e unstaged. Cada caso é repetido com e sem `{{args}}` no texto
-humano; os dois casos rastreados usam commits sintéticos locais. Ela executa
-`init`, `sync` da CLI
-duas vezes, `update`, `sync --check` e o sincronizador independente; confere
-cada etapa, incluindo índice, diff staged, arquivos Git, trechos humanos e
-referência gerenciada. Falhas de execução, preservação ou referência gerenciada
-inválida interrompem as etapas seguintes; somente divergências de argumento e
-idempotência mantêm o diagnóstico. Um analisador independente restrito à fixture
-decodifica o valor de `prompt`, conta `{{args}}` e compara o texto humano,
-a descrição e o comentário. Também confere o hash do bloco no marcador V3. A saída
-e `RESULT.json` registram o resultado. Nas duas fixtures com conteúdo staged e
-unstaged divergente, `init` deve recusar com `E_STAGED` e preservar os bytes e
-os snapshots Git; as etapas seguintes são registradas como `not-run`. Essa
-recusa conservadora é esperada, não prova as etapas que não foram executadas.
-Código 1 indica
-divergência ou falha de execução; a prova é opcional e não integra `npm test`.
-Os diretórios temporários são mantidos para análise.
-O analisador aceita somente os campos, o comentário V3 e o subconjunto de
-string básica usados nesta fixture. Compara os valores humanos,
-mas não garante a preservação dos bytes originais do literal TOML. Outro arquivo
-humano é comparado integralmente por hash. Os processos têm as permissões do
-usuário; não há bloqueio de rede, Gemini real nem detecção de alterações
-transitórias revertidas. Os testes negativos do analisador e da política fazem
-parte de `npm test` e do perfil `portable-resources`; eles também podem ser
-executados isoladamente, sem rodar a matriz funcional:
-
-```console
-node --test tests/gemini-command-fixture.test.mjs
-```
-
-Para observar aplicação e retirada de comando Gemini em duas fixtures com Git
-existente, ambas com `{{args}}` humano, use um pacote local confiável explícito:
-
-```console
-node tests/gemini-command-lifecycle.mjs --package /caminho/do/pacote
-```
-
-O comando exige macOS, Node 24+, Git e `sandbox-exec`. A rede é bloqueada, a
-escrita é limitada à pasta temporária e a leitura da pasta pessoal é bloqueada,
-com exceção do pacote e dos módulos fornecidos. Para verificar o valor TOML e o
-carregador Gemini, acrescente `--parser /caminho/modulo` e
-`--gemini-loader /caminho/modulo`; ambos devem ser confiáveis e compatíveis com
-as APIs usadas pela prova. Sem eles, as respectivas verificações ficam como
-`not-verified`. Nenhum comando Gemini, action, modelo ou serviço é executado.
-
-As fixtures distinguem o TOML não rastreado da adição staged. `init`, `sync` e
-a troca da seleção de Gemini para Claude são comparados com o índice, diff
-staged, referências, configuração Git, conteúdo humano e bytes anteriores.
-O relatório e as fixtures ficam em diretório temporário fora de Git. Uma
-alteração de `.git/info/exclude` interrompe a prova por padrão; para continuar
-o diagnóstico da fixture descartável quando o prefixo anterior permanece, use
-`--diagnose-exclude`. A alteração continua sendo falha. Outras falhas de
-integridade sempre interrompem as etapas seguintes. Código 0 indica aprovação,
-1 falha e 2 verificação incompleta. A prova usa locale C e não cobre o efeito
-de outras localidades, concorrência ou alterações transitórias revertidas.
+A suíte verifica a lista de clientes, o plano de atualização, os arquivos
+humanos, o índice Git e a retirada do que tem propriedade comprovada.
+O grupo de TOML legado continua cobrindo a leitura de comandos e validação
+dos blocos gerenciados usados em instalações anteriores.
 
 Para testar o pacote gerado a partir do checkout atual em um Linux isolado:
 
@@ -322,17 +279,6 @@ a semântica intermediária e não substitui parser independente, clientes reais
 Git ou plataformas diferentes.
 Veja a [spec em rascunho](../docs/specs/toml-preservacao/SPEC.md).
 
-Para executar o ciclo da CLI e do sync em 20 fixtures TOML:
-
-```sh
-node --test tests/gemini-toml-lifecycle-matrix.mjs
-```
-
-A prova compara Git e bytes após a retirada do Gemini. O leitor usa o parser distribuído
-pelo kit e não substitui a comparação com um parser independente ou o cliente.
-Os testes rápidos do leitor estão em `gemini-toml-lifecycle-reader.test.mjs` e
-integram a suíte padrão.
-
 ## Recuperação concorrente
 
 `recovery-effects.test.mjs` exercita a classificação isolada com opções reais
@@ -396,10 +342,8 @@ sync; o update usa legado sintético. O snapshot desses seis exclui
 arquivos. Em outros sistemas, os doze casos são ignorados. As fixtures Linux
 para xattr cobrem atualizações e backups em `tmpfs`; elas não comprovam ACLs ou
 comportamento em outros sistemas de arquivos.
-`gemini-derived-diagnostic.test.mjs` reproduz um registro derivado antigo após
-edição humana e `update`. Exige diagnóstico por caminho e resultado não saudável
-para `doctor` e `sync --check` da CLI, preservando os dados observados. O check
-direto é apenas registrado; a prova não resolve propriedade por hash antigo.
+O teste de diagnóstico de TOML legado distingue ausência, falha de leitura e
+divergência do registro sem inferir propriedade pelo hash informado.
 `sync-special-mode.test.mjs` verifica recusa do sync direto antes de alterar
 arquivos planejados com bit POSIX especial, incluindo `--force` e remoção.
 Os bits sticky, setuid e setgid são exercitados separadamente em macOS e Linux;
@@ -446,25 +390,6 @@ e o tratamento de opções antes e depois do separador de argumentos.
 Também confere a CLI principal com estado e configuração inválidos,
 sem alterar o índice observado. Não cobre validação de esquema, outros parsers
 ou respostas HTTP.
-`gemini-xattr-preservation.test.mjs` usa TOML humano misto e xattr sintético em
-macOS e Linux para verificar atualização real ou recusa sem alterações em
-`update`, `sync` da CLI e sincronização direta. O caso executa por padrão nas
-duas plataformas. Sua cobertura é limitada ao xattr sintético e ao estado
-persistente observado. O gate macOS de doze casos cobre outras fixtures.
-No Linux, a fixture exige Perl com `syscall.ph` e `/tmp` com suporte a xattr;
-ausência desses requisitos causa falha, não aprovação. A recusa só é comprovada
-quando a causa principal e o caminho exato aparecem em `error.code` e
-`error.path` na resposta estruturada da CLI ou na primeira linha do erro do sync
-direto; outra saída é inconclusiva e falha o teste. A candidata informa o caminho
-para recusas de metadados no alvo real e distingue erros no estágio temporário.
-O snapshot compara nomes, modos e bytes persistentes, mas não mede ACLs, outros
-xattrs ou alterações transitórias revertidas.
-A fixture usa as APIs nativas de macOS ou Linux. No Windows, consulte as
-provas de DACL e fluxos alternativos de `file-modes.test.mjs`.
-No PowerShell, defina a variável com `$env:ADK_STRICT_RECOVERY_TEST = '1'`,
-execute `node --test tests/concurrent-recovery.test.mjs` e depois remova-a com
-`Remove-Item Env:ADK_STRICT_RECOVERY_TEST`.
-
 `sync-temporary-privacy.test.mjs` verifica o modo no instante em que o sync
 cria um temporário. A implementação anterior chegou a criar modo `666` para
 um destino `600` com `umask 000`. A prova agora abrange cinco modos de arquivos
@@ -538,7 +463,7 @@ Ele não comprova a ordem de todas as categorias nem um plano de recuperação.
 
 ## Descoberta em clientes nativos
 
-Com Node 24+, um pacote confiável local e as CLIs Gemini, OpenCode e Copilot:
+Com Node 24+, um pacote confiável local e as CLIs OpenCode e Copilot:
 
 ```console
 node tests/native-client-matrix.mjs --package "$work/package" --version "$version"
@@ -553,8 +478,8 @@ instalado, incluindo faltas, extras e duplicatas. Para cada skill e perfil,
 registra separadamente referência estrutural, descoberta e execução. A prova
 estrutural exige o apontamento gerado canônico e compara os bytes da origem
 instalada com os do pacote; não inclui colisões de conteúdo humano. Algumas
-referências de perfil não são formatos de descoberta nativa. Gemini e Copilot
-listam skills, e OpenCode lista perfis; as demais combinações ficam `not-run`.
+referências de perfil não são formatos de descoberta nativa. Copilot
+lista skills e OpenCode lista perfis; as demais combinações ficam `not-run`.
 O Copilot deve retornar cada nome uma única vez, habilitado e com a localização
 da skill do projeto; resultados pessoais ou incorporados não são confundidos.
 A descoberta observada não comprova execução. O runner não solicita inferência

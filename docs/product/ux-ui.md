@@ -10,7 +10,7 @@ A experiência prioriza comandos curtos, resultados legíveis e continuidade.
 
 | Jornada | Resposta esperada |
 | --- | --- |
-| Primeiro uso | Local instalado, resumo e próxima etapa para o projeto. |
+| Primeiro uso | Idioma, clientes e objetivo, com resumo e próxima etapa. |
 | Projeto existente | Mudanças propostas e preservação dos arquivos próprios. |
 | Atualização | O que mudou, conflitos/backups e como verificar o resultado. |
 | Diagnóstico | Pendências observadas e próximos comandos ou skills. |
@@ -20,16 +20,15 @@ PT é padrão. EN e ES alteram a interface e os próximos passos, mantendo nomes
 de comandos e caminhos. O idioma salvo é reutilizado nas próximas execuções.
 Mensagens distinguem confirmação, aviso e falha sem afirmar testes não feitos.
 
-O primeiro uso interativo permite escolher idioma e agentes de código.
-Quem automatiza pode fornecer `--lang`, `--agents` e ler `--json`; o resultado
-inclui a próxima ação. Agentes em aplicativos podem reunir a escolha pelo
-chat e passá-la à CLI, sem depender de um terminal interativo. Instalação
-normal resume mudanças; simulação lista uma amostra e o JSON fornece o plano.
+O assistente do primeiro uso reúne idioma, agentes e objetivo. Quem passa
+idioma e clientes na CLI pode escolher o objetivo com `--purpose`.
+Agentes em aplicativos podem reunir as escolhas pelo chat e usar `--json`
+para obter a próxima ação. A simulação lista mudanças e conflitos no plano.
 
-`doctor` responde sobre a instalação do kit, enquanto `next` orienta o trabalho
-do projeto. Essa distinção evita tratar um diagnóstico saudável como prova
-de que a aplicação está pronta. Conflitos devem levar à comparação de arquivos
-antes de qualquer substituição. Veja [CLI](../guides/cli.md) e
+`doctor` responde sobre a instalação do kit. `next` orienta o trabalho do
+projeto, inclusive a etapa de documentação com `next --intent document`.
+`document` reúne o inventário em Markdown ou JSON. Conflitos pedem comparação
+de arquivos antes de uma substituição. Veja [CLI](../guides/cli.md) e
 [recuperação](../guides/troubleshooting.md) para o comportamento observável.
 
 O comando `agents` consulta a seleção sem escrever arquivos. Sua alteração

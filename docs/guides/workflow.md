@@ -20,14 +20,16 @@ nome do aplicativo ou pelas pastas existentes. Sem resposta disponível, o
 padrão é `all`. A seleção salva continua nas atualizações e sincronizações.
 Use `agents` para consultar ou alterar depois; veja a [referência](cli.md).
 
-Use `doctor` para conferir o kit e `next` para consultar a próxima etapa.
-Nos exemplos, `agentdevkit` representa a CLI; no checkout, use
-`npm run cli -- <comando>`. A invocação por npx está na instalação.
+Na raiz do projeto atendido, confira o kit e consulte a próxima etapa:
 
-```sh
-agentdevkit doctor --target .
-agentdevkit next --target .
+```console
+npx @pathbit/agentdevkit doctor
+npx @pathbit/agentdevkit next
 ```
+
+No checkout do AgentDevKit, indique o projeto com
+`npm run cli -- doctor --target <caminho-do-projeto>`.
+[Referência da CLI](cli.md)
 
 O diagnóstico descreve sinais e arquivos existentes. Ele não aprova
 documentos, não comprova comportamento e não autoriza substituir decisões.

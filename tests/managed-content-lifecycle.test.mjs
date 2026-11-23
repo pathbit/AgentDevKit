@@ -7,8 +7,7 @@ import { join } from 'node:path';
 import { applyPlan, inspect, planInstallation } from '../src/install.mjs';
 import { synchronize } from '../.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs';
 import { extractManagedBlock, managedBlockDigest } from '../.pbai4devs/scripts/lib/managed-content.mjs';
-import { extractTomlManagedBlock, tomlManagedBlockDigest } from '../.pbai4devs/scripts/lib/managed-toml.mjs';
-import { inspectFixture } from './gemini-toml-lifecycle-reader.mjs';
+import { extractTomlManagedBlock, mergeTomlContent } from '../.pbai4devs/scripts/lib/managed-toml.mjs';
 
 test('edição humana num apontamento previamente gerado migra para ownership de bloco sem desindexar', async t => {
   const { root, git, put, read } = fixture(t);
@@ -31,38 +30,19 @@ test('edição humana num apontamento previamente gerado migra para ownership de
   assert.equal((await cli(root, ['update', '--force'])).changed, false);
 });
 
-test('comando Gemini existente recebe referência dentro do prompt sem reescrever configuração', async t => {
-  const { root, git, put, read } = fixture(t);
-  const path = '.gemini/commands/preparar-dev.toml';
-  const original = '# comentário humano\r\ndescription = "Meu comando"\r\nprompt = "Siga a rotina do usuário." # comentário do prompt\r\n\r\n[metadata]\r\ncustom = true\r\n';
-  put(path, original); git('add', '--all'); const index = git('ls-files', '--stage', '-z');
-  await cli(root, ['init', '--agents', 'gemini', '--yes']);
-  const content = read(path);
-  const state = JSON.parse(read('.pbai4devs/state/agentdevkit.json'));
-  assert.equal(state.files[path], undefined);
-  assert.equal(state.blocks[path], tomlManagedBlockDigest(content));
-  assert.deepEqual(inspectFixture(content, {
-    original,
-    prefix: '# comentário humano\r\ndescription = "Meu comando"\r\n',
-    suffix: ' # comentário do prompt\r\n\r\n[metadata]\r\ncustom = true\r\n',
-    expectedHash: state.blocks[path],
-    humanPrompt: 'Siga a rotina do usuário.',
-    reference: '@{.pbai4devs/commands/preparar-dev/COMMAND.md}',
-  }), { margins: true, provenanceValid: true, promptValid: true, humanPrompt: true, references: 1, args: 1 });
-  assert.equal((await cli(root, ['update'])).changed, false);
-  await cli(root, ['doctor']); await cli(root, ['sync', '--check']);
-  assert.equal(git('ls-files', '--stage', '-z'), index);
-  await cli(root, ['agents', 'codex']);
-  assert.equal(extractTomlManagedBlock(read(path)), null);
-  assert.equal(read(path), original);
-});
-
 test('retira bloco Gemini staged preservando edição humana posterior e índice', async t => {
   const { root, git, put, read } = fixture(t);
   const path = '.gemini/commands/preparar-dev.toml';
   put(path, '# comentário humano\r\ndescription = "Meu comando"\r\nprompt = "Siga a rotina do usuário."\r\n');
   put('.gitignore', '# Ignore humano\n');
-  await cli(root, ['init', '--agents', 'gemini', '--yes']);
+  await cli(root, ['init', '--agents', 'codex', '--yes']);
+  const statePath = '.pbai4devs/state/agentdevkit.json';
+  const legacy = JSON.parse(read(statePath));
+  const managed = mergeTomlContent(read(path), '@{.pbai4devs/commands/preparar-dev/COMMAND.md}\n\n{{args}}');
+  put(path, managed.text);
+  legacy.clients = ['gemini'];
+  legacy.blocks[path] = managed.sha256;
+  put(statePath, JSON.stringify(legacy));
   assert.ok(extractTomlManagedBlock(read(path)));
   git('add', '-f', '--', path, '.gitignore');
   const index = readFileSync(join(root, '.git/index'));

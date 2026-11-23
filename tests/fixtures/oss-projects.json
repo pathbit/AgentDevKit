@@ -63,7 +63,7 @@
       "repository": "https://github.com/go-chi/chi.git",
       "commit": "c64ed7d6635f33a8b2feaff7dcfa55677023ac7d",
       "profile": "Go project without package.json",
-      "clients": ["opencode", "cursor", "gemini"]
+      "clients": ["opencode", "cursor", "antigravity"]
     }
   ]
 }

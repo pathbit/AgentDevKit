@@ -150,12 +150,12 @@ jobs:
             label: Windows / Node 24 / managed content protection
           - os: windows-latest
             node: 24
-            profile: portable-resources-gemini
-            label: Windows / Node 24 / Gemini resources
+            profile: portable-legacy-toml
+            label: Windows / Node 24 / legacy TOML
           - os: windows-latest
             node: 24
-            profile: portable-resources-gemini-staged
-            label: Windows / Node 24 / staged Gemini TOML
+            profile: portable-retired-client-migration
+            label: Windows / Node 24 / retired client migration
           - os: windows-latest
             node: 24
             profile: portable-sync-core
@@ -266,12 +266,12 @@ jobs:
             label: macOS / Node 24 / managed content protection
           - os: macos-15-intel
             node: 24
-            profile: portable-resources-gemini
-            label: macOS / Node 24 / Gemini resources
+            profile: portable-legacy-toml
+            label: macOS / Node 24 / legacy TOML
           - os: macos-15-intel
             node: 24
-            profile: portable-resources-gemini-staged
-            label: macOS / Node 24 / staged Gemini TOML
+            profile: portable-retired-client-migration
+            label: macOS / Node 24 / retired client migration
           - os: macos-15-intel
             node: 24
             profile: portable-sync-core

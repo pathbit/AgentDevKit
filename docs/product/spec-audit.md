@@ -44,6 +44,15 @@ permanecem fora do Git; registre uma referência segura ou explique o bloqueio.
 | [Destinos](../specs/target-paths/SPEC.md) | Destinos de instalação | Pendente |
 | [Ordem](../specs/preimplementation-order/SPEC.md) | Ordem antes da implementação | Pendente |
 | [Recuperação conservadora](../specs/recuperacao-conservadora/SPEC.md) | Recuperação após falha | Rascunho; decisões e provas pendentes |
+| [Registro de recuperação](../specs/registro-recuperacao/SPEC.md) | Registros e transições | Revisão por critério pendente |
+| [Diário em disco](../specs/diario-disco/SPEC.md) | Persistência e publicação de registros | Revisão por critério pendente |
+| [Manifesto de recuperação](../specs/manifesto-recuperacao/SPEC.md) | Integridade do snapshot | Revisão por critério pendente |
+| [Backup privado](../specs/backup-privado/SPEC.md) | Proteção das cópias locais | Revisão por critério pendente |
+| [Permissões de temporários](../specs/sync-permissoes/SPEC.md) | Metadados de arquivos | Revisão por critério pendente |
+| [Escopo de regras Claude](../specs/escopo-regras-claude/SPEC.md) | Descoberta e regras legadas | Revisão por critério pendente |
+| [Preservação TOML](../specs/toml-preservacao/SPEC.md) | Comandos legados | Revisão por critério pendente |
+| [Experiência guiada](../specs/experiencia-guiada/SPEC.md) | Primeiros passos | Publicada na 0.0.34; revisão por critério pendente |
+| [Documentação de legado](../specs/documentacao-legado/SPEC.md) | Inventário e evidências | Publicada na 0.0.35; revisão por critério pendente |
 
 Ao concluir uma auditoria, acrescente uma referência rastreável por critério,
 com estado e evidência, e atualize a linha correspondente. Veja o

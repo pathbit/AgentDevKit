@@ -49,14 +49,15 @@ if (!stringList(retiredRoots) || new Set(retiredRoots).size !== retiredRoots.len
 // supplies roots for a new manifest.
 export const adapterRoots = Object.freeze([...activeRoots, ...retiredRoots]);
 
-export function normalizeClients(input) {
+export function normalizeClients(input, { stored = false } = {}) {
   if (input === undefined) return ['all'];
   const values = typeof input === 'string' ? [input] : input;
   if (!Array.isArray(values) || !values.length || values.some(value => typeof value !== 'string')) throw new Error('Selecione ao menos um cliente valido.');
   const selected = new Set();
   for (const value of values) for (const part of value.split(',')) {
     const requested = part.trim().toLowerCase(), id = aliases[requested] ?? requested;
-    if (!availableClients.some(client => client.id === id)) throw new Error('Cliente desconhecido: ' + (part || '(vazio)'));
+    const retired = stored && id === 'gemini';
+    if (!retired && !availableClients.some(client => client.id === id)) throw new Error('Cliente desconhecido: ' + (part || '(vazio)'));
     selected.add(id);
   }
   if (selected.has('all')) {
@@ -66,8 +67,8 @@ export function normalizeClients(input) {
   return adapters.filter(adapter => selected.has(adapter.id)).map(adapter => adapter.id);
 }
 
-export function resolveAdapters(input) {
-  const clients = normalizeClients(input), all = clients.includes('all');
+export function resolveAdapters(input, options) {
+  const clients = normalizeClients(input, options), all = clients.includes('all');
   const requested = all ? adapters.map(adapter => adapter.id) : clients;
   const selected = new Set(requested);
   for (const id of selected) for (const required of adapters.find(adapter => adapter.id === id).requires) selected.add(required);

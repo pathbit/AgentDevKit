@@ -50,8 +50,8 @@ continuam quando necessárias; arquivos próprios dos clientes são preservados
 pela CLI, inclusive ao reduzir a seleção.
 Use `gitignore|pasta` para pastas como `.vscode`, sem espelhar recursos nelas.
 `plano` adapta os nomes à descoberta dos clientes; metadados próprios de SDK
-podem vir de um YAML ao lado da fonte. Antigravity e Gemini recebem seus
-apontamentos; o catálogo geral inclui comandos, tools, scripts e modelos.
+podem vir de um YAML ao lado da fonte. O catálogo geral inclui comandos,
+tools, scripts e modelos.
 Não replique tools, scripts, templates, estado, testes, docs ou guias.
 Não use `--documento`; mantenha documentos fora dos espelhos.
 

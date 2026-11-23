@@ -134,6 +134,11 @@ export function explainError(language, code, error, { possiblePartial = false } 
     es: 'Ejecute agentdevkit update antes de sincronizar o cambiar la configuración anterior.',
   }[language || 'pt'];
   if (code === 'E_MIGRATION_REVIEW') return migrationReview;
+  if (code === 'E_CLIENTS_RETIRED') return {
+    pt: 'A seleção anterior foi aposentada. Consulte agents e escolha um cliente com update --agents <id> --dry-run.',
+    en: 'The previous selection was retired. Run agents and choose a client with update --agents <id> --dry-run.',
+    es: 'La selección anterior se retiró. Consulte agents y elija un cliente con update --agents <id> --dry-run.',
+  }[language || 'pt'];
   const value = {
     pt: { E_ARGS: 'Argumentos inválidos; consulte --help.', E_STATE: 'O estado do AgentDevKit está inválido.', E_SYMLINK: 'Um link simbólico impede a operação segura.', E_TARGET: 'Escolha uma pasta real e segura como destino.', E_PATH: 'Um caminho gerenciado é inválido.', E_BLOCK: 'Os marcadores do bloco gerenciado estão inválidos.', E_CHANGED: 'Um arquivo mudou depois do planejamento; execute novamente.', E_TEMPLATE: 'Um template necessário está inválido.' },
     en: { E_ARGS: 'Invalid arguments; see --help.', E_STATE: 'AgentDevKit state is invalid.', E_SYMLINK: 'A symbolic link prevents this operation.', E_TARGET: 'Choose a real, safe target directory.', E_PATH: 'A managed path is invalid.', E_BLOCK: 'Managed block markers are invalid.', E_CHANGED: 'A file changed after planning; try again.', E_TEMPLATE: 'A required template is invalid.' },

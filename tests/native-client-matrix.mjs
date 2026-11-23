@@ -79,16 +79,6 @@ export function discovery(client, kind, item, output, project, policy = adapters
         resolve(matches[0].path) === resolve(expected);
     } catch { return false; }
   }
-  if (client === 'gemini' && kind === 'skills') {
-    const lines = output.split(/\r?\n/), header = `${item.name} [Enabled]`;
-    const index = lines.indexOf(header);
-    if (index < 0) return false;
-    for (const line of lines.slice(index + 1)) {
-      if (line && !/^\s/.test(line)) break;
-      if (line.trim() === `Location:    ${join(project, destination(client, kind, item, policy))}`) return true;
-    }
-    return false;
-  }
   if (client === 'opencode' && kind === 'agents') {
     try {
       const text = safeRead(project, destination(client, kind, item, policy));
@@ -138,7 +128,7 @@ async function main() {
   const envBase = Object.fromEntries(['PATH', 'SystemRoot', 'WINDIR', 'COMSPEC', 'PATHEXT'].filter(k => process.env[k]).map(k => [k, process.env[k]]));
   for (const client of policy.map(adapter => adapter.id)) for (const kind of ['new', 'existing']) {
     const caseDir = join(directory, `${client}-${kind}`), project = join(caseDir, 'project'), home = join(caseDir, 'home');
-    const entry = { client, projectKind: kind, project, init: { status: 'blocked' }, discovery: { status: ['gemini', 'opencode', 'copilot'].includes(client) ? 'blocked' : 'not-run' } }; cases.push(entry);
+    const entry = { client, projectKind: kind, project, init: { status: 'blocked' }, discovery: { status: ['opencode', 'copilot'].includes(client) ? 'blocked' : 'not-run' } }; cases.push(entry);
     let observed = null, caseError = null;
     try {
     mkdirSync(project, { recursive: true, mode: 0o700 }); mkdirSync(home, { mode: 0o700 });
@@ -146,7 +136,6 @@ async function main() {
     const env = { ...envBase, HOME: home, USERPROFILE: home, XDG_CONFIG_HOME: join(caseDir, 'config'), XDG_CACHE_HOME: join(caseDir, 'cache'), XDG_DATA_HOME: join(caseDir, 'data'), XDG_STATE_HOME: join(caseDir, 'state'), TMPDIR: join(caseDir, 'tmp'), TMP: join(caseDir, 'tmp'), TEMP: join(caseDir, 'tmp'), GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: join(caseDir, 'empty-gitconfig'), GIT_TERMINAL_PROMPT: '0', npm_config_offline: 'true', NO_COLOR: '1' };
     writeFileSync(env.GIT_CONFIG_GLOBAL, '', { mode: 0o600, flag: 'wx' });
     if (kind === 'existing') { writeFileSync(join(project, 'README.md'), '# Projeto sintético\nConteúdo preexistente.\n'); writeFileSync(join(project, '.gitignore'), '# regra sintética\nprivate/\n'); }
-    mkdirSync(join(home, '.gemini')); writeFileSync(join(home, '.gemini', 'trustedFolders.json'), JSON.stringify({ [project]: 'TRUST_FOLDER' }), { mode: 0o600 });
     const invoke = async (label, file, args) => {
       const result = await command(file, args, project, env, 60000);
       for (const stream of ['stdout', 'stderr']) writeFileSync(join(caseDir, `${label}.${stream}.log`), result[stream], { mode: 0o600, flag: 'wx' });
@@ -160,9 +149,9 @@ async function main() {
     const installedCatalog = JSON.parse(safeRead(project, '.pbai4devs/catalog.json'));
     entry.inventory = compareInventory(catalog, installedCatalog);
     if (kind === 'existing') entry.fixturePreserved = safeRead(project, 'README.md') === '# Projeto sintético\nConteúdo preexistente.\n' && safeRead(project, '.gitignore') === '# regra sintética\nprivate/\n';
-    if (['gemini', 'opencode', 'copilot'].includes(client)) {
+    if (['opencode', 'copilot'].includes(client)) {
       const version = await invoke('version', client, ['--version']);
-      const query = client === 'gemini' ? ['skills', 'list'] : client === 'copilot' ? ['skill', 'list', '--json'] : ['debug', 'agents', '--standalone'];
+      const query = client === 'copilot' ? ['skill', 'list', '--json'] : ['debug', 'agents', '--standalone'];
       observed = await invoke('discovery', client, query);
       entry.version = good(version) ? version.stdout.trim() : null;
       entry.discovery = { status: good(observed) ? 'completed' : 'blocked', log: observed.stdoutLog, stderr: observed.stderrLog, exitCode: observed.status, error: observed.error, timedOut: observed.timedOut, exceeded: observed.exceeded };
@@ -170,7 +159,7 @@ async function main() {
     } catch (error) { caseError = error.message; entry.error = caseError; }
     for (const type of ['skills', 'agents']) for (const item of catalog[type]) {
       const structure = entry.init.status === 'passed' ? structural(project, client, type, item, policy, pkg) : { status: 'blocked', reason: caseError || 'Instalação indisponível.' };
-      const supported = (['gemini', 'copilot'].includes(client) && type === 'skills') || (client === 'opencode' && type === 'agents');
+      const supported = (client === 'copilot' && type === 'skills') || (client === 'opencode' && type === 'agents');
       const validObservation = observed && entry.discovery.status === 'completed';
       const found = validObservation && supported && structure.status === 'passed' ? discovery(client, type, item, observed.stdout, project, policy) : null;
       rows.push({ client, projectKind: kind, type, id: item.id, name: item.name, source: item.path, structure,
@@ -179,7 +168,7 @@ async function main() {
     }
   }
   const report = { schemaVersion: 1, package: `${meta.name}@${meta.version}`, node: process.version, cases, rows,
-    limitations: ['A estrutura verifica apontamento gerado e bytes da origem contra o pacote, não comportamento; não inclui colisões humanas.', 'Descoberta só é observada para skills Gemini e Copilot e perfis OpenCode; as demais combinações e clientes não foram testados; apontamentos podem ser apenas referências.', 'Não invoca inferência nem executa fluxos; leitura ou descoberta não provam execução.', 'O runner usa clientes e pacote confiáveis com permissões do usuário: HOME e variáveis isolados não são sandbox de sistema nem bloqueiam rede.', 'No Windows ACL e encerramento de descendentes não são garantidos.', 'Logs podem conter dados emitidos pelos processos; projetos e configurações gerados são sintéticos.', 'A checagem de links não é atômica contra trocas concorrentes.', 'Aplica os adaptadores e o construtor de catálogo exportados pelo pacote; contratos desconhecidos bloqueiam a prova.'] };
+    limitations: ['A estrutura verifica apontamento gerado e bytes da origem contra o pacote, não comportamento; não inclui colisões humanas.', 'Descoberta só é observada para skills Copilot e perfis OpenCode; as demais combinações e clientes não foram testados; apontamentos podem ser apenas referências.', 'Não invoca inferência nem executa fluxos; leitura ou descoberta não provam execução.', 'O runner usa clientes e pacote confiáveis com permissões do usuário: HOME e variáveis isolados não são sandbox de sistema nem bloqueiam rede.', 'No Windows ACL e encerramento de descendentes não são garantidos.', 'Logs podem conter dados emitidos pelos processos; projetos e configurações gerados são sintéticos.', 'A checagem de links não é atômica contra trocas concorrentes.', 'Aplica os adaptadores e o construtor de catálogo exportados pelo pacote; contratos desconhecidos bloqueiam a prova.'] };
   const file = join(directory, 'RESULT.json'); writeFileSync(file, JSON.stringify(report, null, 2) + '\n', { mode: 0o600, flag: 'wx' });
   const failed = cases.some(c => c.init.status !== 'passed' || !['completed', 'not-run'].includes(c.discovery?.status) || c.fixturePreserved === false || c.error || !c.inventory || Object.values(c.inventory).some(x => x.missing.length || x.extra.length || x.duplicates.length)) || rows.some(r => r.structure.status === 'failed' || r.discovery.status === 'not-observed');
   console.log(JSON.stringify({ report: file, cases: cases.length, rows: rows.length, failed })); if (failed) process.exitCode = 1;

@@ -137,13 +137,11 @@ export const portableProfiles = Object.freeze({
   'portable-managed-content': Object.freeze(['managed-content.test.mjs']),
   'portable-managed-lifecycle': Object.freeze(['managed-content-lifecycle.test.mjs']),
   'portable-managed-protection': Object.freeze(['managed-content-protection.test.mjs']),
-  'portable-resources-gemini': Object.freeze([
-    'gemini-command-fixture.test.mjs', 'gemini-unowned-block.test.mjs',
-    'gemini-derived-command.test.mjs', 'gemini-derived-diagnostic.test.mjs',
-    'gemini-reference-body.test.mjs', 'gemini-large-integer.test.mjs', 'gemini-xattr-preservation.test.mjs',
-    'gemini-toml-lifecycle-reader.test.mjs',
+  'portable-legacy-toml': Object.freeze([
+    'gemini-command-fixture.test.mjs', 'gemini-derived-diagnostic.test.mjs',
+    'gemini-reference-body.test.mjs', 'gemini-toml-lifecycle-reader.test.mjs',
   ]),
-  'portable-resources-gemini-staged': Object.freeze(['gemini-toml-staged-lifecycle.test.mjs']),
+  'portable-retired-client-migration': Object.freeze(['retired-client-migration.test.mjs']),
   'portable-layout': Object.freeze(['source-layout.test.mjs']),
 });
 

@@ -17,14 +17,13 @@ agentdevkit sync --check --target "./meu projeto" --json
 ```
 
 `doctor` verifica a instalação do kit. Para as ferramentas, use
-`agentdevkit tools check all`; para o aplicativo, use os testes do projeto.
+`agentdevkit tools check <nome>`; para o aplicativo, use os testes do projeto.
 Antes de compartilhar uma saída, remova dados privados e caminhos pessoais.
 
-Se o Gemini CLI não listar skills do projeto, execute `gemini skills list` na
-raiz e confira se `Location` aponta para `.gemini/skills/` do projeto. Skills
-locais exigem que a pasta seja confiável; revise seu conteúdo antes de aprovar
-a confiança pelo cliente. Em uma sessão aberta, use `/skills reload` e depois
-`/skills list`. Veja a [documentação oficial de descoberta][gemini-trust].
+Se a instalação usava só o Gemini CLI, consulte `agentdevkit agents` e gere
+um plano com `agentdevkit update --agents <id> --dry-run`. Confira os
+arquivos gerenciados e preservados antes de aplicar.
+[Compatibilidade e migração](../../.pbai4devs/COMPATIBILIDADE.md#escolher-clientes)
 
 No OpenCode 2, uma consulta imediata isolada de `skill.list` pode retornar uma
 lista vazia mesmo com os arquivos presentes. Confira novamente no servidor já
@@ -420,5 +419,4 @@ Use as [issues do projeto][issues] ou volte ao [índice](../README.md).
 [tools]: ../../.pbai4devs/scripts/preparar-ferramentas/README.md
 [issues]: https://github.com/pathbit/AgentDevKit/issues
 [github-install]: installation.md#github-packages
-[gemini-trust]: https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/tutorials/skills-getting-started.md
 [opencode-cli]: https://opencode.ai/docs/cli/

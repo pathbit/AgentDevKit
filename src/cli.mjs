@@ -412,12 +412,13 @@ export async function main(argv = process.argv.slice(2), context = {}) {
     if (options.command === 'help') result.message = text(language, 'help');
     else if (options.command === 'version') result.message = `AgentDevKit ${packageInfo.version}`;
     else if (options.command === 'agents' && options.clients === undefined) {
-      result.message = text(language, 'clientsCurrent'); result.availableClients = availableClients;
+      result.message = clients.length ? text(language, 'clientsCurrent') : explainError(language, 'E_CLIENTS_RETIRED');
+      result.availableClients = availableClients;
     }
     else if (options.command === 'lang' && !options.positionals.length && !options.language && options.clients === undefined) result.message = `${text(language, 'language')}: ${language}`;
     else if (options.command === 'doctor') {
       const found = inspect(target);
-      if (found.installed) {
+      if (found.installed && clients.length) {
         let plan;
         try { plan = preparePlan({ target, language, mode: 'sync' }); }
         catch (error) {
@@ -490,7 +491,10 @@ export async function main(argv = process.argv.slice(2), context = {}) {
         }
       }
       result.issues = found.issues; result.ok = found.installed && found.issues.length === 0;
-      result.message = text(language, result.ok ? 'healthy' : found.installed ? 'unhealthy' : 'missing'); exitCode = result.ok ? 0 : 1;
+      result.message = found.installed && !clients.length
+        ? explainError(language, 'E_CLIENTS_RETIRED')
+        : text(language, result.ok ? 'healthy' : found.installed ? 'unhealthy' : 'missing');
+      exitCode = result.ok ? 0 : 1;
     } else if (options.command === 'document') {
       result.documentation = legacyDocumentation(target);
       result.message = text(language, 'document');
@@ -519,6 +523,7 @@ export async function main(argv = process.argv.slice(2), context = {}) {
       result.toolOutput = [child.stdout, child.stderr, child.error?.message].filter(Boolean).join('\n'); exitCode = result.ok ? 0 : child.status || 1;
       if (!result.ok) result.next = getNextSteps({ command: 'error', language, target, installed: true, possiblePartial: true });
     } else {
+      if (!clients.length) throw Object.assign(new Error('The stored client selection was retired.'), { code: 'E_CLIENTS_RETIRED' });
       if (options.command === 'lang') {
         const selected = options.positionals[0] || options.language; language = normalizeLanguage(selected);
         if (!language) usage('Use lang pt, en or es.'); result.language = language;
@@ -595,7 +600,11 @@ export async function main(argv = process.argv.slice(2), context = {}) {
       }
     }
     if (removalBeforePlan.length) result.issues = removalBeforePlan.map(issue => ({ ...issue, observedBeforePlanFailure: true }));
-    if (options.command === 'doctor' || options.command === 'sync' && options.check) result.warnings = [claudeInspectionWarning(language)];
+    if (code === 'E_CLIENTS_RETIRED' && !possiblePartial) {
+      result.next = operationalNext(result, options, { installed: true });
+    } else if (options.command === 'doctor' || options.command === 'sync' && options.check) {
+      result.warnings = [claudeInspectionWarning(language)];
+    }
     if (options.command === 'document' && !result.recovery && !possiblePartial) {
       result.next = getNextSteps({ command: 'document-error', language, target });
     }

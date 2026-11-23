@@ -10,7 +10,7 @@ import {testGitConfig} from '../.pbai4devs/scripts/lib/test-git-environment.mjs'
 const pkg=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const cli=join(pkg,'bin/agentdevkit.mjs');
 const source='.pbai4devs/commands/fixture-modo/COMMAND.md';
-const target='.gemini/commands/fixture-modo.toml';
+const target='.cursor/commands/fixture-modo.md';
 const sha=x=>createHash('sha256').update(x).digest('hex');
 const env=Object.fromEntries(Object.entries(process.env).filter(([k])=>!/^GIT_|^NODE_OPTIONS$/i.test(k)));
 Object.assign(env,{GIT_CONFIG_GLOBAL:testGitConfig,GIT_CONFIG_NOSYSTEM:'1',GIT_TERMINAL_PROMPT:'0',GIT_OPTIONAL_LOCKS:'0'});
@@ -21,7 +21,7 @@ function prepare(t,action,protectedTarget=true){
  const ok=(bin,args)=>{const r=run(bin,args);assert.equal(r.status,0,r.stderr+'\n'+r.stdout);return r};
  const put=(p,c)=>{mkdirSync(dirname(join(root,p)),{recursive:true});writeFileSync(join(root,p),c)};
  ok('git',['init','--quiet']);put('.gitignore','# regra humana\nprivate/\n');put('HUMAN.md','staged\n');ok('git',['add','--','.gitignore','HUMAN.md']);put('HUMAN.md','staged\nunstaged\n');
- ok(process.execPath,[cli,'init','--target',root,'--agents','gemini','--yes']);
+ ok(process.execPath,[cli,'init','--target',root,'--agents','cursor','--yes']);
  const script=join(root,'.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs');
  const command=d=>`---\ndescription: ${d}\n---\n\n# Comando sintético\n\nVerificar.\n`;
  put(source,command('Versão inicial'));ok(process.execPath,[script,'--root',root]);

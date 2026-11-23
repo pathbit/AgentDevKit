@@ -5,6 +5,7 @@
   ],
   "retiredRoots": [
     ".agent",
+    ".gemini",
     ".kimi"
   ],
   "adapters": [
@@ -149,30 +150,6 @@
       "requires": [],
       "extraRoots": [],
       "entrypoints": []
-    },
-    {
-      "id": "gemini",
-      "name": "Gemini CLI",
-      "root": ".gemini",
-      "formats": {
-        "skills": "plano",
-        "agents": "plano",
-        "commands": "arquivo"
-      },
-      "agentMetadata": "gemini.yaml",
-      "reason": "Skills usam SKILL.md ou */SKILL.md e agentes usam *.md direto. Comandos TOML são recursivos; rules/ contém referências.",
-      "sources": [
-        "https://geminicli.com/docs/cli/skills/",
-        "https://geminicli.com/docs/core/subagents/",
-        "https://geminicli.com/docs/cli/custom-commands/",
-        "https://github.com/google-gemini/gemini-cli/blob/be6b6d8ff200c0cda543337c3f70b17c86337d49/packages/core/src/skills/skillLoader.ts"
-      ],
-      "aliases": [],
-      "requires": [],
-      "extraRoots": [],
-      "entrypoints": [
-        "GEMINI.md"
-      ]
     },
     {
       "id": "zcode",

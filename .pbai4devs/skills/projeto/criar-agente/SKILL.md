@@ -14,7 +14,7 @@ Mapeie modo e permissões nos YAMLs nativos ao lado da fonte; mantenha o
 cabeçalho compartilhado portátil. Quando houver suporte,
 valide-os e informe diferenças de descoberta. Quando o formato não for
 reconhecido, peça a leitura explícita da origem.
-Para Antigravity e Gemini, mantenha os YAMLs específicos junto ao `AGENT.md`.
+Para Antigravity, mantenha os YAMLs específicos junto ao `AGENT.md`.
 O manifesto é gerado: não o edite à mão. A sincronização gera apontamentos.
 
 Atualize índice/guia, siga as regras de estrutura e qualidade e finalize com

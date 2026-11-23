@@ -25,7 +25,7 @@ pode trocar de agente sem manter várias cópias das mesmas instruções.
 | --- | --- |
 | Preparar o computador | [Node/npm no Windows, macOS e Linux](guides/prerequisites.md) |
 | Primeiro uso | [Instalar via npm ou GitHub Packages][install] → [seguir o fluxo][flow] |
-| Projeto em andamento | [Instalar com simulação][install] → [retomar][flow] |
+| Projeto em andamento | [Simular a instalação][preview] → [retomar pelo objetivo][flow] |
 | Já uso outro fluxo de planejamento ou contexto | [Comparar funcionalidades](guides/comparacao.md) |
 | Evoluir documentação existente | [Inventariar e complementar](guides/documentation.md) |
 | Personalizar agentes | [Recursos][resources] → [compatibilidade][clients] |
@@ -81,6 +81,7 @@ CLI orienta a comunicação dos agentes, sem traduzir documentos existentes.
 [Voltar ao projeto](../README.md)
 
 [install]: guides/installation.md#instalar
+[preview]: guides/installation.md#simular-em-um-projeto-existente
 [flow]: guides/workflow.md
 [clients]: ../.pbai4devs/COMPATIBILIDADE.md
 [tests]: guides/tools-and-testing.md

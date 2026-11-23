@@ -10,7 +10,7 @@ máquina.
 Também procura executáveis opcionais no PATH sem iniciar um shell.
 
 `managed-content.mjs` limita a propriedade do kit aos seus blocos Markdown;
-`managed-toml.mjs` aplica o mesmo contrato ao `prompt` de comandos Gemini.
+`managed-toml.mjs` aplica o contrato a comandos Gemini de instalações legadas.
 Ele usa `smol-toml.cjs` para validar o documento antes de reconhecer um prompt
 já equivalente. O bundle é
 [smol-toml 1.9.1](https://github.com/squirrelchat/smol-toml),

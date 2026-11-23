@@ -41,10 +41,10 @@ function prepare(t,mode,unaffected=false,bit=0o1000,requireBit=false){
  assert.equal(ok('git',['show',':HUMAN.md']).stdout,'staged\n','índice deve conter a versão staged');
  let target;
  if(mode==='init') {target='AGENTS.md';put(target,'# Equipe\n\nInstrução humana preexistente.\n');}
- else {ok(process.execPath,[cli,'init','--target',root,'--agents','gemini','--yes','--json']);target='.pbai4devs/state/agentdevkit.json';}
+ else {ok(process.execPath,[cli,'init','--target',root,'--agents','cursor','--yes','--json']);target='.pbai4devs/state/agentdevkit.json';}
  const special=unaffected?'HUMAN.md':target;chmodSync(join(root,special),bit|0o644);
  if((lstatSync(join(root,special)).mode&0o7000)!==bit){if(requireBit||process.env.ADK_STRICT_RECOVERY_TEST==='1')assert.fail(`filesystem não preservou o bit sintético ${bit.toString(8)}`);t.skip(`filesystem não preservou o bit sintético ${bit.toString(8)}`);return null;}
- const args=mode==='init'?['init','--target',root,'--agents','gemini','--yes','--json']: [mode,'--target',root,'--lang','en','--yes','--json'];
+ const args=mode==='init'?['init','--target',root,'--agents','cursor','--yes','--json']: [mode,'--target',root,'--lang','en','--yes','--json'];
  return {root,run,target,special,args,before:snapshot(root)};
 }
 const unsupported=!['darwin','linux'].includes(process.platform);
@@ -69,11 +69,11 @@ for(const [label,bit] of [['sticky',0o1000],['setgid',0o2000],['setuid',0o4000]]
  const run=(bin,args)=>{const r=spawnSync(bin,args,{cwd:root,env,encoding:'utf8',timeout:180000,maxBuffer:12*1024*1024});assert.equal(r.error,undefined,r.error?.message);assert.equal(r.signal,null);return r;};
  const ok=(bin,args)=>{const r=run(bin,args);assert.equal(r.status,0,r.stdout+'\n'+r.stderr);return r;};
  const put=(p,c)=>{const f=join(root,p);mkdirSync(dirname(f),{recursive:true});writeFileSync(f,c)};
- const target='.gemini/commands/revisar-entrega.toml',state='.pbai4devs/state/agentdevkit.json';
+ const target='.cursor/commands/revisar-entrega.md',state='.pbai4devs/state/agentdevkit.json';
  ok('git',['init','--quiet']);put('.gitignore','# regra humana\nprivate/\n');put('HUMAN.md','staged\n');ok('git',['add','--','.gitignore','HUMAN.md']);put('HUMAN.md','staged\nunstaged\n');
  assert.equal(ok('git',['show',':HUMAN.md']).stdout,'staged\n','índice deve conter a versão staged');
  const gitPaths=['.git/index','.git/HEAD','.git/config','.git/info/exclude','.gitignore','HUMAN.md'];const beforeInit=Object.fromEntries(gitPaths.map(p=>[p,sha(readFileSync(join(root,p)))]));
- ok(process.execPath,[cli,'init','--target',root,'--agents','gemini,codex','--yes','--json']);
+ ok(process.execPath,[cli,'init','--target',root,'--agents','cursor,codex','--yes','--json']);
  for(const p of gitPaths)assert.equal(sha(readFileSync(join(root,p))),beforeInit[p],`init preserva ${p}`);
  assert.equal(JSON.parse(readFileSync(join(root,state))).files[target],sha(readFileSync(join(root,target))),'alvo deve estar registrado como gerenciado');
  chmodSync(join(root,target),bit|0o644);

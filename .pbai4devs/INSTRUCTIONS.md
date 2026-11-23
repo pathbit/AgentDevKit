@@ -31,7 +31,8 @@ aplicativo, SO ou pastas. Sem resposta disponível, mantenha a escolha salva ou
 `all`. Registre pela CLI, sem editar hashes do estado manualmente.
 
 No primeiro uso, indique o objetivo com `init --purpose agents|product|run|document`
-ou responda à pergunta interativa. A escolha orienta a próxima ação.
+ou responda no assistente interativo quando ele abrir. Se você passou idioma e
+clientes explicitamente, informe também o objetivo na CLI.
 Para consultar o inventário antes de instalar, use `agentdevkit document`.
 
 Para iniciar produto, siga a ordem abaixo. Para preparar a execução de projeto
@@ -107,7 +108,7 @@ O arquivo local `espelhos.conf` registra seleção, layouts e pontos nativos.
 O catálogo local `catalog.json` reúne inventário e comandos das ferramentas.
 Os registros `skills.json`, `rules.json` e `agents.json` indexam as fontes.
 Codex e Antigravity compartilham `.agents`; Kimi usa `.kimi-code`.
-Gemini usa `.gemini` e Copilot usa `.github`. A pasta `.vscode` depende da
+Copilot usa `.github`. A pasta `.vscode` depende da
 configuração do editor. Veja os clientes e seus limites na
 [compatibilidade](COMPATIBILIDADE.md).
 Só clientes selecionados recebem derivações; uma pasta compartilhada permanece

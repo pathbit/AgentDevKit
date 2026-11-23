@@ -6,7 +6,7 @@ import { dirname, join, posix, win32 } from 'node:path';
 import { tmpdir } from 'node:os';
 import { audit } from './matrix-audit.mjs';
 const hash = value => createHash('sha256').update(value).digest('hex');
-const selections=['codex','claude','opencode','gemini','copilot','cursor','kimi','minimax','deepseek','antigravity','antigravity-legacy','zcode','kimi-legacy','mimo','claude,codex','copilot,cursor','codex,opencode','gemini,claude','deepseek,minimax','antigravity,copilot'];
+const selections=['codex','claude','opencode','vscode','copilot','cursor','kimi','minimax','deepseek','antigravity','antigravity-legacy','zcode','kimi-legacy','mimo','claude,codex','copilot,cursor','codex,opencode','antigravity,claude','deepseek,minimax','antigravity,copilot'];
 function fixture(t, status='passed', windows=false, round=1) {
   const parent=mkdtempSync(join(tmpdir(),'adk-audit-fixture-')); t.after(()=>rmSync(parent,{recursive:true,force:true}));
   const dir=join(parent,'run');mkdirSync(dir);
@@ -67,7 +67,7 @@ function fixture(t, status='passed', windows=false, round=1) {
     entries.push({caseDir,result});
   }
   const before=Object.fromEntries(['managedContent','managedToml','packageCli','packageManifest','runner'].map(k=>[k,{path:'/'+k,sha256:'a'.repeat(64)}]));
-  const report={version,rounds:1,startRound:round,projects:40,passed:status==='passed'?40:39,failed:Number(status==='failed'),notVerified:Number(status==='not-verified'),status,provenance:{algorithm:'sha256',before,after:before,passed:true},results:entries.map(x=>x.result)};
+  const report={version,matrixPlan:'current',rounds:1,startRound:round,projects:40,passed:status==='passed'?40:39,failed:Number(status==='failed'),notVerified:Number(status==='not-verified'),status,provenance:{algorithm:'sha256',before,after:before,passed:true},results:entries.map(x=>x.result)};
   const save=()=>{for(const e of entries)writeFileSync(join(e.caseDir,'RESULT.json'),JSON.stringify(e.result));writeFileSync(join(dir,'RESULT.json'),JSON.stringify(report));};
   save();return {parent,dir,origin,caseDir:entries[0].caseDir,result:entries[0].result,report,save};
 }
@@ -116,7 +116,7 @@ test('novo: assessment verified coerente permanece passed',t=>{let f=fixture(t);
 test('índice Git ausente no baseline é recusado',t=>{let f=fixture(t);const file=join(f.caseDir,'BEFORE.json'), b=JSON.parse(readFileSync(file));delete b.unchanged['.git/index'];writeFileSync(file,JSON.stringify(b));assert.throws(()=>audit(f.dir,f.origin),/Arquivos mínimos/);});
 test('baseline sem arquivos mínimos é recusado',t=>{let f=fixture(t);const file=join(f.caseDir,'BEFORE.json'), b=JSON.parse(readFileSync(file));b.unchanged={};writeFileSync(file,JSON.stringify(b));assert.throws(()=>audit(f.dir,f.origin),/Arquivos mínimos/);});
 test('seleção sintética não planejada é recusada',t=>{let f=fixture(t);f.report.results[0].selection='agente-ficticio';f.report.results[1].selection='agente-ficticio';f.save();assert.throws(()=>audit(f.dir,f.origin),/Seleção não corresponde/);});
-test('rodada cinco aceita IDs e seleções planejadas',t=>{let f=fixture(t,'passed',false,5);const selection='codex,gemini|codex,copilot|codex,cursor|codex,kimi|codex,minimax|codex,deepseek|codex,antigravity|codex,antigravity-legacy|codex,zcode|codex,kimi-legacy|codex,mimo|claude,opencode|claude,copilot|claude,cursor|claude,kimi|claude,minimax|claude,deepseek|claude,antigravity|claude,antigravity-legacy|claude,zcode'.split('|');f.report.results.forEach((x,i)=>{x.selection=selection[Math.floor(i/2)];x.operations.find(o=>o.label==='init').args[3]=x.selection;});f.save();assert.equal(audit(f.dir,f.origin).matrixStatus,'passed');});
+test('rodada cinco aceita IDs e seleções planejadas',t=>{let f=fixture(t,'passed',false,5);const selection='codex,vscode|codex,copilot|codex,cursor|codex,kimi|codex,minimax|codex,deepseek|codex,antigravity|codex,antigravity-legacy|codex,zcode|codex,kimi-legacy|codex,mimo|claude,opencode|claude,vscode|claude,copilot|claude,cursor|claude,kimi|claude,minimax|claude,deepseek|claude,antigravity-legacy|claude,zcode'.split('|');f.report.results.forEach((x,i)=>{x.selection=selection[Math.floor(i/2)];x.operations.find(o=>o.label==='init').args[3]=x.selection;});f.save();assert.equal(audit(f.dir,f.origin).matrixStatus,'passed');});
 function mutateBaseline(f, caseName, change){const file=join(f.dir,caseName,'BEFORE.json'),value=JSON.parse(readFileSync(file));change(value);writeFileSync(file,JSON.stringify(value));}
 test('referências vazias são recusadas',t=>{let f=fixture(t);mutateBaseline(f,'01-new',b=>{b.refs={};});assert.throws(()=>audit(f.dir,f.origin),/Diretórios de refs/);});
 test('ref heads obrigatória é recusada quando removida',t=>{let f=fixture(t);mutateBaseline(f,'01-new',b=>{delete b.refs['.git/refs/heads'];});assert.throws(()=>audit(f.dir,f.origin),/Diretórios de refs/);});
@@ -128,7 +128,7 @@ test('documentos vazios são recusados em existente',t=>{let f=fixture(t);mutate
 test('cada documento humano é obrigatório em existente',t=>{let f=fixture(t);mutateBaseline(f,'02-existing',b=>{delete b.documents['CLAUDE.md'];});assert.throws(()=>audit(f.dir,f.origin),/Documentos humanos obrigatórios/);});
 test('arquivos humanos do kit são obrigatórios em existente',t=>{let f=fixture(t);mutateBaseline(f,'02-existing',b=>{delete b.unchanged['.pbai4devs/skills/projeto/criar-skill/SKILL.md'];});assert.throws(()=>audit(f.dir,f.origin),/Arquivos mínimos/);});
 test('variante 1 exige regra Cursor para existente',t=>{let f=fixture(t,'passed',false,2);assert.equal(audit(f.dir,f.origin).matrixStatus,'passed');mutateBaseline(f,'42-existing',b=>{delete b.unchanged['.cursor/rules/equipe.mdc'];});assert.throws(()=>audit(f.dir,f.origin),/Arquivos mínimos/);});
-test('variante 2 exige comando Gemini para existente',t=>{let f=fixture(t,'passed',false,3);assert.equal(audit(f.dir,f.origin).matrixStatus,'passed');mutateBaseline(f,'82-existing',b=>{delete b.unchanged['.gemini/commands/equipe.toml'];});assert.throws(()=>audit(f.dir,f.origin),/Arquivos mínimos/);});
+test('variante 2 exige comando TOML humano em projeto existente',t=>{let f=fixture(t,'passed',false,3);assert.equal(audit(f.dir,f.origin).matrixStatus,'passed');mutateBaseline(f,'82-existing',b=>{delete b.unchanged['.gemini/commands/equipe.toml'];});assert.throws(()=>audit(f.dir,f.origin),/Arquivos mínimos/);});
 test('variante 3 exige skill humana de colisão no novo',t=>{let f=fixture(t,'passed',false,4);assert.equal(audit(f.dir,f.origin).matrixStatus,'passed');mutateBaseline(f,'121-new',b=>{delete b.documents['.agents/skills/projeto/criar-skill/SKILL.md'];});assert.throws(()=>audit(f.dir,f.origin),/Documentos humanos obrigatórios/);});
 test('documentos com modo contraditório não são aprovados',t=>{let f=fixture(t);const file=join(f.dir,'02-existing','init.snapshot.json'),snapshot=JSON.parse(readFileSync(file));snapshot.documents['AGENTS.md'].after.mode=0;writeFileSync(file,JSON.stringify(snapshot));assert.throws(()=>audit(f.dir,f.origin),/Dados do snapshot/);});
 

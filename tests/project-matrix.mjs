@@ -9,6 +9,12 @@ import { managedBlockDigest } from '../.pbai4devs/scripts/lib/managed-content.mj
 import { tomlManagedBlockDigest } from '../.pbai4devs/scripts/lib/managed-toml.mjs';
 
 const selections = [
+  'codex', 'claude', 'opencode', 'vscode', 'copilot', 'cursor', 'kimi',
+  'minimax', 'deepseek', 'antigravity', 'antigravity-legacy', 'zcode',
+  'kimi-legacy', 'mimo', 'claude,codex', 'copilot,cursor', 'codex,opencode',
+  'antigravity,claude', 'deepseek,minimax', 'antigravity,copilot',
+];
+const geminiSelections = [
   'codex', 'claude', 'opencode', 'gemini', 'copilot', 'cursor', 'kimi',
   'minimax', 'deepseek', 'antigravity', 'antigravity-legacy', 'zcode',
   'kimi-legacy', 'mimo', 'claude,codex', 'copilot,cursor', 'codex,opencode',
@@ -144,15 +150,16 @@ export function options(args) {
 }
 
 // Seleções canônicas, sem repetição semântica por ordem dos agentes.
-export function matrixCases(rounds, startRound = 1) {
+export function matrixCases(rounds, startRound = 1, matrixPlan = 'current') {
   if (!Number.isInteger(rounds) || rounds < 1 || rounds > 100) throw Error('--rounds deve estar entre 1 e 100.');
   if (!Number.isInteger(startRound) || startRound < 1 || startRound > 100 || startRound + rounds - 1 > 100) throw Error('--start-round e --rounds devem estar entre as rodadas 1 e 100.');
-  const agents = selections.slice(0, 14), pool = [], seen = new Set();
+  const initial = matrixPlan === 'with-gemini' ? geminiSelections : selections;
+  const agents = initial.slice(0, 14), pool = [], seen = new Set();
   const add = selection => {
     const key = selection.split(',').sort().join(',');
     if (!seen.has(key)) { seen.add(key); pool.push(selection); }
   };
-  selections.forEach(add);
+  initial.forEach(add);
   const combinations = (chosen, start, remaining) => {
     if (!remaining) { add(chosen.join(',')); return; }
     for (let i = start; i <= agents.length - remaining; i++) combinations([...chosen, agents[i]], i + 1, remaining - 1);
@@ -184,7 +191,7 @@ export function verifiedLegacyPairs(items) {
   if (keys.length !== 500 || [...pairs.values()].some(kinds => kinds.size !== 2) || sha(JSON.stringify(keys)) !== observedLegacyPairsHash) return new Set();
   return new Set(keys);
 }
-const legacy021Pairs = verifiedLegacyPairs(matrixCases(25));
+const legacy021Pairs = verifiedLegacyPairs(matrixCases(25, 1, 'with-gemini'));
 
 export function outputParent(requested) {
   const configuredTemp = resolve(tmpdir()), canonicalTemp = realpathSync(configuredTemp);
@@ -823,7 +830,9 @@ async function main() {
   if (Object.values(fixedBefore).some(item => !item.sha256)) throw Error('Proveniência inicial não verificável.');
   const policyBytes = readProvenanceFile(provenanceFiles.packageAdapterPolicy);
   if (sha(policyBytes) !== fixedBefore.packageAdapterPolicy.sha256) throw Error('Política de adaptadores mudou durante a leitura.');
-  const cursorMetadataName = cursorMetadataFromPolicy(JSON.parse(policyBytes.toString('utf8')));
+  const policy = JSON.parse(policyBytes.toString('utf8'));
+  const cursorMetadataName = cursorMetadataFromPolicy(policy);
+  const matrixPlan = policy.adapters.some(adapter => adapter.id === 'gemini') ? 'with-gemini' : 'current';
   const sidecarsBefore = cursorSidecarSnapshot(pkg, cursorMetadataName);
   if (Object.values(sidecarsBefore).some(item => !item.sha256)) throw Error('Proveniência inicial dos sidecars não verificável.');
   const provenanceBefore = { ...fixedBefore, ...sidecarsBefore };
@@ -835,7 +844,7 @@ async function main() {
   const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^GIT_|^npm_config_|^NODE_OPTIONS$/i.test(k) && !/(?:^|_)(?:token|secret|password)(?:_|$)/i.test(k)));
   Object.assign(env, { GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: join(directory, 'empty-gitconfig'), npm_config_offline: 'true', npm_config_audit: 'false', npm_config_fund: 'false' });
   writeFileSync(join(directory, 'empty-gitconfig'), '', { flag: 'wx' });
-  const cases = matrixCases(opts.rounds, opts.startRound);
+  const cases = matrixCases(opts.rounds, opts.startRound, matrixPlan);
   const results = new Array(cases.length); let cursor = 0;
   const worker = async () => { while (true) { const index = cursor++; if (index >= cases.length) return; try { results[index] = await projectCase(cases[index], directory, cli, opts.version, env, command, { diagnoseExclude: Boolean(opts.diagnoseExclude) }); } catch (error) {
     const report = join(directory, `case-${cases[index].number}-setup-error.json`);
@@ -845,7 +854,7 @@ async function main() {
   await Promise.all(Array.from({ length: opts.jobs }, worker));
   const provenanceAfter = { ...provenanceSnapshot(provenanceFiles), ...cursorSidecarSnapshot(pkg, cursorMetadataName) };
   const provenance = { platform: process.platform, arch: process.arch, algorithm: 'sha256', before: provenanceBefore, after: provenanceAfter, passed: provenanceComparison(provenanceBefore, provenanceAfter) };
-  const summary = { version: meta.version, package: pkg, node: process.version, provenance, modeMask: `0o${modeMask.toString(8)}`, startRound: opts.startRound, rounds: opts.rounds, ...(opts.diagnoseExclude ? { diagnosticExclude: true } : {}), projects: results.length, passed: results.filter(r => r.passed).length, failed: results.filter(r => !r.passed && r.status !== 'not-verified').length, notVerified: results.filter(r => r.status === 'not-verified').length,
+  const summary = { version: meta.version, matrixPlan, package: pkg, node: process.version, provenance, modeMask: `0o${modeMask.toString(8)}`, startRound: opts.startRound, rounds: opts.rounds, ...(opts.diagnoseExclude ? { diagnosticExclude: true } : {}), projects: results.length, passed: results.filter(r => r.passed).length, failed: results.filter(r => !r.passed && r.status !== 'not-verified').length, notVerified: results.filter(r => r.status === 'not-verified').length,
     limitations: ['Cada rodada contém 40 projetos; o limite é 100 rodadas (4.000 projetos), com custo de tempo e espaço proporcional; não há limite global de disco ou duração.', 'Documentos extensíveis aceitam apenas conteúdo original ou original seguido do bloco AgentDevKit exato esperado, além de modo e diretórios preservados; variantes legítimas desse bloco podem ser sinalizadas e exigem análise.', 'Projetos sintéticos locais; verifica inventário, hashes e seleção instalados após cada etapa, mas não executa skills, agentes, clientes nativos ou testes de aplicações.', 'A estabilidade do inventário indica idempotência dos arquivos gerenciados observados; update, doctor e sync dependem da CLI e de sua saída e não provam atualização a partir de conteúdo legado diferente.', 'Apontamentos Markdown de skills, perfis, comandos e regras usam política e fontes do pacote; destinos humanos preservados sem bloco são marcados não verificados. Descoberta e execução nativas não são testadas.', 'Logs de saída são texto decodificado como UTF-8; bytes inválidos não são preservados fielmente.', 'Não impede acesso à rede pelo sistema operacional.', 'Não testa configuração ou credenciais reais: remove NODE_OPTIONS, GIT_* e npm_config_* e isola configuração global do Git.', 'Os snapshots cobrem arquivos e índice registrados ao final de cada etapa; não detectam alteração e reversão durante um mesmo processo.', 'Refs das fixtures usam .git/refs e packed-refs; outros formatos e metadados Git não são cobertos.', 'Timeout ou excesso de saída deixam preservação não verificada; descendentes que escapem do grupo podem permanecer.', ...(process.platform === 'win32' ? ['No Windows, o modo compara apenas o bit de escrita reportado pelo Node; ACLs não são verificadas.', 'No Windows, apenas o processo filho é encerrado; descendentes podem permanecer.'] : [])], results };
   summary.status = overallStatus(provenance.passed, summary.failed, summary.notVerified);
   summary.limitations.push('ruleScopes registra configuração documental: origem de leitura explícita sem apontamento Claude na fixture, ou modo Cursor comparado à regra e ao sidecar. A execução do cliente permanece não testada.');

@@ -55,6 +55,7 @@ npm run check
 Escolha verificações adicionais pelo impacto da mudança. Instalação exige
 projetos novos e existentes; Git exige preservação do índice e dos arquivos;
 distribuição exige o pacote real. Consulte [testes][tests].
+O [guia de desenvolvimento][source] explica como incluir o lint Markdown.
 
 Mantenha testes e fixtures versionados. Relatórios, capturas, downloads,
 apontamentos e preferências locais ficam ignorados. Revise o diff antes de

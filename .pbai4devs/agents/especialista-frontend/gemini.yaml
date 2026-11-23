@@ -1,6 +1,0 @@
----
-name: especialista-frontend
-description: Implementa e verifica a interface aprovada e seus fluxos reais.
-kind: local
-tools: [read_file, grep_search, run_shell_command, replace, write_file]
----

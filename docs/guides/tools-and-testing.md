@@ -64,17 +64,18 @@ o código de testes segue os diretórios acordados para aquele projeto.
 A [matriz de maturidade][matrix] usa oito projetos sintéticos. Ela comprova
 contratos do kit; não aprova um produto real nem certifica todos os aplicativos.
 Os pareceres simulados dessa matriz não substituem revisão independente.
-Use `npm run examples` para preparar as cópias e `npm run test:examples`
-para executá-las em uma pasta temporária fora de Git. O [guia dos exemplos][examples]
+Use `npm run examples` para gerar exemplos para inspeção.
+`npm run test:examples` cria novas cópias temporárias e executa os cenários.
+O [guia dos exemplos][examples]
 explica cada cenário; o [guia de desenvolvimento](../maintainers/development.md)
 reúne as verificações do repositório.
 
 ## Guardar os resultados
 
-Código de testes e fixtures são versionados. Relatórios, capturas, vídeos,
-downloads e saídas locais são ignorados, inclusive `.playwright*` em qualquer
-caixa. Registre passou, falhou ou não verificado; não transforme ausência de
-prova em sucesso. Feche a entrega pela [revisão][review].
+Versione código de testes e fixtures. Guarde relatórios, capturas, vídeos,
+downloads e saídas Playwright em caminhos ignorados pelo projeto e confira com
+`git check-ignore -v -- <caminho>`. Registre o resultado de cada verificação e
+feche a entrega pela [revisão][review].
 
 [Wiki](../README.md) · [Recursos](resources.md)
 

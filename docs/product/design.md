@@ -59,8 +59,8 @@ externo, frontmatter e nome existente são preservados; somente o hash do bloco
 é registrado. Alterações externas continuam permitidas; alterações dentro do
 bloco exigem revisão e não autorizam sobrescrever o arquivo com `--force`.
 Arquivos novos e integralmente gerados continuam com propriedade integral.
-Comandos TOML recebem a referência no valor de `prompt`, preservando as demais
-chaves. Configurações nativas fora desse escopo permanecem sob controle humano.
+O leitor de comandos TOML legados reconhece a contribuição gerenciada em
+`prompt`. Configurações nativas permanecem sob controle humano.
 Nunca é possível ignorar somente um trecho de arquivo no Git. Veja a
 [spec de integração][additive].
 
@@ -78,6 +78,10 @@ O inspetor inclui metadados de documentação no JSON: caminhos, tipo, papel
 provável, origem da indicação, tamanho e hash quando couber nos limites.
 Ele não escreve arquivos, não emite conteúdo e não lê destinos simbólicos.
 Limites e avisos impedem interpretar uma busca parcial como ausência de docs.
+
+`document` usa essa inspeção para preparar um rascunho de inventário em
+Markdown ou JSON. `next --intent document` orienta o fluxo de leitura pelo
+agente a partir do estado do projeto. [Comandos da CLI](../guides/cli.md)
 
 A skill `atualizar-documentacao` usa esse inventário antes dos templates.
 O agente lê o material, propõe ações por arquivo e aplica complementos

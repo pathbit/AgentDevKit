@@ -18,6 +18,11 @@ npm test
 origem das releases. Ambas executam o CI. A automação de publicação depende
 do push aprovado na `main` e da versão do pacote.
 
+`npm run check` confere estrutura e links. Para incluir o lint Markdown,
+prepare `markdownlint-cli2` pelo
+[script de ferramentas](../../.pbai4devs/scripts/preparar-ferramentas/README.md).
+O perfil `npm run verify` prepara a ferramenta antes da checagem.
+
 ## Ambiente Compose
 
 A aplicação é uma CLI: cada execução termina e não abre porta nem mantém

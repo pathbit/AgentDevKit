@@ -11,16 +11,16 @@ const sha = data => createHash('sha256').update(data).digest('hex');
 const digestPattern = /^[a-f0-9]{64}$/;
 const isDigest = value => typeof value === 'string' && digestPattern.test(value);
 const expected = ['init', 'update', 'update-force', 'doctor', 'sync-check'];
-const initial = ['codex','claude','opencode','gemini','copilot','cursor','kimi','minimax','deepseek','antigravity','antigravity-legacy','zcode','kimi-legacy','mimo','claude,codex','copilot,cursor','codex,opencode','gemini,claude','deepseek,minimax','antigravity,copilot'];
-function selectionPool() {
-  const all=[], known=new Set(), agents=initial.slice(0,14);
+const initial = ['codex','claude','opencode','vscode','copilot','cursor','kimi','minimax','deepseek','antigravity','antigravity-legacy','zcode','kimi-legacy','mimo','claude,codex','copilot,cursor','codex,opencode','antigravity,claude','deepseek,minimax','antigravity,copilot'];
+const geminiSelections = ['codex','claude','opencode','gemini','copilot','cursor','kimi','minimax','deepseek','antigravity','antigravity-legacy','zcode','kimi-legacy','mimo','claude,codex','copilot,cursor','codex,opencode','gemini,claude','deepseek,minimax','antigravity,copilot'];
+function selectionPool(selections) {
+  const all=[], known=new Set(), agents=selections.slice(0,14);
   const add=x=>{const k=x.split(',').sort().join(',');if(!known.has(k)){known.add(k);all.push(x);}};
-  initial.forEach(add);
+  selections.forEach(add);
   function choose(list,start,left){if(!left){add(list.join(','));return;}for(let i=start;i<=agents.length-left;i++)choose([...list,agents[i]],i+1,left-1);}
   for(let size=1;size<=4;size++)choose([],0,size);
   return all;
 }
-const pool=selectionPool();
 // Recalcula independentemente os motivos publicados pelo runner. Alterações no
 // contrato exigem revisão explícita desta função; não importa o runner.
 function coverageAssessment(operations) {
@@ -180,7 +180,8 @@ function verifyProvenanceSources(report, sources) {
   if (!isDeepStrictEqual(recorded, hashes)) {
     fail('Inventário ou hash de sidecars de proveniência Cursor divergente.');
   }
-  return { metadataName, sidecars };
+  const matrixPlan = policy.adapters.some(adapter => adapter.id === 'gemini') ? 'with-gemini' : 'current';
+  return { metadataName, sidecars, matrixPlan };
 }
 
 function verifyProvenance(report, flavor, sources) {
@@ -270,6 +271,10 @@ export function audit(output, origin, sources = {}) {
   const report = json(summaryBytes);
   if (!isObject(report) || !Array.isArray(report.results) || !Number.isInteger(report.rounds) || report.rounds < 1 || report.rounds > 100 || !Number.isInteger(report.startRound) || report.startRound < 1 || report.startRound + report.rounds - 1 > 100 || report.results.length !== report.rounds * 40 || typeof report.version !== 'string' || !report.version) fail('Rodadas, cardinalidade ou versão inválidas.');
   const { passed: provenance, sourcesVerified, sourceDetails, legacy } = verifyProvenance(report, flavor, sources);
+  const matrixPlan = report.matrixPlan === undefined ? 'with-gemini' : report.matrixPlan;
+  if (!['with-gemini', 'current'].includes(matrixPlan)
+    || (sourceDetails && sourceDetails.matrixPlan !== matrixPlan)) fail('Plano de seleções da matriz inválido.');
+  const pool = selectionPool(matrixPlan === 'with-gemini' ? geminiSelections : initial);
   const counts = { passed: 0, failed: 0, 'not-verified': 0 }, seen = new Set(), selectionPairs = new Set();
   for (const [index, result] of report.results.entries()) {
     if (!isObject(result) || !Number.isSafeInteger(result.number) || result.number < 1 || seen.has(result.number) || !Object.hasOwn(counts, result.status) || result.passed !== (result.status === 'passed')) fail('Caso inválido.');

@@ -392,6 +392,10 @@ function runSynchronization({ root = projectRoot, check = false, force = false, 
   const stateFile = `${stateRoot}/agentdevkit.json`;
   const installedBytes = stat(safe(stateFile)) ? readFileSync(safe(stateFile)) : null;
   const installed = installedBytes ? parseJson(normalize(installedBytes.toString('utf8')), 'estado instalado') : null;
+  const migrateClients = 'Revise os clientes legados com agentdevkit update --dry-run e selecione clientes ativos com --agents.';
+  if (!privateStage && Array.isArray(installed?.clients) && installed.clients.some(id => typeof id === 'string' && id.split(',').some(value => value.trim().toLowerCase() === 'gemini'))) {
+    fail(migrateClients);
+  }
   const configText = configExists ? read(safe(config)) : adapterManifest(root, { clients: installed?.clients });
   const rows = configText.split('\n');
   const entryRegistry = `${stateRoot}/derived.json`;
@@ -535,6 +539,7 @@ function runSynchronization({ root = projectRoot, check = false, force = false, 
     } else fail(`Tipo invalido no manifesto: ${type}`);
   }
   if (!agents.size) fail('Nenhum agente cadastrado.');
+  if (configText.startsWith('# Gerado por AgentDevKit;') && agents.has('.gemini')) fail(migrateClients);
   for (const key of formats.keys()) if (!agents.has(key.split('/')[0])) fail(`Formato fora dos agentes: ${key}`);
   for (const [target, source] of fallbacks) if (!agents.has(target) || !agents.has(source) || formats.get(`${target}/skills`) !== 'nenhum' || formats.get(`${source}/skills`) === 'nenhum') fail(`Fallback fora dos agentes: ${target}`);
   for (const root of discoveries) if (!agents.has(root)) fail(`Descoberta fora dos agentes: ${root}`);
@@ -1108,7 +1113,7 @@ function runSynchronization({ root = projectRoot, check = false, force = false, 
   const nextEntries = generateEntrypoints ? {} : { ...previousEntries.entries };
   if (generateEntrypoints) {
     const previous = previousEntries;
-    for (const canonical of resolveAdapters(installed?.clients).entrypoints) {
+    for (const canonical of resolveAdapters(installed?.clients, { stored: true }).entrypoints) {
       const name = resolveEntrypoint(root, canonical);
       const template = `.pbai4devs/templates/entrypoints/${canonical}`;
       if (!stat(safe(template))?.isFile()) continue;

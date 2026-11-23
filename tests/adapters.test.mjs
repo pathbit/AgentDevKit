@@ -26,7 +26,7 @@ function fixture(t, { gitRepository = true } = {}) {
   write(root, '.pbai4devs/rules/projeto/style/RULE.md', '---\ntrigger: always_on\ndescription: Estilo.\n---\n\n# Estilo\n');
   write(root, '.pbai4devs/agents/revisor/AGENT.md', '---\nname: revisor\ndescription: Revisor.\n---\n\n# Revisor\n');
   write(root, '.pbai4devs/agents/revisor/claude.yaml', '---\nname: revisor\ndescription: Revisor.\ntools: Read, Grep\n---\n');
-  for (const client of ['antigravity', 'github', 'gemini']) write(root, `.pbai4devs/agents/revisor/${client}.yaml`, '---\nname: revisor\ndescription: Revisor.\n---\n');
+  for (const client of ['antigravity', 'github']) write(root, `.pbai4devs/agents/revisor/${client}.yaml`, '---\nname: revisor\ndescription: Revisor.\n---\n');
   write(root, '.pbai4devs/templates/gitignore/agents.ignore', '/*\n!/.gitignore\n{{ALLOWLIST}}\n');
   write(root, '.pbai4devs/templates/gitignore/shared.ignore', '/tools/.cache/\n');
   write(root, '.pbai4devs/templates/gitignore/clients.json', '{".agents":{"allow":["skills.json","rules.json","agents.json"]}}\n');
@@ -69,13 +69,13 @@ test('clientes recebem grupos e excecoes nativas pesquisadas', t => {
   }
   assert.equal(existsSync(join(root, '.codex/skills/projeto/example/SKILL.md')), false);
   assert.ok(existsSync(join(root, '.codex/agents/revisor/AGENT.md')));
-  for (const client of ['.claude', '.github', '.gemini', '.zcode', '.minimax', '.dsh']) {
+  for (const client of ['.claude', '.github', '.zcode', '.minimax', '.dsh']) {
     assert.ok(existsSync(join(root, client, 'skills/example/SKILL.md')), client);
     assert.equal(existsSync(join(root, client, 'skills/projeto/example/SKILL.md')), false, client);
   }
   assert.ok(existsSync(join(root, '.opencode/commands/projeto/check.md')));
   assert.ok(existsSync(join(root, '.claude/commands/projeto/check.md')));
-  assert.ok(existsSync(join(root, '.gemini/commands/projeto/check.toml')));
+  assert.equal(existsSync(join(root, '.gemini')), false);
   assert.ok(existsSync(join(root, '.cursor/rules/projeto/style.mdc')));
   assert.ok(existsSync(join(root, '.github/instructions/projeto/style.instructions.md')));
   assert.match(read(root, '.claude/agents/revisor.md'), /tools: Read, Grep/);
@@ -152,7 +152,7 @@ test('implementador Claude declara preload da skill e mantém apontamentos para 
 
 test('cada excecao de layout tem motivo e fontes oficiais', () => {
   assert.equal(new Set(adapterRoots).size, adapterRoots.length);
-  assert.equal(adapters.length, 12);
+  assert.equal(adapters.length, 11);
   for (const adapter of adapters) {
     assert.ok(adapter.name.length > 0);
     assert.ok(adapter.reason.length > 20);
@@ -182,7 +182,6 @@ const selections = [
   ['cursor', ['.cursor'], ['AGENTS.md']],
   ['copilot', ['.github', '.vscode'], ['AGENTS.md']],
   ['opencode', ['.opencode'], ['AGENTS.md']],
-  ['gemini', ['.gemini'], ['AGENTS.md', 'GEMINI.md']],
   ['zcode', ['.zcode'], ['AGENTS.md']],
   ['kimi', ['.kimi-code'], ['AGENTS.md']],
   ['kimi-legacy', ['.kimi-code'], ['AGENTS.md'], 'kimi'],
@@ -199,10 +198,10 @@ test('selecao resolve dependencias, pontos de entrada e fallback all', () => {
     assert.deepEqual(selection.entrypoints, entrypoints, client);
     assert.deepEqual(selection.adapters.map(adapter => adapter.root), roots.filter(root => root !== '.vscode'));
   }
-  assert.deepEqual(adapterRoots.filter(root => !resolveAdapters().roots.includes(root)), ['.agent', '.kimi']);
+  assert.deepEqual(adapterRoots.filter(root => !resolveAdapters().roots.includes(root)), ['.agent', '.gemini', '.kimi']);
   assert.deepEqual(resolveAdapters('all').entrypoints, ['AGENTS.md', 'CLAUDE.md', 'GEMINI.md']);
   assert.deepEqual(resolveAdapters(['codex', 'antigravity', 'vscode']).roots, ['.agents', '.codex', '.github', '.vscode']);
-  assert.deepEqual(resolveAdapters(['gemini', 'claude']).entrypoints, ['AGENTS.md', 'CLAUDE.md', 'GEMINI.md']);
+  assert.deepEqual(resolveAdapters(['antigravity', 'claude']).entrypoints, ['AGENTS.md', 'CLAUDE.md', 'GEMINI.md']);
 });
 
 test('cada selecao filtra todos os tipos de linha e sincroniza somente suas raizes', async t => {

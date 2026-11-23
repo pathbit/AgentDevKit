@@ -43,7 +43,7 @@ test('migração independente preserva marcador correlacionado fora da seleção
  const d=read(root,old)?JSON.parse(read(root,old)):{schemaVersion:1,entries:{}};d.removedFiles={...d.removedFiles,[target]:digest};d.humanNote={text:'sintético'};
  put(root,old,JSON.stringify(d,null,2)+'\n');renameSync(join(root,'.pbai4devs/state'),join(root,'.pbai4devs/estado'));unlinkSync(join(root,target));
  git(root,'add','-f','--',legacyDerived);const before={index:read(root,'.git/index'),config:read(root,'.git/config'),exclude:read(root,'.git/info/exclude'),ignore:read(root,'.gitignore'),human:read(root,'HUMAN.md'),derived:read(root,legacyDerived)};
- const plan=planInstallation({target:root,mode:'update',clients:['gemini']});assert.equal(plan.canApply,true);assert.equal(plan.changes.some(item=>item.path===target&&item.action==='create'),false);applyPlan(plan);
+ const plan=planInstallation({target:root,mode:'update',clients:['cursor']});assert.equal(plan.canApply,true);assert.equal(plan.changes.some(item=>item.path===target&&item.action==='create'),false);applyPlan(plan);
  assert.deepEqual(read(root,'.git/index'),before.index);assert.deepEqual(read(root,'.git/config'),before.config);assert.deepEqual(read(root,'.git/info/exclude'),before.exclude);assert.deepEqual(read(root,'.gitignore'),before.ignore);assert.deepEqual(read(root,'HUMAN.md'),before.human);assert.deepEqual(read(root,'.pbai4devs/state/derived.json'),before.derived);assert.equal(read(root,target),null);
 });
 

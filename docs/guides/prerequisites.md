@@ -107,15 +107,17 @@ runtime, verifica o checksum e não altera o PATH permanentemente.
 
 ## Depois de instalar o kit
 
-Na pasta do projeto, prepare e verifique as ferramentas compatíveis:
+Escolha as ferramentas necessárias à tarefa. Para preparar e verificar
+somente lint Markdown, por exemplo:
 
 ```console
-npx @pathbit/agentdevkit tools setup
-npx @pathbit/agentdevkit tools check all
+npx @pathbit/agentdevkit tools install markdownlint-cli2
+npx @pathbit/agentdevkit tools check markdownlint-cli2
 ```
 
 Para usar GitHub Packages, acrescente `--registry=https://npm.pkg.github.com`
 antes do nome do pacote, como no [guia de instalação](installation.md#github-packages).
+`tools setup` prepara e verifica as ferramentas compatíveis.
 `tools setup base` limita o preparo a navegador e lint. A instalação dos CLIs
 não instala browsers, FFmpeg nem concede permissões desktop; veja os requisitos
 da tarefa em [ferramentas e testes](tools-and-testing.md).

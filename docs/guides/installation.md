@@ -74,9 +74,10 @@ confira o [diagnóstico de registry](troubleshooting.md#download-plataforma-ou-f
 
 ### Opções e verificação
 
-Sem comando adicional, o pacote executa `init`. Em terminal interativo,
-pergunta idioma e agentes. No aplicativo desktop, peça ao agente para reunir
-as escolhas no chat e usar `--lang` e `--agents` na CLI.
+Sem comando adicional, o pacote executa `init`. No primeiro uso interativo,
+quando falta o idioma ou a seleção de agentes, o assistente reúne essas escolhas
+e o objetivo. Com idioma e clientes explícitos, use também `--purpose`.
+No aplicativo desktop, reúna as escolhas pelo chat e passe-as à CLI.
 
 Consulte [CLI](cli.md) para acrescentar seleção, destino e simulação. `--json`,
 `--yes`, `--dry-run` ou ausência de terminal interativo evitam perguntas.
@@ -93,7 +94,21 @@ npx @pathbit/agentdevkit sync --check
 Se escolheu GitHub Packages, use o mesmo prefixo
 `npx --registry=https://npm.pkg.github.com` nesses comandos. Para fixar uma
 versão, acrescente-a ao nome do pacote, como `@pathbit/agentdevkit@0.0.31`.
-O próximo passo é [preparar as ferramentas](prerequisites.md#depois-de-instalar-o-kit).
+Consulte `npx @pathbit/agentdevkit next` para retomar pelo objetivo do projeto.
+Prepare [as ferramentas](prerequisites.md#depois-de-instalar-o-kit) quando a
+tarefa exigir.
+
+### Simular em um projeto existente
+
+Na raiz do projeto, confira os arquivos e conflitos sem aplicar as mudanças:
+
+```console
+npx @pathbit/agentdevkit init --dry-run --json
+```
+
+Depois de decidir como tratar o plano, aplique `init` com os clientes e o
+objetivo escolhidos. Para um kit já instalado, simule `update` antes de usar
+uma versão nova. [Referência da CLI](cli.md)
 
 ## O que fica no projeto
 
@@ -171,10 +186,12 @@ sem prometer a adição do apontamento. Repetir a operação não duplica o bloc
 Edite suas instruções fora
 dele: atualizações alteram somente a contribuição do kit. Nomes de entradas
 com caixa diferente são reaproveitados quando há uma única opção.
-Comandos Gemini mantêm a referência dentro do valor `prompt` em TOML válido.
 Configurações que não são instruções não recebem uma mesclagem arbitrária.
 Arquivos mistos não passam a pertencer ao kit. Sua visibilidade para o Git
 também depende da regra aplicada à pasta do cliente.
+
+Para atualizar uma instalação com o Gemini CLI selecionado, confira a
+[migração de clientes](../../.pbai4devs/COMPATIBILIDADE.md#escolher-clientes).
 
 Links simbólicos preexistentes são preservados sem atravessá-los. O campo
 `preserved` lista caminhos próprios encontrados no planejamento ou em colisões,

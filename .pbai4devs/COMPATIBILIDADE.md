@@ -22,7 +22,6 @@ salva; sem ambas, usa `all`. Não há detecção automática do agente em execu�
 | [Cursor][cursor] | `cursor` | `.cursor` |
 | [Copilot][cp] | `copilot` | `.github`, `.vscode` |
 | [OpenCode V2][opencode] | `opencode` | `.opencode` |
-| [Gemini CLI][gemini] | `gemini` | `.gemini` |
 | [Antigravity][antigravity] | `antigravity` | `.agents` |
 | [ZCode][zcode] | `zcode` | `.zcode` |
 | [Kimi Code][kimi] | `kimi` | `.kimi-code` |
@@ -43,6 +42,14 @@ de gerar em `.agent` e `.kimi` e retira os apontamentos de propriedade
 comprovada. Conteúdo próprio, editado ou com divergência no índice Git
 permanece.
 
+O Gemini CLI saiu da seleção ativa do AgentDevKit. Em uma instalação que
+também usa outros clientes, `update` conserva esses IDs. Em uma instalação
+exclusiva do Gemini CLI, consulte `agents` e escolha um cliente ativo com
+`update --agents <id> --dry-run`. O plano identifica os apontamentos antigos
+cuja propriedade o kit consegue comprovar e preserva arquivos do projeto.
+`GEMINI.md` continua sendo um ponto de entrada do adaptador Antigravity.
+[Transição anunciada pelo Google][gemini-transition]
+
 ## Formatos nativos
 
 Os grupos são preservados quando a descoberta permite. Abaixo, `grupo/`
@@ -62,9 +69,6 @@ Os caminhos são relativos à pasta do cliente, exceto onde indicado.
   `prompts/grupo/nome.prompt.md` para Local.
 - OpenCode: `skills/grupo/nome/SKILL.md`, `commands/grupo/nome.md`,
   `agents/grupo/nome.md`; regras como referências.
-- Gemini: `skills/nome/SKILL.md`, `commands/grupo/nome.toml`,
-  `agents/nome.md`; regras como referências. Skills do projeto exigem pasta
-  confiável no cliente; consulte a [documentação de descoberta][gemini-trust].
 - Antigravity: skills e regras agrupadas, agentes planos registrados nos
   manifestos; comandos como referências.
 - ZCode: `skills/nome/SKILL.md`, comandos diretos; demais tipos são referências.
@@ -81,7 +85,7 @@ Permissão de terminal não isola caminhos por si só: o perfil e os scripts
 continuam responsáveis por respeitar o escopo autorizado.
 
 Claude documenta skills no nível `skills/nome`; sua descoberta de arquivos
-`.claude` em subprojetos não confirma grupos dentro de `skills/`. Gemini,
+`.claude` em subprojetos não confirma grupos dentro de `skills/`.
 MiniMax, Copilot CLI/SDK e DeepSeek usam filhos imediatos. ZCode exige skills
 planas em plugins. Mantemos esses layouts; não presumimos recursão em agentes ou
 comandos quando o fornecedor só documenta arquivos diretos.
@@ -180,8 +184,7 @@ comprovada. As razões e fontes por adaptador também ficam em
 [cursor]: https://cursor.com/docs/skills
 [cp]: https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/skills
 [opencode]: https://opencode.ai/docs/skills
-[gemini]: https://geminicli.com/docs/cli/skills/
-[gemini-trust]: https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/tutorials/skills-getting-started.md
+[gemini-transition]: https://developers.googleblog.com/an-important-update-transitioning-gemini-cli-to-antigravity-cli/
 [antigravity]: https://antigravity.google/docs/customization-discovery
 [zcode]: https://zcode.z.ai/en/docs/skill
 [kimi]: https://moonshotai.github.io/kimi-code/en/customization/skills

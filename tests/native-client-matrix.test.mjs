@@ -12,9 +12,9 @@ import { compareInventory, destination, discovery, structural } from './native-c
 const skill = { id: 'projeto/criar-skill', name: 'criar-skill', path: '.pbai4devs/skills/projeto/criar-skill/SKILL.md' };
 const agent = { id: 'revisor', name: 'revisor', path: '.pbai4devs/agents/revisor/AGENT.md' };
 test('destinos são específicos por cliente e tipo', () => {
-  assert.equal(destination('gemini', 'skills', skill), '.gemini/skills/criar-skill/SKILL.md');
+  assert.equal(destination('claude', 'skills', skill), '.claude/skills/criar-skill/SKILL.md');
   assert.equal(destination('opencode', 'skills', skill), '.opencode/skills/projeto/criar-skill/SKILL.md');
-  assert.equal(destination('gemini', 'agents', agent), '.gemini/agents/revisor.md');
+  assert.equal(destination('claude', 'agents', agent), '.claude/agents/revisor.md');
   assert.equal(destination('opencode', 'agents', agent), '.opencode/agents/revisor.md');
   assert.equal(destination('codex', 'skills', skill), '.agents/skills/projeto/criar-skill/SKILL.md');
   assert.equal(destination('codex', 'agents', agent), '.codex/agents/revisor/AGENT.md');
@@ -24,31 +24,18 @@ test('destinos são específicos por cliente e tipo', () => {
 });
 test('estrutura exige origem e referência ao caminho correto', t => {
   const root = mkdtempSync(join(tmpdir(), 'native-test-')); t.after(() => rmSync(root, { recursive: true, force: true }));
-  const target = join(root, destination('gemini', 'skills', skill)); mkdirSync(dirname(target), { recursive: true });
+  const target = join(root, destination('claude', 'skills', skill)); mkdirSync(dirname(target), { recursive: true });
   const wrapper = link => `---\nname: criar-skill\n---\n\n# Criar skill\n\n<!-- gerado: sincronizar-agentes -->\nLeia e siga ${link}.\n`;
   writeFileSync(target, wrapper('[origem](../../../.pbai4devs/skills/projeto/criar-skill/SKILL.md)'));
-  assert.equal(structural(root, 'gemini', 'skills', skill).status, 'failed');
+  assert.equal(structural(root, 'claude', 'skills', skill).status, 'failed');
   mkdirSync(dirname(join(root, skill.path)), { recursive: true }); writeFileSync(join(root, skill.path), 'skill');
-  assert.equal(structural(root, 'gemini', 'skills', skill).status, 'passed');
-  writeFileSync(target, wrapper('[origem](../../../outro/SKILL.md)')); assert.equal(structural(root, 'gemini', 'skills', skill).status, 'failed');
+  assert.equal(structural(root, 'claude', 'skills', skill).status, 'passed');
+  writeFileSync(target, wrapper('[origem](../../../outro/SKILL.md)')); assert.equal(structural(root, 'claude', 'skills', skill).status, 'failed');
   const link = '[origem](../../../.pbai4devs/skills/projeto/criar-skill/SKILL.md)';
   for (const inert of [`---\nname: fake\n---\n\n\`\`\`\n---\n\n# Fake\n\n<!-- gerado: sincronizar-agentes -->\nLeia e siga ${link}.\n`, `<!-- ${link} -->`, `\`\`${link}\`\``, `    ${link}`, `\\${link}`, `\`\`\`md\n${link}\n\`\`\``, `  \`\`\`md\n${link}\n  \`\`\``, `\`\`\`\`md\n${link}\n\`\`\`\``, `\`inicio\n${link}\nfim\``]) {
-    writeFileSync(target, inert); assert.equal(structural(root, 'gemini', 'skills', skill).status, 'failed', inert);
+    writeFileSync(target, inert); assert.equal(structural(root, 'claude', 'skills', skill).status, 'failed', inert);
   }
 });
-test('descoberta exige nome exato e localização do projeto, sem inferir execução', () => {
-  const project = join(tmpdir(), 'projeto-sintetico');
-  const location = join(project, destination('gemini', 'skills', skill));
-  const output = `criar-skill [Enabled]\n  Location:    ${location}\n`;
-  assert.equal(discovery('gemini', 'skills', skill, output, project), true);
-  assert.equal(discovery('gemini', 'skills', skill, output, join(tmpdir(), 'outro')), false);
-  assert.equal(discovery('gemini', 'skills', skill, output.replace('  Location:', 'outro [Enabled]\n  Location:'), project), false);
-  assert.equal(discovery('gemini', 'skills', skill, output.replace('[Enabled]', '[Disabled]'), project), false);
-  assert.equal(discovery('gemini', 'agents', agent, output, project), null);
-  assert.equal(discovery('opencode', 'agents', agent, 'não é JSON', project), false);
-  assert.equal(discovery('opencode', 'skills', skill, '', project), null);
-});
-
 test('Copilot exige skill habilitada e única na pasta do projeto', () => {
   const project = '/tmp/projeto-sintetico';
   const row = { name: 'criar-skill', source: 'project', enabled: true,
@@ -74,14 +61,14 @@ test('inventário acusa faltas, extras e duplicatas mesmo com mesmo id', () => {
 });
 test('recusa links simbólicos na origem e no apontamento, inclusive ancestrais', t => {
   const root = mkdtempSync(join(tmpdir(), 'native-symlink-')); t.after(() => rmSync(root, { recursive: true, force: true }));
-  const source = join(root, skill.path), target = join(root, destination('gemini', 'skills', skill));
+  const source = join(root, skill.path), target = join(root, destination('claude', 'skills', skill));
   mkdirSync(dirname(source), { recursive: true }); mkdirSync(dirname(target), { recursive: true });
   writeFileSync(source, 'source'); writeFileSync(target, '---\nname: criar-skill\n---\n\n# Criar skill\n\n<!-- gerado: sincronizar-agentes -->\nLeia e siga [origem](../../../.pbai4devs/skills/projeto/criar-skill/SKILL.md).\n');
   rmSync(source);
   try { symlinkSync(target, source); } catch (error) { if (process.platform === 'win32' && ['EPERM', 'EACCES', 'UNKNOWN'].includes(error.code)) { t.skip('Sem permissão de symlink.'); return; } throw error; }
-  assert.equal(structural(root, 'gemini', 'skills', skill).status, 'failed');
-  rmSync(source); writeFileSync(source, 'source'); rmSync(target); symlinkSync(source, target); assert.equal(structural(root, 'gemini', 'skills', skill).status, 'failed');
-  rmSync(target); rmSync(dirname(target), { recursive: true }); symlinkSync(dirname(source), dirname(target), 'dir'); assert.equal(structural(root, 'gemini', 'skills', skill).status, 'failed');
+  assert.equal(structural(root, 'claude', 'skills', skill).status, 'failed');
+  rmSync(source); writeFileSync(source, 'source'); rmSync(target); symlinkSync(source, target); assert.equal(structural(root, 'claude', 'skills', skill).status, 'failed');
+  rmSync(target); rmSync(dirname(target), { recursive: true }); symlinkSync(dirname(source), dirname(target), 'dir'); assert.equal(structural(root, 'claude', 'skills', skill).status, 'failed');
 });
 test('OpenCode exige conteúdo exato do perfil instalado para o mesmo id', t => {
   const project = mkdtempSync(join(tmpdir(), 'native-profile-')); t.after(() => rmSync(project, { recursive: true, force: true }));
@@ -114,7 +101,7 @@ test('falhas de catálogo instalado e fixture produzem casos e todas as linhas',
   const catalog = buildCatalog(pkg).catalog;
   const policyFile = join(pkg, '.pbai4devs/templates/clients/ADAPTERS.json');
   const alteredPolicy = JSON.parse(readFileSync(policyFile, 'utf8'));
-  alteredPolicy.adapters.find(item => item.id === 'gemini').root = '.gemini-outra';
+  alteredPolicy.adapters.find(item => item.id === 'claude').root = '.claude-outra';
   writeFileSync(policyFile, JSON.stringify(alteredPolicy));
   writeFileSync(join(pkg, 'package.json'), JSON.stringify({ name: '@pathbit/agentdevkit', version: '1.2.3', type: 'module' }));
   const fake = `import {mkdirSync,writeFileSync,rmSync} from 'node:fs'; import {join,basename,dirname} from 'node:path';
@@ -130,23 +117,23 @@ console.log(JSON.stringify({ok:true}));`;
   assert.equal(report.rows.length, expectedCases.length * (catalog.skills.length + catalog.agents.length));
   for (const item of report.cases) { assert.equal(item.init.status, 'passed'); assert.ok(item.error); assert.ok(['blocked', 'not-run'].includes(item.discovery.status)); }
   assert.equal(report.rows.every(item => item.execution.status === 'not-run'), true);
-  assert.ok(report.rows.find(item => item.client === 'gemini' && item.type === 'skills').structure.path.startsWith('.gemini-outra/'));
+  assert.ok(report.rows.find(item => item.client === 'claude' && item.type === 'skills').structure.path.startsWith('.claude-outra/'));
 });
 
 test('destino usa política do pacote em vez da política do checkout', () => {
-  const policy = [{ id: 'gemini', root: '.gemini-outra', formats: { skills: 'agrupado', agents: 'plano' } }];
-  assert.equal(destination('gemini', 'skills', skill, policy), '.gemini-outra/skills/projeto/criar-skill/SKILL.md');
-  assert.equal(destination('gemini', 'agents', agent, policy), '.gemini-outra/agents/revisor.md');
+  const policy = [{ id: 'claude', root: '.claude-outra', formats: { skills: 'agrupado', agents: 'plano' } }];
+  assert.equal(destination('claude', 'skills', skill, policy), '.claude-outra/skills/projeto/criar-skill/SKILL.md');
+  assert.equal(destination('claude', 'agents', agent, policy), '.claude-outra/agents/revisor.md');
 });
 
 test('detecta adulteração dos bytes da origem instalada', t => {
   const root = mkdtempSync(join(tmpdir(), 'native-source-')); t.after(() => rmSync(root, { recursive:true, force:true }));
   const project = join(root, 'project'), pkg = join(root, 'package'), source = join(project, skill.path), expected = join(pkg, skill.path);
-  const target = join(project, destination('gemini', 'skills', skill));
+  const target = join(project, destination('claude', 'skills', skill));
   for (const file of [source, expected, target]) mkdirSync(dirname(file), { recursive:true });
   writeFileSync(expected, 'fonte original'); writeFileSync(source, 'fonte adulterada');
   writeFileSync(target, '---\nname: criar-skill\n---\n\n# Criar skill\n\n<!-- gerado: sincronizar-agentes -->\nLeia e siga [origem](../../../.pbai4devs/skills/projeto/criar-skill/SKILL.md).\n');
-  const result = structural(project, 'gemini', 'skills', skill, undefined, pkg);
+  const result = structural(project, 'claude', 'skills', skill, undefined, pkg);
   assert.equal(result.status, 'failed'); assert.match(result.reason, /origem instalada diverge/);
   assert.notEqual(result.sourceSha256, result.expectedSourceSha256);
 });

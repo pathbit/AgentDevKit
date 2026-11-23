@@ -37,10 +37,10 @@ description: Incrementos verificáveis do AgentDevKit.
   sincronização segura e validação em projetos reais.
 - [Recuperação conservadora](recuperacao-conservadora/SPEC.md): rascunho para
   preservar conteúdo humano e orientar recuperação após falhas.
-- [Registro de recuperação](registro-recuperacao/SPEC.md): validação isolada
-  dos registros da futura recuperação conservadora.
-- [Diário em disco](diario-disco/SPEC.md): publicação exclusiva de registros em
-  componente isolado, ainda sem integração ao instalador ou sync.
+- [Registro de recuperação](registro-recuperacao/SPEC.md): contrato dos
+  registros e provas do componente.
+- [Diário em disco](diario-disco/SPEC.md): publicação exclusiva de registros.
+  A integração ao instalador e ao sync está no changelog da 0.0.31.
 - [Manifesto de recuperação](manifesto-recuperacao/SPEC.md): cópias privadas
   verificáveis do snapshot informado ao mecanismo de recuperação.
 - [Permissões de temporários](sync-permissoes/SPEC.md): proteção do modo de
@@ -48,7 +48,11 @@ description: Incrementos verificáveis do AgentDevKit.
 - [Backup privado](backup-privado/SPEC.md): isolamento da pasta de cópias do
   instalador, com limites explícitos por plataforma.
 - [Preservação TOML](toml-preservacao/SPEC.md): rascunho para manter bytes e
-  semântica de prompts humanos ao adicionar ou retirar apontamentos.
+  semântica ao tratar prompts humanos de instalações legadas.
+- [Experiência guiada](experiencia-guiada/SPEC.md): primeiro uso e próximos
+  passos conforme o estado do projeto.
+- [Documentação de legado](documentacao-legado/SPEC.md): inventário,
+  documentação por módulo e evidências no código e nos testes.
 
 Cada incremento vincula requisitos, critérios, testes e evidências locais.
 O [roadmap](../product/roadmap.md) distingue releases publicadas de trabalho

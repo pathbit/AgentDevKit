@@ -224,9 +224,9 @@ test('mudança das raízes durante poda impede remover raiz desmarcada', { timeo
 test('mudança entre raízes retiradas impede podar a próxima raiz', { timeout: 120000 }, t => {
   const root = fixture(t);
   // Claude mantém regras para revisão; use duas raízes efetivamente removíveis.
-  applyPlan(planInstallation({ target: root, mode: 'init', clients: ['cursor', 'gemini'] }));
+  applyPlan(planInstallation({ target: root, mode: 'init', clients: ['cursor', 'opencode'] }));
   const plan = planInstallation({ target: root, mode: 'agents', clients: ['codex'] });
-  assert.ok(plan.retiredRoots.includes('.cursor') && plan.retiredRoots.includes('.gemini'));
+  assert.ok(plan.retiredRoots.includes('.cursor') && plan.retiredRoots.includes('.opencode'));
   const [first, second] = plan.retiredRoots;
   const remove = fs.rmdirSync; let changed = false, secondAttempted = false;
   t.mock.method(fs, 'rmdirSync', (path, ...args) => {

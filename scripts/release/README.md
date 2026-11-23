@@ -14,9 +14,10 @@ autenticação por host e links para instalação e pré-requisitos.
 exato uma vez. O perfil prepara o CLI `skills` para testar a integração real
 com uma fixture local. O relatório de infraestrutura registra os testes
 exclusivos de outra plataforma como parciais. O pipeline aceita somente
-as omissões previstas. O perfil `full` verifica os casos Linux e
-`portable-resources` exige aprovação individual dos casos delegados no macOS e
-no Windows. Falhas ou ferramentas ausentes bloqueiam a verificação.
+as omissões previstas. O perfil `full` verifica os casos Linux.
+`portable-resources` exerce a infraestrutura delegada a macOS e Windows,
+e `native-macos-metadata` verifica a preservação nativa em um gate separado.
+Falhas ou ferramentas ausentes bloqueiam a verificação.
 `portable` executa todos os grupos de portabilidade localmente;
 no CI, `portable-cli`, `portable-source-integration`, `portable-selection`,
 `portable-selection-lifecycle`,
@@ -28,12 +29,12 @@ no CI, `portable-cli`, `portable-source-integration`, `portable-selection`,
 `portable-resources`, `portable-resources-clients`, `portable-claude-rule-cli`,
 `portable-resources-managed`, `portable-managed-content`,
 `portable-managed-lifecycle`, `portable-managed-protection`,
-`portable-resources-gemini`, `portable-resources-gemini-staged`,
+`portable-legacy-toml`, `portable-retired-client-migration`,
 `portable-sync-core`, `portable-sync-core-updates`, `portable-sync-ownership`,
 `portable-sync-preservation` e `portable-layout` rodam em jobs separados no
 Windows e no macOS. Os quatro perfis de sync executam os sete módulos do
 ponto de entrada `tests/TEST.mjs` do sincronizador. Os dois perfis de núcleo
-usam filtros complementares no mesmo módulo. No Windows,
+encaminham a `BASE.mjs` e `UPDATES.mjs`, respectivamente. No Windows,
 `portable-cli` confere se a instalação e o sync direto preservam a DACL de
 arquivos atualizados em NTFS, usando uma regra explícita de leitura na fixture.
 `portable-source-integration` isola o teste de convergência entre a CLI e a

@@ -292,7 +292,7 @@ test('preserva Readme.md e entradas humanas com caixa diferente sem criar duplic
   for (const [path, content] of Object.entries(files)) put(root, path, content);
   git('add', '--all');
   const before = snapshot(root, Object.keys(files)), index = git('ls-files', '--stage', '-z');
-  const args = ['init', '--yes', '--agents', 'codex,claude,gemini'];
+  const args = ['init', '--yes', '--agents', 'codex,claude,antigravity'];
   const preview = await cli(root, [...args, '--dry-run']);
   for (const path of Object.keys(files)) assert.ok(preview.preserved.some(item => item.path === path), path);
   assert.equal(existsSync(join(root, '.pbai4devs')), false);

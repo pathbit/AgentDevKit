@@ -89,9 +89,9 @@ for (const mode of ['init', 'unaffected']) test(`xattr seletivo: ${mode} em fixt
   if (mode === 'init') {
     target = 'AGENTS.md';
     writeFileSync(join(root, target), '# Equipe\n\nConteúdo humano.\n');
-    args = ['init', '--agents', 'gemini'];
+    args = ['init', '--agents', 'codex'];
   } else {
-    const initial = success(process.execPath, [cli, 'init', '--target', root, '--agents', 'gemini', '--yes', '--json']);
+    const initial = success(process.execPath, [cli, 'init', '--target', root, '--agents', 'codex', '--yes', '--json']);
     assert.equal(JSON.parse(initial.stdout).ok, true);
     target = 'HUMAN.md';
     args = ['update', '--lang', 'en'];

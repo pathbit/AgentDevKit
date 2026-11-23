@@ -375,7 +375,7 @@ export function loadState(root, { rawClients = false } = {}) {
   if (state.clients !== undefined) {
     if (!Array.isArray(state.clients)) fail('E_STATE', 'Invalid client selection in AgentDevKit state.');
     try {
-      const clients = normalizeClients(state.clients);
+      const clients = normalizeClients(state.clients, { stored: true });
       if (!rawClients) state.clients = clients;
     } catch { fail('E_STATE', 'Invalid client selection in AgentDevKit state.'); }
   }
@@ -668,7 +668,10 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
   // transaction; a plain sync/agents/lang would leave old hard-coded paths.
   if (migration && !['init', 'update'].includes(mode)) fail('E_UPGRADE', 'Run AgentDevKit update before migrating the legacy state directory.');
   if (mode !== 'init' && !previous) fail('E_MISSING', text(language, 'missing'));
-  const selected = normalizeClients(clients ?? previous?.clients ?? ['all']);
+  const selected = clients === undefined
+    ? normalizeClients(previous?.clients, { stored: true })
+    : normalizeClients(clients);
+  if (!selected.length) fail('E_CLIENTS_RETIRED', 'Choose a supported client with update --agents after reviewing the plan.');
   const active = resolveAdapters(selected);
   const changingClients = clients !== undefined || mode === 'agents';
   const ownedEntrypoints = new Set(), mixedPaths = new Set(), satisfiedReferences = new Set(), nativeInputs = new Map();
@@ -1921,6 +1924,7 @@ export function inspect(target) {
   // An orphaned removal record can be legitimate history, but the current
   // installation state cannot corroborate it. Do not silently report it clean.
   const issues = unverifiedRemovalIssues(state, derived);
+  if (state.clients?.length === 0) issues.push({ code: 'client-selection-retired', path: statePath });
   for (const [path, digest] of Object.entries(state.files)) {
     if (derived.blocks[path] || derived.removedBlocks.includes(path)) continue;
     const content = read(target, path);
