@@ -20,7 +20,7 @@ function repositoryBase(pkg) {
   const source = typeof pkg.repository === 'string' ? pkg.repository : pkg.repository?.url;
   const match = source?.match(/^(?:git\+)?https:\/\/github\.com\/([^/]+)\/([^/#]+?)(?:\.git)?\/?$/);
   if (!match) throw new Error('Metadados exigem repository HTTPS do GitHub.');
-  return `https://github.com/${match[1]}/${match[2]}/blob/master/`;
+  return `https://github.com/${match[1]}/${match[2]}/blob/main/`;
 }
 
 function validateMetadata(pkg) {

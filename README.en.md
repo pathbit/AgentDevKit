@@ -60,14 +60,13 @@ npx @pathbit/agentdevkit next --intent document
 `next` suggests a step for you to take. Ask your agent to read `AGENTS.md`
 and use the `proximos-passos` skill with your goal.
 
-### Use the workflow the task calls for
+### Choose the tools for your workflow
 
-AgentDevKit gives multiple coding agents the same starting point. Set up your
-project and verify delivery with the kit, then draw on **BMad** for discovery,
-**OpenSpec** or **GitHub Spec Kit** for specs, **Tech Leads Club** for planning,
-or **Dotcontext** (AI Context) for project context as needed. If the project
-already has these artifacts, run `npx @pathbit/agentdevkit next --integrations`
-to find recognized references. See the [comparison guide](docs/guides/comparacao.md).
+AgentDevKit shares instructions across coding agents, suggests the next step
+in the terminal, and helps you reuse project documentation. Run
+`npx @pathbit/agentdevkit next --integrations` to find references already
+present in your repository. The [comparison guide](docs/guides/comparacao.md)
+covers the strengths and use cases of each approach.
 
 ## Explore
 
@@ -83,7 +82,7 @@ to find recognized references. See the [comparison guide](docs/guides/comparacao
 | Review security with local tools | [Local security](docs/guides/security.md) |
 | Look up options or fix an error | [CLI][cli] · [Troubleshooting][help] |
 | Improve the kit | [Contributing](CONTRIBUTING.md) |
-| Try the scenarios | [Examples](https://github.com/pathbit/AgentDevKit/tree/master/examples) |
+| Try the scenarios | [Examples](https://github.com/pathbit/AgentDevKit/tree/main/examples) |
 
 ## Develop this repository
 

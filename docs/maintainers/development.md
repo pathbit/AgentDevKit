@@ -8,10 +8,15 @@ Comece com Git, Node.js 24+ e npm. `npm ci` remove `node_modules` antes de
 instalar; preserve qualquer conteúdo local dessa pasta. Na raiz do checkout:
 
 ```console
+git switch develop
 npm ci --ignore-scripts
 npm run check
 npm test
 ```
+
+`develop` recebe as mudanças em integração. `main` é a branch padrão e
+origem das releases. Ambas executam o CI. A automação de publicação depende
+do push aprovado na `main` e da versão do pacote.
 
 ## Ambiente Compose
 
@@ -97,6 +102,6 @@ artefato aprovado pelo CI.
 [Wiki](../README.md) · [Exemplos][examples]
 
 [review]: ../../.pbai4devs/commands/revisar-entrega/COMMAND.md
-[tests]: https://github.com/pathbit/AgentDevKit/tree/master/tests
-[scripts]: https://github.com/pathbit/AgentDevKit/tree/master/scripts
-[examples]: https://github.com/pathbit/AgentDevKit/tree/master/examples
+[tests]: https://github.com/pathbit/AgentDevKit/tree/main/tests
+[scripts]: https://github.com/pathbit/AgentDevKit/tree/main/scripts
+[examples]: https://github.com/pathbit/AgentDevKit/tree/main/examples

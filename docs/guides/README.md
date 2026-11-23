@@ -8,6 +8,7 @@ description: Guias de instalação, uso e verificação do AgentDevKit.
 - [Instalação: npm e GitHub Packages](installation.md)
 - [Comandos da CLI](cli.md)
 - [Fluxo de trabalho](workflow.md)
+- [Comparação de funcionalidades](comparacao.md)
 - [Evoluir documentação existente](documentation.md)
 - [Recursos dos agentes](resources.md)
 - [Recursos na prática: do pedido à entrega](recursos-na-pratica.md)

@@ -1045,4 +1045,4 @@ existência de uma tag não substitui os testes da alteração em andamento.
 [targets]: ../specs/target-paths/SPEC.md
 [order]: ../specs/preimplementation-order/SPEC.md
 
-[testes-kit]: https://github.com/pathbit/AgentDevKit/blob/master/tests/README.md
+[testes-kit]: https://github.com/pathbit/AgentDevKit/blob/main/tests/README.md

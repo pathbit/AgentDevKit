@@ -19,5 +19,5 @@ Informe os comandos executados, resultados e limites da verificação.
 
 Consulte o [guia de contribuição][guia] e a [documentação][docs].
 
-[guia]: https://github.com/pathbit/AgentDevKit/blob/master/CONTRIBUTING.md
-[docs]: https://github.com/pathbit/AgentDevKit/blob/master/docs/README.md
+[guia]: https://github.com/pathbit/AgentDevKit/blob/main/CONTRIBUTING.md
+[docs]: https://github.com/pathbit/AgentDevKit/blob/main/docs/README.md

@@ -106,11 +106,12 @@ nada. Nunca versione o tarball ou seus relatórios.
    checkout candidato nas provas de instalação, compatibilidade e matriz.
    Para a prova de atualização, comece na última versão publicada e termine
    no mesmo tarball candidato.
-3. Envie o commit à branch principal e acompanhe o CI e a release.
+3. Valide o commit em `develop` e promova-o à `main`. Acompanhe o CI da
+   `main` e, quando a versão mudar, o workflow de release.
 
 O perfil completo exige os testes estritos de recuperação concorrente. Enquanto
 eles falharem, não há artefato certificado para publicação; consulte o
-[roadmap](../product/roadmap.md) e os [testes](https://github.com/pathbit/AgentDevKit/blob/master/tests/README.md).
+[roadmap](../product/roadmap.md) e os [testes](https://github.com/pathbit/AgentDevKit/blob/main/tests/README.md).
 
 Após toda a matriz de CI passar, a automação cria a tag `v<versão>` no
 commit verificado e inicia o workflow de release. Um push sem mudança de versão
@@ -132,11 +133,12 @@ identificam a mesma entrega. A execução manual também exige a tag;
 não crie outra tag para uma versão nem mova uma tag já publicada. Publicações
 feitas fora desse fluxo não criam tags automaticamente.
 
-Para consultar o código de uma versão sem trocar os arquivos atuais:
+Para consultar os arquivos de uma versão no mesmo checkout:
 
 ```console
 git fetch --tags
-git worktree add --detach ../AgentDevKit-v0.0.19 v0.0.19
+git show v0.0.19:package.json
+git diff v0.0.19..main -- src/
 ```
 
 Em um projeto atendido, fixe a versão desejada do pacote e revise o plano antes

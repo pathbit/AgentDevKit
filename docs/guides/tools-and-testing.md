@@ -85,4 +85,4 @@ prova em sucesso. Feche a entrega pela [revisão][review].
 [desktop]: ../../.pbai4devs/tools/agent-desktop/README.md
 [matrix]: ../../.pbai4devs/scripts/testar-maturidade/README.md
 [review]: ../../.pbai4devs/commands/revisar-entrega/COMMAND.md
-[examples]: https://github.com/pathbit/AgentDevKit/tree/master/examples
+[examples]: https://github.com/pathbit/AgentDevKit/tree/main/examples

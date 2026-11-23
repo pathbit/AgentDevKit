@@ -9,7 +9,7 @@ body:
         Consulte a [documentação][doc] e procure issues semelhantes.
         Remova tokens, senhas, dados privados e caminhos pessoais dos exemplos.
 
-        [doc]: https://github.com/pathbit/AgentDevKit/blob/master/docs/README.md
+        [doc]: https://github.com/pathbit/AgentDevKit/blob/main/docs/README.md
   - type: input
     id: version
     attributes:

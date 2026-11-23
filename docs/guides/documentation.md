@@ -90,4 +90,4 @@ Use `verificar-trabalho` e `revisar-entrega`; salve as provas em `.agent-tests/`
 [skill]: ../../.pbai4devs/skills/projeto/atualizar-documentacao/SKILL.md
 [legado]: ../../.pbai4devs/skills/projeto/documentar-legado/SKILL.md
 [levantamento]: ../../.pbai4devs/templates/levantamento-legado/TEMPLATE.md
-[tests]: https://github.com/pathbit/AgentDevKit/blob/master/tests/README.md
+[tests]: https://github.com/pathbit/AgentDevKit/blob/main/tests/README.md

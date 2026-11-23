@@ -78,7 +78,7 @@ test('release produz quatro arquivos e checksum dos bytes reais do pacote', asyn
     const archive = readFileSync(join(output, archiveName));
     const contents = entries(archive);
     assert.deepEqual(contents.get('LICENSE').data, readFileSync(join(root, 'LICENSE')));
-    assert.equal(contents.get('README.md').data.toString(), '# Release fixture\n\n[Guide](https://github.com/pathbit/AgentDevKit/blob/master/docs/guide.md#start)\n');
+    assert.equal(contents.get('README.md').data.toString(), '# Release fixture\n\n[Guide](https://github.com/pathbit/AgentDevKit/blob/main/docs/guide.md#start)\n');
     assert.equal(readFileSync(join(root, 'README.md'), 'utf8').startsWith('---\n'), true);
     assert.deepEqual(readdirSync(temporary), []);
     const digest = createHash('sha256').update(archive).digest('hex');
@@ -109,8 +109,8 @@ test('release produz quatro arquivos e checksum dos bytes reais do pacote', asyn
     assert.match(notes, /```text\n/);
     assert.match(notes, /Use Node\.js 24\+ com npm/);
     assert.match(notes, /Com Node 18â€“23 existente/);
-    assert.ok(notes.includes('https://github.com/pathbit/AgentDevKit/blob/master/docs/guides/installation.md'));
-    assert.ok(notes.includes('https://github.com/pathbit/AgentDevKit/blob/master/docs/guides/prerequisites.md'));
+    assert.ok(notes.includes('https://github.com/pathbit/AgentDevKit/blob/main/docs/guides/installation.md'));
+    assert.ok(notes.includes('https://github.com/pathbit/AgentDevKit/blob/main/docs/guides/prerequisites.md'));
   });
 });
 
@@ -140,7 +140,7 @@ test('README do npm remove frontmatter e adapta apenas links Markdown fora de cÃ
   const published = files.get('README.md').data.toString();
   assert.ok(published.startsWith('# Release fixture\n'));
   assert.ok(!published.includes('description: Fonte preservada.'));
-  const base = 'https://github.com/pathbit/AgentDevKit/blob/master/';
+  const base = 'https://github.com/pathbit/AgentDevKit/blob/main/';
   for (const link of ['docs/guide.md#start', 'assets/logo.svg', 'docs/a%20b.md#item', 'docs/topic(v1).md', 'docs/root.md', 'docs/guide.md?view=npm#start']) assert.ok(published.includes(base + link), link);
   for (const link of ['[Start](#start)', '[Npm](https://www.npmjs.com/package/example)', '[Mail](mailto:team@example.test)', '[CDN](//example.test/a.svg)', '`[literal](docs/local.md)`', '```markdown\n[literal](docs/local.md)\n```']) assert.ok(published.includes(link), link);
   for (const path of tracked) {

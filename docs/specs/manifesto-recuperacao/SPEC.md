@@ -98,7 +98,7 @@ persistência dos nomes no Windows após perda de energia permanece sem
 garantia. A verificação local no macOS cobriu criação exclusiva e conferência
 dos hashes. Falta executar em Windows o teste que concede leitura a Todos
 (`Everyone`) e exige recusa do backup antes de gravar, além do ciclo de
-preparação e verificação em pasta privada. [Testes do backup](https://github.com/pathbit/AgentDevKit/blob/master/tests/recovery-backup.test.mjs)
+preparação e verificação em pasta privada. [Testes do backup](https://github.com/pathbit/AgentDevKit/blob/main/tests/recovery-backup.test.mjs)
 
 O chamador pode verificar o backup e fornecer o hash do manifesto a `begin`.
 A resolução manual exige a geração e o ID da pendência e preserva o manifesto,

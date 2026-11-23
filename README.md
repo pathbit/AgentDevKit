@@ -59,16 +59,13 @@ npx @pathbit/agentdevkit next --intent document
 O `next` indica o próximo passo. Para seguir a orientação no seu agente, peça
 que ele leia `AGENTS.md` e use `proximos-passos` com seu objetivo.
 
-### Use apenas o fluxo que a tarefa exige
+### Escolha as ferramentas para o seu fluxo
 
-O AgentDevKit serve como ponto de partida único para vários agentes. Use o
-kit para preparar o projeto e validar a entrega, aproveitando, conforme
-precisar, a descoberta do **BMad**, specs de **OpenSpec** ou **GitHub Spec Kit**,
-o planejamento do **Tech Leads Club** ou o contexto do **Dotcontext**
-(AI Context). Se o projeto já tem esses artefatos, consulte
-`npx @pathbit/agentdevkit next --integrations` para localizar as referências
-reconhecidas. Veja quando cada opção vale a pena no
-[guia comparativo](docs/guides/comparacao.md).
+O AgentDevKit reúne instruções para diferentes agentes, orienta o próximo passo
+no terminal e ajuda a reaproveitar a documentação do projeto. Use
+`npx @pathbit/agentdevkit next --integrations` para localizar referências
+já presentes no repositório. O [guia comparativo](docs/guides/comparacao.md)
+mostra os destaques de cada abordagem e quando usar cada uma.
 
 ## Encontre o que precisa
 
@@ -84,7 +81,7 @@ reconhecidas. Veja quando cada opção vale a pena no
 | Revisar segurança sem serviços externos | [Segurança local](docs/guides/security.md) |
 | Consultar opções ou resolver um erro | [CLI][cli] · [Soluções][help] |
 | Melhorar o próprio kit | [Contribuir](CONTRIBUTING.md) |
-| Experimentar os cenários | [Exemplos](https://github.com/pathbit/AgentDevKit/tree/master/examples) |
+| Experimentar os cenários | [Exemplos](https://github.com/pathbit/AgentDevKit/tree/main/examples) |
 
 ## Desenvolver este repositório
 

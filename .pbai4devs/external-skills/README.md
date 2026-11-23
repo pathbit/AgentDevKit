@@ -58,4 +58,4 @@ catálogo. Vercel Writing Guidelines deve contribuir apenas com princípios
 editoriais compatíveis: seus padrões de MDX/TypeScript e atribuição de agentes
 não substituem os padrões locais de Markdown, Node e autoria Git.
 
-[security]: https://github.com/pathbit/AgentDevKit/blob/master/docs/guides/security-references.md
+[security]: https://github.com/pathbit/AgentDevKit/blob/main/docs/guides/security-references.md
