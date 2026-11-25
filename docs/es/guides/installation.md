@@ -28,9 +28,9 @@ utilizar el kit solo con Node.js.
 
 ## Instalar
 
-Los dos registros ofrecen el mismo paquete
-[`@pathbit/agentdevkit`](../maintainers/packages.md). Elija uno de ellos y
-ejecuta en la carpeta del proyecto.
+Usa el [paquete público en npmjs](https://www.npmjs.com/package/@pathbit/agentdevkit)
+en la carpeta del proyecto. Para usar un archivo de una versión publicada o
+el código de `main`, consulta [otras formas de ejecutar](../../../README.es.md#otras-formas-de-ejecutar).
 
 ### npm público
 

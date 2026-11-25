@@ -28,8 +28,9 @@ kit with Node.js alone.
 
 ## Install
 
-Both registries offer the same [package](../maintainers/packages.md). Run
-the command for your chosen registry in the project folder.
+Use the [public package on npmjs](https://www.npmjs.com/package/@pathbit/agentdevkit)
+in your project folder. To use a release tarball or run from `main`, see
+[other ways to run](../../../README.en.md#other-ways-to-run).
 
 ### public npm
 

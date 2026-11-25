@@ -29,8 +29,9 @@ pode receber o kit sem instalar ferramentas da aplicação.
 
 ## Instalar
 
-Os dois registries oferecem o mesmo [`@pathbit/agentdevkit`](../maintainers/packages.md).
-Escolha um deles e execute na pasta do projeto.
+Use o [pacote público no npmjs](https://www.npmjs.com/package/@pathbit/agentdevkit)
+na pasta do projeto. Para executar o tarball de uma release ou o código da
+`main`, veja [as outras formas de executar](../../README.md#outras-formas-de-executar).
 
 ### npm público
 

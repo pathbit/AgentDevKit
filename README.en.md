@@ -7,7 +7,7 @@ language: en
 
 [Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
 
-[npm package][npm-package]
+[Package on npmjs][npm-package] · [GitHub releases][github-releases]
 
 [![npm][npm-badge]][npm-package] [![MIT][license-badge]](LICENSE)
 
@@ -31,18 +31,13 @@ projects written in any language. The kit generates references for
 
 ## Quick start
 
-Open a terminal in the project folder and run:
+Open a terminal in your project folder. npmjs is the default way to run the
+kit. Use `@latest` for the newest stable release. Specify the version number
+to run the same version every time.
 
 ```console
-npx @pathbit/agentdevkit init --lang en --purpose agents
-```
-
-Use `@latest` to get the newest stable release on npm. Pin the version
-number to repeat an installation with the same release.
-
-```console
-npx @pathbit/agentdevkit@latest init
-npx @pathbit/agentdevkit@0.0.39 init
+npx --yes @pathbit/agentdevkit@latest init --lang en --purpose agents
+npx --yes @pathbit/agentdevkit@0.0.39 init --lang en --purpose agents
 ```
 
 In the setup wizard, use the arrow keys to move and **Space** to mark each
@@ -70,6 +65,33 @@ Open the project in your coding agent and ask:
 
 Check the selection with `npx @pathbit/agentdevkit agents`.
 [Installation options][install] · [Supported clients][clients]
+
+## Other ways to run
+
+### From a GitHub release
+
+Run the `.tgz` for a published version. It requires Node.js and its bundled `npx`.
+
+<!-- markdownlint-disable MD013 -->
+
+```console
+npx --yes https://github.com/pathbit/AgentDevKit/releases/download/v0.0.39/agentdevkit-0.0.39.tgz init --lang en --purpose agents
+```
+
+<!-- markdownlint-enable MD013 -->
+
+### From the source on GitHub
+
+With [Git installed][git-download], run the development version from
+the `main` branch.
+
+<!-- markdownlint-disable MD013 -->
+
+```console
+npx --yes "git+https://github.com/pathbit/AgentDevKit.git#main" init --lang en --purpose agents
+```
+
+<!-- markdownlint-enable MD013 -->
 
 ## Choose what to do
 
@@ -146,6 +168,7 @@ your project's license and files.
 
 [clients]: docs/en/kit/COMPATIBILIDADE.md
 [release]: https://github.com/pathbit/AgentDevKit/releases/latest
+[github-releases]: https://github.com/pathbit/AgentDevKit/releases
 [npm-package]: https://www.npmjs.com/package/@pathbit/agentdevkit
 [npm-badge]: https://img.shields.io/npm/v/%40pathbit%2Fagentdevkit
 [license-badge]: https://img.shields.io/badge/license-MIT-blue

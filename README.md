@@ -6,7 +6,7 @@ language: pt-BR
 # Pathbit AI - AgentDevKit
 
 [Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
-· [Pacote npm][npm-package]
+· [Pacote no npmjs][npm-package] · [Versões no GitHub][github-releases]
 
 [![npm][npm-badge]][npm-package] [![MIT][license-badge]](LICENSE)
 
@@ -30,18 +30,13 @@ projetos de qualquer linguagem. O kit gera referências para
 
 ## Começo rápido
 
-Abra um terminal na pasta do projeto e execute:
+Abra um terminal na pasta do projeto. O npmjs é o caminho principal.
+Use `@latest` para receber a versão estável mais recente. Informe o número
+para executar sempre a mesma versão.
 
 ```console
-npx @pathbit/agentdevkit init --lang pt --purpose agents
-```
-
-Use `@latest` para acompanhar a última versão estável publicada no npm.
-Informe o número para repetir a instalação com a mesma versão.
-
-```console
-npx @pathbit/agentdevkit@latest init
-npx @pathbit/agentdevkit@0.0.39 init
+npx --yes @pathbit/agentdevkit@latest init --lang pt --purpose agents
+npx --yes @pathbit/agentdevkit@0.0.39 init --lang pt --purpose agents
 ```
 
 No assistente, use as setas para navegar e **Espaço** para marcar cada
@@ -69,6 +64,34 @@ Abra o projeto no seu agente de código e peça:
 
 Confira a seleção com `npx @pathbit/agentdevkit agents`.
 [Opções de instalação][install] · [Clientes compatíveis][clients]
+
+## Outras formas de executar
+
+### Pelo GitHub Release
+
+Use o arquivo `.tgz` de uma versão publicada. Node.js e o `npx` que vem com
+ele bastam.
+
+<!-- markdownlint-disable MD013 -->
+
+```console
+npx --yes https://github.com/pathbit/AgentDevKit/releases/download/v0.0.39/agentdevkit-0.0.39.tgz init --lang pt --purpose agents
+```
+
+<!-- markdownlint-enable MD013 -->
+
+### Direto do código no GitHub
+
+Com [Git instalado][git-download], execute a versão em desenvolvimento
+da branch `main`.
+
+<!-- markdownlint-disable MD013 -->
+
+```console
+npx --yes "git+https://github.com/pathbit/AgentDevKit.git#main" init --lang pt --purpose agents
+```
+
+<!-- markdownlint-enable MD013 -->
 
 ## Escolha o que quer fazer
 
@@ -168,6 +191,7 @@ a licença e os arquivos próprios do seu projeto.
 [issues]: https://github.com/pathbit/AgentDevKit/issues/new/choose
 [packages]: docs/maintainers/packages.md
 [release]: https://github.com/pathbit/AgentDevKit/releases/latest
+[github-releases]: https://github.com/pathbit/AgentDevKit/releases
 [npm-package]: https://www.npmjs.com/package/@pathbit/agentdevkit
 [npm-badge]: https://img.shields.io/npm/v/%40pathbit%2Fagentdevkit
 [license-badge]: https://img.shields.io/badge/license-MIT-blue
