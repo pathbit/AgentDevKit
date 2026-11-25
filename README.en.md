@@ -162,4 +162,4 @@ your project's license and files.
 
 ---
 
-Developed with ❤️ by [Pathbit](https://www.pathbit.com.br/)
+Developed with ❤️ by [Pathbit](https://pathbit.co/)
