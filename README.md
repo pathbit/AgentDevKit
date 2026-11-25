@@ -36,6 +36,14 @@ Abra um terminal na pasta do projeto e execute:
 npx @pathbit/agentdevkit init --lang pt --purpose agents
 ```
 
+Use `@latest` para acompanhar a última versão estável publicada no npm.
+Informe o número para repetir a instalação com a mesma versão.
+
+```console
+npx @pathbit/agentdevkit@latest init
+npx @pathbit/agentdevkit@0.0.39 init
+```
+
 No assistente, use as setas para navegar e **Espaço** para marcar cada
 agente. Confirme com **Enter**. Pressione **Esc** para cancelar. Se confirmar
 sem marcar nenhum, o kit instala apenas os recursos compartilhados.

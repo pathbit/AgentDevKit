@@ -37,6 +37,14 @@ Open a terminal in the project folder and run:
 npx @pathbit/agentdevkit init --lang en --purpose agents
 ```
 
+Use `@latest` to get the newest stable release on npm. Pin the version
+number to repeat an installation with the same release.
+
+```console
+npx @pathbit/agentdevkit@latest init
+npx @pathbit/agentdevkit@0.0.39 init
+```
+
 In the setup wizard, use the arrow keys to move and **Space** to mark each
 agent. Press **Enter** to confirm or **Esc** to cancel. Confirming with no
 agents marked installs the shared resources.
