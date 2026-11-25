@@ -87,6 +87,6 @@ fails, preserve the informed paths and review the waste before attempting again.
 Checks are not atomic against concurrent changes nor prove ACLs or extended
 attributes.
 
-[reading-pt]: ../../../../scripts/release/README.md
+[reading-pt]: https://github.com/pathbit/AgentDevKit/blob/main/scripts/release/README.md
 [reading-en]: README.md
 [reading-es]: ../../../es/scripts/release/README.md

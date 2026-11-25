@@ -172,8 +172,8 @@ To check the installation in fixed public clones at the root of the repository:
 npm run test:oss
 ```
 
-A [project matrix](../../../tests/fixtures/oss-projects.json) log Hibernate commits
-ORM, EF6, Rust, Go, Tailcat, Express and Requests, as well as Zod and Chi. For
+The [project matrix][oss-project-matrix] pins commits for Hibernate ORM, EF6,
+Rust, Go, Tailcat, Express, Requests, Zod and Chi. For
 one project only, use for example `npm run test:oss -- --project express`. The
 clones and reports stay in a new folder within `tmp/oss-compatibility/`. The
 test validates the kit, including file preservation and Git index; it does not
@@ -238,6 +238,7 @@ deployment or other operating systems.
 
 Details: [test maturity](../kit/scripts/testar-maturidade/README.md).
 
-[reading-pt]: ../../../examples/README.md
+[reading-pt]: https://github.com/pathbit/AgentDevKit/blob/main/examples/README.md
+[oss-project-matrix]: https://github.com/pathbit/AgentDevKit/blob/main/tests/fixtures/oss-projects.json
 [reading-en]: README.md
 [reading-es]: ../../es/examples/README.md

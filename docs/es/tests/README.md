@@ -238,10 +238,9 @@ Para verificar el paquete local en proyectos reales, ejecute:
 npm run test:oss -- --tarball "$archive"
 ```
 
-La prueba clona los commits fijos de
-[matriz](../../../tests/fixtures/oss-projects.json)Hibernate ORM, EF6, Rust, Go,
-Tailcat,
-Express, Requests, Zod y Chi. Confiere archivos, permisos, enlaces, staging,
+La prueba clona los commits fijos de la [matriz de proyectos][oss-project-matrix].
+Incluye Hibernate ORM, EF6, Rust, Go, Tailcat, Express, Requests, Zod y Chi.
+Comprueba archivos, permisos, enlaces, staging,
 instalación y actualización; compara los bytes de `.git/info/exclude` y observa
 ignores sin exigir alteraciones en ellos. Para ediciones humanas, valida la
 copia de seguridad compatible y, cuando el paquete usa diario de recuperación,
@@ -606,6 +605,7 @@ prueba si una de ellas no tiene una negación explícita sin contenido parcial.
 Devuelve error cuando cualquier perfil no es verificado; no ejecuta los flujos
 completos de los agentes ni autentica el paquete informado.
 
-[reading-pt]: ../../../tests/README.md
+[reading-pt]: https://github.com/pathbit/AgentDevKit/blob/main/tests/README.md
+[oss-project-matrix]: https://github.com/pathbit/AgentDevKit/blob/main/tests/fixtures/oss-projects.json
 [reading-en]: ../../en/tests/README.md
 [reading-es]: README.md

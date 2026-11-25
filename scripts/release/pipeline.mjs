@@ -239,7 +239,7 @@ function verifyLinuxOwnership(root, env) {
     throw new Error('O gate de propriedade exige Linux e permissão para trocar de UID.');
   }
   const fixtures = {
-    'file-modes.test.mjs': ['CLI preserva arquivo de outro proprietário antes de instalar'],
+    'file-modes.test.mjs': ['CLI preserves file from another owner before installing'],
     'recovery-store.test.mjs': [
       'Linux root recusa UID real divergente nos três diretórios sem escrever',
       'Linux root recusa registro de outro UID sem gravar',

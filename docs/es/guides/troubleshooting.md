@@ -213,16 +213,24 @@ no asuma secreto sólo por los bits POSIX. Si un sistema de archivos POSIX
 informar a los permisos amplios para la nueva carpeta, la operación falla con
 `E_BACKUP` antes de la copia. Backups no sustituyen el control de versión.
 
-Actualizaciones usan la copia nativa de la plataforma para preservar los
-metadatos soportados; fallas detectadas durante la copia interrumpen la
-publicación. En macOS, ACLs legibles y xattrs se mantienen; ACLs que niegan
-escritura, flags de protección o consultas inconclusas bloquean la alteración.
-La verificación no cubre ACLs de directorios o todos los filesystems. En Linux,
-la copia pide al usuario. `cp` que preserve xattrs y el verificador compara los
-atributos cuando `getfattr` Está disponible. Sin esta herramienta, la copia
-puede continuar con aviso, pero la preservación de xattrs no se ha verificado de
-forma independiente. Remociones y Windows tienen límites propios; mantenga una
-copia verificada de los datos importantes antes de recuperar archivos.
+Las actualizaciones usan la copia nativa de la plataforma para conservar los
+metadatos compatibles. Si la copia falla, se interrumpe la publicación. En
+macOS, el kit conserva las ACL legibles y los atributos extendidos. Las ACL
+que deniegan la escritura, las marcas de protección o las comprobaciones no
+concluyentes bloquean el cambio. Se comprueban las ACL de archivos en sistemas
+de archivos compatibles.
+
+En macOS, eliminar un archivo con atributos extendidos puede devolver
+`E_PROTECTED_METADATA` con `metadataReason: xattr-present`. En ARM se
+reprodujo al actualizar de 0.0.36 a 0.0.37 y al ejecutar `agents remove`
+tras instalar 0.0.37 desde cero. Los archivos generados tenían el atributo
+`com.apple.provenance`. Ejecuta `xattr "<ruta>"` sobre el archivo del error
+para listar sus atributos. Conserva los archivos y los atributos al revisar.
+
+En Linux, el kit pide a `cp` que conserve los atributos extendidos y los
+compara cuando `getfattr` está disponible. Sin esa herramienta, la copia puede
+continuar con un aviso de que la conservación no se pudo comprobar. Mantén
+una copia verificada de los datos importantes antes de recuperar archivos.
 
 Si planificación, aplicación o herramienta falla después de un posible cambio,
 interrumpa otras operaciones y preserve archivos y copias de seguridad hasta que

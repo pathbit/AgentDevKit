@@ -24,6 +24,6 @@ See [contribution guide][guia] e a [documentation][docs].
 [guia]: ../CONTRIBUTING.md
 [docs]: ../README.md
 
-[reading-pt]: ../../../.github/PULL_REQUEST_TEMPLATE.md
+[reading-pt]: https://github.com/pathbit/AgentDevKit/blob/main/.github/PULL_REQUEST_TEMPLATE.md
 [reading-en]: PULL_REQUEST_TEMPLATE.md
 [reading-es]: ../../es/github/PULL_REQUEST_TEMPLATE.md

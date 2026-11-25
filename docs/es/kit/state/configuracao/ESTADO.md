@@ -110,6 +110,6 @@ pruebas verifican rechazo por ACL o flag inmutable en el estado observado; el
 update usa legado sintético. La suíte estándar anterior no comprueba la
 corrección. Logs están en `.agent-tests/configuracao-cli-8AkUjb/`.
 
-[reading-pt]: ../../../../../.pbai4devs/state/configuracao/ESTADO.md
+[reading-pt]: https://github.com/pathbit/AgentDevKit/blob/main/.pbai4devs/state/configuracao/ESTADO.md
 [reading-en]: ../../../../en/kit/state/configuracao/ESTADO.md
 [reading-es]: ESTADO.md

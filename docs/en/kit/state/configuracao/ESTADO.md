@@ -101,6 +101,6 @@ six new tests check refusal by ACL or unchangeable flag in the observed state;
 update uses synthetic legacy. The previous default suite does not prove
 correction. Logs are in `.agent-tests/configuracao-cli-8AkUjb/`.
 
-[reading-pt]: ../../../../../.pbai4devs/state/configuracao/ESTADO.md
+[reading-pt]: https://github.com/pathbit/AgentDevKit/blob/main/.pbai4devs/state/configuracao/ESTADO.md
 [reading-en]: ESTADO.md
 [reading-es]: ../../../../es/kit/state/configuracao/ESTADO.md

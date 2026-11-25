@@ -93,6 +93,6 @@ niegan. Si la limpieza falla, preserve los caminos informados y revise los
 residuos antes de intentar nuevamente. Las verificaciones no son atómicas contra
 alteraciones competidores ni comprueban ACLs o atributos extendidos.
 
-[reading-pt]: ../../../../scripts/release/README.md
+[reading-pt]: https://github.com/pathbit/AgentDevKit/blob/main/scripts/release/README.md
 [reading-en]: ../../../en/scripts/release/README.md
 [reading-es]: README.md

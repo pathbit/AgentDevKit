@@ -15,6 +15,6 @@ Las automaciones entregadas a los proyectos consumidores continúan en
 [`.pbai4devs/scripts`](../kit/scripts/README.md), junto a sus recursos.
 No duplique estas herramientas en este directorio.
 
-[reading-pt]: ../../../scripts/README.md
+[reading-pt]: https://github.com/pathbit/AgentDevKit/blob/main/scripts/README.md
 [reading-en]: ../../en/scripts/README.md
 [reading-es]: README.md

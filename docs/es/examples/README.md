@@ -179,7 +179,7 @@ repositorio:
 npm run test:oss
 ```
 
-A [matriz de proyectos](../../../tests/fixtures/oss-projects.json) registra los
+La [matriz de proyectos][oss-project-matrix] registra los
 commits de Hibernate ORM, EF6, Rust, Go, Tailcat, Express y Requests, además de
 Zod y Chi. Para un proyecto solo, use por ejemplo `npm run test:oss -- --project
 express`. Los clones e informes se encuentran en una carpeta nueva dentro de
@@ -247,6 +247,7 @@ interfaz visual, implantación u otros sistemas operativos.
 
 Detalles: [prueba madurez](../kit/scripts/testar-maturidade/README.md).
 
-[reading-pt]: ../../../examples/README.md
+[reading-pt]: https://github.com/pathbit/AgentDevKit/blob/main/examples/README.md
+[oss-project-matrix]: https://github.com/pathbit/AgentDevKit/blob/main/tests/fixtures/oss-projects.json
 [reading-en]: ../../en/examples/README.md
 [reading-es]: README.md

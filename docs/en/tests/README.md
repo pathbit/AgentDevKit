@@ -221,9 +221,9 @@ To check the local package in real projects, run:
 npm run test:oss -- --tarball "$archive"
 ```
 
-The test clones fixed commits of
-[matrix](../../../tests/fixtures/oss-projects.json): Hibernate
-ORM, EF6, Rust, Go, Tailcat, Express, Requests, Zod and Chi. Checks files,
+The test clones the commits pinned in the [project matrix][oss-project-matrix].
+It covers Hibernate ORM, EF6, Rust, Go, Tailcat, Express, Requests, Zod and Chi.
+It checks files,
 permissions, links, staging, installation and update; compares bytes of
 `.git/info/exclude` and observes ignores without requiring changes in them. For
 human editions, validates the compatible backup and, when the package uses
@@ -569,6 +569,7 @@ if one of them does not have an explicit denial without partial content. It
 returns error when any profile is not verified; it does not execute the full
 flows of the agents nor authenticate the informed package.
 
-[reading-pt]: ../../../tests/README.md
+[reading-pt]: https://github.com/pathbit/AgentDevKit/blob/main/tests/README.md
+[oss-project-matrix]: https://github.com/pathbit/AgentDevKit/blob/main/tests/fixtures/oss-projects.json
 [reading-en]: README.md
 [reading-es]: ../../es/tests/README.md

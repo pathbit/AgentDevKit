@@ -200,15 +200,23 @@ verification; do not assume secrecy only by the POSIX bits. If a file system
 POSIX inform broad permissions for the new folder, operation fails with
 `E_BACKUP` before copying. Backups do not replace version control.
 
-Updates use the native copy of the platform to preserve supported metadata;
-faults detected during the copy interrupt the publication. In macOS, readable
-ACLs and xattrs are maintained; ACLs that deny writing, protection flags or
-inconclusive queries block the change. Verification does not cover directory
-ACLs or all filessystems. In Linux, the copy asks the `cp` that preserves xattrs
-and the verifier compares the attributes when `getfattr` is available. Without
-this tool, the copy may proceed with warning, but the preservation of xattrs has
-not been independently verified. Removals and Windows have their own limits;
-keep a verified copy of the important data before recovering files.
+Updates use the platform's native copy operation to preserve supported
+metadata. Copy failures stop publication. On macOS, the kit preserves
+readable ACLs and extended attributes. ACLs that deny writes, protection flags,
+or inconclusive checks block the change. Verification covers file ACLs on
+supported filesystems.
+
+On macOS, removing a file with extended attributes can return
+`E_PROTECTED_METADATA` with `metadataReason: xattr-present`. The behavior
+was reproduced on ARM when updating from 0.0.36 to 0.0.37 and when running
+`agents remove` after a fresh 0.0.37 installation. The generated files had
+the `com.apple.provenance` attribute. Run `xattr "<path>"` on the reported
+file to list its attributes. Preserve the files and attributes during review.
+
+On Linux, the kit asks `cp` to preserve extended attributes and compares them
+when `getfattr` is available. Without that tool, the copy can proceed with a
+warning that attribute preservation could not be verified. Keep a verified
+backup of important data before recovering files.
 
 If planning, application or a tool fails after a possible change, interrupt
 other operations and preserve files and backups until you review the status. See
