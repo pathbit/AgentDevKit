@@ -15,9 +15,25 @@ for(const mode of ['agents','agents-force','sync-force'])test(`remoção planeja
  const file=join(root,target);for(let i=0;i<attrs.length;i++){const set=run('/usr/bin/xattr',['-w',attrs[i],`synthetic-${i}`,file]);if(set.status!==0){if(process.env.ADK_STRICT_RECOVERY_TEST==='1')assert.fail('pré-requisito de xattr indisponível');t.skip('filesystem não permitiu criar xattr sintético');return;}}
  const names=()=>{const r=ok('/usr/bin/xattr',['-s','--',file]);return r.stdout.split('\n').filter(Boolean).sort();};const beforeNames=names();assert.ok(attrs.every(a=>beforeNames.includes(a)),'ambos atributos devem estar presentes');const namesDigest=sha(JSON.stringify(beforeNames)),before=snapshot(root),staged=sha(ok('git',['diff','--cached','--binary','--no-ext-diff','--no-textconv']).stdout);
  if(mode==='sync-force'){
-  const js=`const m=await import(process.argv[1]);const r=m.inspectSyncEffects({root:process.argv[2],force:true,output(){}});process.stdout.write(JSON.stringify(r.logicalEffects.operations));`;
-  const preview=JSON.parse(ok(process.execPath,['--input-type=module','-e',js,pathToFileURL(direct).href,root]).stdout);assert.ok(preview.some(x=>x.path===target&&x.action==='remove'),'sync direto deve planejar remoção do alvo');
- }else{const args=['agents','codex','--target',root,'--yes','--json',...(mode==='agents-force'?['--force']:[])];const preview=JSON.parse(ok(process.execPath,[cli,...args,'--dry-run']).stdout);assert.ok(preview.plan.some(x=>x.path===target&&x.action==='remove'),'CLI deve planejar remoção do alvo');}
+  const js = `
+    const { inspectSyncEffects } = await import(process.argv[1]);
+    const { logicalEffects, xattrBlockers, exitCode } = inspectSyncEffects({ root: process.argv[2], force: true, output() {} });
+    process.stdout.write(JSON.stringify({ operations: logicalEffects.operations, xattrBlockers, exitCode }));
+  `;
+  const preview = JSON.parse(ok(process.execPath, ['--input-type=module', '-e', js, pathToFileURL(direct).href, root]).stdout);
+  assert.ok(preview.operations.some(operation => operation.path === target && operation.action === 'remove'));
+  assert.ok(preview.xattrBlockers.includes(target));
+  assert.equal(preview.exitCode, 1);
+ } else {
+  const args = ['agents', 'codex', '--target', root, '--yes', '--json', ...(mode === 'agents-force' ? ['--force'] : [])];
+  const previewRun = run(process.execPath, [cli, ...args, '--dry-run']);
+  assert.equal(previewRun.status, 1);
+  const preview = JSON.parse(previewRun.stdout);
+  assert.ok(preview.plan.some(operation => operation.path === target && operation.action === 'remove'));
+  assert.ok(preview.issues.some(issue => issue.path === target && issue.code === 'xattr-present'));
+  assert.equal(preview.error.code, 'E_PROTECTED_METADATA');
+  assert.ok(attrs.every(name => !previewRun.stdout.includes(name) && !previewRun.stderr.includes(name)));
+ }
  assert.deepEqual(snapshot(root),before,'consulta não altera fixture');assert.equal(sha(JSON.stringify(names())),namesDigest);
  const r=mode==='sync-force'?run(process.execPath,[direct,'--root',root,'--force']):run(process.execPath,[cli,'agents','codex','--target',root,'--yes','--json',...(mode==='agents-force'?['--force']:[])]);
  assert.ok(r.status>0,'operação deve recusar');assert.ok(attrs.every(a=>!r.stdout.includes(a)&&!r.stderr.includes(a)),'nome do atributo não deve ser divulgado');

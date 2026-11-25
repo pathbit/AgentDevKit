@@ -12,6 +12,12 @@ export function inspectMacXattr(path) {
   } catch { return 'unknown'; }
 }
 
+export function inspectMacXattrBlocker(path, preservesMetadata) {
+  const status = inspectMacXattr(path);
+  if (status === 'empty' || status === 'present' && preservesMetadata) return null;
+  return status === 'present' ? 'xattr-present' : 'xattr-unverified';
+}
+
 // Linux can omit inaccessible names from listxattr, including trusted.*.
 // A nonempty listing proves presence; an empty one cannot prove absence.
 export function linuxPythonXattrs(path) {

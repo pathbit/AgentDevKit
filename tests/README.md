@@ -478,8 +478,11 @@ instalado, incluindo faltas, extras e duplicatas. Para cada skill e perfil,
 registra separadamente referência estrutural, descoberta e execução. A prova
 estrutural exige o apontamento gerado canônico e compara os bytes da origem
 instalada com os do pacote; não inclui colisões de conteúdo humano. Algumas
-referências de perfil não são formatos de descoberta nativa. Copilot
-lista skills e OpenCode lista perfis; as demais combinações ficam `not-run`.
+referências de perfil exigem validação no cliente. O Copilot lista skills.
+No OpenCode 1, o runner consulta cada perfil com `debug agent <nome> --pure`
+e confere o `prompt` carregado. No OpenCode 2, usa `debug agents --standalone`
+e confere o `system` da entrada correspondente. As demais combinações ficam
+`not-run`.
 O Copilot deve retornar cada nome uma única vez, habilitado e com a localização
 da skill do projeto; resultados pessoais ou incorporados não são confundidos.
 A descoberta observada não comprova execução. O runner não solicita inferência

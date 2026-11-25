@@ -24,3 +24,8 @@ Pacotes e registros de instalação ficam em `.local/`; o estado próprio do CLI
 pode usar `~/.agent-browser`, conforme a
 [configuração oficial](https://agent-browser.dev/configuration). O script não
 altera `HOME`. Os testes usam sessão própria e a encerram ao terminar.
+
+Se o navegador recusar o nome da sessão por causa do comprimento do socket
+Unix, defina `AGENT_BROWSER_SOCKET_DIR` para um diretório privado com caminho
+curto. Isso pode ser necessário ao executar testes em uma pasta temporária
+profunda no macOS.

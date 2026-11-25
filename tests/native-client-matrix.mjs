@@ -67,7 +67,7 @@ export function structural(project, client, kind, item, policy = adapters, packa
     return { status: 'passed', path, ...hashes };
   } catch (error) { return { status: 'failed', path, reason: error.code || error.message }; }
 }
-export function discovery(client, kind, item, output, project, policy = adapters) {
+export function discovery(client, kind, item, output, project, policy = adapters, { opencodeV1 = false } = {}) {
   if (client === 'copilot' && kind === 'skills') {
     try {
       const parsed = JSON.parse(output);
@@ -84,7 +84,9 @@ export function discovery(client, kind, item, output, project, policy = adapters
       const text = safeRead(project, destination(client, kind, item, policy));
       const match = text.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n(?:\r?\n)?([\s\S]*?)\s*$/);
       const parsed = JSON.parse(output);
-      if (!match || !Array.isArray(parsed)) return false;
+      if (!match) return false;
+      if (opencodeV1) return parsed?.name === item.name && parsed.prompt === match[1];
+      if (!Array.isArray(parsed)) return false;
       const candidates = parsed.filter(row => row.id === item.name);
       return candidates.length === 1 && candidates[0].name === item.name && candidates[0].system === match[1];
     } catch { return false; }
@@ -126,10 +128,12 @@ async function main() {
     console.log(JSON.stringify({ report, cases: 0, rows: 0, failed: true })); process.exitCode = 1; return;
   }
   const envBase = Object.fromEntries(['PATH', 'SystemRoot', 'WINDIR', 'COMSPEC', 'PATHEXT'].filter(k => process.env[k]).map(k => [k, process.env[k]]));
+  const good = result => result?.status === 0 && !result.error && !result.timedOut && !result.exceeded;
   for (const client of policy.map(adapter => adapter.id)) for (const kind of ['new', 'existing']) {
     const caseDir = join(directory, `${client}-${kind}`), project = join(caseDir, 'project'), home = join(caseDir, 'home');
     const entry = { client, projectKind: kind, project, init: { status: 'blocked' }, discovery: { status: ['opencode', 'copilot'].includes(client) ? 'blocked' : 'not-run' } }; cases.push(entry);
-    let observed = null, caseError = null;
+    let observed = null, caseError = null, opencodeV1 = false;
+    const individualObservations = new Map();
     try {
     mkdirSync(project, { recursive: true, mode: 0o700 }); mkdirSync(home, { mode: 0o700 });
     for (const dir of ['config', 'cache', 'data', 'state', 'tmp']) mkdirSync(join(caseDir, dir), { mode: 0o700 });
@@ -142,7 +146,6 @@ async function main() {
       return { ...result, stdoutLog: join(caseDir, `${label}.stdout.log`), stderrLog: join(caseDir, `${label}.stderr.log`) };
     };
     const init = await invoke('init', process.execPath, [cli, 'init', '--target', project, '--agents', client, '--yes', '--json']);
-    const good = r => r.status === 0 && !r.error && !r.timedOut && !r.exceeded;
     let initOk = false; try { initOk = good(init) && JSON.parse(init.stdout).ok === true; } catch { /* saída inválida */ }
     entry.init = { status: initOk ? 'passed' : 'failed', log: init.stdoutLog, stderr: init.stderrLog };
     if (!initOk) throw Error('Instalação falhou.');
@@ -151,19 +154,30 @@ async function main() {
     if (kind === 'existing') entry.fixturePreserved = safeRead(project, 'README.md') === '# Projeto sintético\nConteúdo preexistente.\n' && safeRead(project, '.gitignore') === '# regra sintética\nprivate/\n';
     if (['opencode', 'copilot'].includes(client)) {
       const version = await invoke('version', client, ['--version']);
-      const query = client === 'copilot' ? ['skill', 'list', '--json'] : ['debug', 'agents', '--standalone'];
-      observed = await invoke('discovery', client, query);
       entry.version = good(version) ? version.stdout.trim() : null;
-      entry.discovery = { status: good(observed) ? 'completed' : 'blocked', log: observed.stdoutLog, stderr: observed.stderrLog, exitCode: observed.status, error: observed.error, timedOut: observed.timedOut, exceeded: observed.exceeded };
+      opencodeV1 = client === 'opencode' && /^1\./.test(entry.version || '');
+      if (opencodeV1) {
+        for (const item of catalog.agents) {
+          const result = await invoke(`discovery-${individualObservations.size + 1}`, client, ['debug', 'agent', item.name, '--pure']);
+          individualObservations.set(item.id, result);
+        }
+        const failed = [...individualObservations].filter(([, result]) => !good(result)).map(([id]) => id);
+        entry.discovery = { status: failed.length ? 'blocked' : 'completed', failed };
+      } else {
+        const query = client === 'copilot' ? ['skill', 'list', '--json'] : ['debug', 'agents', '--standalone'];
+        observed = await invoke('discovery', client, query);
+        entry.discovery = { status: good(observed) ? 'completed' : 'blocked', log: observed.stdoutLog, stderr: observed.stderrLog, exitCode: observed.status, error: observed.error, timedOut: observed.timedOut, exceeded: observed.exceeded };
+      }
     }
     } catch (error) { caseError = error.message; entry.error = caseError; }
     for (const type of ['skills', 'agents']) for (const item of catalog[type]) {
       const structure = entry.init.status === 'passed' ? structural(project, client, type, item, policy, pkg) : { status: 'blocked', reason: caseError || 'Instalação indisponível.' };
       const supported = (client === 'copilot' && type === 'skills') || (client === 'opencode' && type === 'agents');
-      const validObservation = observed && entry.discovery.status === 'completed';
-      const found = validObservation && supported && structure.status === 'passed' ? discovery(client, type, item, observed.stdout, project, policy) : null;
+      const observation = opencodeV1 ? individualObservations.get(item.id) : observed;
+      const validObservation = good(observation);
+      const found = validObservation && supported && structure.status === 'passed' ? discovery(client, type, item, observation.stdout, project, policy, { opencodeV1 }) : null;
       rows.push({ client, projectKind: kind, type, id: item.id, name: item.name, source: item.path, structure,
-        discovery: { status: !supported ? 'not-run' : !validObservation || structure.status !== 'passed' ? 'blocked' : found ? 'observed' : 'not-observed', evidence: supported && observed ? observed.stdoutLog : null },
+        discovery: { status: !supported ? 'not-run' : !validObservation || structure.status !== 'passed' ? 'blocked' : found ? 'observed' : 'not-observed', evidence: supported && observation ? observation.stdoutLog : null },
         execution: { status: 'not-run', reason: 'Inferência não executada por este runner.' } });
     }
   }

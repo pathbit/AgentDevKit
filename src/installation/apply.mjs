@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { assertUnredirectedGitEnvironment, assertNoNestedGit } from '../../.pbai4devs/scripts/lib/git-environment.mjs';
 import { withPotentialPartial, withUncertainPath } from '../../.pbai4devs/scripts/lib/error-reporting.mjs';
-import { assertLinuxXattrsUnchanged, inspectLinuxXattr, inspectMacAcl, inspectMacDirectoryAcl, inspectMacXattr } from '../../.pbai4devs/scripts/lib/xattr-probe.mjs';
+import { assertLinuxXattrsUnchanged, inspectLinuxXattr, inspectMacAcl, inspectMacDirectoryAcl, inspectMacXattrBlocker } from '../../.pbai4devs/scripts/lib/xattr-probe.mjs';
 import { fileOwnerIssue } from '../../.pbai4devs/scripts/lib/file-owner.mjs';
 import { chmodSync, lstatSync, readFileSync, writeFileSync, readdirSync, mkdirSync, mkdtempSync, rmSync, rmdirSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
@@ -20,6 +20,12 @@ import { allowsStagedBlock, allowedManaged } from './ownership.mjs';
 import { loadState, readDerivedState } from './state.mjs';
 import { assertMigrationDirectoryMetadata } from './legacy-state.mjs';
 import { adapterRoots } from '../adapters/index.mjs';
+
+function xattrProtectionError(path, metadataReason) {
+  return Object.assign(new Error('Extended attributes require review.'), {
+    code: metadataReason === 'xattr-present' ? 'E_PROTECTED_METADATA' : 'E_METADATA_UNSUPPORTED', path, metadataTargetVerified: true, metadataReason,
+  });
+}
 
 export function applyPlan(plan) {
   assertUnredirectedGitEnvironment();
@@ -48,10 +54,15 @@ export function applyPlan(plan) {
     if (acl === 'empty') fail('E_CHANGED', 'The planned ACL status changed; review and create a new plan.');
     throw Object.assign(new Error('ACL requires review.'), { code: acl === 'present' ? 'E_PROTECTED_METADATA' : 'E_METADATA_UNSUPPORTED', path: blocker.path, metadataTargetVerified: true, metadataReason: acl === 'present' ? 'acl-present' : 'acl-unverified' });
   }
-  if (!plan.canApply && !plan.conflicts?.length && !plan.localIgnoreCheck?.missing?.length && plan.xattrBlockers?.length && process.platform === 'linux') {
+  if (!plan.canApply && !plan.conflicts?.length && !plan.localIgnoreCheck?.missing?.length && plan.xattrBlockers?.length) {
     const blocker = plan.xattrBlockers[0], file = safePath(plan.target, blocker.path);
-    if (!stat(file)?.isFile() || inspectLinuxXattr(file) !== 'present') fail('E_CHANGED', 'The planned metadata changed; review and create a new plan.');
-    throw Object.assign(new Error('Extended attributes require review.'), { code: 'E_PROTECTED_METADATA', path: blocker.path, metadataTargetVerified: true, metadataReason: 'xattr-present' });
+    const action = plan.changes?.find(change => change.path === blocker.path)?.action;
+    if (!stat(file)?.isFile()) fail('E_CHANGED', 'The planned file changed; review and create a new plan.');
+    let status = null;
+    if (process.platform === 'darwin') status = inspectMacXattrBlocker(file, action === 'update' && nativeMetadataCopySupported);
+    if (process.platform === 'linux' && inspectLinuxXattr(file) === 'present') status = 'xattr-present';
+    if (status !== blocker.code) fail('E_CHANGED', 'The planned metadata changed; review and create a new plan.');
+    throw xattrProtectionError(blocker.path, status);
   }
   if (!plan.canApply) fail('E_CONFLICT', text(plan.language, 'conflict'));
   if (!Array.isArray(plan.changes)) fail('E_PLAN', 'The installation plan must contain a list of changes.');
@@ -201,7 +212,7 @@ export function applyPlan(plan) {
       // detection is conclusive; absence of a finding is not a safety proof.
       if (info?.isFile() && process.platform === 'linux' && inspectLinuxXattr(safePath(target, change.path)) === 'present'
         && (change.action !== 'update' || !nativeMetadataCopySupported || plan.xattrUnverified?.includes(change.path))) {
-        throw Object.assign(new Error('Extended attributes require review.'), { code: 'E_PROTECTED_METADATA', path: change.path, metadataTargetVerified: true, metadataReason: 'xattr-present' });
+        throw xattrProtectionError(change.path, 'xattr-present');
       }
       if (info?.isFile() && process.platform === 'darwin') {
         const protection = inspectMacWriteProtection(safePath(target, change.path));
@@ -214,11 +225,8 @@ export function applyPlan(plan) {
           const code = acl === 'present' ? 'E_PROTECTED_METADATA' : 'E_METADATA_UNSUPPORTED';
           throw Object.assign(new Error('ACL requires review.'), { code, path: change.path, metadataTargetVerified: true, metadataReason: acl === 'present' ? 'acl-present' : 'acl-unverified' });
         }
-        const result = inspectMacXattr(safePath(target, change.path));
-        if (result !== 'empty' && !(change.action === 'update' && nativeMetadataCopySupported && result === 'present')) {
-          const code = result === 'present' ? 'E_PROTECTED_METADATA' : 'E_METADATA_UNSUPPORTED';
-          throw Object.assign(new Error('Extended attributes require review.'), { code, path: change.path, metadataTargetVerified: true, metadataReason: result === 'present' ? 'xattr-present' : 'xattr-unverified' });
-        }
+        const blocker = inspectMacXattrBlocker(safePath(target, change.path), change.action === 'update' && nativeMetadataCopySupported);
+        if (blocker) throw xattrProtectionError(change.path, blocker);
       }
       if (info?.isFile() && (info.mode & 0o7000)) {
         throw Object.assign(new Error('Existing file has special POSIX mode bits; preserved for review.'), {
@@ -353,8 +361,12 @@ export function applyPlan(plan) {
             fail('E_CHANGED', `Migrated copy changed before removing: ${path}`);
           }
         }
-        if (process.platform === 'linux' && stat(safePath(target, path))?.isFile() && inspectLinuxXattr(safePath(target, path)) === 'present') {
-          throw Object.assign(new Error('Extended attributes require review.'), { code: 'E_PROTECTED_METADATA', path, metadataTargetVerified: true, metadataReason: 'xattr-present' });
+        if (process.platform === 'linux' && stat(file)?.isFile() && inspectLinuxXattr(file) === 'present') {
+          throw xattrProtectionError(path, 'xattr-present');
+        }
+        if (process.platform === 'darwin' && stat(file)?.isFile()) {
+          const blocker = inspectMacXattrBlocker(file, false);
+          if (blocker) throw xattrProtectionError(path, blocker);
         }
         rmSync(file);
       }

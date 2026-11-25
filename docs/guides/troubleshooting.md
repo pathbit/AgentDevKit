@@ -62,6 +62,10 @@ por outro cliente. [Seleção de clientes][clients]
 | `E_MIGRATION_REVIEW` | Preserve o estado legado e revise a reativação. |
 | `E_PLUGIN` | Confira o ID e a origem com `plugins info <id>`. |
 
+No macOS, se `--dry-run --json` apontar `xattr-present` ou
+`xattr-unverified`, confira a rota indicada e liste os atributos com
+`xattr "<caminho>"`.
+
 No macOS, `/tmp` e `/var/folders` são aceitos quando forem os aliases de
 sistema esperados. Destinos que atravessam links humanos continuam recusados,
 inclusive quando apontados por `TMPDIR`, `TEMP` ou `TMP`.

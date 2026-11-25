@@ -81,6 +81,10 @@ test('OpenCode exige conteúdo exato do perfil instalado para o mesmo id', t => 
   assert.equal(discovery('opencode', 'agents', agent, output(`comentário .pbai4devs/agents/revisor/AGENT.md`), project), false);
   assert.equal(discovery('opencode', 'agents', agent, output(body.replace('../../.pbai4devs', '/outro/.pbai4devs')), project), false);
   assert.equal(discovery('opencode', 'agents', agent, JSON.stringify([{ id:'revisor-outro', name:'revisor', system:body }]), project), false);
+  const v1 = (name, prompt) => discovery('opencode', 'agents', agent, JSON.stringify({ name, prompt }), project, undefined, { opencodeV1: true });
+  assert.equal(v1('revisor', body), true);
+  assert.equal(v1('revisor', 'conteúdo diferente'), false);
+  assert.equal(v1('revisor-outro', body), false);
 });
 
 test('catálogo inválido produz relatório de erro', { skip: Number(process.versions.node.split('.')[0]) < 24 ? 'A matriz nativa requer Node.js 24 ou superior.' : false }, t => {

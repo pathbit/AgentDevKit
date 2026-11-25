@@ -1,6 +1,6 @@
 import { types as utilTypes } from 'node:util';
 import { assertUnredirectedGitEnvironment, assertNoNestedGit, gitPathsOverlap } from '../../.pbai4devs/scripts/lib/git-environment.mjs';
-import { inspectLinuxXattr, inspectMacAcl } from '../../.pbai4devs/scripts/lib/xattr-probe.mjs';
+import { inspectLinuxXattr, inspectMacAcl, inspectMacXattrBlocker } from '../../.pbai4devs/scripts/lib/xattr-probe.mjs';
 import { fileOwnerIssue } from '../../.pbai4devs/scripts/lib/file-owner.mjs';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -461,6 +461,12 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
     }) : [];
     const xattrBlockers = linuxXattrChecks.filter(item => item.status === 'present'
       && !(item.action === 'update' && nativeMetadataCopySupported)).map(item => ({ path: item.path, code: 'xattr-present' }));
+    if (process.platform === 'darwin') for (const { path, action } of changes) {
+      const file = safePath(target, path);
+      if (!stat(file)?.isFile()) continue;
+      const code = inspectMacXattrBlocker(file, action === 'update' && nativeMetadataCopySupported);
+      if (code) xattrBlockers.push({ path, code });
+    }
     const xattrUnverified = linuxXattrChecks.filter(item => item.status !== 'present').map(item => item.path);
     // A conflict means ownership or the managed bytes could not be proven.
     // Backups do not authorize replacing user content, even with --force.

@@ -151,7 +151,8 @@ export function applySynchronization({
           const index = planUntrack(root, { [path]: affectedBefore.get(path) });
           if (index.paths.length || index.conflicts.length) fail(`Arquivo Claude rastreado no indice Git; remocao bloqueada: ${path}`);
         }
-        assertNoSharedHardlinks(safe, path);
+        if (process.platform === 'darwin') assertWritableMetadata([{ path, action }], safe, output);
+        else assertNoSharedHardlinks(safe, path);
         const target = safe(path);
         if (process.platform === 'linux' && stat(target)?.isFile() && inspectLinuxXattr(target) === 'present') {
           throw Object.assign(new Error(`E_PROTECTED_METADATA: ${path}`), { code: 'E_PROTECTED_METADATA', path });

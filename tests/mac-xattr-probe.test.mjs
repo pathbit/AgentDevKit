@@ -6,7 +6,7 @@ import { lstatSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSyn
 import { devNull, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { classifyXattr, inspectMacXattr } from '../.pbai4devs/scripts/lib/xattr-probe.mjs';
+import { classifyXattr, inspectMacXattr, inspectMacXattrBlocker } from '../.pbai4devs/scripts/lib/xattr-probe.mjs';
 
 const repository = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const cli = join(repository, 'bin/agentdevkit.mjs');
@@ -65,8 +65,12 @@ test('nome de atributo composto apenas por espaço é identificado', { skip: mac
   const file = join(root, 'arquivo com espaço');
   writeFileSync(file, 'fixture');
   assert.equal(inspectMacXattr(file), 'empty');
+  assert.equal(inspectMacXattrBlocker(file, false), null);
   if (!setAttribute(t, file, ' ')) return;
   assert.equal(inspectMacXattr(file), 'present');
+  assert.equal(inspectMacXattrBlocker(file, false), 'xattr-present');
+  assert.equal(inspectMacXattrBlocker(file, true), null);
+  assert.equal(inspectMacXattrBlocker(join(root, 'ausente'), true), 'xattr-unverified');
 });
 
 for (const mode of ['init', 'unaffected']) test(`xattr seletivo: ${mode} em fixture Git`, { skip: macOnly, timeout: 240000 }, t => {
