@@ -36,7 +36,7 @@ function fixture(t) {
   return { project, fixture: original, packageRoot, manifest, events, prompt: 'Leia cada skill.', process: { code: 0, signal: null, timedOut: false } };
 }
 
-test('auditoria exige invocação, leitura correta e marcadores por skill', t => {
+test("audit requires invocation, correct reading and skill markers", t => {
   const input = fixture(t), result = assessCopilotEvidence(input);
   assert.equal(result.passed, true); assert.equal(result.verified, 2);
   const swapped = structuredClone(input);
@@ -66,7 +66,7 @@ test('auditoria exige invocação, leitura correta e marcadores por skill', t =>
   assert.equal(assessCopilotEvidence(failed).processPassed, false);
 });
 
-test('auditoria detecta alterações na origem e nos documentos humanos', t => {
+test("audit detects changes in origin and human documents", t => {
   const input = fixture(t);
   writeFileSync(join(input.project, input.manifest[0].path), 'alterado');
   assert.equal(assessCopilotEvidence(input).rows[0].checks.sourceUnchangedAfterSetup, false);

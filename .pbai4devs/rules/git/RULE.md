@@ -17,8 +17,9 @@ em checkpoints e merges; destaque mudanças incompatíveis com `!` ou
 `BREAKING CHANGE:`. Autor e committer devem ser o usuário, nunca um agente;
 confira as identidades efetivas e não adicione coautoria ou identificação de
 agente. Se a identidade do usuário não estiver clara, pergunte. Não altere a
-configuração ou a assinatura criptográfica automaticamente e não reescreva
-autores humanos existentes.
+configuração Git nem reescreva autores humanos existentes. Agentes de código
+jamais assinam commits por GPG, SSH ou trailer. Quando a assinatura criptográfica
+for exigida, o responsável humano deve realizá-la.
 
 Antes de publicar, confira o conteúdo, as verificações e o estado remoto; não
 envie tarefas incompletas nem use push forçado. Consulte a skill correspondente

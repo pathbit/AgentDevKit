@@ -7,7 +7,7 @@ import { blockDigest } from './ownership.mjs';
 import { actualStatePath, replaceJsonMember, reconcileStateBytes } from './state.mjs';
 
 export function planStateRecords({
-  target, desired, mode, language, bundled, previous, installedState, clients,
+  target, desired, mode, language, bundled, previous, installedState, clients, local,
   selected, migration, changingClients, derived, derivedConfigFiles, unknownRemovedFiles,
   migratedHuman, preservedHub, mixedPaths, preserved, synchronized, stagedHuman, observeNative,
 }) {
@@ -15,6 +15,7 @@ export function planStateRecords({
     catalogs: derivedCatalogs, config: derivedConfig, removedBlocks, removedFiles } = derived;
   const manifest = { schemaVersion: 1, version: bundled.length ? packageInfo.version : previous.version, language, files: {}, blocks: {} };
   if (mode !== 'sync' || clients !== undefined || previous?.clients !== undefined) manifest.clients = selected;
+  if (local) manifest.local = true;
   for (const [path, content] of desired) {
     if (path === 'README.md' || migratedHuman.has(path) || preservedHub.has(path)) continue;
     const block = blockDigest(path, content);

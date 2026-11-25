@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, sep } from 'node:path';
 import { synchronize } from '../.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs';
 
-test('sync remove referência obsoleta antes de criar a nova e preserva arquivos humanos', { timeout: 120000 }, t => {
+test("sync removes obsolete reference before creating new and preserves human files", { timeout: 120000 }, t => {
   const root = fs.realpathSync(fs.mkdtempSync(join(tmpdir(), 'adk-sync-order-')));
   t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); fs.rmSync(root, { recursive: true, force: true }); });
   const git = (...args) => {
@@ -46,7 +46,7 @@ test('sync remove referência obsoleta antes de criar a nova e preserva arquivos
   assert.deepEqual(fs.readFileSync(join(root, '.gitignore')), ignore);
 });
 
-test('sync cria pais compartilhados somente quando necessários e conserva diretório humano', { timeout: 120000 }, t => {
+test("sync creates shared parents only when needed and conserves human directory", { timeout: 120000 }, t => {
   const root = fs.realpathSync(fs.mkdtempSync(join(tmpdir(), 'adk-sync-parents-')));
   t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); fs.rmSync(root, { recursive: true, force: true }); });
   const put = (path, content) => { const file = join(root, path); fs.mkdirSync(dirname(file), { recursive: true }); fs.writeFileSync(file, content); };

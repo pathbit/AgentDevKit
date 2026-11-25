@@ -4,6 +4,8 @@ description: Verificação, pacotes e releases do AgentDevKit.
 
 # Manutenção e releases
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 Para atualizar o kit em um projeto, use [instalação](../guides/installation.md).
 Este guia explica como manter e publicar o gerador.
 
@@ -207,3 +209,7 @@ aprovado; uma aprovação de CI não substitui a instalação real pelo registro
 [package]: https://www.npmjs.com/package/@pathbit/agentdevkit
 [security-ci]: https://github.com/pathbit/AgentDevKit/actions/workflows/security-tools.yml
 [runners]: https://docs.github.com/en/actions/reference/runners/github-hosted-runners
+
+[reading-pt]: maintenance.md
+[reading-en]: ../en/maintainers/maintenance.md
+[reading-es]: ../es/maintainers/maintenance.md

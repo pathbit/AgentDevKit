@@ -19,7 +19,7 @@ function fixture(t) {
   return root;
 }
 
-test('raiz ausente preserva a reserva e o histórico depois de o projeto ser criado', t => {
+test("missing root preserves the reserve and the history after the project is created", t => {
   const parent = fixture(t), target = join(parent, 'apps', 'novo');
   assert.deepEqual(inspectProjectRecovery(target), noHistory);
   assert.deepEqual(readdirSync(parent), []);
@@ -48,7 +48,7 @@ test('raiz ausente preserva a reserva e o histórico depois de o projeto ser cri
   assert.equal(readFileSync(join(target, 'README.md'), 'utf8'), 'criado pelo operador');
 });
 
-test('cada geração registra quais componentes da raiz ainda faltam', t => {
+test("each generation records which root components are still missing", t => {
   const parent = fixture(t), intermediate = join(parent, 'apps'), target = join(intermediate, 'novo');
   const first = startProjectRecovery(target, []);
   mkdirSync(intermediate);
@@ -62,7 +62,7 @@ test('cada geração registra quais componentes da raiz ainda faltam', t => {
   resolveProjectRecovery(target, second.generation, second.id);
 });
 
-test('projeto existente vincula os bytes anteriores ao início e conserva as alterações após resolução', t => {
+test("existing project binds bytes prior to start and keeps changes after resolution", t => {
   const target = fixture(t);
   const original = Buffer.from('versão anterior');
   const document = join(target, 'README.md');
@@ -82,7 +82,7 @@ test('projeto existente vincula os bytes anteriores ao início e conserva as alt
   assert.throws(() => completeProjectRecovery(tx), { code: 'E_RECOVERY_STATE' });
 });
 
-test('falha ao preparar a cópia mantém a reserva pendente até resolução explícita', t => {
+test("failure to prepare the copy keeps the reservation pending until explicit resolution", t => {
   const target = fixture(t);
   const document = join(target, 'README.md');
   writeFileSync(document, 'original');
@@ -96,7 +96,7 @@ test('falha ao preparar a cópia mantém a reserva pendente até resolução exp
   assert.equal(readFileSync(document, 'utf8'), 'original');
 });
 
-test('origem incompleta impede nova reserva e fica disponível para revisão', t => {
+test("incomplete origin prevents new reservation and is available for review", t => {
   const target = fixture(t);
   const tx = startProjectRecovery(target, []);
   completeProjectRecovery(tx);
@@ -107,7 +107,7 @@ test('origem incompleta impede nova reserva e fica disponível para revisão', t
   assert.equal(readFileSync(origin, 'utf8'), '{"version":');
 });
 
-test('manifesto da cópia divergente impede conclusão e resolução do início', t => {
+test("manifest of the divergent copy prevents completion and resolution of the beginning", t => {
   const target = fixture(t);
   const tx = startProjectRecovery(target, [absentReadme]);
   const manifest = join(tx.backup, 'manifest.json');
@@ -118,7 +118,7 @@ test('manifesto da cópia divergente impede conclusão e resolução do início'
   assert.equal(readdirSync(join(tx.journal, 'records')).length, 2);
 });
 
-test('dois instaladores concorrentes obtêm uma única reserva', async t => {
+test("two competing installers get a single reservation", async t => {
   const parent = fixture(t), target = join(parent, 'projeto');
   const source = new URL('../.pbai4devs/scripts/lib/project-recovery.mjs', import.meta.url).href;
   const child = `

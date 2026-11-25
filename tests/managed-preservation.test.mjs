@@ -18,7 +18,7 @@ function fixture(t) {
   return { root, put, git };
 }
 
-test('clientes visíveis preservam instruções e índice; credenciais são diagnosticadas', t => {
+test("visible customers preserve instructions and index; credentials are diagnosed", t => {
   const { root, put, git } = fixture(t);
   assert.equal(git('init', '--quiet').status, 0);
   put('.claude/skills/minha-skill/SKILL.md', '# Minha skill\n');
@@ -39,7 +39,7 @@ test('clientes visíveis preservam instruções e índice; credenciais são diag
   assert.equal(git('ls-files', '--stage', '-z').stdout, index);
 });
 
-test('migracao preserva regras humanas e permite opt-in de pasta inteira', t => {
+test("migration preserves human rules and allows whole folder opt-in", t => {
   const { root, put, git } = fixture(t);
   assert.equal(git('init', '--quiet').status, 0);
   const original = '# Regra humana\nminha-pasta/\n# BEGIN AGENTDEVKIT LOCAL 0123456789abcdef\n/.claude/\n# END AGENTDEVKIT LOCAL 0123456789abcdef\n';
@@ -57,7 +57,7 @@ test('migracao preserva regras humanas e permite opt-in de pasta inteira', t => 
   assert.ok(readFileSync(join(root, '.git/info/exclude'), 'utf8').startsWith('# Regra humana\nminha-pasta/\n'));
 });
 
-test('gitignore humano é preservado e credenciais visíveis são informadas', t => {
+test("human gitignore is preserved and visible credentials are informed", t => {
   const { root, put, git } = fixture(t);
   assert.equal(git('init', '--quiet').status, 0);
   put('.claude/.gitignore', '# Regras humanas\nminha-pasta/\n');
@@ -70,7 +70,7 @@ test('gitignore humano é preservado e credenciais visíveis são informadas', t
   assert.equal(readFileSync(join(root, '.claude/.gitignore'), 'utf8'), '# Regras humanas\nminha-pasta/\n');
 });
 
-test('projeto aninhado preserva exemplos publicos e isola regras privadas', t => {
+test("nested project preserves public examples and isolates private rules", t => {
   const { root, put, git } = fixture(t);
   assert.equal(git('init', '--quiet').status, 0);
   const nested = join(root, 'packages/example');
@@ -117,7 +117,7 @@ test('probe planejado e novamente validado se uma pasta virar link', t => {
   assert.doesNotThrow(() => applyLocalIgnore(plan));
 });
 
-test('excecao de diretorio nao atravessa juncao dentro do cliente', t => {
+test("exception of directory does not cross junction within the client", t => {
   const { root, git } = fixture(t);
   assert.equal(git('init', '--quiet').status, 0);
   const external = mkdtempSync(join(tmpdir(), 'agentdevkit-child-'));
@@ -133,7 +133,7 @@ test('excecao de diretorio nao atravessa juncao dentro do cliente', t => {
   assert.equal(readFileSync(join(external, 'auth.json'), 'utf8'), 'externo\n');
 });
 
-test('verificador confere apenas nosso bloco e nao impoe metadados ao Markdown humano', t => {
+test("verifier confers only our block and not impoe metadata to human Markdown", t => {
   const { root, put } = fixture(t);
   put('.pbai4devs/skills/demo/SKILL.md', '# Fonte\n');
   const mixed = mergeManagedContent('Texto humano sem H1 ou YAML.\n[Link particular](inexistente.md)\n', 'Leia [origem](../../../.pbai4devs/skills/demo/SKILL.md).');
@@ -143,7 +143,7 @@ test('verificador confere apenas nosso bloco e nao impoe metadados ao Markdown h
   assert.throws(() => checkManagedBlocks(root, { '.claude/skills/demo/SKILL.md': mixed.sha256 }));
 });
 
-test('verificador resolve inclusao Gemini pela raiz do projeto', t => {
+test("verifier solves including Gemini by project root", t => {
   const { root, put } = fixture(t);
   put('.pbai4devs/commands/demo/COMMAND.md', '# Fonte\n');
   const mixed = mergeTomlContent('description = "Meu comando"\nprompt = "Minha instrucao"\n', '@{.pbai4devs/commands/demo/COMMAND.md}');

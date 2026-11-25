@@ -40,7 +40,7 @@ function snapshot(root) {
   visit(root); return files;
 }
 
-test('texto humano com formato de referência nunca comprova propriedade', t => {
+test("human text with reference format never proves property", t => {
   for (const path of [generated, '.claude/skills/human.md']) {
     const root = fixture(t); write(root, path, human);
     const before = snapshot(root);
@@ -63,7 +63,7 @@ test('texto humano com formato de referência nunca comprova propriedade', t => 
   }
 });
 
-test('hash registrado comprova referência legada sem marcador e diretório vazio humano permanece', t => {
+test("registered hash proves legacy reference without marker and human empty directory remains", t => {
   const root = fixture(t), stale = '.claude/skills/legacy.md';
   write(root, stale, human);
   write(root, '.pbai4devs/state/agentdevkit.json', JSON.stringify({ schemaVersion: 1, clients: ['claude'], files: { [stale]: hash(human) }, blocks: {} }));
@@ -74,7 +74,7 @@ test('hash registrado comprova referência legada sem marcador e diretório vazi
   assert.equal(run(root, { check: true }).exitCode, 0);
 });
 
-test('negação de ignore humana é preservada e visibilidade é avisada', t => {
+test("negation of human ignorance is preserved and visibility is warned", t => {
   const root = fixture(t); write(root, '.gitignore', '!/.agent-tests/\n!/.agent-tests/**\n');
   const before = fs.readFileSync(join(root, '.gitignore')), exclude = fs.readFileSync(join(root, '.git/info/exclude')), messages = [];
   assert.equal(run(root, { localIgnores: true, force: true, output: message => messages.push(message) }).exitCode, 0);
@@ -84,7 +84,7 @@ test('negação de ignore humana é preservada e visibilidade é avisada', t => 
   assert.ok(fs.existsSync(join(root, generated)));
 });
 
-test('atualização de referência própria conserva permissões', t => {
+test("own reference update saves permissions", t => {
   const root = fixture(t); run(root);
   fs.chmodSync(join(root, generated), 0o600);
   const mode = fs.statSync(join(root, generated)).mode & 0o777;
@@ -93,7 +93,7 @@ test('atualização de referência própria conserva permissões', t => {
   assert.equal(fs.statSync(join(root, generated)).mode & 0o777, mode);
 });
 
-test('mudança concorrente de ignore após gravação preserva a regra humana', t => {
+test("concurrent change of ignore after recording preserves the human rule", t => {
   const root = fixture(t); run(root);
   write(root, source, '---\nname: demo\ndescription: Atualizado.\n---\n\n# Demo\n');
   const target = join(root, generated);
@@ -140,7 +140,7 @@ function afterNewFileCloses(t, target, action) {
   t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
 }
 
-test('conteúdo humano concorrente é preservado na falha de sincronização', t => {
+test("competing human content is preserved in sync failure", t => {
   const root = fixture(t);
   afterNewFileCloses(t, join(root, generated), () => write(root, generated, human));
   assert.throws(() => run(root), /Mudanca concorrente preservada/);
@@ -148,7 +148,7 @@ test('conteúdo humano concorrente é preservado na falha de sincronização', t
   assert.equal(run(root, { check: true }).recovery.status, 'pending');
 });
 
-test('falha ao registrar remoção derivada preserva fallback no backup e índice no projeto', t => {
+test("failure to register derivative removal preserves fallback in backup and index in project", t => {
   const root = fixture(t), fallback = '.codex/skills/demo/SKILL.md';
   write(root, '.pbai4devs/espelhos.conf', [
     'agente|.agents|agrupado', 'agente|.codex|plano',
@@ -160,7 +160,7 @@ test('falha ao registrar remoção derivada preserva fallback no backup e índic
   run(root);
   const initial = fs.readFileSync(join(root, fallback));
   write(root, '.pbai4devs/state/agentdevkit.json', JSON.stringify({ schemaVersion: 1, files: { [fallback]: hash(initial) }, blocks: {} }));
-  fs.rmSync(join(root, '.agents/skills')); // A obstrução pertence à fixture.
+  fs.rmSync(join(root, '.agents/skills')); // The obstruction belongs to the fixture.
   const index = fs.readFileSync(join(root, '.git/index'));
   const writeFile = fs.writeFileSync, originalRemove = fs.rmSync;
   let injected = false, temporary, temporaryBytes, cleanupAttempted = false;
@@ -194,7 +194,7 @@ test('falha ao registrar remoção derivada preserva fallback no backup e índic
   assert.throws(() => run(root), { code: 'E_RECOVERY_PENDING' });
 });
 
-test('conteúdo humano é preservado quando o fechamento informa falha após a escrita', t => {
+test("human content is preserved when closing informs failure after writing", t => {
   const root = fixture(t);
   const failure = new Error('falha depois de fechar');
   afterNewFileCloses(t, join(root, generated), () => { write(root, generated, human); throw failure; });
@@ -202,7 +202,7 @@ test('conteúdo humano é preservado quando o fechamento informa falha após a e
   assert.equal(fs.readFileSync(join(root, generated), 'utf8'), human);
 });
 
-test('falha de catálogo preserva ancestral e mantém remoções já concluídas', { skip: process.platform === 'win32' && 'A comparação desta fixture verifica os bits POSIX dos diretórios antes e depois da falha.' }, t => {
+test("catalog failure preserves ancestral and maintains already completed removals", { skip: process.platform === 'win32' && 'A comparação desta fixture verifica os bits POSIX dos diretórios antes e depois da falha.' }, t => {
   const root = fixture(t); run(root);
   const parent = join(root, '.claude/skills'); fs.chmodSync(parent, 0o700);
   fs.rmSync(join(root, '.pbai4devs/skills/demo'), { recursive: true });

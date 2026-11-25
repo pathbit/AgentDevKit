@@ -32,7 +32,7 @@ function fixture(t) {
 
 const document = (preparation, configuration) => `---\npreparacao: ${preparation}\nconfiguracao_tecnica: ${configuration}\ndocumentos:\n  prd: docs/PRD.md\n---\n\n# Estado\n`;
 
-test('bloqueia antes do código quando o estado está ausente ou pendente', t => {
+test("blocks before code when the state is missing or pending", t => {
   const { root, state, run } = fixture(t);
   assert.deepEqual(run().report.motivo, 'estado-ausente');
   assert.equal(run().status, 1);
@@ -44,7 +44,7 @@ test('bloqueia antes do código quando o estado está ausente ou pendente', t =>
   }
 });
 
-test('aceita o modelo real e mantém provas da aplicação como verificação separada', t => {
+test("accepts the actual model and maintains application evidence as separate verification", t => {
   const { root, state, run } = fixture(t);
   const template = readFileSync(join(projectRoot, '.pbai4devs/templates/configuracao/TEMPLATE.md'), 'utf8');
   state(template); assert.equal(run().report.motivo, 'configuracao-pendente');
@@ -54,7 +54,7 @@ test('aceita o modelo real e mantém provas da aplicação como verificação se
   assert.equal(existsSync(join(root, 'src')), false);
 });
 
-test('consulta apenas preparação sem exigir configuração técnica antecipada', t => {
+test("consultation only preparation without requiring early technical configuration", t => {
   const { root, state, run, write } = fixture(t);
   assert.equal(run('--preparacao').report.motivo, 'estado-ausente');
   state(document('pendente', 'concluido'));
@@ -78,7 +78,7 @@ test('consulta apenas preparação sem exigir configuração técnica antecipada
   assert.equal(run('--preparacao').report.motivo, 'estado-invalido');
 });
 
-test('indicadores concluídos exigem revisão adicional de evidências e não alteram Git', t => {
+test("completed indicators require further review of evidence and do not change Git", t => {
   const { root, state, write, run } = fixture(t);
   state(document('"concluido" # aprovado', "'concluido'"));
   write('.gitignore', 'node_modules/\n'); write('AGENTS.md', '# Instruções humanas\n');
@@ -96,7 +96,7 @@ test('indicadores concluídos exigem revisão adicional de evidências e não al
   assert.equal(existsSync(join(root, 'src')), false);
 });
 
-test('recusa indicadores ausentes, desconhecidos, duplicados e não expõe valores', t => {
+test("refuses missing, unknown, duplicated indicators and does not expose values", t => {
   const { state, run } = fixture(t);
   const secret = 'SENSITIVE_VALUE_47849';
   for (const value of [
@@ -126,7 +126,7 @@ test('recusa indicadores ausentes, desconhecidos, duplicados e não expõe valor
   assert.equal(run().report.status, 'verificar-evidencias');
 });
 
-test('aceita estado legado e recusa coexistência de árvores de estado', t => {
+test("accepts legacy status and refuses coexistence of state trees", t => {
   const { state, run } = fixture(t);
   state(document('concluido', 'concluido'), 'estado');
   assert.equal(run().report.status, 'verificar-evidencias');
@@ -135,7 +135,7 @@ test('aceita estado legado e recusa coexistência de árvores de estado', t => {
   assert.equal(result.report.motivo, 'estado-inacessivel-ou-inseguro');
 });
 
-test('não segue link humano em arquivo ou pasta de estado', t => {
+test("does not follow human link in file or status folder", t => {
   const { root, state, run } = fixture(t);
   const outside = join(root, 'fora'); mkdirSync(outside);
   const target = join(outside, 'ESTADO.md'); writeFileSync(target, document('concluido', 'concluido'));
@@ -150,14 +150,14 @@ test('não segue link humano em arquivo ou pasta de estado', t => {
   assert.equal(readFileSync(target, 'utf8'), document('concluido', 'concluido'));
 });
 
-test('exige Node e rejeita argumentos extras sem ler outro projeto', t => {
+test("requires Node and rejects extra arguments without reading another project", t => {
   const { root, run } = fixture(t);
   const result = run('--root', root); assert.equal(result.status, 2);
   assert.match(result.stderr, /\[--preparacao\]/);
   assert.equal(verifyConfiguration(root).status, 'bloqueado');
 });
 
-test('seletor de scripts propaga bloqueio e exige revisão de evidências', t => {
+test("script selector propagates lock and requires evidence review", t => {
   const { root, state } = fixture(t);
   const selector = join(root, '.pbai4devs/scripts/executar-script/SCRIPT.mjs');
   const execute = () => spawnSync(process.execPath, [selector, 'verificar-configuracao'], { cwd: root, encoding: 'utf8' });

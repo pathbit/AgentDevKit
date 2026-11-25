@@ -129,7 +129,7 @@ for (const kind of ['install', 'sync']) for (const frozen of [false, true]) {
   });
 }
 
-test('falha de limpeza no estágio mantém causa e escopo de estágio', { timeout: 120000 }, t => {
+test("stage cleaning failure maintains cause and scope of stage", { timeout: 120000 }, t => {
   const base = fs.realpathSync(fs.mkdtempSync(join(tmpdir(), 'adk-cleanup-stage-')));
   const root = join(base, 'project'), scratch = join(base, 'scratch');
   fs.mkdirSync(root);
@@ -175,7 +175,7 @@ test('falha de limpeza no estágio mantém causa e escopo de estágio', { timeou
   assert.deepEqual(paths.map(p => fs.readFileSync(join(root, p))), before);
 });
 
-test('CLI JSON identifica o estágio sem publicar conteúdo humano', { timeout: 120000 }, async t => {
+test("CLI JSON identifies the stage without publishing human content", { timeout: 120000 }, async t => {
   const base = fs.realpathSync(fs.mkdtempSync(join(tmpdir(), 'adk-cleanup-cli-')));
   const root = join(base, 'project'), scratch = join(base, 'scratch');
   fs.mkdirSync(root);
@@ -509,7 +509,7 @@ for (const [name, thrown] of [['undefined', undefined], ['null', null], ['false'
   }
 }
 
-test('falha anterior ao sync sem valor continua como causa após falha de limpeza', { timeout: 120000 }, t => {
+test("previous failure to valueless sync continues as cause after cleaning failure", { timeout: 120000 }, t => {
   const base = fs.realpathSync(fs.mkdtempSync(join(tmpdir(), 'adk-falsy-before-sync-')));
   const root = join(base, 'project'), scratch = join(base, 'scratch');
   fs.mkdirSync(root); fs.mkdirSync(scratch);

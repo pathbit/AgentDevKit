@@ -4,6 +4,8 @@ description: Do preparo do kit à implementação e revisão de uma entrega.
 
 # Fluxo de trabalho
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 [Documentação](../README.md) · [Instalação](installation.md) ·
 [Recursos](resources.md) · [Ferramentas e testes](tools-and-testing.md)
 
@@ -110,10 +112,28 @@ Critério sem prova, falha ou revisão pendente impede concluir a entrega.
 
 ## Em um projeto existente
 
-Preparar o ambiente não exige recriar PRD/design/spec ou reorganizar o código.
-Preserve dados, lockfiles, configurações e comandos reais. Uma nova mudança
-funcional precisa de escopo próprio; um reparo não autoriza uma migração ampla.
-Mesmo uma mudança sem spec exige critérios claros e revisão da entrega.
+Na pasta onde o kit está instalado, pergunte por onde começar.
+
+```console
+npx @pathbit/agentdevkit next --intent run
+```
+
+Em um monorepo com instalação compartilhada, comece pela raiz e informe o
+módulo ao agente. Se o módulo tem seu próprio kit, indique sua pasta com
+`--target`. A versão em desenvolvimento mostra caminhos para conferir antes
+da execução. [Como testar a versão local](cli.md#preparar-um-projeto-existente)
+
+Leia o README e os arquivos indicados, como Compose ou Makefile. Se o projeto
+usa uma convenção própria, confirme o comando de inicialização com a equipe.
+Passe o módulo e esses arquivos ao agente junto com o pedido.
+
+```text
+Quero rodar o módulo de relatórios. Leia o AGENTS.md e o README.
+Mostre o comando de inicialização e como verificar se subiu.
+```
+
+Preserve dados, lockfiles, configurações e comandos reais. Para uma mudança
+funcional, defina o escopo e os critérios de aceite antes de implementar.
 
 **[ Próximo passo ]** Consulte `next` e use a skill indicada, preservando as
 decisões existentes. Consulte [recursos](resources.md) se faltar um fluxo.
@@ -131,3 +151,7 @@ decisões existentes. Consulte [recursos](resources.md) se faltar um fluxo.
 [inventario]: documentation.md#documentar-um-sistema-em-uso
 [legado]: ../../.pbai4devs/commands/documentar-legado/COMMAND.md
 [revisao]: ../../.pbai4devs/commands/revisar-entrega/COMMAND.md
+
+[reading-pt]: workflow.md
+[reading-en]: ../en/guides/workflow.md
+[reading-es]: ../es/guides/workflow.md

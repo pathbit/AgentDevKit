@@ -4,6 +4,8 @@ description: Preservar o ignore do projeto ao instalar o AgentDevKit.
 
 # Ignore do projeto
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 > Esta spec registra o contrato histórico da release. A decisão posterior é não
 > editar `.git/info/exclude` nem criar ou alterar ignores na raiz ou nos clientes.
 > Os ignores existentes no hub também são preservados. A atualização dos
@@ -29,3 +31,7 @@ quando um estado antigo do kit registra esse arquivo.
 Os testes de exclusão local cobrem negações, migração, arquivos rastreados,
 permissões e worktrees. Os testes de instalação e compatibilidade conferem a
 preservação do projeto e o comportamento com e sem Git.
+
+[reading-pt]: SPEC.md
+[reading-en]: ../../en/specs/project-ignore/SPEC.md
+[reading-es]: ../../es/specs/project-ignore/SPEC.md

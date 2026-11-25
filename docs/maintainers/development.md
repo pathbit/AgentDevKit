@@ -4,6 +4,8 @@ description: Guia rápido para desenvolver e validar o AgentDevKit.
 
 # Desenvolver o AgentDevKit
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 Comece com Git, Node.js 24+ e npm. `npm ci` remove `node_modules` antes de
 instalar; preserve qualquer conteúdo local dessa pasta. Na raiz do checkout:
 
@@ -125,3 +127,7 @@ artefato aprovado pelo CI.
 [tests]: https://github.com/pathbit/AgentDevKit/tree/main/tests
 [scripts]: https://github.com/pathbit/AgentDevKit/tree/main/scripts
 [examples]: https://github.com/pathbit/AgentDevKit/tree/main/examples
+
+[reading-pt]: development.md
+[reading-en]: ../en/maintainers/development.md
+[reading-es]: ../es/maintainers/development.md

@@ -15,7 +15,7 @@ import { validateCatalog as validateExternalCatalog } from '../../gerenciar-skil
 import { stateDirectory } from '../../lib/state-path.mjs';
 import { project, cli, marker, skill, source, read, write, pointer, recordOwned, toolConfig, externalConfig, run, snapshot, fixture, rejected, assertCheckReadonly } from './fixtures.mjs';
 
-test('somente estágio privado autenticado pode dispensar o diário', t => {
+test("authenticated private internship only can dispense the diary", t => {
   const root = fixture(t, true);
   const handle = createPrivateSyncStage();
   t.after(() => rmSync(handle.path, { recursive: true, force: true }));
@@ -28,7 +28,7 @@ test('somente estágio privado autenticado pode dispensar o diário', t => {
   assert.deepEqual(snapshot(root), before);
 });
 
-test('sincronização direta conserva estado legado e recusa duas pastas de estado', t => {
+test("direct synchronization preserves legacy state and refuses two status folders", t => {
   const root = fixture(t, true);
   write(root, source, skill);
   write(root, '.pbai4devs/estado/agentdevkit.json', JSON.stringify({
@@ -43,7 +43,7 @@ test('sincronização direta conserva estado legado e recusa duas pastas de esta
   assert.deepEqual(snapshot(root), before);
 });
 
-test('detecção de estado recusa link simbólico sem abrir o destino', t => {
+test("state detection refusal symbolic link without opening destination", t => {
   const root = fixture(t, true);
   const external = join(root, 'externo');
   mkdirSync(external);
@@ -51,7 +51,7 @@ test('detecção de estado recusa link simbólico sem abrir o destino', t => {
   assert.throws(() => stateDirectory(root), /Link simbolico/);
   assert.equal(existsSync(join(root, '.pbai4devs/state')), false);
 });
-test('sincroniza somente principais, preserva metadados e usa referências UTF-8 relativas', t => {
+test("synchronises only majors, preserves metadata and uses references UTF-8 relative", t => {
   const root = fixture(t);
   assertCheckReadonly(root);
   assert.equal(run(root).exitCode, 0);
@@ -84,7 +84,7 @@ test('sincroniza somente principais, preserva metadados e usa referências UTF-8
   assert.deepEqual(snapshot(root), before, 'A segunda sincronização deve ser idempotente.');
 });
 
-test('hub único deriva regras por inclusão e metadados nativos do Antigravity', t => {
+test("Single hub derives rules by inclusion and native metadata from Antigravity", t => {
   const root = fixture(t);
   write(root, '.pbai4devs/agents/revisor/antigravity.yaml', '---\nname: revisor\nmainAgent: false\nsubagent: true\n---\n');
   write(root, '.pbai4devs/espelhos.conf', read(root, '.pbai4devs/espelhos.conf') + [
@@ -113,7 +113,7 @@ test('hub único deriva regras por inclusão e metadados nativos do Antigravity'
   assert.throws(() => validateIgnoreClients({ '.pbai4devs': {} }));
 });
 
-test('manifesto sem estado recusa a raiz aposentada com qualquer capitalização', t => {
+test("manifest without state refuses the retired root with any capitalisation", t => {
   const config = '.pbai4devs/espelhos.conf';
   for (const row of [
     'agente|.gemini|plano', 'agente|.Gemini|plano', 'gitignore|.GEMINI',
@@ -129,7 +129,7 @@ test('manifesto sem estado recusa a raiz aposentada com qualquer capitalização
   }
 });
 
-test('TOML novo não é destino nativo e referências legadas falsas não são reconhecidas', t => {
+test("TOML new is not native destination and false legacy references are not recognized", t => {
   const root = fixture(t);
   const row = 'nativo|.claude/commands/check.toml|.pbai4devs/commands/check/COMMAND.md';
   write(root, '.pbai4devs/espelhos.conf', read(root, '.pbai4devs/espelhos.conf') + row + '\n');
@@ -139,7 +139,7 @@ test('TOML novo não é destino nativo e referências legadas falsas não são r
   assert.equal(isReference('---\ndescription: regra\n---\n\n# Regra\n\n@[../../.pbai4devs/rules/demo/RULE.md]\nTexto proprio\n'), false);
 });
 
-test('gera ignore do kit sem criar ignores de clientes ou ocultar recursos', t => {
+test("generates ignore the kit without creating customers ignores or hide features", t => {
   const root = fixture(t, true);
   write(root, source, skill);
   write(root, '.pbai4devs/espelhos.conf', 'agente|.codex|plano\ngitignore|.vscode\n');
@@ -156,7 +156,7 @@ test('gera ignore do kit sem criar ignores de clientes ou ocultar recursos', t =
   assertCheckReadonly(root, {}, 0);
 });
 
-test('preserva bloco gitignore de cliente mesmo quando o template muda', t => {
+test("preserves customer block gitignore even when the template changes", t => {
   const root = fixture(t, true); run(root);
   const prefix = '# Regras do usuario\r\n/private-cache/\r\n';
   const suffix = '# Excecao local\r\n!keep.log\r\n';
@@ -170,7 +170,7 @@ test('preserva bloco gitignore de cliente mesmo quando o template muda', t => {
   assertCheckReadonly(root, {}, 0);
 });
 
-test('preserva gitignore proprio, detecta exclusao do ignore compartilhado e mantem idempotencia', t => {
+test("preserves gigignore itself, detects exclusion from shared ignorance and maintains idempotencia", t => {
   const root = fixture(t, true);
   const custom = '# Local\n/custom/\n!custom/keep'; write(root, '.codex/.gitignore', custom);
   run(root); assert.equal(read(root, '.codex/.gitignore'), custom);
@@ -207,7 +207,7 @@ test('ignores existentes e indice staged sobrevivem a template compartilhado alt
   assertGitPreserved();
 });
 
-test('gitignore recusa marcadores invalidos e fontes ausentes antes de qualquer mutacao', t => {
+test("gitignore refuses invalid markers and missing sources before any mutation", t => {
   for (const text of [ignoreBegin, ignoreEnd, `${ignoreEnd}\n${ignoreBegin}\n`, `${ignoreBegin}\na\n${ignoreEnd}\n${ignoreBegin}\nb\n${ignoreEnd}\n`]) {
     const root = fixture(t, true); write(root, '.codex/.gitignore', text);
     run(root, { force: true }); assert.equal(read(root, '.codex/.gitignore'), text);
@@ -240,14 +240,14 @@ test('gitignore gerado funciona no Git sem esconder definicoes versionadas', t =
   }
 });
 
-test('mergeGitignore preserva bytes exteriores e nao interpreta o arquivo como Markdown', () => {
+test("mergeGitignore preserves external bytes and does not interpret the file as Markdown", () => {
   const current = `---\r\ncustom: true\r\n---\r\n${ignoreBegin}\r\nold\r\n${ignoreEnd}\r\n**/other\r\n`;
   const merged = mergeGitignore(current, '*.log\n');
   assert.equal(merged.hasBlock, true);
   assert.equal(merged.text, `---\r\ncustom: true\r\n---\r\n${ignoreBegin}\n*.log\n${ignoreEnd}\n**/other\r\n`);
 });
 
-test('allowlist abre somente configuracoes e diretorios declarados no Git', t => {
+test("allowlist opens only settings and directories declared in Git", t => {
   const root = fixture(t, true);
   write(root, '.pbai4devs/espelhos.conf', 'agente|.codex|plano\ngitignore|.vscode\n');
   write(root, '.pbai4devs/templates/gitignore/clients.json', JSON.stringify({ '.codex': { allow: ['config.toml', 'native/file.json'] }, '.vscode': { resources: false, allow: ['settings.json', 'snippets/'] } }));
@@ -274,7 +274,7 @@ test('allowlist invalida ou token ausente falha antes de mutacoes', t => {
   const root = fixture(t, true); write(root, '.pbai4devs/templates/gitignore/clients.json', '{broken'); rejected(root, { force: true });
 });
 
-test('registros são derivados, determinísticos e --check nunca os corrige', t => {
+test("records are derived, deterministic and --check never corrects them", t => {
   const root = fixture(t);
   run(root);
   write(root, '.pbai4devs/skills.json', '{"incorreto":true}\n');
@@ -293,7 +293,7 @@ test('registros são derivados, determinísticos e --check nunca os corrige', t 
   assertCheckReadonly(empty, {}, 0);
 });
 
-test('skills externas baixadas não entram nos índices; cópias humanas permanecem intactas', t => {
+test("Downloaded external skills do not enter the indexes; human copies remain intact", t => {
   const root = fixture(t);
   write(root, '.pbai4devs/external-skills/README.md', '# Catálogo externo\n');
   write(root, '.pbai4devs/external-skills/CATALOG.json', JSON.stringify(externalConfig()));
@@ -344,7 +344,7 @@ test('sync e --force recusam apontamentos editados preservando recursos humanos'
   assert.match(read(root, '.codex/config.toml'), /config-native-preservada/);
 });
 
-test('preserva linhas legadas humanas sem prova de propriedade', t => {
+test("preserves human legacy lines without proof of ownership", t => {
   const root = fixture(t);
   run(root);
   write(root, 'docs/produto/prd/demo/PRD.md', '# Produto real\n');
@@ -363,7 +363,7 @@ test('preserva linhas legadas humanas sem prova de propriedade', t => {
   assertCheckReadonly(root);
 });
 
-test('limpa configuração legada comprovadamente gerenciada e registra novo hash', t => {
+test("clean legate configuration provenly managed and registers new hash", t => {
   const root = fixture(t);
   const path = '.pbai4devs/espelhos.conf';
   write(root, path, read(root, path) + 'documento|manual\n');
@@ -375,7 +375,7 @@ test('limpa configuração legada comprovadamente gerenciada e registra novo has
   assertCheckReadonly(root, {}, 0);
 });
 
-test('rejeita manifestos fora do escopo, campos extras, caminhos e caixas conflitantes sem mutação', t => {
+test("rejects manifests outside the scope, extra fields, conflicting paths and boxes without mutation", t => {
   const rows = [
     'agente|.git', 'agente|.AGENTS|plano', 'agente|.GIT|plano', 'agente|.AgEnT-TeStS|plano', 'agente|.CLAUDE|plano', 'agente|.claude|plano', 'agente|.other|invalid', 'agente|.other|plano|extra',
     'agente|../outside|plano', 'agente|C:/outside|plano', 'agente|.test//dir|plano', 'agente|.test\\dir|plano', 'agente|.test|plano|extra|another',
@@ -389,7 +389,7 @@ test('rejeita manifestos fora do escopo, campos extras, caminhos e caixas confli
   }
 });
 
-test('colisões de destino, ancestral, metadados e slugs não são resolvidas por --force', t => {
+test("destination collisions, ancestry, metadata and slugs are not resolved by --force", t => {
   for (const variant of ['slug', 'source', 'ancestor', 'metadata', 'target-case']) {
     const root = fixture(t);
     let extra;
@@ -406,7 +406,7 @@ test('colisões de destino, ancestral, metadados e slugs não são resolvidas po
   }
 });
 
-test('metadados incompletos, ausentes e com corpo são rejeitados antes de alterações', t => {
+test("incomplete, absent and body metadata are rejected before changes", t => {
   for (const text of ['name: revisor\n', '---\nname: revisor\n', '---\nname: revisor\n---\ntexto indevido\n', null]) {
     const root = fixture(t);
     const metadata = '.pbai4devs/agents/revisor/kimi-code.yaml';
@@ -418,7 +418,7 @@ test('metadados incompletos, ausentes e com corpo são rejeitados antes de alter
   rejected(root, { force: true }, /Titulo/);
 });
 
-test('symlinks canônicos são rejeitados sem efeitos quando o sistema permite criá-los', t => {
+test("canonical symlinks are rejected without effect when the system allows to create them", t => {
   for (const location of ['.pbai4devs/skills/projeto/demo/external.md', '.pbai4devs/skills.json', '.pbai4devs/espelhos.conf']) {
     const root = fixture(t);
     rmSync(join(root, location), { recursive: true, force: true });
@@ -428,7 +428,7 @@ test('symlinks canônicos são rejeitados sem efeitos quando o sistema permite c
   }
 });
 
-test('nomes de controle são rejeitados sem efeitos em todos os sistemas', t => {
+test("control names are rejected without effects on all systems", t => {
   const root = fixture(t);
   const manifest = read(root, '.pbai4devs/espelhos.conf');
   write(root, '.pbai4devs/espelhos.conf', manifest + `nativo|.claude/skills/invalid\u0001.md|${source}\n`);
@@ -443,13 +443,13 @@ test('nomes de controle são rejeitados sem efeitos em todos os sistemas', t => 
   }
 });
 
-test('registros não regulares são rejeitados sem efeitos', t => {
+test("non-regular records are rejected without effect", t => {
   const other = fixture(t);
   mkdirSync(join(other, '.pbai4devs/skills.json'));
   rejected(other, { force: true }, /Registro nao e arquivo/);
 });
 
-test('recuperação recusa raiz simbólica com os arquivos do projeto intactos', t => {
+test("symbolic root refusal recovery with project files intact", t => {
   const root = fixture(t);
   run(root);
   write(root, source, skill.replace('Exemplo.', 'Exemplo modificado.'));
@@ -465,7 +465,7 @@ test('recuperação recusa raiz simbólica com os arquivos do projeto intactos',
   assert.deepEqual(readdirSync(outside), []);
 });
 
-test('frontmatter e reconhecimento de apontamentos não confundem instruções próprias', () => {
+test("frontmatter and note recognition do not confuse own instructions", () => {
   assert.equal(header('---\r\nname: test\r\n---\r\nbody\r\n'), '---\nname: test\n---\n');
   assert.ok(isReference(pointer()));
   assert.ok(isReference('# Git\n\nLeia [origem](x) ao realizar operações Git.\n'));
@@ -475,7 +475,7 @@ test('frontmatter e reconhecimento de apontamentos não confundem instruções p
   assert.throws(() => header('sem YAML'), /YAML/);
 });
 
-test('CLI Node propaga códigos de check e rejeita opções sem invocar shell', t => {
+test("CLI Node propagates check codes and rejects options without invoking shell", t => {
   const root = fixture(t);
   write(root, '.pbai4devs/templates/gitignore/local.ignore', readFileSync(join(project, '.pbai4devs/templates/gitignore/local.ignore'), 'utf8'));
   write(root, '.pbai4devs/templates/gitignore/agents.ignore', readFileSync(join(project, '.pbai4devs/templates/gitignore/agents.ignore'), 'utf8'));
@@ -495,7 +495,7 @@ test('CLI Node propaga códigos de check e rejeita opções sem invocar shell', 
   assert.equal(changed.status, 1, changed.stderr);
 });
 
-test('entradas da CLI mantêm ownership integral e recursos têm proveniência derivada', t => {
+test("Inputs from CLI maintain full ownership and resources have derived provenance", t => {
   const root = fixture(t, true);
   const template = '---\ndescription: Entrada.\n---\n\n# Agentes\n';
   const entry = template + '\nResponda em português.\n';
@@ -538,7 +538,7 @@ test('nativos recusam principais dentro de estado ignorado e fora do catalogo', 
   }
 });
 
-test('regras validam trigger e contexto antes de gerar registros ou espelhos', t => {
+test("rules validate trigger and context before generating records or mirrors", t => {
   const root = fixture(t, true); const path = '.pbai4devs/rules/demo/RULE.md';
   const rule = fields => `---\ndescription: Regra de teste.\n${fields}---\n\n# Regra\n`;
   for (const [fields, expected] of [
@@ -571,7 +571,7 @@ test('outputs ignorados nao entram nos assets; fixtures versionaveis continuam',
   for (const path of kept) assert.ok(assets.has(`.pbai4devs/${path}`), path);
 });
 
-test('catálogo completo deriva oito tipos, ações reais e assets sem estado local', t => {
+test("complete catalog derives eight types, real actions and asset without local state", t => {
   const root = completeCatalogFixture(t);
   write(root, '.pbai4devs/scripts/browser/SCRIPT.conf', 'executor=playwright-mcp\n');
   write(root, '.pbai4devs/scripts/browser/SCRIPT.js', '(page) => page.title();\n');
@@ -605,7 +605,7 @@ test('catálogo completo deriva oito tipos, ações reais e assets sem estado lo
   assertCheckReadonly(root, {}, 0);
 });
 
-test('criar editar e remover recursos atualiza todos os tipos e os índices nativos', t => {
+test("create edit and remove features updates all types and native indexes", t => {
   const root = completeCatalogFixture(t);
   run(root);
   for (const [kind, file] of Object.entries({ skills: 'SKILL.md', agents: 'AGENT.md', commands: 'COMMAND.md', rules: 'RULE.md', templates: 'TEMPLATE.md' })) write(root, `.pbai4devs/${kind}/demo/${file}`, `---\nname: demo\n${kind === 'rules' ? 'trigger: always_on\n' : ''}description: ${kind} atualizado.\n---\n\n# Demo\n`);
@@ -626,7 +626,7 @@ test('criar editar e remover recursos atualiza todos os tipos e os índices nati
   assertCheckReadonly(root, {}, 0);
 });
 
-test('JSON derivado alterado é preservado até remoção deliberada pelo usuário', t => {
+test("JSON modified derivative is preserved until deliberately removed by the user", t => {
   const root = completeCatalogFixture(t);
   run(root);
   for (const path of ['.pbai4devs/catalog.json', '.pbai4devs/skills.json', '.pbai4devs/agents.json', '.pbai4devs/rules.json']) write(root, path, '{corrompido');
@@ -661,7 +661,7 @@ test('catalogo e seletor aceitam o mesmo SCRIPT.conf e os tres formatos Node', t
   rejected(root, { force: true }, /SCRIPT.conf deve ser um arquivo/);
 });
 
-test('fontes JSON, referências e entradas de scripts inválidas falham antes de mutações', t => {
+test("fonts JSON, references and invalid script entries fail before mutations", t => {
   const cases = [
     ['.pbai4devs/tools/demo/TOOL.json', '{invalid', /TOOL|JSON/],
     ['.pbai4devs/external-skills/CATALOG.json', '{invalid', /JSON/],
@@ -681,7 +681,7 @@ test('fontes JSON, referências e entradas de scripts inválidas falham antes de
   rejected(root, { force: true }, /SCRIPT|script|ausente/);
 });
 
-test('erro de JSON externo não divulga conteúdo e não altera a fixture', t => {
+test("error of JSON external does not disclose content and does not change fixture", t => {
   const root = completeCatalogFixture(t);
   const sentinel = 'SYNTHETIC_SECRET_ALPHA';
   const path = '.pbai4devs/external-skills/CATALOG.json';
@@ -771,7 +771,7 @@ test('builder e gerenciador externo compartilham o mesmo contrato de validacao',
   }
 });
 
-test('formatos por tipo preservam grupos e geram apenas o formato nativo escolhido', t => {
+test("formats by type preserve groups and generate only the chosen native format", t => {
   const root = fixture(t, true);
   write(root, source, skill);
   write(root, '.pbai4devs/commands/projeto/check/COMMAND.md', '---\ndescription: Checagem.\n---\n\n# Checagem\n');
@@ -795,7 +795,7 @@ test('formatos por tipo preservam grupos e geram apenas o formato nativo escolhi
   assertCheckReadonly(root, {}, 0);
 });
 
-test('Copilot conserva escopo glob e deixa manual e decisão do modelo em referências explícitas', t => {
+test("Copilot preserves scope glob and leaves manual and model decision in explicit references", t => {
   const root = fixture(t, true);
   write(root, source, skill);
   for (const [name, fields] of [
@@ -818,7 +818,7 @@ test('Copilot conserva escopo glob e deixa manual e decisão do modelo em refer�
   assertCheckReadonly(root, {}, 0);
 });
 
-test('Copilot recusa instrução nativa manual sem metadados ao criar um novo arquivo', t => {
+test("Copilot refuses native manual instruction without metadata when creating a new file", t => {
   const root = fixture(t, true);
   const rule = '.pbai4devs/rules/manual/RULE.md';
   write(root, rule, '---\ntrigger: manual\ndescription: Manual.\n---\n\n# Manual\n');
@@ -828,7 +828,7 @@ test('Copilot recusa instrução nativa manual sem metadados ao criar um novo ar
   assert.deepEqual(snapshot(root), before);
 });
 
-test('Copilot respeita YAML nativo explícito e frontmatter humano', t => {
+test("Copilot respects YAML explicit native and human frontmatter", t => {
   const root = fixture(t, true);
   write(root, source, skill);
   const glob = '.pbai4devs/rules/escopo/RULE.md', manual = '.pbai4devs/rules/manual/RULE.md';
@@ -851,7 +851,7 @@ test('Copilot respeita YAML nativo explícito e frontmatter humano', t => {
   assertCheckReadonly(root, {}, 0);
 });
 
-test('Copilot preserva colisões humanas ambíguas e só complementa escopo comprovadamente igual', t => {
+test("Copilot preserves ambiguous human collisions and only complements proven scope equal", t => {
   const root = fixture(t, true);
   const items = [
     ['global', 'always_on', '', '---\napplyTo: "**"\n---\n\n# Global humano\n', true],
@@ -895,7 +895,7 @@ test('Copilot preserva colisões humanas ambíguas e só complementa escopo comp
   }
 });
 
-test('Copilot aplica YAML nativo somente quando o frontmatter humano é idêntico', t => {
+test("Copilot applies YAML native only when the human frontmatter is identical", t => {
   const root = fixture(t, true);
   const native = '---\napplyTo: "docs/**/*.md"\ndescription: "Regra de projeto"\n---\n';
   for (const name of ['igual', 'diferente', 'ambiguo', 'sem-escopo']) {
@@ -930,7 +930,7 @@ test('Copilot aplica YAML nativo somente quando o frontmatter humano é idêntic
   assertCheckReadonly(separate, {}, 0);
 });
 
-test('Copilot preserva inclusive bloco gerenciado quando o escopo humano muda', t => {
+test("Copilot preserves even managed block when the human scope changes", t => {
   const root = fixture(t, true);
   const target = '.github/instructions/escopo.instructions.md';
   write(root, '.pbai4devs/rules/escopo/RULE.md', '---\ntrigger: glob\nglobs: "src/**/*.ts"\ndescription: Escopo.\n---\n\n# Escopo\n');
@@ -947,7 +947,7 @@ test('Copilot preserva inclusive bloco gerenciado quando o escopo humano muda', 
   assertCheckReadonly(root, {}, 1);
 });
 
-test('migração de instrução rastreada bloqueia a transação e preserva índice e arquivo', t => {
+test("tracked instruction migration blocks transaction and preserves index and file", t => {
   const root = fixture(t, true);
   const git = (...args) => {
     const result = spawnSync('git', args, { cwd: root, encoding: 'utf8', windowsHide: true });
@@ -972,7 +972,7 @@ test('migração de instrução rastreada bloqueia a transação e preserva índ
   assert.match(git('status', '--short', '--', old), /^A /);
 });
 
-test('migração Copilot remove apenas referência global comprovadamente gerenciada', t => {
+test("Copilot migration removes only provenly managed global reference", t => {
   const root = fixture(t, true);
   write(root, source, skill);
   const rule = '.pbai4devs/rules/manual/RULE.md';
@@ -1016,7 +1016,7 @@ test('manifesto de descoberta humano permanece intacto mesmo com force', t => {
   assertCheckReadonly(root, { generateEntrypoints: true }, 0);
 });
 
-test('formatos desconhecidos ou fora do cliente falham antes de mutar', t => {
+test("unknown formats or outside client fail before mutating", t => {
   const root = fixture(t, true);
   write(root, source, skill);
   for (const row of [
@@ -1034,7 +1034,7 @@ test('formatos desconhecidos ou fora do cliente falham antes de mutar', t => {
   assert.throws(() => resourcePath(source, 'skills', 'arquivo'), /Skills/);
 });
 
-test('sincronização direta recusa troca concorrente da obstrução de fallback', t => {
+test("Direct sync refusal concurrent exchange of fallback obstruction", t => {
   const root = fixture(t, true);
   write(root, source, skill);
   write(root, '.pbai4devs/espelhos.conf', [
@@ -1046,7 +1046,7 @@ test('sincronização direta recusa troca concorrente da obstrução de fallback
   assert.throws(() => synchronize({ root, localIgnores: false, generateEntrypoints: false, output() {
     if (called) return;
     called = true;
-    rmSync(join(root, '.agents/skills/projeto')); // Simula mudança humana após o planejamento.
+    rmSync(join(root, '.agents/skills/projeto')); // It simulates human change after planning.
   } }), /mudou apos o planejamento/);
   assert.equal(called, true);
   assert.equal(existsSync(join(root, '.codex')), false);

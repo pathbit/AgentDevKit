@@ -52,7 +52,7 @@ function installedFixture(t) {
   return { ...context, generated };
 }
 
-test('verificação consulta propriedade legada e recusa estado ambíguo', t => {
+test("verification consultation property legacy and refusal ambiguous state", t => {
   const { root } = installedFixture(t);
   renameSync(join(root, '.pbai4devs/state'), join(root, '.pbai4devs/estado'));
   assert.doesNotThrow(() => collectMarkdown(root));
@@ -64,7 +64,7 @@ function writeCatalog(root) {
   for (const [path, content] of buildCatalog(root).outputs) { mkdirSync(join(root, path, '..'), { recursive: true }); writeFileSync(join(root, path), content); }
 }
 
-test('confere recursos sem percorrer downloads ou modificar a fixture', t => {
+test("gives features without going through downloads or modifying fixture", t => {
   const { root, file } = resourceFixture(t);
   file('.pbai4devs/tools/demo/.local/versions/package/README.md', 'invalido');
   file('.pbai4devs/tools/bin/README.md', 'invalido');
@@ -78,7 +78,7 @@ test('confere recursos sem percorrer downloads ou modificar a fixture', t => {
   assert.deepEqual(readdirSync(root, { recursive: true }), before);
 });
 
-test('ignora resultados locais em qualquer caixa e ainda verifica fixtures comuns', t => {
+test("ignores local results in any box and still checks common fixtures", t => {
   const { root, file } = resourceFixture(t);
   for (const path of ['.pbai4devs/TmP/invalid.md', '.pbai4devs/skills/exemplo/.PLAYWRIGHT-MCP/invalid.md', '.pbai4devs/skills/exemplo/playwright-report/invalid.md', '.pbai4devs/skills/exemplo/TEST-RESULTS/invalid.md', '.codex/skills/exemplo/.agent-tests/invalid.md']) file(path, '# Resultado sem frontmatter\n');
   const kept = file('.pbai4devs/skills/exemplo/fixtures/cache/input.md');
@@ -87,7 +87,7 @@ test('ignora resultados locais em qualquer caixa e ainda verifica fixtures comun
   assert.throws(() => verify(root), /fixtures\/cache\/input.md/);
 });
 
-test('verifica Markdown de todas as pastas padrão e documentos da raiz', t => {
+test("Checks Markdown of all default folders and root documents", t => {
   const { root, file } = resourceFixture(t);
   const sources = ['src/README.md', 'bin/README.md', 'tests/README.md', 'scripts/release/README.md',
     'examples/README.md', 'CHANGELOG.md', 'CONTRIBUTING.md', 'GUIDE.MD',
@@ -102,7 +102,7 @@ test('verifica Markdown de todas as pastas padrão e documentos da raiz', t => {
   }
 });
 
-test('coleta source-only ignora exemplos gerados e clientes, sem exigir Git', t => {
+test("source-only collection ignores generated examples and customers without requiring Git", t => {
   const { root, file } = resourceFixture(t);
   const guide = file('examples/README.md');
   file('examples/generated/README.md', '# Resultado inválido\n');
@@ -116,7 +116,7 @@ test('coleta source-only ignora exemplos gerados e clientes, sem exigir Git', t 
   for (const path of result.files) assert.doesNotMatch(relative(root, path), /examples[\\/]generated|node_modules|TEST-RESULTS|\.github[\\/]skills|\.codex/);
 });
 
-test('instalação valida somente fontes e Markdown próprio, preservando conteúdo humano', t => {
+test("installation validates only sources and Markdown own, preserving human content", t => {
   const { root, file, generated } = installedFixture(t);
   const own = ['README.md', 'AGENTS.md', 'docs/product.md', 'src/README.md', '.codex/README.md', '.codex/templates/custom.md', '.codex/skills/human/SKILL.md'];
   for (const path of own) file(path, '# Texto humano sem frontmatter\n\n[Link próprio](missing-human-file.md)\n');
@@ -130,7 +130,7 @@ test('instalação valida somente fontes e Markdown próprio, preservando conte�
   assert.throws(() => verify(root), /Frontmatter\/H1 invalido: .pbai4devs\/skills\/exemplo\/SKILL.md/);
 });
 
-test('instalação não atravessa links humanos de entradas e skills', t => {
+test("installation does not cross human links of inputs and skills", t => {
   const { root, file } = installedFixture(t);
   file('AGENTS.md', '# Instrução humana sem frontmatter\n');
   file('own-docs/README.md', '# README humano\n');
@@ -153,7 +153,7 @@ test('instalação não atravessa links humanos de entradas e skills', t => {
   assert.deepEqual(links.map(([path]) => readlinkSync(join(root, path))), before);
 });
 
-test('instalação recusa caminho gerenciado substituído por link', t => {
+test("installation refuses managed path replaced by link", t => {
   const { root, file, generated } = installedFixture(t);
   const target = file('external.md', '# Conteúdo externo\n');
   rmSync(join(root, generated));
@@ -166,7 +166,7 @@ test('instalação recusa caminho gerenciado substituído por link', t => {
   assert.equal(readFileSync(target, 'utf8'), '# Conteúdo externo\n');
 });
 
-test('instalação confere entradas derivadas sem aplicar lint a blocos humanos', t => {
+test("installation confers derivative inputs without applying lint to human blocks", t => {
   const { root, file } = installedFixture(t);
   const contents = document('# Entrada gerada\n');
   file('GEMINI.md', contents);
@@ -186,7 +186,7 @@ test('instalação confere entradas derivadas sem aplicar lint a blocos humanos'
   assert.ok(verify(root).files.includes(join(root, 'GEMINI.md')));
 });
 
-test('instalação também protege manifestos registrados em derived.outputs', t => {
+test("installation also protects registered manifests in derived.outputs", t => {
   const { root, file } = installedFixture(t);
   const manifest = '.agents/skills.json';
   const contents = '{"entries":[]}\n';
@@ -197,7 +197,7 @@ test('instalação também protege manifestos registrados em derived.outputs', t
   assert.throws(() => verify(root), /Arquivo gerenciado ausente: .agents\/skills.json/);
 });
 
-test('remoções derivadas exigem hash compatível e não ocultam arquivo humano recriado', t => {
+test("derivative removals require compatible hash and do not hide recreated human file", t => {
   const { root, file, generated } = installedFixture(t);
   const statePath = join(root, '.pbai4devs/state/agentdevkit.json');
   const state = JSON.parse(readFileSync(statePath, 'utf8'));
@@ -250,7 +250,7 @@ test('catalogo recusa TOOL incompleto, ponte ausente e referencia de comando que
   assert.throws(() => checkCatalog(root), /Referencia ausente/);
 });
 
-test('caminhos concretos em comandos e exemplos apontam para arquivos reais', t => {
+test("concrete paths in commands and examples point to real files", t => {
   const { root, file } = resourceFixture(t);
   file('.pbai4devs/scripts/tarefa/SCRIPT.mjs', 'export {};\n');
   const command = file('.pbai4devs/commands/tarefa/COMMAND.md', document('# Tarefa\n\n```console\nnode .pbai4devs/scripts/tarefa/SCRIPT.mjs check\n```\n\nModelo: `.pbai4devs/templates/<nome>/TEMPLATE.md`.\n'));
@@ -261,7 +261,7 @@ test('caminhos concretos em comandos e exemplos apontam para arquivos reais', t 
   assert.throws(() => checkResourceReferences(root, [command]), /Recurso ausente/);
 });
 
-test('external-skills mantém seu guia validado e só oculta o payload .local', t => {
+test("external-kills keeps your guide validated and only hides the payload .local", t => {
   const { root, file } = resourceFixture(t);
   const guide = file('.pbai4devs/external-skills/README.md');
   file('.pbai4devs/external-skills/CATALOG.json', '{"entries":[]}');
@@ -283,7 +283,7 @@ test('external-skills mantém seu guia validado e só oculta o payload .local', 
   }
 });
 
-test('external-skills é auxiliar proibido nas pastas dos agentes', t => {
+test("external-skills is prohibited in agent folders", t => {
   const { root, file } = resourceFixture(t);
   file('.codex/external-skills/CATALOG.json', '{"entries":[]}');
   assert.throws(() => verify(root), /Auxiliar indevido em .codex\/external-skills/);
@@ -323,7 +323,7 @@ for (const [name, type, targetExists] of symlinkCases) {
   });
 }
 
-test('frontmatter e primeiro conteúdo H1 são obrigatórios', () => {
+test("frontmatter and first content H1 are required", () => {
   checkFrontmatter(document('# Correto\n'), 'ok.md');
   checkFrontmatter(document('# Correto\r\n'), 'ok.mdc');
   for (const text of ['# Sem YAML\n', '---\ndescription: aberto\n# H1\n', document('Texto\n# Tarde\n'), document('## H2\n')]) {
@@ -331,7 +331,7 @@ test('frontmatter e primeiro conteúdo H1 são obrigatórios', () => {
   }
 });
 
-test('valida links locais inline, referências e nomes codificados', t => {
+test("validates inline local links, references and encoded names", t => {
   const { root, file } = resourceFixture(t);
   file('docs/target name.md');
   const guide = file('README.md', document('# Links\n\n[Local](docs/target%20name.md#titulo)\n[Outro][target]\n[Web](https://example.com)\n[Email](mailto:teste@example.com)\n[Âncora](#titulo)\n\n[target]: <docs/target name.md>\n\n```md\n[Exemplo](nao-existe.md)\n```\n'));
@@ -343,7 +343,7 @@ test('valida links locais inline, referências e nomes codificados', t => {
   assert.throws(() => localLinkTargets('[Local](invalid%Q0.md)'), /codificacao invalida/);
 });
 
-test('inclui mdc e documentos registrados no catálogo', t => {
+test("includes mdc and documents registered in the catalogue", t => {
   const { root, file } = resourceFixture(t);
   file('.pbai4devs/espelhos.conf', 'agente|.codex|plano\ndocumento|EXTRA.md|AGENTS.md\n');
   file('EXTRA.md');
@@ -365,7 +365,7 @@ test('exige guias da origem e impede auxiliares nos espelhos', t => {
   assert.throws(() => verify(root), /Auxiliar indevido em .codex\/tools/);
 });
 
-test('chama sincronizador e linter pelo Node atual, sem wrappers shell', t => {
+test("Synchronizer and linter call by the current Node, no wrappers shell", t => {
   const { root, file } = resourceFixture(t);
   const calls = [];
   const run = (...args) => { calls.push(args); return { status: 0, stdout: 'Finding: fixture\nLinting: 2 files\nSummary: 0 error(s)\n', stderr: '' }; };
@@ -402,7 +402,7 @@ function ignoreFixture(t) {
   return context;
 }
 
-test('fontes e clientes permanecem visíveis, preservando Git e alertando sobre arquivos privados', t => {
+test("sources and customers remain visible, preserving Git and alerting about private files", t => {
   const { root, file } = ignoreFixture(t);
   const outputs = ['.github/skills/generated/SKILL.md', '.vscode/.gitignore', '.github/.gitignore'];
   const sources = ['src/new.mjs', 'bin/new.mjs', 'tests/new.test.mjs', 'scripts/release/new.mjs'];
@@ -448,14 +448,14 @@ test('fontes e clientes permanecem visíveis, preservando Git e alertando sobre 
   for (const path of [...generated.filter(path => !outputs.includes(path)), ...privateFiles]) assert.equal(tracked.includes(path), false, path);
 });
 
-test('ignores locais cobrem resultados em qualquer caixa sem bloquear fixtures', t => {
+test("Local ignores cover results in any box without locking fixtures", t => {
   const { root } = ignoreFixture(t);
   const ignored = ['.pbai4devs/.PLAYWRIGHT-MCP/session.json', '.pbai4devs/tests/TestResults/report.xml', '.github/skills/demo/.env', '.github/skills/demo/NoDe_MoDuLeS/dep.js', '.vscode/logs/session.log'];
   assert.deepEqual(new Set(ignoredPaths(root, ignored)), new Set(ignored));
   assert.deepEqual(ignoredPaths(root, ['.pbai4devs/tests/fixtures/cache/input.json', '.github/skills/demo/.env.development.example', '.vscode/new-config.json']), []);
 });
 
-test('validação source-only não exige catálogo, manifesto ou adaptadores gerados', t => {
+test("source-only validation does not require catalog, manifest or generated adapters", t => {
   const { root, file } = resourceFixture(t);
   rmSync(join(root, '.pbai4devs/espelhos.conf'));
   file('.pbai4devs/README.md', document('# Origem\n\n[Índice](catalog.json)\n'));

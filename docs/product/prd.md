@@ -6,6 +6,8 @@ version: 0.0.12
 
 # PRD do AgentDevKit
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 ## Problema e público
 
 Desenvolvedores precisam reutilizar instruções de agentes entre projetos e
@@ -78,3 +80,7 @@ própria e não são considerados concluídos por esta aprovação.
 [Fluxo de uso](../guides/workflow.md)
 
 [install]: ../guides/installation.md#opções-e-verificação
+
+[reading-pt]: prd.md
+[reading-en]: ../en/product/prd.md
+[reading-es]: ../es/product/prd.md

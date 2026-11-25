@@ -22,7 +22,7 @@ test('entradas novas e geradas importam o nome real de agents.md', async t => {
   await cli(root, ['doctor']);
 });
 
-test('bloco gerenciado preserva texto staged e edição adicional no mesmo arquivo', t => {
+test("managed block preserves staged text and additional edition in the same file", t => {
   const { root, git, put, read } = fixture(t);
   put('AGENTS.md', '# Instruções humanas\n');
   put('.gitignore', '# Ignore humano\n');
@@ -44,7 +44,7 @@ test('bloco gerenciado preserva texto staged e edição adicional no mesmo arqui
   assert.equal(read('.gitignore'), '# Ignore humano\n');
 });
 
-test('sync da CLI incorpora sidecars de agente criados após a instalação', { timeout: 120000 }, async t => {
+test("sync da CLI incorporates agent sidecars created after installation", { timeout: 120000 }, async t => {
   const { root, git, put, read } = fixture(t);
   put('AGENTS.md', '# Instruções humanas\n');
   put('.gitignore', '# Ignore humano\n');
@@ -92,7 +92,7 @@ test('diagnostico deixa de exigir arquivo humano depois de retirar seu bloco', a
   assert.equal(inspect(root).issues.some(issue => issue.path === path), false);
 });
 
-test('entradas humanas em caixa original recebem apenas o bloco e mantêm índice, CRLF e alterações futuras', async t => {
+test("Human inputs in original box receive only the block and keep index, CRLF and future changes", async t => {
   const { root, git, put, read } = fixture(t);
   const entries = {
     'agents.md': '\ufeff---\r\ncustom: project\r\n---\r\n\r\n# Regras humanas\r\n\r\nNão altere meu fluxo.',
@@ -126,7 +126,7 @@ test('entradas humanas em caixa original recebem apenas o bloco e mantêm índic
   assert.equal(git('ls-files', '--stage', '-z'), index);
 });
 
-test('skills, agentes, comandos e regras de mesmo nome mantêm metadados e só recebem referência', async t => {
+test("Skills, agents, commands and rules of the same name keep metadata and only receive reference", async t => {
   const { root, git, put, read } = fixture(t);
   const paths = {
     '.claude/skills/criar-skill/SKILL.md': '---\nname: criar-skill\ndescription: Minha definição\ncustom: true\n---\n\n# Minha skill\n\nExecute a rotina humana.\n',

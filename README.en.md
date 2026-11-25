@@ -1,50 +1,75 @@
 ---
-description: Portable instructions and tools for coding agents.
+description: "Portable instructions and tools for coding agents."
 language: en
 ---
 
 # AgentDevKit
 
-[Português](README.md) · [Español](README.es.md) · [npm package][npm-package]
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
+[npm package][npm-package]
 
 [![npm][npm-badge]][npm-package] [![MIT][license-badge]](LICENSE)
 
-AgentDevKit guides coding agents from planning through verification.
-Skills, rules, commands and agent profiles share one source in `.pbai4devs`.
-The kit generates references for [Codex, Claude, Cursor, Copilot, OpenCode
-and other supported clients][clients].
+AgentDevKit helps coding agents understand your project, plan changes and
+verify their work. Its instructions live in `.pbai4devs` and can be used in
+projects written in any language. The kit generates references for
+[Codex, Claude, Cursor, Copilot, OpenCode and other supported clients][clients].
 
-## Start in your project
+## Prerequisites
 
-Set up [Node.js 24+ and npm][prerequisites] on Windows, macOS or Linux. Open a
-terminal in your project folder. For an existing project, [preview the
-installation][preview] to see what will change. Install through **public npm**
-without logging in:
+- **Required for the CLI.** Install Node.js 24 LTS or newer with npm and
+  `npx`, included in the official distribution. On Windows, use at least
+  version 24.13.1 in the 24 LTS series or choose 26 LTS or newer.
+  [Download Node.js][node-download] · [Platform setup][prerequisites]
+- **Git for repository workflows.** Install Git to clone the code and check
+  Git ignore rules. You can install the kit in a folder without Git.
+  [Download Git][git-download]
+- **Coding agent and project tools.** Open the project in the client you use
+  to work with coding agents. Follow your project's own requirements to build
+  and test the application. [Supported clients][clients]
 
-```console
-npx @pathbit/agentdevkit init
-```
+## Quick start
 
-The first-run wizard asks for a language, clients and a goal. If you know which
-clients you use, pass `--agents codex,claude`. With no explicit or saved choice,
-`none` prepares shared resources and `AGENTS.md` without creating client
-directories. The choice is saved per project, and the CLI supports `pt`, `en`
-and `es`. See the [installation
-options][install] for pnpm, Yarn, Bun and [GitHub Packages][github-install].
-
-In a Git project, check the installation and synchronization:
+Open a terminal in the project folder and run:
 
 ```console
-npx @pathbit/agentdevkit doctor
-npx @pathbit/agentdevkit sync --check
+npx @pathbit/agentdevkit init --lang en --purpose agents
 ```
+
+In the setup wizard, use the arrow keys to move and **Space** to mark each
+agent. Press **Enter** to confirm or **Esc** to cancel. Confirming with no
+agents marked installs the shared resources.
+
+To change the selection later:
+
+```console
+npx @pathbit/agentdevkit agents --select
+```
+
+In an existing folder, you can [preview the installation][preview]. For
+automation or terminals without a menu, specify the client IDs:
+
+```console
+npx @pathbit/agentdevkit init --lang en --agents codex,claude --dry-run
+npx @pathbit/agentdevkit init --lang en --agents codex,claude
+```
+
+Open the project in your coding agent and ask:
+
+> Read AGENTS.md and the README. Show the project commands and suggest a
+> first step. For now, only read the files.
+
+Check the selection with `npx @pathbit/agentdevkit agents`.
+[Installation options][install] · [Supported clients][clients]
 
 ## Choose what to do
 
 | I want to… | Run in the terminal |
 | --- | --- |
+| Select agents | `npx @pathbit/agentdevkit agents --select` |
 | Plan a product | `npx @pathbit/agentdevkit next --intent product` |
-| Run the application | `npx @pathbit/agentdevkit next --intent run` |
+| Find out how to run the app | `npx @pathbit/agentdevkit next --intent run` |
 | Document the system | `npx @pathbit/agentdevkit next --intent document` |
 | Inventory before installing | `npx @pathbit/agentdevkit document` |
 
@@ -67,55 +92,74 @@ shows where to start in each case.
 
 | I want to… | Read |
 | --- | --- |
-| Learn the concepts and find a guide | [Documentation](docs/README.md) |
-| Improve existing documentation | [Inventory and additions](docs/guides/documentation.md) |
-| Create a skill or command | [Resources](docs/guides/resources.md) |
-| Choose a workflow by outcome | [Resources in practice](docs/guides/recursos-na-pratica.md) |
+| Learn the concepts and find a guide | [Documentation](docs/en/README.md) |
+| Improve existing documentation | [Inventory and additions](docs/en/guides/documentation.md) |
+| Create a skill or command | [Resources](docs/en/guides/resources.md) |
+| Choose a workflow by outcome | [Resources in practice](docs/en/guides/recursos-na-pratica.md) |
 | Install tools and verify work | [Tools and tests][tests] |
-| Review security with local tools | [Local security](docs/guides/security.md) |
+| Review security with local tools | [Local security](docs/en/guides/security.md) |
 | Look up options or fix an error | [CLI][cli] · [Troubleshooting][help] |
-| Improve the kit | [Contributing](CONTRIBUTING.md) |
-| Try the scenarios | [Examples](https://github.com/pathbit/AgentDevKit/tree/main/examples) |
+| Improve the kit | [Contributing](docs/en/CONTRIBUTING.md) |
+| Try the scenarios | [Examples](docs/en/examples) |
 
 ## Develop this repository
 
 Use Node.js 24+ with npm. Run `npm ci --ignore-scripts`, `npm run check`,
 `npm test` and `npm run examples`. Examples are generated in a system temporary
 directory outside Git; `npm run test:examples` runs the scenarios.
-See the [development guide](docs/maintainers/development.md) for the project structure.
+See the [development guide](docs/en/maintainers/development.md) for the project
+structure.
 
 Detailed guides are in Portuguese. Local tools have a separate installation
 step. The [release artifacts and checksums][release] let you verify the package
 published to [both registries][packages].
 
-## License and authorship
+[Changelog](docs/en/CHANGELOG.md) · [Roadmap](docs/en/product/roadmap.md)
+· [Plugins and credits](docs/en/guides/plugins.md)
 
-Maintained by [PathBit](https://www.pathbit.com.br),
-under the [MIT license](LICENSE).
+---
+
+## Contributing and Branch Protection
+
+Open a pull request from your fork targeting `develop`. Reviewed changes move
+to `main` for release. See the [contributing guide](docs/en/CONTRIBUTING.md)
+for the checks to run before submitting.
+
+Found a bug or have an idea? [Open an issue][issues] using the contribution
+forms. See [how to participate](docs/en/maintainers/community.md).
+
+---
+
+## 📄 License
+
+Distributed under the [MIT license](LICENSE).
 Installation includes the kit license in `.pbai4devs/LICENSE` and preserves
 your project's license and files.
 
-[Changelog](CHANGELOG.md) · [Roadmap](docs/product/roadmap.md)
-· [Plugins and credits](docs/guides/plugins.md)
-
-Found a bug or have an idea? [Open an issue][issues] using the contribution
-forms. See [how to participate](docs/maintainers/community.md).
-
-[clients]: .pbai4devs/COMPATIBILIDADE.md
+[clients]: docs/en/kit/COMPATIBILIDADE.md
 [release]: https://github.com/pathbit/AgentDevKit/releases/latest
 [npm-package]: https://www.npmjs.com/package/@pathbit/agentdevkit
 [npm-badge]: https://img.shields.io/npm/v/%40pathbit%2Fagentdevkit
 [license-badge]: https://img.shields.io/badge/license-MIT-blue
-[tests]: docs/guides/tools-and-testing.md
-[cli]: docs/guides/cli.md
-[help]: docs/guides/troubleshooting.md
+[tests]: docs/en/guides/tools-and-testing.md
+[cli]: docs/en/guides/cli.md
+[help]: docs/en/guides/troubleshooting.md
 [issues]: https://github.com/pathbit/AgentDevKit/issues/new/choose
-[packages]: docs/maintainers/packages.md
-[prerequisites]: docs/guides/prerequisites.md
-[install]: docs/guides/installation.md
-[preview]: docs/guides/installation.md#simular-em-um-projeto-existente
-[update]: docs/guides/installation.md#atualizar-e-escolher-agentes
-[workflow]: docs/guides/workflow.md
-[plugins]: docs/guides/plugins.md
-[comparison]: docs/guides/comparacao.md
-[github-install]: docs/guides/installation.md#github-packages
+[packages]: docs/en/maintainers/packages.md
+[prerequisites]: docs/en/guides/prerequisites.md
+[node-download]: https://nodejs.org/en/download
+[git-download]: https://git-scm.com/install/
+[install]: docs/en/guides/installation.md
+[preview]: docs/en/guides/installation.md#simulate-on-an-existing-project
+[update]: docs/en/guides/installation.md#update-and-choose-agents
+[workflow]: docs/en/guides/workflow.md
+[plugins]: docs/en/guides/plugins.md
+[comparison]: docs/en/guides/comparacao.md
+
+[reading-pt]: README.md
+[reading-en]: README.en.md
+[reading-es]: README.es.md
+
+---
+
+Developed with ❤️ by [Pathbit](https://www.pathbit.com.br/)

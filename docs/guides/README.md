@@ -4,8 +4,11 @@ description: Guias de instalação, uso e verificação do AgentDevKit.
 
 # Guias de uso
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 ## Preparar o projeto
 
+- [Começo rápido e primeiro pedido](../../README.md#começo-rápido).
 - [Pré-requisitos no Windows, macOS e Linux](prerequisites.md).
 - [Instalação via npm ou GitHub Packages](installation.md).
 - [Atualização e seleção de clientes][update].
@@ -26,3 +29,7 @@ description: Guias de instalação, uso e verificação do AgentDevKit.
 [Voltar à documentação](../README.md)
 
 [update]: installation.md#atualizar-e-escolher-agentes
+
+[reading-pt]: README.md
+[reading-en]: ../en/guides/README.md
+[reading-es]: ../es/guides/README.md

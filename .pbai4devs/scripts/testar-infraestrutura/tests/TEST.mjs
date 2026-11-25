@@ -12,14 +12,14 @@ import { classifyExecution, isExpectedPlatformSkip, testInfrastructure } from '.
 import { isTestEvent } from '../REPORTER.mjs';
 import { nativeSkipReason, platformFixturePath, platformFixtures } from '../PLATFORM_FIXTURES.mjs';
 
-test('eventos de versões sem entryFile são reconhecidos sem depender do nome', () => {
+test("events of non-entryFile versions are recognized without depending on the name", () => {
   const file = '/fixture/TEST.mjs';
   assert.equal(isTestEvent({ name: 'teste declarado', file, details: { type: 'test' } }), true);
   assert.equal(isTestEvent({ name: file, file, details: { type: 'test' } }), true);
   assert.equal(isTestEvent({ name: 'grupo', file, details: { type: 'suite' } }), false);
 });
 
-test('classificação recusa evidência ausente, inconsistente ou execução interrompida', () => {
+test("classification refuses absent evidence, inconsistent or interrupted execution", () => {
   const counts = { tests: 1, passed: 1, failed: 0, cancelled: 0, skipped: 0, todo: 0 };
   const evidence = { observed: 1, fileSummaries: 1, counts, skipped: [], pending: [] };
   assert.equal(classifyExecution({ status: 0 }, evidence), 'passed');
@@ -62,7 +62,7 @@ function isolated(t) {
   return { base, root, put, index };
 }
 
-test('cada execução preserva relatórios existentes e o índice Git', t => {
+test("each implementation preserves existing reports and the Git index", t => {
   const { root, put, index } = isolated(t);
   put('.agent-tests/infraestrutura/demo.log', 'log humano\n');
   put('.agent-tests/infraestrutura/REPORT.json', 'relatório humano\n');
@@ -75,7 +75,7 @@ test('cada execução preserva relatórios existentes e o índice Git', t => {
   assert.deepEqual(readFileSync(join(root, '.git/index')), index);
 });
 
-test('ACL herdada no diretório de logs interrompe antes de executar suítes', { skip: nativeSkipReason('darwin') }, t => {
+test("ACL inherited in log directory interrupts before running suites", { skip: nativeSkipReason('darwin') }, t => {
   const { root, put, index } = isolated(t), folder = join(root, '.agent-tests/infraestrutura');
   mkdirSync(folder, { recursive: true });
   const acl = 'everyone allow list,search,readattr,readextattr,readsecurity,file_inherit,directory_inherit';
@@ -89,7 +89,7 @@ test('ACL herdada no diretório de logs interrompe antes de executar suítes', {
   assert.deepEqual(readFileSync(join(root, '.git/index')), index);
 });
 
-test('ACL de logs não verificável interrompe sem expor diagnóstico', { skip: nativeSkipReason('darwin') }, t => {
+test("ACL non-verifiable log interrupts without exposing diagnosis", { skip: nativeSkipReason('darwin') }, t => {
   const { root, put, index } = isolated(t);
   put('.pbai4devs/scripts/demo/tests/TEST.mjs', "import { writeFileSync } from 'node:fs'; writeFileSync('executou.txt', 'sim');\n");
   const original = childProcess.spawnSync;
@@ -111,7 +111,7 @@ test('ACL de logs não verificável interrompe sem expor diagnóstico', { skip: 
   assert.deepEqual(readFileSync(join(root, '.git/index')), index);
 });
 
-test('ACL de logs não verificável após a suíte impede gravar saída', { skip: nativeSkipReason('darwin') }, t => {
+test("ACL log uncheckable after suite prevents recording output", { skip: nativeSkipReason('darwin') }, t => {
   const { root, put, index } = isolated(t);
   put('.pbai4devs/scripts/demo/tests/TEST.mjs', "import { writeFileSync } from 'node:fs'; import { test } from 'node:test'; test('sintético', () => { writeFileSync('executou.txt', 'sim'); console.log('saída sintética'); });\n");
   const original = childProcess.spawnSync;
@@ -151,7 +151,7 @@ for (const path of ['.agent-tests', '.agent-tests/infraestrutura']) {
   });
 }
 
-test('não sobrescreve um log simbólico criado durante a suíte', {
+test("does not overwrite a symbolic log created during the suite", {
   skip: process.platform === 'win32' && 'A fixture cria um symlink de arquivo em um processo filho; junctions do NTFS só representam diretórios.',
 }, t => {
   const { base, root, put, index } = isolated(t), outside = join(base, 'outside.txt');
@@ -189,7 +189,7 @@ for (const kind of ['diretório', 'arquivo']) {
   });
 }
 
-test('não omite silenciosamente uma suíte em diretório simbólico', t => {
+test("does not silently omit a symbolic directory suite", t => {
   const { base, root, put, index } = isolated(t), outside = join(base, 'outside');
   mkdirSync(join(outside, 'tests'), { recursive: true });
   writeFileSync(join(outside, 'tests/TEST.mjs'), "import { writeFileSync } from 'node:fs'; writeFileSync('externo.txt', 'sim');\n");
@@ -202,7 +202,7 @@ test('não omite silenciosamente uma suíte em diretório simbólico', t => {
   assert.deepEqual(readFileSync(join(root, '.git/index')), index);
 });
 
-test('nao aprova uma execucao sem suites', t => {
+test("does not approve an execution without suites", t => {
   const output = join(projectRoot, '.agent-tests'); mkdirSync(output, { recursive: true });
   const root = mkdtempSync(join(output, 'runner-empty-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -230,7 +230,7 @@ for (const [scenario, source] of [
   });
 }
 
-test('opções herdadas do Node não filtram a suíte', t => {
+test("inherited options from Node do not filter the suite", t => {
   const { root, index } = isolated(t), previous = process.env.NODE_OPTIONS;
   process.env.NODE_OPTIONS = '--test-name-pattern=nome-que-nao-existe';
   try {
@@ -244,7 +244,7 @@ test('opções herdadas do Node não filtram a suíte', t => {
   }
 });
 
-test('relatório identifica skips sem expor caminhos absolutos', t => {
+test("report identifies skips without exposing absolute paths", t => {
   const { root, put } = isolated(t);
   put('.pbai4devs/scripts/demo/tests/TEST.mjs', `
     import { test } from 'node:test';
@@ -283,7 +283,7 @@ test('skip de alias Windows exige identidade restrita e motivo exato', () => {
   }
 });
 
-test('skips esperados preservam motivos, contagens e resultado parcial no relatório', {
+test("expected skips preserve reasons, counts and partial result in the report", {
   skip: ['darwin', 'linux'].includes(process.platform) ? false : 'Requer Linux ou macOS para exercitar a delegação da suíte.',
 }, t => {
   const { root, put } = isolated(t);
@@ -316,7 +316,7 @@ test('skips esperados preservam motivos, contagens e resultado parcial no relat�
   assert.deepEqual(JSON.parse(readFileSync(join(report.directory, 'REPORT.json'))), report);
 });
 
-test('teste importado não certifica arquivo que termina antes do teste pendente', t => {
+test("imported test does not certify file that ends before pending test", t => {
   const { root, put } = isolated(t);
   put('.pbai4devs/scripts/demo/tests/helper.mjs', "import { test } from 'node:test'; test('importado', () => {});\n");
   put('.pbai4devs/scripts/demo/tests/TEST.mjs', "import './helper.mjs'; import { test } from 'node:test'; test('pendente', async () => { await new Promise(() => {}); }); setTimeout(() => process.exit(0), 200);\n");
@@ -324,7 +324,7 @@ test('teste importado não certifica arquivo que termina antes do teste pendente
   assert.notEqual(report.status, 'passed');
 });
 
-test('suíte que importa teste concluído mantém resultado aprovado', t => {
+test("suite importing completed test keeps approved result", t => {
   const { root, put } = isolated(t);
   put('.pbai4devs/scripts/demo/tests/helper.mjs', "import { test } from 'node:test'; test('importado', () => {});\n");
   put('.pbai4devs/scripts/demo/tests/TEST.mjs', "import './helper.mjs';\n");

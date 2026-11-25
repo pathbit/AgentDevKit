@@ -20,7 +20,7 @@ function checkProbeFailure(diagnostics) {
 }
 const runtimeProbe = "require('node:fs').writeSync(3, JSON.stringify({version:process.versions.node,node:process.execPath,bun:Boolean(process.versions.bun)}))";
 const directRuntimeProbe = 'JSON.stringify({version:process.versions.node,node:process.execPath,bun:Boolean(process.versions.bun)})';
-// O marcador separa mensagens anteriores à execução do npm, sem alterar seu stdout.
+// The bookmark separates messages prior to npm execution without changing your stdout.
 function npmProbe(marker) {
   return `const f=require('node:fs');f.writeSync(1,${JSON.stringify(marker)});const i=process.execArgv.findIndex((v,j)=>v==='-e'&&process.execArgv[j+1]===process._eval);if(i>=0)process.execArgv.splice(i,2);require('node:module').runMain()`;
 }
@@ -28,7 +28,7 @@ const probeOptions = { encoding: 'utf8', timeout: 20000, maxBuffer: 65536, stdio
 const directProbeOptions = { encoding: 'utf8', timeout: 20000 };
 const instrumentedNpmProbeOptions = { ...directProbeOptions, maxBuffer: 65536 };
 function usesNodeOptions(environment, platform) {
-  // No Windows, spawn ordena e deduplica chaves sem diferenciar maiúsculas.
+  // In Windows, spamn orders and deduplicates keys without differentiating capitals.
   const key = platform === 'win32'
     ? Object.keys(environment).sort().find(name => name.toUpperCase() === 'NODE_OPTIONS')
     : 'NODE_OPTIONS';

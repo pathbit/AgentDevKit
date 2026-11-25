@@ -157,6 +157,7 @@ export function print(result, options, output) {
     output.write(`  ${step.label}\n`);
     if (step.skill) output.write(`  ${step.skill}\n`);
     if (step.instruction) output.write(`  ${step.instruction}\n`);
+    for (const path of step.references ?? []) output.write(`    - ${path}\n`);
     if (step.command) output.write(`  > ${step.command}\n`);
   }
 }

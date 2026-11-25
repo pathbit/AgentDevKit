@@ -14,7 +14,7 @@ function put(root, path, content) {
   fs.mkdirSync(dirname(file), { recursive: true }); fs.writeFileSync(file, content);
 }
 
-test('sync preserva pasta humana criada no lugar da referência antes da remoção', { timeout: 120000 }, t => {
+test("sync preserves human paste created in place of reference before removal", { timeout: 120000 }, t => {
   const root = fs.realpathSync(fs.mkdtempSync(join(tmpdir(), 'adk-remove-directory-race-')));
   t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); fs.rmSync(root, { recursive: true, force: true }); });
   assert.equal(spawnSync('git', ['init', '-q', '--template=', root]).status, 0);

@@ -5,7 +5,7 @@ import {
   markDiagnosticsBoundary,
 } from '../.pbai4devs/scripts/lib/error-reporting.mjs';
 
-test('preserva diagnósticos próprios e causas legítimas sem modificar objetos', () => {
+test("preserves its own diagnoses and legitimate causes without modifying objects", () => {
   const cause = Object.assign(new Error('synthetic'), {
     uncertainPaths: ['backup/a'],
     cleanupFailures: [{ path: 'backup/b', message: 'cleanup failed' }],
@@ -22,7 +22,7 @@ test('preserva diagnósticos próprios e causas legítimas sem modificar objetos
   assert.equal(outer.cause, cause);
 });
 
-test('não executa getters próprios de erros, arrays e entradas de limpeza', () => {
+test("does not execute own bug getters, arrays and cleaning inputs", () => {
   let calls = 0;
   const getter = () => { calls++; throw Error('synthetic'); };
   const arr = ['a', 'b'];
@@ -36,7 +36,7 @@ test('não executa getters próprios de erros, arrays e entradas de limpeza', ()
   assert.equal(calls, 0);
 });
 
-test('não executa traps de proxies diretos, revogados, arrays ou protótipos', () => {
+test("does not execute direct, revoked, array or prototype proxies traps", () => {
   let traps = 0;
   const handler = {
     get() { traps++; throw Error(); },
@@ -54,7 +54,7 @@ test('não executa traps de proxies diretos, revogados, arrays ou protótipos', 
   assert.equal(traps, 0);
 });
 
-test('marca truncamento em protótipo personalizado e não assume dados herdados', () => {
+test("custom prototype truncation brand and does not take inherited data", () => {
   const prototype = { rollbackPreservedPaths: ['herdado'] };
   const error = Object.assign(Object.create(prototype), { uncertainPaths: ['próprio'] });
   const diagnostics = collectErrorDiagnostics(error);
@@ -75,7 +75,7 @@ test('limita grafos e arrays, reconhece ciclos e respeita fronteira mapeada', ()
   assert.deepEqual(collectErrorDiagnostics(boundary).preservedPaths, ['visível']);
 });
 
-test('sinaliza diagnóstico malformado ou inacessível sem inventar dados', () => {
+test("signals malformed or inaccessible diagnosis without inventing data", () => {
   const cases = [
     { uncertainPaths: 'invalid' },
     { rollbackPreservedPaths: [42] },
@@ -89,7 +89,7 @@ test('sinaliza diagnóstico malformado ou inacessível sem inventar dados', () =
   }
 });
 
-test('diagnóstico herdado de protótipo padrão alterado é incerto sem invocar getter', () => {
+test("inherited diagnosis of altered standard prototype is uncertain without invoking getter", () => {
   let calls = 0;
   const previous = Object.getOwnPropertyDescriptor(Error.prototype, 'uncertainPaths');
   try {
@@ -107,7 +107,7 @@ test('diagnóstico herdado de protótipo padrão alterado é incerto sem invocar
   }
 });
 
-test('mantém compatibilidade para dados regulares, duplicatas e erro agregado', () => {
+test("maintains compatibility for regular data, duplicates and aggregated error", () => {
   const secondary = Object.assign(new Error('synthetic secondary'), {
     rollbackPreservedPaths: ['same', 'second'],
     cleanupFailures: [{ path: 'cleanup', message: 'reason' }],
@@ -125,7 +125,7 @@ test('mantém compatibilidade para dados regulares, duplicatas e erro agregado',
   assert.equal(diagnostics.truncated, false);
 });
 
-test('limite é compartilhado entre listas e sinaliza omissão de dados posteriores', () => {
+test("limit is shared between lists and signals omission of later data", () => {
   const full = Array.from({ length: 4096 }, (_, index) => `item-${index}`);
   const exact = collectErrorDiagnostics({ rollbackPreservedPaths: full });
   assert.equal(exact.preservedPaths.length, 4096);

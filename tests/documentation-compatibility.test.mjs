@@ -23,7 +23,7 @@ function fixture(t) {
   return { root, original, documentation, project: { id: 'fixture', repository: 'https://github.com/example/project.git', commit: 'a'.repeat(40) } };
 }
 
-test('o exercício acrescenta links sem substituir conteúdo, permissões ou arquivos alheios', t => {
+test("the exercise adds links without overwriting content, permissions or other files", t => {
   const { root, original, documentation, project } = fixture(t);
   const before = workspace(root), plan = createAdditivePlan(root, documentation, project);
   assert.equal(plan.append.path, 'Readme.md');
@@ -36,7 +36,7 @@ test('o exercício acrescenta links sem substituir conteúdo, permissões ou arq
   assert.deepEqual(workspace(root), after);
 });
 
-test('documento alterado após o inventário ou plano bloqueia a fixture antes de criar o índice', t => {
+test("changed document after inventory or plan blocks fixture before creating index", t => {
   const { root, documentation, project } = fixture(t);
   const plan = createAdditivePlan(root, documentation, project);
   const edited = '# Human edit after planning\n';
@@ -47,7 +47,7 @@ test('documento alterado após o inventário ou plano bloqueia a fixture antes d
   assert.equal(existsSync(join(root, plan.create.path)), false);
 });
 
-test('índice criado por outra pessoa depois do plano não é sobrescrito', t => {
+test("Index created by another person after plan is not overwritten", t => {
   const { root, documentation, project } = fixture(t);
   const plan = createAdditivePlan(root, documentation, project), before = readFileSync(join(root, plan.append.path));
   mkdirSync(join(root, 'docs/agentdevkit-validation'));
@@ -57,7 +57,7 @@ test('índice criado por outra pessoa depois do plano não é sobrescrito', t =>
   assert.deepEqual(readFileSync(join(root, plan.append.path)), before);
 });
 
-test('link inserido depois do plano não redireciona a escrita documental', t => {
+test("link inserted after plan does not redirect document writing", t => {
   const { root, documentation, project } = fixture(t);
   const plan = createAdditivePlan(root, documentation, project);
   const outside = mkdtempSync(join(tmpdir(), 'agentdevkit-docs-external-'));
@@ -71,7 +71,7 @@ test('link inserido depois do plano não redireciona a escrita documental', t =>
   assert.equal(existsSync(join(root, plan.create.path)), false);
 });
 
-test('o inventário opaco não autoriza seguir README simbólico e prefere o documento real do Zod', () => {
+test("opaque inventory does not allow to follow README symbolic and prefers the real Zod document", () => {
   assert.throws(() => selectReadme({ files: [{ path: 'README.md', kind: 'symbolic-link', role: 'readme' }] }, 'zod'), /Nenhum README regular/);
   const chosen = selectReadme({ files: [
     { path: 'README.md', kind: 'symbolic-link', role: 'readme' },
@@ -81,7 +81,7 @@ test('o inventário opaco não autoriza seguir README simbólico e prefere o doc
   assert.equal(chosen.path, 'packages/zod/README.md');
 });
 
-test('a conferência falha se conteúdo fora do plano for alterado', t => {
+test("conference fails if content outside the plan is changed", t => {
   const { root, original, documentation, project } = fixture(t);
   const before = workspace(root), plan = createAdditivePlan(root, documentation, project);
   applyAdditiveFixture(root, plan);

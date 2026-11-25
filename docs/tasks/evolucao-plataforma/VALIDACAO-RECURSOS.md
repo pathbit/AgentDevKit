@@ -5,6 +5,8 @@ status: em andamento
 
 # Provas individuais da versão 0.0.21
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 Este inventário acompanha as provas individuais dos recursos do pacote npm
 `0.0.21`, identificado pelo SHA-256 do tarball
 `3fda1ea8dd5361d84f3684b96b31573dd320db1ca87bab267370bba31e51132d`.
@@ -88,3 +90,7 @@ e os fluxos completos permanecem pendentes; os limites estão em [tarefas](TASKS
 | `planejador` | Parcial |
 | `revisor` | Parcial |
 | `validador` | Parcial |
+
+[reading-pt]: VALIDACAO-RECURSOS.md
+[reading-en]: ../../en/tasks/evolucao-plataforma/VALIDACAO-RECURSOS.md
+[reading-es]: ../../es/tasks/evolucao-plataforma/VALIDACAO-RECURSOS.md

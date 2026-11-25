@@ -47,7 +47,7 @@ function fixture(t) {
   return { root, git, put, read, cli, ignore };
 }
 
-test('consultas com diff limitado a trabalho.txt preservam índice nesta fixture', t => {
+test("consultations with diff limited to trabalho.txt preserve index in this fixture", t => {
   const root = mkdtempSync(join(tmpdir(), 'adk-git-consultas-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const env = { ...process.env, GIT_CONFIG_NOSYSTEM: '1',
@@ -74,8 +74,8 @@ test('consultas com diff limitado a trabalho.txt preservam índice nesta fixture
   utimesSync(clean, new Date('2001-01-01T00:00:00Z'), new Date('2001-01-01T00:00:00Z'));
   assert.notEqual(statSync(clean).mtimeMs, beforeMtime, 'a fixture precisa de stat cache desatualizado');
 
-  // Esta fixture não prova que GIT_OPTIONAL_LOCKS=0 preserve o índice em
-  // consultas arbitrárias: o diff abaixo não inclui o arquivo com stat antigo.
+  // This fixture does not prove that GIT_OPTIONAL_LOCKS=0 preserve the index in
+  // arbitrary queries: the diff below does not include the file with old stat.
   const readOnly = { GIT_OPTIONAL_LOCKS: '0' };
   const entries = git(['ls-files', '--stage', '-z'], readOnly);
   const index = readFileSync(join(root, '.git', 'index'));
@@ -93,7 +93,7 @@ test('consultas com diff limitado a trabalho.txt preservam índice nesta fixture
   assert.equal(readFileSync(join(root, 'novo.txt'), 'utf8'), 'Não rastreado.\n');
 });
 
-test('README legado próprio e sua pasta não são removidos por heurística ou force', t => {
+test("README legacy and its folder are not removed by heuristic or force", t => {
   const f = fixture(t);
   const legacy = '.pbai4devs/adapters/README.md';
   const content = '# Adaptadores\n\nAntigravity: instruções privadas da equipe.\n';
@@ -111,7 +111,7 @@ test('README legado próprio e sua pasta não são removidos por heurística ou 
   }
 });
 
-test('colisão e recursos adicionais do hub são preservados e descobertos sem ownership', t => {
+test("collision and additional hub features are preserved and discovered without ownership", t => {
   const f = fixture(t), collision = '.pbai4devs/skills/projeto/criar-skill/SKILL.md';
   const custom = skill('criar-skill', 'Processo próprio de skills.');
   const extra = '.pbai4devs/skills/equipe/skill-propria/SKILL.md';
@@ -138,7 +138,7 @@ test('colisão e recursos adicionais do hub são preservados e descobertos sem o
   assert.deepEqual(f.cli('update', '--dry-run').plan, []);
 });
 
-test('edição em fonte gerenciada não é adotada nem sobrescrita por sync ou force', t => {
+test("managed source editing is not adopted or overwritten by sync or force", t => {
   const f = fixture(t), path = '.pbai4devs/skills/projeto/criar-skill/SKILL.md';
   f.cli('init', '--agents', 'codex,claude');
   const human = f.read(path).replace(/^description: .+$/m, 'description: Alteração humana da equipe.');
@@ -156,7 +156,7 @@ test('edição em fonte gerenciada não é adotada nem sobrescrita por sync ou f
   }
 });
 
-test('remove somente fonte obsoleta intacta e preserva edições e arquivos extras próximos', t => {
+test("only removes obsolete font intact and preserves nearby extra edits and files", t => {
   const f = fixture(t);
   f.cli('init', '--agents', 'codex,claude');
   const obsolete = '.pbai4devs/skills/equipe/obsoleta/SKILL.md';
@@ -189,7 +189,7 @@ test('remove somente fonte obsoleta intacta e preserva edições e arquivos extr
   assert.equal(f.read(extra), 'Não remover.\n');
 });
 
-test('README legado com ownership e hash íntegro pode ser removido sem afetar arquivos adjacentes', t => {
+test("README legacy with ownership and intact hash can be removed without affecting adjacent files", t => {
   const f = fixture(t), legacy = '.pbai4devs/adapters/README.md';
   f.cli('init', '--agents', 'codex');
   const content = '# Adaptadores\n\nAntigravity legado.\n';
@@ -232,7 +232,7 @@ for (const committed of [false, true]) test(`fonte com staged humano divergente 
   assert.equal(f.git('ls-files', '--stage', '-z'), index);
 });
 
-test('staged divergente criado após planejar bloqueia aplicação sem alterar arquivos', t => {
+test("divergent staged created after planning blocks application without changing files", t => {
   const f = fixture(t);
   f.cli('init', '--agents', 'codex');
   const original = f.read('AGENTS.md');
@@ -272,7 +272,7 @@ for (const gitMissing of [false, true]) test(`projeto sem Git ${gitMissing ? 'in
   assert.equal(readFileSync(join(root, path), 'utf8'), human);
 });
 
-test('link humano fora do escopo é preservado; link em fonte gerenciada é recusado', t => {
+test("human link outside the scope is preserved; link in managed source is refused", t => {
   const f = fixture(t), external = join(f.root, 'external');
   mkdirSync(external);
   writeFileSync(join(external, 'secret.txt'), 'Não alterar.\n');
@@ -337,7 +337,7 @@ for (const args of [['update', '--dry-run', '--force'], ['update', '--force']]) 
   assert.equal(f.read('.gitignore'), f.ignore);
 });
 
-test('falha de consulta ao Git em repositório existente não é interpretada como ausência de alterações', t => {
+test("Git query failure in existing repository is not interpreted as no changes", t => {
   const f = fixture(t), source = '.pbai4devs/skills/projeto/criar-skill/SKILL.md';
   f.cli('init', '--agents', 'codex');
   f.git('add', '--', source);
@@ -352,7 +352,7 @@ test('falha de consulta ao Git em repositório existente não é interpretada co
   assert.equal(f.read('.gitignore'), f.ignore);
 });
 
-test('alias de caixa do índice preserva fonte em sistema de arquivos insensível a maiúsculas', t => {
+test("index box alias preserves source in capital-insensitive file system", t => {
   const f = fixture(t), source = '.pbai4devs/skills/equipe/obsoleta/SKILL.md';
   const alias = source.replace('/skills/', '/SKILLS/');
   f.cli('init', '--agents', 'codex');
@@ -430,7 +430,7 @@ for (const name of ['catalog.json', 'skills.json', 'agents.json', 'rules.json'])
   });
 }
 
-test('catálogo editado após instalação bloqueia update inclusive com force', t => {
+test("catalog edited after installation blocks update including with force", t => {
   const f = fixture(t), path = '.pbai4devs/catalog.json';
   f.git('add', '--', '.gitignore');
   f.cli('init', '--agents', 'codex');
@@ -454,7 +454,7 @@ test('catálogo editado após instalação bloqueia update inclusive com force',
   }
 });
 
-test('campos humanos do estado principal preservam bytes durante mudança de clientes e update', t => {
+test("Human fields of the main state preserve bytes during customer change and update", t => {
   const f = fixture(t);
   f.git('add', '--', '.gitignore');
   f.cli('init', '--agents', 'codex');
@@ -472,7 +472,7 @@ test('campos humanos do estado principal preservam bytes durante mudança de cli
   assert.deepEqual(readFileSync(join(f.root, '.git', 'index')), index);
 });
 
-test('catálogos e configuração idênticos não são adotados como gerenciados', t => {
+test("identical catalogs and configuration are not adopted as managed", t => {
   const source = fixture(t);
   source.cli('init', '--agents', 'codex');
   for (const name of ['catalog.json', 'skills.json', 'agents.json', 'rules.json', 'espelhos.conf']) {
@@ -531,7 +531,7 @@ for (const path of ['.agents/.gitignore', '.pbai4devs/.gitignore']) test(`ignore
   assert.deepEqual(readFileSync(join(f.root, '.git/info/exclude')), exclude);
 });
 
-test('exclusão staged de catálogo bloqueia o plano e informa caminho e operação', t => {
+test("catalog staged deletion blocks the plan and informs path and operation", t => {
   const f = fixture(t), catalog = '.pbai4devs/catalog.json';
   f.cli('init', '--agents', 'codex');
   f.git('add', '-f', '--', catalog);
@@ -554,7 +554,7 @@ test('exclusão staged de catálogo bloqueia o plano e informa caminho e operaç
   assert.equal(f.read('.gitignore'), f.ignore);
 });
 
-test('catálogo gerado íntegro com exclusão staged é atualizado sem modificar o índice', t => {
+test("catalog generated intact with staged exclusion is updated without modifying the index", t => {
   const f = fixture(t), catalog = '.pbai4devs/catalog.json';
   f.cli('init', '--agents', 'codex');
   const old = JSON.parse(f.read(catalog));
@@ -579,7 +579,7 @@ test('catálogo gerado íntegro com exclusão staged é atualizado sem modificar
   assert.equal(f.read('.gitignore'), f.ignore);
 });
 
-test('catálogo com exclusão staged sem ownership continua bloqueado', t => {
+test("catalog with delete staged without ownership remains blocked", t => {
   const f = fixture(t), catalog = '.pbai4devs/catalog.json';
   f.cli('init', '--agents', 'codex');
   const manifest = JSON.parse(f.read(state));

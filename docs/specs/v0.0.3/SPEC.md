@@ -6,6 +6,8 @@ version: 0.0.3
 
 # Fontes e geração local
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 ## Objetivo
 
 Manter em `.pbai4devs` as fontes do kit e gerar a estrutura específica de cada
@@ -62,3 +64,7 @@ validar os sistemas suportados com grupos adequados, sem prometer tempos fixos.
 A aprovação exige revisão independente e evidências por critério.
 
 [Todas as specs](../README.md) · [Wiki](../../README.md)
+
+[reading-pt]: SPEC.md
+[reading-en]: ../../en/specs/v0.0.3/SPEC.md
+[reading-es]: ../../es/specs/v0.0.3/SPEC.md

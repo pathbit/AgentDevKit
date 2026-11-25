@@ -4,6 +4,8 @@ description: Nome em inglês para a pasta de estado compartilhado.
 
 # Pasta de estado
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 A pasta de primeiro nível passa de `.pbai4devs/estado` para
 `.pbai4devs/state`. Ela contém estado de instalação e configuração, não
 memória de conversas. Os nomes internos permanecem iguais.
@@ -20,3 +22,7 @@ memória de conversas. Os nomes internos permanecem iguais.
   instalações antigas e novas de forma coerente.
 - AC-004: Testes locais, CI em Linux, Windows e macOS e revisão independente
   verificam o comportamento e os limites da migração.
+
+[reading-pt]: SPEC.md
+[reading-en]: ../../en/specs/state-directory/SPEC.md
+[reading-es]: ../../es/specs/state-directory/SPEC.md

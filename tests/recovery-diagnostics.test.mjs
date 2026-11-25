@@ -15,7 +15,7 @@ import { collectErrorDiagnostics, explainUnsupportedHardlink, markDiagnosticsBou
 const repository = fileURLToPath(new URL('..', import.meta.url));
 const put = (root, path, value) => { const file = join(root, path); fs.mkdirSync(dirname(file), { recursive: true }); fs.writeFileSync(file, value); };
 
-test('erro imutável mantém código, causa e caminho Git ao receber diagnóstico', () => {
+test("immutable error keeps Git code, cause and path when receiving diagnosis", () => {
   const cause = Object.freeze(Object.assign(new Error('falha sintética'), { code: 'E_NESTED_GIT', nestedGitPath: 'modulo', exitCode: 2 }));
   const error = withUncertainPath(cause, 'backup');
   assert.equal(error.cause, cause); assert.equal(error.code, 'E_NESTED_GIT');
@@ -23,7 +23,7 @@ test('erro imutável mantém código, causa e caminho Git ao receber diagnóstic
   assert.deepEqual(collectErrorDiagnostics(error).preservedPaths, ['backup']);
 });
 
-test('erro imutável mantém causa e comunica aplicação possivelmente parcial', () => {
+test("immutable error keeps cause and communicates possibly partial application", () => {
   const cause = Object.freeze(Object.assign(new Error('falha sintética'), { code: 'EIO', exitCode: 2 }));
   const error = withPotentialPartial(cause);
   assert.equal(error.cause, cause); assert.equal(error.code, 'EIO'); assert.equal(error.exitCode, 2);
@@ -60,7 +60,7 @@ for (const [name, wrap] of [
   else assert.equal(collectErrorDiagnostics(error).possiblePartial, true);
 });
 
-test('causa primária atravessa apenas wrappers próprios e agregados sem entrar em ciclo', () => {
+test("primary cause crosses only own wrappers and aggregates without going into cycle", () => {
   const primary = Object.assign(new Error('falha primária sintética'), { code: 'EIO' });
   const aggregate = Object.freeze(new AggregateError([primary], 'falha agrupada'));
   const wrapper = withPotentialPartial(aggregate);
@@ -73,7 +73,7 @@ test('causa primária atravessa apenas wrappers próprios e agregados sem entrar
   assert.equal(primaryDiagnosticError(cycle), cycle);
 });
 
-test('mensagens de erro parcial pedem revisão sem prometer ausência de alterações ou recomendar repetição', () => {
+test("Partial error messages request revision without promising no changes or recommend repetition", () => {
   for (const language of ['pt', 'en', 'es']) for (const code of ['E_GIT', 'E_CHANGED', 'E_UPGRADE', 'E_CONFIG_PARSE', 'E_LEGACY_PATH']) {
     const message = explainError(language, code, {}, { possiblePartial: true });
     assert.match(message, /revisão|review|revisión/i);

@@ -8,7 +8,7 @@ import { expectedNames, nativeGate } from '../scripts/release/native-macos-metad
 const tap = () => expectedNames.map((name, index) => `ok ${index + 1} - ${name}`).join('\n')
   + '\n# tests 12\n# pass 12\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0';
 
-test('gate isola variáveis e exige exatamente doze passes', () => {
+test("gate isolates variables and requires exactly twelve passes", () => {
   let args;
   const exec = (...value) => { args = value; return { status: 0, stdout: tap() }; };
   const env = { NODE_OPTIONS: '--test-name-pattern=nope', node_options: 'hostile', NODE_TEST_CONTEXT: 'child-v8', ADK_STRICT_RECOVERY_TEST: '0', OTHER: 'safe' };
@@ -21,7 +21,7 @@ test('gate isola variáveis e exige exatamente doze passes', () => {
   assert.ok(args[1].some(value => value.startsWith('--test-name-pattern=')));
 });
 
-test('gate bloqueia skip, TODO, nome ausente, duplicado e processo falho', () => {
+test("Gate blocks skip, TODO, absent name, duplicate and failed process", () => {
   const invalid = [
     tap().replace(expectedNames[0], `${expectedNames[0]} # SKIP`),
     tap().replace(expectedNames[0], `${expectedNames[0]} # TODO`),

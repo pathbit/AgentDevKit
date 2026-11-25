@@ -34,6 +34,12 @@ export function parseArgs(argv) {
     } else if (arg === '--markdown' && options.command !== 'tools') {
       if (options.markdown) usage('Use --markdown once.');
       options.markdown = true;
+    } else if (arg === '--local' && options.command !== 'tools') {
+      if (options.local) usage('Use --local once.');
+      options.local = true;
+    } else if (arg === '--select' && options.command !== 'tools') {
+      if (options.select) usage('Use --select once.');
+      options.select = true;
     } else if (['--target', '--lang', '--agents', '--clients'].includes(arg)) {
       const value = argv[++index]; if (!value || value.startsWith('-')) usage(`Missing value: ${arg}`);
       if (arg === '--target') options.target = value;
@@ -78,6 +84,11 @@ export function parseArgs(argv) {
   if (options.intent !== undefined && !['next', 'help', 'version'].includes(options.command)) usage('--intent requires next.');
   if (options.integrations && !['next', 'help', 'version'].includes(options.command)) usage('--integrations requires next.');
   if (options.purpose !== undefined && !['init', 'help', 'version'].includes(options.command)) usage('--purpose requires init.');
+  if (options.local && !['init', 'help', 'version'].includes(options.command)) usage('--local requires init.');
+  if (options.select && !['help', 'version'].includes(options.command)
+    && (options.command !== 'agents' || options.clients || options.json || options.yes || options.dryRun || options.force)) {
+    usage('Use agents --select by itself in an interactive terminal.');
+  }
   if (options.markdown && (options.json || !['document', 'help', 'version'].includes(options.command))) usage('--markdown requires document without --json.');
   if (options.command === 'document' && (options.force || options.yes)) usage('document is a read-only command.');
   if (options.check && options.command !== 'sync') usage('--check requires sync.');

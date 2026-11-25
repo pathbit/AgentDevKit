@@ -2,7 +2,7 @@ import { lstatSync, opendirSync } from 'node:fs';
 import { join, posix } from 'node:path';
 import { nativePathBoundary } from './native-paths.mjs';
 
-// Não garante atomicidade contra troca concorrente de ancestrais.
+// It doesn't guarantee atomicity against rival exchange of ancestors.
 export function scanRetainedClaude(root) {
   const base = '.claude/rules', retained = new Map();
   const unknown = () => retained.set(base, 'claude-scan-incomplete');
@@ -38,8 +38,8 @@ export function scanRetainedClaude(root) {
   return [...retained].map(([path, reason]) => ({ path, reason })).sort((a, b) => a.path.localeCompare(b.path));
 }
 
-// Um marcador em exemplo cercado por fences não identifica referência ativa.
-// Para apontamentos mistos sem registro, exija marcador e ligação real à origem.
+// An example marker surrounded by fences does not identify active reference.
+// For unregistered mixed notes, require marker and real link to the source.
 export function resemblesClaudeReference(target, text) {
   let fence = null, marker = false, pointer = false;
   const lines = text.replace(/\r\n?/g, '\n').replace(/^\uFEFF/, '').split('\n');
@@ -65,14 +65,14 @@ export function resemblesClaudeReference(target, text) {
       try {
         const resolved = posix.normalize(posix.join(posix.dirname(target), decodeURIComponent(match[1])));
         if (/^\.pbai4devs\/rules\/.+\/RULE\.md$/.test(resolved)) pointer = true;
-      } catch { /* Escapes inválidos não comprovam uma referência. */ }
+      } catch { /* Invalid escapes do not prove a reference. */ }
     }
   }
   return marker && pointer;
 }
 
-// Sinal conservador, inclusive em exemplos: não estabelece autoria nem prova
-// que o Markdown carrega a regra. Evita tratar sintaxe desconhecida como segura.
+// The marker can signal a rule reference, even inside an example.
+// Treat unknown syntax conservatively when ownership or activation is unclear.
 export function mayReferenceClaudeRule(_target, text) {
   if (!/\[origem\]/i.test(text)) return false;
   try { return /\.pbai4devs\/rules\//i.test(decodeURIComponent(text)); }

@@ -30,7 +30,7 @@ function snapshot(root) {
   return Object.fromEntries(['.git/index', '.git/config', '.git/info/exclude', '.gitignore', 'README.md', 'human.txt', target].map(path => [path, bytes(root, path)]));
 }
 
-test('overlay legítimo do sync direto é aceito pelo check da CLI', { timeout: 180000 }, t => {
+test("the legitimate overlay of direct sync is accepted by the CLI", { timeout: 180000 }, t => {
   const root = fixture(t), agent = '.claude/agents/implementador.md';
   const metadata = '.pbai4devs/agents/implementador/claude.yaml';
   put(root, '.gitignore', '# humano\n'); put(root, 'human.txt', 'staged\n');
@@ -59,7 +59,7 @@ test('overlay legítimo do sync direto é aceito pelo check da CLI', { timeout: 
   assert.deepEqual(Object.fromEntries(paths.map(path => [path, bytes(root, path)])), before);
 });
 
-test('CLI mantém referência idêntica sem adoção, com descoberta e índice staged', { timeout: 180000 }, t => {
+test("CLI maintains identical reference without adoption, with discovery and staged index", { timeout: 180000 }, t => {
   const { root, reference } = setup(t), before = snapshot(root);
   for (const args of [['init', '--agents', 'antigravity,codex'], ['update'], ['sync'], ['sync', '--check'], ['sync'], ['sync', '--check']]) {
     const result = cli(root, args); assert.equal(result.ok, true, args.join(' '));
@@ -74,7 +74,7 @@ test('CLI mantém referência idêntica sem adoção, com descoberta e índice s
   }
 });
 
-test('plano mantém diagnóstico específico de referência não Claude já satisfeita', { timeout: 180000 }, t => {
+test("plan keeps specific diagnosis of reference not Claude already satisfied", { timeout: 180000 }, t => {
   const { root, reference } = setup(t); cli(root, ['init', '--agents', 'codex']);
   const before = snapshot(root), plan = planInstallation({ target: root, mode: 'sync', language: 'pt' });
   assert.equal(plan.preserved.find(item => item.path === target)?.reason, 'existing-reference-satisfied');
@@ -90,7 +90,7 @@ test('plano continua classificando arquivo nativo desconhecido como existente', 
   assert.deepEqual(bytes(root, extra), before);
 });
 
-test('CLI não considera equivalentes texto ou metadados humanos diferentes', { timeout: 180000 }, t => {
+test("CLI does not consider different human text or metadata equivalent", { timeout: 180000 }, t => {
   for (const variant of ['extra', 'metadata']) {
     const { root, reference } = setup(t);
     const content = variant === 'extra' ? Buffer.concat([reference, Buffer.from('Nota humana.\n')]) : Buffer.from(reference.toString('utf8').replace('description:', 'description: Conteúdo humano '));
@@ -101,7 +101,7 @@ test('CLI não considera equivalentes texto ou metadados humanos diferentes', { 
   }
 });
 
-test('CLI preserva índice staged diferente do apontamento presente no disco', { timeout: 180000 }, t => {
+test("CLI preserves staged index different from the note present in the disc", { timeout: 180000 }, t => {
   const { root, reference } = setup(t); cli(root, ['init', '--agents', 'antigravity,codex']);
   const staged = 'apontamento staged sintético diferente\n';
   put(root, target, staged); git(root, 'add', '--', target); put(root, target, reference);
@@ -120,7 +120,7 @@ test('CLI preserva índice staged diferente do apontamento presente no disco', {
   }
 });
 
-test('CLI deixa tombstones brutos no caminho legado sem aplicar o plano', { timeout: 180000 }, t => {
+test("CLI leaves crude tombstones on the legacy path without applying the plan", { timeout: 180000 }, t => {
   const { root } = setup(t); cli(root, ['init', '--agents', 'codex']);
   const original = bytes(root, derived);
   for (const kind of ['file', 'block']) {

@@ -4,6 +4,33 @@ description: Alterações verificáveis por versão do AgentDevKit.
 
 # Changelog
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
+## 0.0.39
+
+- O assistente de instalação exibe uma lista marcável de agentes. Use
+  `agents --select` para editar a seleção em um terminal interativo.
+- O começo rápido mostra como simular a instalação, selecionar um cliente
+  e fazer a primeira consulta em projetos novos ou existentes.
+- `next --intent run` indica arquivos de referência para escolher o comando da
+  equipe. O inventário reconhece mais formas de projeto e orienta o preparo
+  por Compose sem executar comandos da aplicação.
+- `init --local` ignora arquivos ainda não rastreados em `.pbai4devs` com
+  uma regra no próprio hub. Atualizações e sincronizações mantêm a escolha.
+- O CI testa a preservação de arquivos e do índice Git em projetos de várias
+  linguagens, documentação, pastas vazias e monorepos.
+- Cancelar o assistente preserva os arquivos e retorna o código 130. O menu
+  continua visível quando a saída de erro está redirecionada.
+- A instalação rejeita um arquivo no caminho de destino e detecta se outro
+  processo substituiu o diretório desde a prévia interna da operação.
+- O diagnóstico aceita exceções comprovadas para diretórios de compilação e
+  ainda sinaliza arquivos privados que possam ficar visíveis no Git.
+
+## 0.0.38
+
+- A prévia no macOS informa bloqueios de metadados antes de aplicar a
+  instalação, a atualização ou a sincronização.
+
 ## 0.0.37
 
 - Gera subagentes nativos do ZCode com ferramentas explícitas por função e
@@ -326,3 +353,7 @@ description: Alterações verificáveis por versão do AgentDevKit.
 
 Os resultados de validação ficam em relatórios ignorados e no CI, separados
 deste registro das funcionalidades entregues.
+
+[reading-pt]: CHANGELOG.md
+[reading-en]: docs/en/CHANGELOG.md
+[reading-es]: docs/es/CHANGELOG.md

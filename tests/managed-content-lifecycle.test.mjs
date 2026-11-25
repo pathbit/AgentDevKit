@@ -10,7 +10,7 @@ import { extractManagedBlock, managedBlockDigest } from '../.pbai4devs/scripts/l
 import { extractTomlManagedBlock } from '../.pbai4devs/scripts/lib/managed-toml.mjs';
 import { mergeTomlContent } from './fixtures/legacy-toml-writer.mjs';
 
-test('edição humana num apontamento previamente gerado migra para ownership de bloco sem desindexar', async t => {
+test("human edition in a previously generated note migrates to block ownership without unindexing", async t => {
   const { root, git, put, read } = fixture(t);
   await cli(root, ['init', '--agents', 'claude', '--yes']);
   const path = '.claude/agents/revisor.md';
@@ -31,7 +31,7 @@ test('edição humana num apontamento previamente gerado migra para ownership de
   assert.equal((await cli(root, ['update', '--force'])).changed, false);
 });
 
-test('retira bloco Gemini staged preservando edição humana posterior e índice', async t => {
+test("removes block Gemini staged preserving later human edition and index", async t => {
   const { root, git, put, read } = fixture(t);
   const path = '.gemini/commands/preparar-dev.toml';
   put(path, '# comentário humano\r\ndescription = "Meu comando"\r\nprompt = "Siga a rotina do usuário."\r\n');
@@ -63,7 +63,7 @@ test('retira bloco Gemini staged preservando edição humana posterior e índice
   assert.equal(read('.gitignore'), '# Ignore humano\n');
 });
 
-test('referência derivada editada é preservada e bloqueia sync direto e CLI, inclusive force', async t => {
+test("derivative reference edited is preserved and blocks direct sync and CLI, including force", async t => {
   const { root, git, put, read } = fixture(t);
   put('.gitignore', '# Ignore humano\n');
   put('humano.txt', 'Preparado no índice.\n');
@@ -96,7 +96,7 @@ test('referência derivada editada é preservada e bloqueia sync direto e CLI, i
   assert.equal(extractManagedBlock(read(path)), null);
 });
 
-test('sync direto adiciona e retira bloco de arquivo humano após a CLI reconciliar o estado', async t => {
+test("direct sync adds and removes human file block after the CLI reconciling the state", async t => {
   const { root, put, read } = fixture(t);
   await cli(root, ['init', '--agents', 'claude', '--yes']);
   const source = '.pbai4devs/skills/projeto/local-only/SKILL.md';

@@ -17,7 +17,7 @@ function fixture(t) {
 }
 const options = { skip: available ? false : 'exige GNU Make e shell POSIX' };
 
-test('setup não apaga node_modules existente', options, t => {
+test("setup does not delete existing node_modules", options, t => {
   const dir = fixture(t), modules = join(dir, 'node_modules');
   mkdirSync(modules); writeFileSync(join(modules, 'humano.txt'), 'fixture humana');
   const child = spawnSync('make', ['setup'], { cwd: dir, encoding: 'utf8' });
@@ -25,7 +25,7 @@ test('setup não apaga node_modules existente', options, t => {
   assert.equal(readFileSync(join(modules, 'humano.txt'), 'utf8'), 'fixture humana');
 });
 
-test('setup recusa Docker indisponível antes de npm ci', options, t => {
+test("setup refusal Docker unavailable before npm ci", options, t => {
   const dir = fixture(t), bin = join(dir, 'bin'); mkdirSync(bin);
   writeFileSync(join(bin, 'docker'), '#!/bin/sh\nexit 42\n', { mode: 0o755 });
   const child = spawnSync('make', ['setup'], { cwd: dir, env: { ...process.env, PATH: bin + delimiter + process.env.PATH }, encoding: 'utf8' });
@@ -34,7 +34,7 @@ test('setup recusa Docker indisponível antes de npm ci', options, t => {
   assert.equal(existsSync(join(dir, 'node_modules')), false);
 });
 
-test('build não sobrescreve artefato existente', options, t => {
+test("build does not overwrite existing artifact", options, t => {
   const dir = fixture(t), release = join(dir, '.agent-tests', 'release', '0.0.30');
   mkdirSync(release, { recursive: true }); writeFileSync(join(release, 'artefato.tgz'), 'fixture humana');
   const child = spawnSync('make', ['build'], { cwd: dir, encoding: 'utf8' });
@@ -42,7 +42,7 @@ test('build não sobrescreve artefato existente', options, t => {
   assert.equal(readFileSync(join(release, 'artefato.tgz'), 'utf8'), 'fixture humana');
 });
 
-test('build recusa diretório de saída simbólico e preserva o destino', options, t => {
+test("build refuses symbolic output directory and preserves destination", options, t => {
   const dir = fixture(t), external = join(dir, 'fora'); mkdirSync(external);
   writeFileSync(join(external, 'humano.txt'), 'fixture humana');
   symlinkSync(external, join(dir, '.agent-tests'), 'dir');

@@ -4,6 +4,8 @@ description: Execução portátil e publicação confiáveis após falhas do CI.
 
 # Confiabilidade da pipeline
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 As verificações devem identificar a causa das falhas e oferecer margem para
 runners de velocidades diferentes, sem reduzir a cobertura nem liberar um
 pacote antes da aprovação de todos os jobs.
@@ -28,3 +30,7 @@ pacote antes da aprovação de todos os jobs.
 Execute testes de regressão dos limites, falhas, grupos e publicação, além do
 perfil completo local. Acompanhe os runners reais e a release até a conclusão;
 registre resultados e revisão independente no gate de entrega.
+
+[reading-pt]: SPEC.md
+[reading-en]: ../../en/specs/ci-resilience/SPEC.md
+[reading-es]: ../../es/specs/ci-resilience/SPEC.md

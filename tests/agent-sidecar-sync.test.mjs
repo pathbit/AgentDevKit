@@ -13,7 +13,7 @@ const source = '.pbai4devs/agents/inventariar-docs/AGENT.md';
 const sidecar = '.pbai4devs/agents/inventariar-docs/claude.yaml';
 const target = '.claude/agents/inventariar-docs.md';
 
-test('CLI e sync direto convergem após adicionar metadados a agente próprio', { timeout: 300000 }, t => {
+test("CLI and direct sync converge after adding metadata to own agent", { timeout: 300000 }, t => {
   const root = mkdtempSync(join(tmpdir(), 'adk-agent-sidecar-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const put = (path, value) => { const file = join(root, path); mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, value); };

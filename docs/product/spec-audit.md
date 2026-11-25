@@ -5,6 +5,8 @@ status: em-andamento
 
 # Controle das especificações
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 Este índice registra o trabalho necessário para saber o estado de cada critério.
 **Pendente** significa que a auditoria individual ainda não foi concluída; não
 significa que a funcionalidade esteja ausente. Releases, testes antigos e specs
@@ -57,3 +59,7 @@ permanecem fora do Git; registre uma referência segura ou explique o bloqueio.
 Ao concluir uma auditoria, acrescente uma referência rastreável por critério,
 com estado e evidência, e atualize a linha correspondente. Veja o
 [roadmap](roadmap.md) para prioridades e dependências.
+
+[reading-pt]: spec-audit.md
+[reading-en]: ../en/product/spec-audit.md
+[reading-es]: ../es/product/spec-audit.md

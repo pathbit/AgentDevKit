@@ -31,7 +31,7 @@ function treeHash(root) {
   return hash(JSON.stringify(rows));
 }
 
-test('sync preserva conteúdo humano e índice staged em colisão de skill', { timeout: 240000 }, t => {
+test("sync preserves human content and steady index in skill collision", { timeout: 240000 }, t => {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'adk-sync-collision-')));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const run = (program, args) => spawnSync(program, args, { cwd: root, encoding: 'utf8', timeout: 180000, maxBuffer: 8 * 1024 * 1024 });

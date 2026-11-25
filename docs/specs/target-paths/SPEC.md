@@ -4,6 +4,8 @@ description: Resolução segura dos destinos de instalação.
 
 # Destinos de instalação
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 O instalador deve manter o caminho solicitado e preservar projetos existentes,
 inclusive quando trabalha com diretórios temporários no macOS.
 
@@ -17,3 +19,7 @@ inclusive quando trabalha com diretórios temporários no macOS.
   apontados por variáveis de ambiente; caminhos reservados continuam protegidos.
 - AC-004: Testes de regressão, revisão independente e CI cobrem os cenários
   pertinentes em Linux, Windows e macOS.
+
+[reading-pt]: SPEC.md
+[reading-en]: ../../en/specs/target-paths/SPEC.md
+[reading-es]: ../../es/specs/target-paths/SPEC.md

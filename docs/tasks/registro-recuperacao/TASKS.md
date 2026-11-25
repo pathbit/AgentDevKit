@@ -5,6 +5,8 @@ status: em andamento
 
 # Registro de recuperação
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 Spec: [registro-recuperacao](../../specs/registro-recuperacao/SPEC.md).
 Release: pendente.
 
@@ -20,3 +22,7 @@ Release: pendente.
 
 Evidências locais: `.agent-tests/registro-recuperacao/prova-5bq7Fj/`.
 Os testes locais não comprovam comportamento em sistemas de arquivos de rede.
+
+[reading-pt]: TASKS.md
+[reading-en]: ../../en/tasks/registro-recuperacao/TASKS.md
+[reading-es]: ../../es/tasks/registro-recuperacao/TASKS.md

@@ -81,7 +81,7 @@ export function testInfrastructure(root = projectRoot) {
   const report = { status: 'passed', directory: output.run, suites: [] };
   const environment = { ...process.env };
   // Cada --test precisa de seu proprio contexto, inclusive ao testar este runner.
-  // Opções herdadas poderiam filtrar os testes sem alterar o código de saída.
+  // Inherited options could filter the tests without changing the output code.
   for (const key of Object.keys(environment)) if (['NODE_TEST_CONTEXT', 'NODE_OPTIONS', 'ADK_INFRA_ENTRY'].includes(key.toUpperCase())) delete environment[key];
   const reporter = new URL('./REPORTER.mjs', import.meta.url).href;
   for (const name of suites) {

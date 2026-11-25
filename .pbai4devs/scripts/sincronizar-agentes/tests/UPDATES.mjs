@@ -28,7 +28,7 @@ test('metadados humanos editados bloqueiam sync; fontes sem conflito atualizam',
   write(clean, '.pbai4devs/commands/check/COMMAND.md', '---\nname: check-novo\ndescription: Comando atualizado.\n---\n\n# Comando\n');
   write(clean, '.pbai4devs/rules/example/RULE.md', '---\ntrigger: glob\nglobs: "**/*.ts"\ndescription: Regra atualizada.\n---\n\n# Regra\n');
   write(clean, '.pbai4devs/agents/revisor/AGENT.md', '---\nname: revisor\ndescription: Perfil atualizado.\n---\n\n# Revisor\n');
-  // A fixture escolhe retirar a regra gerada depois da recusa conservadora.
+  // The fixture removes the generated rule after a conservative refusal.
   const beforeCleanCheck = snapshot(clean), cleanCheck = run(clean, { check: true });
   assert.notEqual(cleanCheck.exitCode, 0);
   assert.deepEqual(cleanCheck.conflictPaths, ['.claude/rules/example/RULE.md']);
@@ -45,7 +45,7 @@ test('metadados humanos editados bloqueiam sync; fontes sem conflito atualizam',
   assertCheckReadonly(clean, {}, 0);
 });
 
-test('atualiza fontes, adiciona clientes, remove recursos e migra agrupado para plano', t => {
+test("updates sources, adds customers, removes resources and grouped migration to plan", t => {
   const root = fixture(t);
   run(root);
   write(root, source, skill.replace('Exemplo.', 'Atualizado.'));
@@ -57,7 +57,7 @@ test('atualiza fontes, adiciona clientes, remove recursos e migra agrupado para 
   write(root, '.pbai4devs/espelhos.conf', read(root, '.pbai4devs/espelhos.conf').replace('agente|.claude\n', 'agente|.claude|plano\n'));
   assertCheckReadonly(root);
   rejected(root, { force: true }, /Conteudo proprio preservado/);
-  // A remoção é decisão manual simulada na fixture, não decorrência do hash.
+  // Removal is a simulated manual decision in fixture, not due to hash.
   rmSync(join(root, '.claude/rules/example/RULE.md'));
   run(root);
   assert.equal(existsSync(join(root, '.claude/skills/projeto/demo/SKILL.md')), false);
@@ -68,7 +68,7 @@ test('atualiza fontes, adiciona clientes, remove recursos e migra agrupado para 
   assertCheckReadonly(root, {}, 0);
 });
 
-test('sem estado ou manifesto gera apenas a entrada comum e atualiza o que é próprio', t => {
+test("without state or manifest only generates common input and updates what is proper", t => {
   const root = fixture(t, true);
   write(root, source, skill);
   rmSync(join(root, '.pbai4devs/espelhos.conf'));
@@ -92,7 +92,7 @@ test('sem estado ou manifesto gera apenas a entrada comum e atualiza o que é pr
   assert.match(read(root, 'AGENTS.md'), /Texto humano/);
 });
 
-test('sem estado, manifesto Codex ativa skills compartilhadas sem entrada do Antigravity', t => {
+test("stateless, manifesto Codex activates shared skills without Antigravity entry", t => {
   const root = fixture(t, true);
   write(root, source, skill);
   for (const name of ['AGENTS.md', 'GEMINI.md']) write(root, `.pbai4devs/templates/entrypoints/${name}`, `---\ndescription: Entrada.\n---\n\n# ${name}\n`);
@@ -104,7 +104,7 @@ test('sem estado, manifesto Codex ativa skills compartilhadas sem entrada do Ant
   assertCheckReadonly(root, { generateEntrypoints: true }, 0);
 });
 
-test('troca do Antigravity para Codex retira só projeções derivadas intactas', t => {
+test("Exchange of Antigravity to Codex only removes intact derived projections", t => {
   const root = fixture(t, true);
   const config = '.pbai4devs/espelhos.conf';
   const edited = '.agents/agents.json';

@@ -48,7 +48,7 @@ function cli(root, args) {
   return output;
 }
 
-test('instala recursos de desenvolvimento nos clientes selecionados e preserva projeto existente', t => {
+test("installs development resources on selected customers and preserves existing project", t => {
   const { root, git, put, read } = fixture(t);
   const custom = '.claude/skills/planejar-qa/SKILL.md';
   const humanSkill = '---\nname: planejar-qa\ndescription: Processo existente da equipe.\n---\n\n# QA da equipe\n\nPreserve o processo humano.\n';

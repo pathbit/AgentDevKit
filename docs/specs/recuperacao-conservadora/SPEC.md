@@ -5,6 +5,8 @@ status: rascunho
 
 # Recuperação conservadora após falha
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 ## Objetivo
 
 Eliminar a perda reproduzida durante o rollback do instalador e do
@@ -479,3 +481,7 @@ o caminho das specs, a inspeção documental local terminou sem avisos e com
 Esta spec está em rascunho: revisão técnica e decisões permanecem pendentes.
 A autorização geral já concedida pelo usuário não substitui a prova
 das decisões nem altera o contrato histórico por si só.
+
+[reading-pt]: SPEC.md
+[reading-en]: ../../en/specs/recuperacao-conservadora/SPEC.md
+[reading-es]: ../../es/specs/recuperacao-conservadora/SPEC.md

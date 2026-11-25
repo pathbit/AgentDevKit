@@ -41,7 +41,7 @@ function fixture(t, label = 'original') {
   return { project, fixture: original, packageRoot, manifest, events, prompt: 'Delegue cada perfil.', process: { code: 0, signal: null, timedOut: false }, label };
 }
 
-test('audita a leitura de cada perfil pelo subagente selecionado', t => {
+test("audits reading of each profile by the selected subagent", t => {
   const input = fixture(t), result = assessFleetEvidence(input);
   assert.equal(result.passed, true); assert.equal(result.verified, 2);
   const wrongAgent = structuredClone(input); wrongAgent.events[5].data.parentToolCallId = 'outro';

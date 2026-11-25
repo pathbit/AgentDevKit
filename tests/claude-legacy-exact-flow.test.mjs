@@ -11,7 +11,7 @@ const kit = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const wrapper = '.claude/rules/ambiente-local/RULE.md';
 const source = '.pbai4devs/rules/ambiente-local/RULE.md';
 
-test('CLI e sync preservam referência legada e sinalizam escopo não verificado', { timeout: 180000 }, t => {
+test("CLI and sync preserve legacy reference and signal unchecked scope", { timeout: 180000 }, t => {
   const base = mkdtempSync(join(tmpdir(), 'adk-legacy-exact-'));
   t.after(() => rmSync(base, { recursive: true, force: true }));
   const root = join(base, 'project'); mkdirSync(root);

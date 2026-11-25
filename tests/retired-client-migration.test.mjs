@@ -33,7 +33,7 @@ function legacyState(root, clients) {
   return { generated, retained, mixed, own, antigravityConfig, config, restored: stripTomlContent(text.text, text.sha256) };
 }
 
-test('Gemini CLI não integra instalações novas nem aparece em agents', { timeout: 120000 }, t => {
+test("Gemini CLI does not integrate new installations or appear in agents", { timeout: 120000 }, t => {
   const root = fixture(t);
   const available = cli(root, ['agents']).availableClients;
   assert.ok(!available.some(client => client.id === 'gemini'));
@@ -43,7 +43,7 @@ test('Gemini CLI não integra instalações novas nem aparece em agents', { time
   assert.ok(existsSync(join(root, 'GEMINI.md')), 'Antigravity mantém a sua entrada');
 });
 
-test('sync direto orienta a atualização de manifesto gerado antigo', { timeout: 120000 }, t => {
+test("direct sync guides the old generated manifest update", { timeout: 120000 }, t => {
   const root = fixture(t);
   cli(root, ['init', '--agents', 'codex']);
   const { generated } = legacyState(root, ['gemini']);
@@ -63,7 +63,7 @@ test('sync direto orienta a atualização de manifesto gerado antigo', { timeout
   }
 });
 
-test('sync direto de instalação atual não reativa Gemini em manifesto manual', { timeout: 120000 }, t => {
+test("direct sync of current non-reactive Gemini installation in manual manifest", { timeout: 120000 }, t => {
   const root = fixture(t);
   cli(root, ['init', '--agents', 'codex']);
   const manifest = '.pbai4devs/espelhos.conf';

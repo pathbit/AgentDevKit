@@ -45,7 +45,7 @@ function setAttribute(t, file, name = syntheticName) {
   return true;
 }
 
-test('classificador distingue saída vazia, presença e verificação incompleta', () => {
+test("classifier distinguishes empty output, presence and incomplete verification", () => {
   const empty = Buffer.alloc(0);
   const success = { status: 0, signal: null, stdout: empty, stderr: empty };
   assert.equal(classifyXattr(success), 'empty');
@@ -59,7 +59,7 @@ test('classificador distingue saída vazia, presença e verificação incompleta
   ]) assert.equal(classifyXattr(result), 'unknown');
 });
 
-test('nome de atributo composto apenas por espaço é identificado', { skip: macOnly }, t => {
+test("attribute name composed of space only is identified", { skip: macOnly }, t => {
   const root = mkdtempSync(join(tmpdir(), 'adk-xattr-classifier-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const file = join(root, 'arquivo com espaço');

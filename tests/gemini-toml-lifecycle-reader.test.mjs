@@ -23,7 +23,7 @@ for (const [name, assignment] of [
   });
 }
 
-test('metadado inválido, ausente, repetido ou com digest errado é recusado', () => {
+test("invalid metadata, missing, repeated or with wrong digest is refused", () => {
   const original = 'prompt = "texto humano"\n';
   const generated = mergeTomlContent(original, `${reference}\n\n{{args}}`);
   const options = { original, prefix: '', suffix: '\n', expectedHash: generated.sha256, humanPrompt, reference };
@@ -37,7 +37,7 @@ test('metadado inválido, ausente, repetido ou com digest errado é recusado', (
   }
 });
 
-test('conteúdo humano extra antes ou depois do prompt não é ignorado', () => {
+test("Extra human content before or after the prompt is not ignored", () => {
   const original = 'description = "humano"\nprompt = "texto humano"\n';
   const generated = mergeTomlContent(original, `${reference}\n\n{{args}}`);
   const options = { original, prefix: 'description = "humano"\n', suffix: '\n', expectedHash: generated.sha256, humanPrompt, reference };
@@ -47,7 +47,7 @@ test('conteúdo humano extra antes ou depois do prompt não é ignorado', () => 
   }
 });
 
-test('valor ausente, inválido ou diferente é detectado', () => {
+test("missing, invalid or different value is detected", () => {
   const options = { original: '', prefix: '', suffix: '', expectedHash: undefined, humanPrompt, reference };
   for (const text of ['description = "sem prompt"\n', 'prompt = 3\n', 'prompt = "não fechado\n']) assert.equal(inspectFixture(text, options).promptValid, false);
   const result = inspectFixture(`prompt = "outro ${reference} ${reference}"\n`, options);
@@ -57,7 +57,7 @@ test('valor ausente, inválido ou diferente é detectado', () => {
   assert.equal(result.provenanceValid, false);
 });
 
-test('marcador V3 na primeira linha após BOM é reconhecido', () => {
+test("marker V3 on first row after BOM is recognised", () => {
   const prefix = '\ufeff', suffix = '\r\n';
   const original = `${prefix}prompt = "texto humano"${suffix}`;
   const generated = mergeTomlContent(original, `${reference}\n\n{{args}}`);
@@ -66,7 +66,7 @@ test('marcador V3 na primeira linha após BOM é reconhecido', () => {
   assert.equal(observed.margins, true);
 });
 
-test('linha V3 dentro de string humana não comprova proveniência de bloco legado', () => {
+test("V3 line within human string does not prove legacy block provenance", () => {
   const prefix = 'description = """\n# ADK-TOML-META-V3 abc\n"""\n';
   const legacy = mergeManagedContent(humanPrompt, `${reference}\n\n{{args}}`);
   const text = `${prefix}prompt = ${JSON.stringify(legacy.text)}\n`;
@@ -76,7 +76,7 @@ test('linha V3 dentro de string humana não comprova proveniência de bloco lega
   assert.equal(observed.margins, false);
 });
 
-test('linha semelhante dentro de string não interfere em comentário V3 real', () => {
+test("similar line within string does not interfere with actual V3 comment", () => {
   const prefix = 'description = """\n# ADK-TOML-META-V3 abc\n"""\n';
   const suffix = '\n';
   const original = `${prefix}prompt = "texto humano"${suffix}`;
@@ -86,7 +86,7 @@ test('linha semelhante dentro de string não interfere em comentário V3 real', 
   assert.equal(observed.margins, true);
 });
 
-test('comentário ou atribuição extra depois do valor não é ignorado', () => {
+test("extra comment or assignment after value is not ignored", () => {
   const prefix = '', suffix = '\n';
   const original = 'prompt = "texto humano"\n';
   const generated = mergeTomlContent(original, `${reference}\n\n{{args}}`);
@@ -97,7 +97,7 @@ test('comentário ou atribuição extra depois do valor não é ignorado', () =>
   }
 });
 
-test('alteração indevida dos delimitadores não passa pela comparação de bytes', () => {
+test("undue change of delimiters does not go through the comparison of bytes", () => {
   const original = 'prompt = "texto humano"\n';
   const generated = mergeTomlContent(original, `${reference}\n\n{{args}}`);
   const changed = generated.text.replace('prompt = "', 'prompt = """').replace(/"\n$/, '"""\n');
@@ -106,7 +106,7 @@ test('alteração indevida dos delimitadores não passa pela comparação de byt
   assert.equal(result.margins, false);
 });
 
-test('texto extra no corpo gerenciado não passa mesmo com digest correspondente', () => {
+test("extra text in managed body does not pass even with corresponding digest", () => {
   const original = 'prompt = "texto humano"\n';
   const generated = mergeTomlContent(original, `${reference}\n\n{{args}}\nconteúdo extra`);
   const result = inspectFixture(generated.text, { original, prefix: '', suffix: '\n', expectedHash: generated.sha256, humanPrompt, reference });
@@ -114,7 +114,7 @@ test('texto extra no corpo gerenciado não passa mesmo com digest correspondente
   assert.equal(result.margins, false);
 });
 
-test('fixture original ausente ou inconsistente não valida margens', () => {
+test("original fixture absent or inconsistent does not validate margins", () => {
   const original = 'prompt = "texto humano"\n';
   const generated = mergeTomlContent(original, `${reference}\n\n{{args}}`);
   for (const badOriginal of ['', 'descrição incorreta', undefined]) {

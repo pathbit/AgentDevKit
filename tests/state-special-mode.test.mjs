@@ -66,7 +66,7 @@ function fixture(t) {
     index: git(root, 'ls-files', '--stage', '-z'), agents: read(root, 'AGENTS.md'), readme: read(root, 'README.md') };
 }
 
-test('migra estado legado preservando dados humanos, seleção, índice e ignore; atualização é idempotente', t => {
+test("migrating legacy state preserving human data, selection, index and ignore; update is idempotent", t => {
   const f = fixture(t), { root } = f;
   const oldManifest = read(root, `${oldRoot}/agentdevkit.json`);
   const preview = cli(root, ['update', '--dry-run']);
@@ -119,7 +119,7 @@ for (const [name, bit] of [['sticky',0o1000],['setgid',0o2000],['setuid',0o4000]
  });
 }
 
-test('guarda de diretório especial revalida modo antes de aplicar plano', {timeout:180000,skip:process.platform==='win32' && 'A fixture exige bits especiais de diretório POSIX.'},t=>{
+test("special directory saver revalidated mode before applying plan", {timeout:180000,skip:process.platform==='win32' && 'A fixture exige bits especiais de diretório POSIX.'},t=>{
  const f=fixture(t),{root}=f,path=join(root,oldRoot,'configuracao'),relative=oldRoot+'/configuracao';const plan=planInstallation({target:root,mode:'update'});assert.equal(plan.canApply,true);
  fs.chmodSync(path,0o1700);assert.equal(fs.statSync(path).mode&0o7000,0o1000);
  const paths=['.git/index','.git/config','.git/info/exclude','.gitignore','AGENTS.md','README.md',oldRoot+'/agentdevkit.json',oldRoot+'/configuracao/ESTADO.md'];const before=new Map(paths.map(p=>[p,read(root,p)]));
@@ -127,7 +127,7 @@ test('guarda de diretório especial revalida modo antes de aplicar plano', {time
  for(const [p,b] of before)assert.deepEqual(read(root,p),b,p);
 });
 
-test('auditoria: consultas e mensagens com diretório legado especial', {timeout:180000,skip:process.platform==='win32' && 'A fixture exige bits especiais de diretório POSIX.'},t=>{
+test("audit: queries and messages with special legacy directory", {timeout:180000,skip:process.platform==='win32' && 'A fixture exige bits especiais de diretório POSIX.'},t=>{
  const f=fixture(t),{root}=f,relative=oldRoot+'/configuracao',dir=join(root,relative);fs.chmodSync(dir,0o1700);assert.equal(fs.statSync(dir).mode&0o7000,0o1000);
  const paths=['.git/index','.git/config','.git/info/exclude','.gitignore','AGENTS.md','README.md',oldRoot+'/agentdevkit.json',oldRoot+'/configuracao/ESTADO.md',oldRoot+'/outros/minhas-notas.txt'];const before=new Map(paths.map(p=>[p,read(root,p)]));
  for(const args of [['--help'],['--version'],['next','--intent','product'],['agents'],['lang'],['doctor'],['sync','--check'],['update','--dry-run'],['update','--dry-run','--force']]){
@@ -137,7 +137,7 @@ test('auditoria: consultas e mensagens com diretório legado especial', {timeout
  for(const lang of ['pt','en','es']){const r=spawnSync(process.execPath,[bin,'update','--dry-run','--target',root,'--lang',lang],{encoding:'utf8',timeout:180000,maxBuffer:8e6});assert.equal(r.error,undefined);assert.equal(r.signal,null);assert.equal(r.status,1);const labels={pt:'Diretório com bits POSIX especiais; revise',en:'Directory has special POSIX mode bits; review',es:'Directorio con bits POSIX especiales; revise'};assert.ok(r.stdout.includes(labels[lang]+': '+relative),r.stdout);for(const [p,b]of before)assert.deepEqual(read(root,p),b,p);assert.equal(fs.existsSync(join(root,newRoot)),false);assert.equal(fs.statSync(dir).mode&0o7777,0o1700);}
 });
 
-test('doctor com problema anterior identifica diretório protegido e preserva a fixture', {timeout:180000,skip:process.platform==='win32' && 'A fixture exige bits especiais de diretório POSIX.'}, t => {
+test("doctor with previous problem identifies protected directory and preserves fixture", {timeout:180000,skip:process.platform==='win32' && 'A fixture exige bits especiais de diretório POSIX.'}, t => {
   const { root } = fixture(t);
   const relative = `${oldRoot}/configuracao`, directory = join(root, relative);
   fs.chmodSync(directory, 0o1700);

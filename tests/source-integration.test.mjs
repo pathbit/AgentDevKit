@@ -23,7 +23,7 @@ function git(root, ...args) {
   assert.equal(result.status, 0, result.stderr);
 }
 
-test('diagnóstico real bem-sucedido não garante dependências do alvo', { timeout: 180000 }, t => {
+test("successful real diagnosis does not guarantee target dependencies", { timeout: 180000 }, t => {
   const root = mkdtempSync(join(tmpdir(), 'adk-bootstrap-integration-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const cli = spawnSync(process.execPath, [join(project, 'bin/agentdevkit.mjs'), 'init', '--agents', 'codex', '--target', root, '--json'], { encoding: 'utf8', timeout: 120000 });
@@ -42,7 +42,7 @@ test('diagnóstico real bem-sucedido não garante dependências do alvo', { time
   assert.match(result.stdout, /DEPENDENCIA_AUSENTE=true/);
 });
 
-test('CLI reconhece catálogos da sincronização direta e preserva ignore existente', t => {
+test("CLI recognizes direct synchronization catalogs and preserves existing ignore", t => {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'adk-cli-sync-ownership-')));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   git(root, 'init', '-q');
@@ -81,7 +81,7 @@ test('CLI reconhece catálogos da sincronização direta e preserva ignore exist
   assert.equal(runCli('sync', '--check').ok, true);
   assert.equal(runCli('update').ok, true);
   assert.equal(runCli('sync', '--check').ok, true);
-  // Simule uma versão legada que registrou legitimamente este manifesto.
+  // Simulate a legacy version that legitimately registered this manifesto.
   const config = '.pbai4devs/espelhos.conf', installed = '.pbai4devs/state/agentdevkit.json';
   put(root, config, Buffer.concat([get(root, config), Buffer.from('documento|legado-comprovado\n')]));
   const previous = JSON.parse(get(root, installed));
@@ -105,7 +105,7 @@ test('CLI reconhece catálogos da sincronização direta e preserva ignore exist
   for (const [path, content] of Object.entries(initial)) assert.deepEqual(get(root, path), content, path);
 });
 
-test('inventaria várias specs em ordem estável sem escolher incremento ambíguo', t => {
+test("inventory several specs in stable order without choosing ambiguous increment", t => {
   const root = mkdtempSync(join(tmpdir(), 'adk-spec-inventory-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const file = (name, content) => {
@@ -135,7 +135,7 @@ test('inventaria várias specs em ordem estável sem escolher incremento ambígu
   assert.equal(next(), 'gerenciar-roadmap');
 });
 
-test('alterações tardias na pasta de specs invalidam o inventário e a escolha', t => {
+test("late changes in specs folder invalidate inventory and choice", t => {
   for (const mode of ['insert', 'remove']) {
     for (const inspect of [true, false]) {
       const root = realpathSync(mkdtempSync(join(tmpdir(), 'adk-spec-race-')));

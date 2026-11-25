@@ -68,7 +68,7 @@ function initCodex(root) {
   assert.equal(JSON.parse(result.stdout).ok, true);
 }
 
-test('Windows: init incorpora instruções e preserva a DACL explícita do AGENTS.md', windowsAcl, t => {
+test("Windows: init incorporates instructions and preserves the DACL the explicit AGENTS.md", windowsAcl, t => {
   const root = ntfsProject(t);
   const file = join(root, 'AGENTS.md');
   const human = '# Instruções da equipe\n';
@@ -86,7 +86,7 @@ test('Windows: init incorpora instruções e preserva a DACL explícita do AGENT
   assert.equal(fs.statSync(file, { bigint: true }).ino, identity.ino);
 });
 
-test('Windows: sync direto atualiza o apontamento e preserva sua DACL explícita', windowsAcl, t => {
+test("Windows: direct sync updates the note and preserves your DACL explicit", windowsAcl, t => {
   const root = ntfsProject(t);
   initCodex(root);
   const skill = 'skills/seguranca/revisar-seguranca/SKILL.md';
@@ -105,7 +105,7 @@ test('Windows: sync direto atualiza o apontamento e preserva sua DACL explícita
   assert.equal(ntfsDacl(pointer), original);
 });
 
-test('Windows: remoção preserva arquivo com um fluxo NTFS adicional', windowsAcl, t => {
+test("Windows: Removing preserves file with a stream NTFS additional", windowsAcl, t => {
   const root = ntfsProject(t), path = 'gerenciado.txt', file = join(root, path);
   const original = Buffer.from('arquivo gerenciado\n');
   const stream = file + ':fixture', extra = 'conteúdo adicional';
@@ -137,7 +137,7 @@ test('Windows: recusa hashes divergentes mantendo o original e a proposta', wind
   }
 });
 
-test('Windows: o pré-voo verifica vários alvos e identifica o arquivo protegido', windowsAcl, t => {
+test("Windows: Pre-flight scans multiple targets and identifies the protected file", windowsAcl, t => {
   const root = ntfsProject(t);
   const entries = ['primeiro.txt', 'segundo.txt'].map(displayPath => ({ path: join(root, displayPath), displayPath, update: true }));
   for (const entry of entries) writeFileSync(entry.path, entry.displayPath);
@@ -152,7 +152,7 @@ test('Windows: o pré-voo verifica vários alvos e identifica o arquivo protegid
   for (const entry of entries) assert.equal(readFileSync(entry.path, 'utf8'), entry.displayPath);
 });
 
-test('Windows: o pré-voo repete apenas timeout e mantém a recusa explícita', () => {
+test("Windows: Pre-flight repeats only timeout and maintains explicit refusal", () => {
   const entries = ['primeiro.txt', 'segundo.txt'].map(displayPath => ({
     path: join(tmpdir(), displayPath), displayPath, update: true,
   }));
@@ -181,7 +181,7 @@ test('Windows: o pré-voo repete apenas timeout e mantém a recusa explícita', 
   assert.equal(attempts, 1);
 });
 
-test('classifica proprietário e leitura sem presumir suporte no Windows', () => {
+test("classifies owner and read without assuming support on Windows", () => {
   const file = (uid, mode) => ({ uid, mode, isFile: () => true });
   assert.equal(fileOwnerIssue(file(100, 0o640), 'linux', 100), null);
   assert.equal(fileOwnerIssue(file(200, 0o640), 'linux', 100), 'file-owner-different');
@@ -190,7 +190,7 @@ test('classifica proprietário e leitura sem presumir suporte no Windows', () =>
   assert.equal(fileOwnerIssue(file(200, 0o040), 'win32', 100), null);
 });
 
-test('CLI preserva arquivo de outro proprietário antes de instalar', {
+test("CLI preserves file from another owner before installing", {
   timeout: 120000,
   skip: process.platform !== 'linux' || process.getuid?.() !== 0 ? 'fixture requer Linux com troca de usuário' : false,
 }, t => {
@@ -278,7 +278,7 @@ function fixture(t) {
   return root;
 }
 
-test('aplicação recusa mudança de proprietário após planejamento', { skip: posixOnly }, t => {
+test("application refuses change of owner after planning", { skip: posixOnly }, t => {
   const root = fixture(t), path = join(root, 'AGENTS.md');
   const plan = planInstallation({ target: root, mode: 'lang', language: 'en' });
   assert.ok(plan.changes.some(change => change.path === 'AGENTS.md'));
@@ -298,7 +298,7 @@ test('aplicação recusa mudança de proprietário após planejamento', { skip: 
   assert.deepEqual(readFileSync(join(root, '.pbai4devs/state/agentdevkit.json')), state);
 });
 
-test('escrita atômica e backups preservam permissões mesmo com umask restritiva', { skip: posixOnly }, t => {
+test("atomic writing and backups preserve permissions even with a restrictive", { skip: posixOnly }, t => {
   const root = fixture(t), agents = join(root, 'AGENTS.md'), state = join(root, '.pbai4devs/state/agentdevkit.json');
   chmodSync(agents, 0o600); chmodSync(state, 0o640);
   const before = readFileSync(agents);
@@ -335,7 +335,7 @@ for (const mask of [0o000, 0o022, 0o077]) test(`raiz do backup preserva proteç�
   assert.equal(readFileSync(join(parent, 'humano', 'conteudo'), 'utf8'), 'dados humanos');
 });
 
-test('ancestrais novos do backup são privados com umask permissivo', { skip: posixOnly }, t => {
+test("New backup ancestors are private with permissive umask", { skip: posixOnly }, t => {
   const root = fixture(t), plan = planInstallation({ target: root, mode: 'lang', language: 'en' });
   const parent = join(root, '.agent-tests');
   assert.equal(mode(parent), 0o700);
@@ -347,7 +347,7 @@ test('ancestrais novos do backup são privados com umask permissivo', { skip: po
   }
 });
 
-test('sem arquivos anteriores não cria diretório de backup', t => {
+test("without previous files does not create backup directory", t => {
   mkdirSync(join(repository, '.agent-tests'), { recursive: true });
   const root = mkdtempSync(join(repository, '.agent-tests/backup-empty-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -357,7 +357,7 @@ test('sem arquivos anteriores não cria diretório de backup', t => {
   assert.equal(existsSync(join(root, '.agent-tests/agentdevkit/backups')), false);
 });
 
-test('falha ao criar raiz privada impede alterações dos arquivos planejados', t => {
+test("failure to create private root prevents changes in planned files", t => {
   const root = fixture(t), agents = join(root, 'AGENTS.md');
   const before = readFileSync(agents), ignorePath = join(root, '.gitignore');
   const ignore = existsSync(ignorePath) ? readFileSync(ignorePath) : null;
@@ -402,7 +402,7 @@ test('falha ao criar raiz privada impede alterações dos arquivos planejados', 
   assert.deepEqual(plannedSnapshot(root, plan), plannedBefore);
 });
 
-test('falha ao criar ancestral não aplica arquivos planejados', t => {
+test("failed to create ancestor does not apply planned files", t => {
   const root = fixture(t), plan = planInstallation({ target: root, mode: 'lang', language: 'en' });
   const before = plannedSnapshot(root, plan), blocked = join(root, '.agent-tests/agentdevkit');
   const original = fs.mkdirSync; let intercepted = false;
@@ -416,7 +416,7 @@ test('falha ao criar ancestral não aplica arquivos planejados', t => {
   assert.equal(intercepted, true); assert.deepEqual(plannedSnapshot(root, plan), before);
 });
 
-test('recusa raiz de backup com modo inesperadamente amplo antes de copiar', { skip: posixOnly }, t => {
+test("backup root refusal with unexpectedly wide mode before copying", { skip: posixOnly }, t => {
   const root = fixture(t), plan = planInstallation({ target: root, mode: 'lang', language: 'en' });
   const before = plannedSnapshot(root, plan), parent = join(root, '.agent-tests/agentdevkit/backups');
   const original = fs.mkdtempSync; let directory;
@@ -432,7 +432,7 @@ test('recusa raiz de backup com modo inesperadamente amplo antes de copiar', { s
   assert.deepEqual(plannedSnapshot(root, plan), before);
 });
 
-test('falha durante cópia preserva projeto e backup parcial para inspeção', { skip: posixOnly }, t => {
+test("copy failure preserves project and partial backup for inspection", { skip: posixOnly }, t => {
   const root = fixture(t), plan = planInstallation({ target: root, mode: 'lang', language: 'en' });
   const before = plannedSnapshot(root, plan), parent = join(root, '.agent-tests/agentdevkit/backups');
   const original = fs.writeFileSync, cause = Object.freeze(Object.assign(new Error('falha sintética na cópia'), { code: 'EIO' })); let copies = 0, failure;
@@ -452,7 +452,7 @@ test('falha durante cópia preserva projeto e backup parcial para inspeção', {
   assert.ok(fs.readdirSync(join(parent, directories[0])).length > 0);
 });
 
-test('falha após publicar alteração informa backup sem afirmar sua integridade', t => {
+test("failure after posting change informs backup without asserting its integrity", t => {
   const root = fixture(t), plan = planInstallation({ target: root, mode: 'lang', language: 'en' });
   const cause = Object.freeze(Object.assign(new Error('falha após publicação'), { code: 'EIO' }));
   const parent = join(root, '.agent-tests/agentdevkit/backups');
@@ -510,7 +510,7 @@ for (const format of ['json', 'humano']) test(`CLI não promete ausência de alt
   assert.deepEqual(readFileSync(join(root, '.git/index')), index);
 });
 
-test('colisão na cópia de backup é recusada sem substituir o conteúdo existente', t => {
+test("crash on backup copy is refused without replacing existing content", t => {
   const root = fixture(t), plan = planInstallation({ target: root, mode: 'lang', language: 'en' });
   const before = plannedSnapshot(root, plan), parent = join(root, '.agent-tests/agentdevkit/backups');
   const original = fs.writeFileSync; let collision;
@@ -527,7 +527,7 @@ test('colisão na cópia de backup é recusada sem substituir o conteúdo existe
   assert.deepEqual(plannedSnapshot(root, plan), before);
 });
 
-test('backup preserva arquivos vazios e bytes binários não UTF-8', t => {
+test("backup preserves empty files and binary bytes not UTF-8", t => {
   const root = fixture(t), originals = new Map([
     ['vazio.bin', Buffer.alloc(0)], ['binario.bin', Buffer.from([0, 0xff, 0xfe, 0x80, 0x0a])],
   ]);
@@ -539,7 +539,7 @@ test('backup preserva arquivos vazios e bytes binários não UTF-8', t => {
   for (const [path, bytes] of originals) assert.deepEqual(readFileSync(join(root, result.backup, path)), bytes);
 });
 
-test('falha após alteração e remoção conserva o projeto parcial e o backup com bytes e modo originais', { skip: posixOnly }, t => {
+test("failure after change and removal saves partial design and backup with bytes and original mode", { skip: posixOnly }, t => {
   const root = fixture(t), agents = join(root, 'AGENTS.md');
   chmodSync(agents, 0o600);
   const obsoletePath = '.pbai4devs/rules/obsolete/RULE.md', obsolete = join(root, obsoletePath);

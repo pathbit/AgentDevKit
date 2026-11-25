@@ -6,7 +6,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { createPrivateSyncStage, synchronizePrivateStage, isReference } from '../../.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs';
 import { legacyClaudeGitSource } from '../../.pbai4devs/scripts/lib/claude-legacy-exact.mjs';
-import { planLocalIgnore, checkLocalIgnore, planUntrack } from '../../.pbai4devs/scripts/lib/gitignore.mjs';
+import { planLocalIgnore, checkLocalIgnore, planUntrack, mergeGitignore, ignoreBegin, ignoreEnd } from '../../.pbai4devs/scripts/lib/gitignore.mjs';
 import { nativePathBoundary } from '../../.pbai4devs/scripts/lib/native-paths.mjs';
 import { inspectMacWriteProtection, nativeMetadataCopySupported } from '../../.pbai4devs/scripts/lib/native-metadata.mjs';
 import { mayReferenceClaudeRule, resemblesClaudeReference, scanRetainedClaude } from '../../.pbai4devs/scripts/lib/claude-retained.mjs';
@@ -15,7 +15,7 @@ import { extractTomlManagedBlock, stripTomlContent } from '../../.pbai4devs/scri
 import { adapterRoots, normalizeClients, resolveAdapters, changeClientSelection } from '../adapters/index.mjs';
 import { packageRoot, statePath, legacyStatePath, entryNames, begin, end } from '../config.mjs';
 import { text } from '../i18n.mjs';
-import { hash, fail, stat, ignored, safePath, nativeOutputBoundary, walk, write, read, sameBytes } from './filesystem.mjs';
+import { hash, fail, stat, ignored, safePath, nativeOutputBoundary, walk, write, read, sameBytes, targetIdentity, assertTargetUnchanged } from './filesystem.mjs';
 import { stagedDivergences, stagedContains } from './git-index.mjs';
 import { nativeToml, nativeManagedText, allowsStagedBlock, extractBlock, blockDigest, replacedIgnoreBlocks, entryContent, diagnosePreservedDerivedToml } from './ownership.mjs';
 import { loadState, actualStatePath, readDerivedState } from './state.mjs';
@@ -25,8 +25,30 @@ import { planStateRecords } from './plan-state.mjs';
 import { cleanupInstallationStage } from './stage-cleanup.mjs';
 import { reconcileNativeOutputs } from './native-outputs.mjs';
 
-export function planInstallation({ target, language = 'pt', mode = 'init', force = false, clients, clientChange }) {
+const hubIgnore = '.pbai4devs/.gitignore';
+
+function keepHubLocal(stage) {
+  const bytes = read(stage, hubIgnore);
+  const source = bytes?.toString('utf8') ?? '';
+  if (bytes && !Buffer.from(source).equals(bytes)) fail('E_BLOCK', 'The hub ignore file is not UTF-8.');
+  const block = extractBlock(source, ignoreBegin, ignoreEnd);
+  const patterns = block
+    ? block.slice(ignoreBegin.length, -ignoreEnd.length).replace(/^\r?\n/, '').trimEnd()
+    : read(stage, '.pbai4devs/templates/gitignore/shared.ignore').toString('utf8').trimEnd();
+  const alreadyLocal = patterns.endsWith('\n*');
+  const start = block ? source.indexOf(block) : source.length;
+  const after = block ? source.slice(start + block.length) : '';
+  if (alreadyLocal && /^\r?\n?$/.test(after)) return;
+  // Git gives the last matching rule precedence. Keep every user rule and
+  // put the managed local rule last so an existing exception cannot undo it.
+  const custom = source.slice(0, start) + after.replace(/^\r?\n/, '');
+  const ignore = mergeGitignore(custom, alreadyLocal ? patterns : `${patterns}\n*`);
+  write(stage, hubIgnore, ignore.text);
+}
+
+export function planInstallation({ target, language = 'pt', mode = 'init', force = false, clients, clientChange, local }) {
   assertUnredirectedGitEnvironment();
+  const targetSnapshot = targetIdentity(target);
   const initialStatePath = actualStatePath(target);
   const initialDerivedPath = initialStatePath.replace(/agentdevkit\.json$/, 'derived.json');
   const initialStateBytes = read(target, initialStatePath), initialDerivedBytes = read(target, initialDerivedPath);
@@ -34,6 +56,7 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
   // Reconcile the recorded IDs against the canonical selection for this plan.
   let previous = loadState(target, { rawClients: true });
   const installedState = previous;
+  const localHub = local === true || installedState?.local === true;
   const migration = legacyStateMigration(target);
   // A migration must update the installed scripts and pointers in the same
   // transaction; a plain sync/agents/lang would leave old hard-coded paths.
@@ -154,6 +177,7 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
       initialStatePath, initialDerivedPath, initialStateBytes, initialDerivedBytes, stageDependencies,
       stagedHuman, preserveNative, recordPreserved, observeNative, outputBlocked, synchronizeStage,
     });
+    if (localHub) keepHubLocal(stage);
     for (const canonical of active.entrypoints) {
       const name = entryPaths.get(canonical);
       if (preserveNative(name)) continue;
@@ -170,13 +194,21 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
         write(stage, name, merged.text); mixedPaths.add(name); recordPreserved(name, 'existing-file-extended');
       }
     }
-    if (!preserveNative('README.md') && !read(target, 'README.md')) write(stage, 'README.md', `---\ndescription: ${JSON.stringify(text(language, 'readme'))}\nlanguage: ${language}\n---\n\n# ${text(language, 'project')}\n\n${text(language, 'readme')}\n`);
+    if (!preserveNative('README.md') && !read(target, 'README.md')) {
+      const description = text(language, 'readme');
+      const readme = [
+        '---', `description: ${JSON.stringify(description)}`, `language: ${language}`, '---', '',
+        `# ${text(language, 'project')}`, '', description, '',
+        `## ${text(language, 'readmePrerequisites')}`, '', text(language, 'readmeTools'), '',
+      ].join('\n');
+      write(stage, 'README.md', readme);
+    }
     if (!existsSync(join(stage, '.pbai4devs/state/README.md'))) write(stage, '.pbai4devs/state/README.md', `---\ndescription: AgentDevKit state.\n---\n\n# AgentDevKit\n\n${text(language, 'state')}\n`);
     const unknown = new Set(existing.filter(path => !supplied.has(path) && !previous?.files[`.pbai4devs/${path}`] && !internal.has(path)));
     const paths = walk(stage, '', path => !path.split('/').includes('.agent-tests')).filter(path => !path.startsWith('.pbai4devs/') || !unknown.has(path.slice(11)));
     const desired = new Map(paths.filter(path => {
       if (preserveNative(path)) return false;
-      if (path.endsWith('/.gitignore') && read(target, path) && !previous?.files[path] && !previous?.blocks[path] && !derivedBlocks[path]) {
+      if (path.endsWith('/.gitignore') && !(localHub && path === hubIgnore) && read(target, path) && !previous?.files[path] && !previous?.blocks[path] && !derivedBlocks[path]) {
         recordPreserved(path, 'existing-ignore'); return false;
       }
       return true;
@@ -210,7 +242,7 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
       blockHash, stagedHuman, satisfiedReferences, mixedPaths,
     });
     const { manifest, derivedPath, derivedBytes } = planStateRecords({
-      target, desired, mode, language, bundled, previous, installedState, clients,
+      target, desired, mode, language, bundled, previous, installedState, clients, local: localHub,
       selected, migration, changingClients, derived, derivedConfigFiles, unknownRemovedFiles,
       migratedHuman, preservedHub, mixedPaths, preserved, synchronized, stagedHuman, observeNative,
     });
@@ -326,9 +358,9 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
       };
       visit(root); return files;
     }
-    // Regras do cliente desmarcado são preservadas sem provar ownership.
-    // Enquanto existirem, a configuração ativa é desconhecida e check/doctor
-    // devem continuar sinalizando o risco, inclusive após mudar a seleção.
+    // Unmarked customer rules are preserved without proving ownership.
+    // As long as they exist, the active configuration is unknown and check/doctor
+    // should continue to signal the risk, including after changing the selection.
     const retainedClaude = active.roots.includes('.claude') ? [] : scanRetainedClaude(target);
     const retainedClaudeRules = retainedClaude.map(item => item.path);
     if (active.roots.includes('.claude')) {
@@ -468,9 +500,10 @@ export function planInstallation({ target, language = 'pt', mode = 'init', force
       if (code) xattrBlockers.push({ path, code });
     }
     const xattrUnverified = linuxXattrChecks.filter(item => item.status !== 'present').map(item => item.path);
+    assertTargetUnchanged(target, targetSnapshot);
     // A conflict means ownership or the managed bytes could not be proven.
     // Backups do not authorize replacing user content, even with --force.
-    return { target, language, mode, clients: selected, changes, stageDependencies: [...stageDependencies].map(([path, expectedHash]) => ({ path, expectedHash })), conflicts: [...new Set(conflicts)].sort(), canApply: !conflicts.length && !untrack?.conflicts?.length && !localIgnoreCheck.missing.length && !hardlinkBlockers.length && !ownerBlockers.length && !aclBlockers.length && !xattrBlockers.length, hardlinkBlockers, ownerBlockers, aclBlockers, xattrBlockers, xattrUnverified, manifest, retiredRoots, ownedOutputs, untrack, localIgnore, localIgnoreCheck, migration, fallbackChecks: [...fallbackChecks], fallbackOwnedPaths: ownedPaths, retainedClaudeRules, derivedFileDiagnostics, removalDiagnostics, scopeOmissions: (synchronized.scopeOmissions || []).map(item => (retainedClaudeRules.length || conflicts.some(path => path.startsWith('.claude/rules/'))) ? { ...item, status: 'activation-unverified' } : item), preserved: [...preserved.values()].sort((a, b) => a.path.localeCompare(b.path)) };
+    return { target, targetSnapshot, language, mode, clients: selected, changes, stageDependencies: [...stageDependencies].map(([path, expectedHash]) => ({ path, expectedHash })), conflicts: [...new Set(conflicts)].sort(), canApply: !conflicts.length && !untrack?.conflicts?.length && !localIgnoreCheck.missing.length && !hardlinkBlockers.length && !ownerBlockers.length && !aclBlockers.length && !xattrBlockers.length, hardlinkBlockers, ownerBlockers, aclBlockers, xattrBlockers, xattrUnverified, manifest, retiredRoots, ownedOutputs, untrack, localIgnore, localIgnoreCheck, migration, fallbackChecks: [...fallbackChecks], fallbackOwnedPaths: ownedPaths, retainedClaudeRules, derivedFileDiagnostics, removalDiagnostics, scopeOmissions: (synchronized.scopeOmissions || []).map(item => (retainedClaudeRules.length || conflicts.some(path => path.startsWith('.claude/rules/'))) ? { ...item, status: 'activation-unverified' } : item), preserved: [...preserved.values()].sort((a, b) => a.path.localeCompare(b.path)) };
   } catch (error) { stageFailure = error; stageFailed = true; throw error; }
   finally {
     cleanupInstallationStage({

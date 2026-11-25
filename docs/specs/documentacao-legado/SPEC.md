@@ -5,6 +5,8 @@ status: rascunho
 
 # Documentar um sistema legado
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 A equipe precisa recuperar conhecimento do código e dos testes e registrar
 o resultado nos documentos que já usa. O objetivo inicial decide se vale
 mapear comportamento, preparar o ambiente ou planejar uma evolução.
@@ -22,3 +24,7 @@ mapear comportamento, preparar o ambiente ou planejar uma evolução.
   entre comportamento, código e testes. Inferências ficam identificadas.
 - **AC-004** O pacote passa pela revisão de recursos, testes da CLI, ensaios
   em projetos existentes e novos e verificação de distribuição.
+
+[reading-pt]: SPEC.md
+[reading-en]: ../../en/specs/documentacao-legado/SPEC.md
+[reading-es]: ../../es/specs/documentacao-legado/SPEC.md

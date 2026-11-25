@@ -6,6 +6,8 @@ version: 0.0.10
 
 # Publicar e verificar os dois caminhos de instalação
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 ## Objetivo
 
 Publicar a versão 0.0.10 com os guias de pré-requisitos e instalação já
@@ -40,3 +42,7 @@ Conferir `latest`, README público, licença e os quatro comandos da CLI.
 
 Os instaladores nativos dos sistemas são documentados com fontes oficiais;
 esta release não afirma reinstalá-los em máquinas que já têm os pré-requisitos.
+
+[reading-pt]: SPEC.md
+[reading-en]: ../../en/specs/v0.0.10/SPEC.md
+[reading-es]: ../../es/specs/v0.0.10/SPEC.md

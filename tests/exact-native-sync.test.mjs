@@ -30,7 +30,7 @@ function fixture(t){
  return {root,put,git,index,run,plan};
 }
 function state(root){return JSON.parse(readFileSync(join(root,'.pbai4devs/state/derived.json'),'utf8'))}
-test('referência idêntica staged permanece sem adoção em sync repetido e check',(t)=>{
+test("identical reference staged remains unadopted in repeated sync and check",(t)=>{
  const f=fixture(t),before=f.index(),diff=f.git('diff','--cached','--binary','--no-ext-diff','--no-textconv');
  let p=f.plan();assert.equal(p.preserved.find(x=>x.path===target)?.reason,'existing-reference-satisfied');
  assert.ok(!p.logicalEffects.operations.some(x=>x.path===target));
@@ -38,7 +38,7 @@ test('referência idêntica staged permanece sem adoção em sync repetido e che
  p=f.plan();assert.equal(p.exitCode,0);assert.equal(p.preserved.find(x=>x.path===target)?.reason,'existing-reference-satisfied');
  assert.equal(f.git('diff','--cached','--binary','--no-ext-diff','--no-textconv'),diff);assert.equal(f.index(),before);
 });
-test('texto humano ou metadado diferente não entram na equivalência',(t)=>{
+test("different human text or metadata do not enter into equivalence",(t)=>{
  for(const variant of [expected+'Nota humana.\n',expected.replace('description: Exemplo sintético.','description: Descrição humana.')]){
   const f=fixture(t);f.put(target,variant);const p=f.plan();assert.notEqual(p.preserved.find(x=>x.path===target)?.reason,'existing-reference-satisfied');
   assert.equal(readFileSync(join(f.root,target),'utf8'),variant);
@@ -46,16 +46,16 @@ test('texto humano ou metadado diferente não entram na equivalência',(t)=>{
   assert.equal(readFileSync(join(f.root,target),'utf8'),variant);assert.equal(f.index(),before);
  }
 });
-test('referência com hash de propriedade anterior não entra na equivalência',(t)=>{
+test("reference with previous property hash does not enter equivalence",(t)=>{
  const f=fixture(t);f.put('.pbai4devs/state/agentdevkit.json',JSON.stringify({schemaVersion:1,files:{[target]:h(Buffer.from(expected))},blocks:{}}));
  const p=f.plan();assert.notEqual(p.preserved.find(x=>x.path===target)?.reason,'existing-reference-satisfied');assert.equal(readFileSync(join(f.root,target),'utf8'),expected);
 });
-test('bloco anteriormente registrado não entra na equivalência',(t)=>{
+test("previously registered block does not enter equivalence",(t)=>{
  const f=fixture(t),block='<!-- BEGIN AGENTDEVKIT -->\nLeia e siga [origem](../../../.pbai4devs/skills/projeto/demo/SKILL.md).\n<!-- END AGENTDEVKIT -->';
  f.put(target,expected+'\n'+block+'\n');f.put('.pbai4devs/state/agentdevkit.json',JSON.stringify({schemaVersion:1,files:{},blocks:{[target]:h(Buffer.from(block))}}));
  const p=f.plan();assert.notEqual(p.preserved.find(x=>x.path===target)?.reason,'existing-reference-satisfied');assert.ok(readFileSync(join(f.root,target),'utf8').includes(block));
 });
-test('tombstones brutos não entram no novo caminho de equivalência',(t)=>{
+test("Crude tombstones do not enter the new path of equivalence",(t)=>{
  for (const kind of ['file','block']) {
   const f=fixture(t), old=h(Buffer.from(expected));
   f.put('.pbai4devs/state/derived.json',JSON.stringify({schemaVersion:1,entries:{},...(kind==='file'?{removedFiles:{[target]:old}}:{removedBlocks:[target]})}));
@@ -64,7 +64,7 @@ test('tombstones brutos não entram no novo caminho de equivalência',(t)=>{
   assert.equal(readFileSync(join(f.root,target),'utf8'),expected);assert.equal(f.index(),before);
  }
 });
-test('Copilot mantém regra nativa idêntica sem adquirir propriedade',(t)=>{
+test("Copilot maintains identical native rule without acquiring property",(t)=>{
  const f=fixture(t),rule='.github/instructions/demo.instructions.md';
  f.put('.pbai4devs/espelhos.conf','agente|.github|agrupado\nformato|.github|rules|instrucoes\n');
  f.put('.pbai4devs/rules/demo/RULE.md','---\ntrigger: always_on\ndescription: Regra sintética.\n---\n\n# Regra demo\n');
@@ -74,7 +74,7 @@ test('Copilot mantém regra nativa idêntica sem adquirir propriedade',(t)=>{
  for(let n=0;n<2;n++){assert.equal(f.run().exitCode,0);assert.equal(readFileSync(join(f.root,rule),'utf8'),content);if (process.platform !== 'win32') assert.equal(statSync(join(f.root,rule)).mode&0o777,0o640);assert.equal(f.index(),before);let s=state(f.root);assert.ok(!Object.hasOwn(s.files??{},rule));assert.ok(!Object.hasOwn(s.blocks??{},rule));}
  assert.equal(f.plan().exitCode,0);
 });
-test('Copilot exige escopo completo idêntico com glob e sidecar nativo',(t)=>{
+test("Copilot requires identical full scope with native glob and sidecar",(t)=>{
  for (const sidecar of [false,true]) for (const matches of [false,true]) {
   const f=fixture(t),rule='.github/instructions/demo.instructions.md';
   const source='.pbai4devs/rules/demo/RULE.md',metadata='.pbai4devs/rules/demo/copilot.yaml';
@@ -105,7 +105,7 @@ test('Copilot exige escopo completo idêntico com glob e sidecar nativo',(t)=>{
   }
  }
 });
-test('Claude regra nativa continua protegida mesmo com apontamento igual',(t)=>{
+test("Claude native rule remains protected even with equal note",(t)=>{
  const f=fixture(t),rule='.claude/rules/demo/RULE.md';
  f.put('.pbai4devs/espelhos.conf','agente|.claude|agrupado\nformato|.claude|rules|agrupado\n');
  f.put('.pbai4devs/rules/demo/RULE.md','---\ntrigger: always_on\ndescription: Regra sintética.\n---\n\n# Regra demo\n');

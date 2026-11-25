@@ -5,6 +5,8 @@ status: rascunho
 
 # Escopo de regras no Claude Code
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 ## Objetivo
 
 Evitar que regras condicionais do hub sejam carregadas globalmente no Claude e
@@ -133,3 +135,7 @@ Fontes primárias: [regras do Claude](https://code.claude.com/docs/en/memory) e
 [regras do Antigravity](https://antigravity.google/docs/rules/).
 O usuário autorizou as melhorias; a revisão técnica, o destino exato do fallback
 e os detalhes de migração ainda precisam ser concluídos antes da entrega.
+
+[reading-pt]: SPEC.md
+[reading-en]: ../../en/specs/escopo-regras-claude/SPEC.md
+[reading-es]: ../../es/specs/escopo-regras-claude/SPEC.md

@@ -59,7 +59,7 @@ for (const path of catalogs) for (const force of [false, true]) {
   });
 }
 
-test('catálogo anterior idêntico não é assumido como próprio sem estado', t => {
+test("previous identical catalog is not assumed as own without state", t => {
   const root = fixture(t);
   assert.equal(sync(root).exitCode, 0);
   const recorded = JSON.parse(get(root, state));
@@ -75,7 +75,7 @@ test('catálogo anterior idêntico não é assumido como próprio sem estado', t
   for (const [name, content] of Object.entries(before)) assert.deepEqual(get(root, name), content, name);
 });
 
-test('sincronizações diretas sucessivas registram hashes dos catálogos criados', t => {
+test("successive direct synchronisations record hashes of the created catalogs", t => {
   const root = fixture(t);
   assert.equal(sync(root).exitCode, 0);
   for (const path of catalogs) assert.equal(JSON.parse(get(root, state)).catalogs[path], digest(get(root, path)), path);
@@ -85,7 +85,7 @@ test('sincronizações diretas sucessivas registram hashes dos catálogos criado
   assert.equal(sync(root, { check: true }).exitCode, 0);
 });
 
-test('registro de catálogo desconhecido ou hash inválido bloqueia antes de alterar arquivos', t => {
+test("unknown catalog log or invalid hash blocks before changing files", t => {
   const root = fixture(t);
   assert.equal(sync(root).exitCode, 0);
   const registry = JSON.parse(get(root, state));
@@ -135,7 +135,7 @@ for (const path of ['.pbai4devs/.gitignore', '.claude/.gitignore']) {
   });
 }
 
-test('bloco idêntico em AGENTS.md sem registro não é adotado', t => {
+test("identical block on AGENTS.md without registration is not adopted", t => {
   const root = fixture(t), path = 'AGENTS.md';
   put(root, '.pbai4devs/templates/entrypoints/AGENTS.md', '# Instruções\n');
   const content = mergeManagedContent('# Instruções humanas\n', entrypointReference(root, path)).text;
@@ -150,7 +150,7 @@ test('bloco idêntico em AGENTS.md sem registro não é adotado', t => {
   assert.equal(get(root, path).toString('utf8'), content);
 });
 
-test('bloco nativo Markdown idêntico sem registro não é adotado', t => {
+test("Markdown identical native block without registration is not adopted", t => {
   const root = fixture(t), path = '.claude/skills/demo/SKILL.md';
   const content = mergeManagedContent('# Instruções humanas\n', 'Leia e siga [origem](../../../.pbai4devs/skills/demo/SKILL.md).').text;
   put(root, path, content);
@@ -164,7 +164,7 @@ test('bloco nativo Markdown idêntico sem registro não é adotado', t => {
   assert.equal(get(root, path).toString('utf8'), content);
 });
 
-test('TOML do Gemini anterior sem registro permanece intacto e sem propriedade atribuída', t => {
+test("TOML of the previous Gemini without registration remains intact and without assigned property", t => {
   const root = fixture(t), path = '.gemini/commands/demo.toml';
   const prompt = 'Meu prompt\n\n<!-- BEGIN AGENTDEVKIT -->\n@{.pbai4devs/commands/demo/COMMAND.md}\n<!-- END AGENTDEVKIT -->';
   const content = `description = "Humano"\nprompt = ${JSON.stringify(prompt)}\n`;
@@ -195,7 +195,7 @@ for (const force of [false, true]) test(`configuração humana não é alterada 
   for (const [name, content] of Object.entries(before)) assert.deepEqual(get(root, name), content, name);
 });
 
-test('overlay de configuração inválido não autoriza escrita', t => {
+test("invalid configuration overlay does not authorize writing", t => {
   const root = fixture(t);
   assert.equal(sync(root).exitCode, 0);
   const registry = JSON.parse(get(root, state));

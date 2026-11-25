@@ -86,7 +86,7 @@ for (const [part, label] of [
   assert.deepEqual(readFileSync(join(f.root, 'README.md')), human);
 });
 
-test('relatório ausente mantém erro de leitura ENOENT', t => {
+test("missing report maintains read error ENOENT", t => {
   const f = fixture(t);
   assert.throws(() => checkReview('.agent-tests/ausente.json', { root: f.root }), error => {
     assert.equal(error.code, 'ENOENT');
@@ -105,7 +105,7 @@ test('instrucoes existentes entram na revisao e mudancas posteriores invalidam o
   });
 });
 
-test('instrucoes criadas apos o preparo exigem novo snapshot mesmo em escopo limitado', async t => {
+test("instructions created after preparation require new snapshot even in limited scope", async t => {
   for (const file of ['AGENTS.md', 'CLAUDE.md', 'GEMINI.md']) await t.test(file, t => {
     const f = approved(t, {}, () => {}, false);
     f.put(file, '# Novas instrucoes\n');
@@ -136,7 +136,7 @@ test('em modo git um novo arquivo elegivel invalida a revisao', t => {
   assert.throws(() => checkReview(f.file, { root: f.root }), /mudaram/);
 });
 
-test('todos os criterios precisam resultado e prova; nao executado nao e aprovado', async t => {
+test("all criteria need result and proof; not executed is not approved", async t => {
   for (const status of ['pending', 'failed', 'not-run', 'not-applicable']) await t.test(status, t => {
     const f = approved(t); f.report.validation[0].status = status; f.save();
     assert.throws(() => checkReview(f.file, { root: f.root }), /sem prova/);
@@ -153,7 +153,7 @@ test('provas vazias, fora do diretorio e forcadas no Git sao recusadas', async t
   await t.test('versionada', t => { const f = approved(t); f.git('add', '-f', f.proof); assert.throws(() => checkReview(f.file, { root: f.root }), /indice Git/); });
 });
 
-test('sem impacto exige motivo; omitir documento ou deixar achado aberto bloqueia', async t => {
+test("no impact requires reason; omit document or leave open find blocks", async t => {
   await t.test('motivo', t => { const f = approved(t); f.report.documentation[0].reason = ''; f.save(); assert.throws(() => checkReview(f.file, { root: f.root }), /documentacao/); });
   await t.test('documento', t => { const f = approved(t); f.report.documentation = []; f.save(); assert.throws(() => checkReview(f.file, { root: f.root }), /sem revisao/); });
   await t.test('achado', t => { const f = approved(t); f.report.review.findings.push({ id: 'R1', description: 'Correcao necessaria', status: 'open' }); f.save(); assert.throws(() => checkReview(f.file, { root: f.root }), /abertos/); });
@@ -174,7 +174,7 @@ test('links simbolicos nao viram prova ou documento autorizado', t => {
   assert.throws(() => checkReview(f.file, { root: f.root }), /simbolico/);
 });
 
-test('spec sem IDs claros nao passa pelo preparo', () => {
+test("spec without clear IDs does not go through preparation", () => {
   assert.throws(() => specCriteria('## Critérios de aceite\n\nFunciona.\n'), /AC-001/);
   assert.deepEqual(specCriteria('## Critérios de aceite\nAC-001\nAC-001\n\n## Referências\nAC-999'), ['AC-001']);
 });
@@ -184,7 +184,7 @@ test('placeholders no plano nao contam como validacao definida', t => {
   assert.throws(() => checkReview(f.file, { root: f.root }), /incompleto/);
 });
 
-test('documento extra nao Markdown permanece obrigatorio e protegido pelo snapshot', t => {
+test("extra document no Markdown remains mandatory and protected by snapshot", t => {
   const f = fixture(t); f.put('api/openapi.yaml', 'openapi: 3.1.0\n');
   const made = prepareReview({ root: f.root, id: 'mudanca', execution: 'extra', scope: ['src/main.mjs'], documents: ['api/openapi.yaml'] });
   assert.ok(made.report.snapshot.documents.includes('api/openapi.yaml'));
@@ -195,7 +195,7 @@ test('documento extra nao Markdown permanece obrigatorio e protegido pelo snapsh
   assert.throws(() => checkReview(made.file, { root: f.root }), /Documento sem revisao/);
 });
 
-test('spec e documento de referencia nao podem ser artefatos ignorados', t => {
+test("spec and reference document cannot be ignored artifacts", t => {
   const f = fixture(t); f.put('.agent-tests/spec.md', readFileSync(join(f.root, 'spec.md')));
   assert.throws(() => prepareReview({ root: f.root, id: 'mudanca', spec: '.agent-tests/spec.md' }), /versionavel/);
   assert.throws(() => prepareReview({ root: f.root, id: 'mudanca', documents: ['.agent-tests/relatorio.txt'] }), /versionavel/);
@@ -206,7 +206,7 @@ test('remover referencia da spec do relatorio nao remove sua obrigatoriedade', t
   assert.throws(() => checkReview(f.file, { root: f.root }), /Baseline|referencias alteradas/);
 });
 
-test('indice Git precisa corresponder ao codigo testado antes de commit', t => {
+test("Git index needs to match the code tested before commit", t => {
   const f = approved(t, {}, f => {
     f.git('add', 'src/main.mjs');
     f.put('src/main.mjs', 'export const value=2;\n');
@@ -217,7 +217,7 @@ test('indice Git precisa corresponder ao codigo testado antes de commit', t => {
   assert.equal(checkReview(f.file, { root: f.root }).status, 'passed');
 });
 
-test('prepare, seal, check e check-commit preservam indice com stat defasado', t => {
+test("prepare, seal, check and check-commit preserve index with outdated stat", t => {
   const f = fixture(t);
   f.git('add', '.');
   f.git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', '-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=disabled-hooks', 'commit', '-q', '-m', 'test: base');
@@ -256,7 +256,7 @@ test('coleta automatica inclui staged cancelado e ambas pontas de renomeacao', a
   });
 });
 
-test('coleta automatica recusa nome com quebra de linha sem tocar indice', t => {
+test("automatic collection refuses name with line break without touching index", t => {
   if (process.platform === 'win32') return t.skip('Quebras de linha nao sao nomes de arquivo validos no Windows.');
   const f = fixture(t); f.put('line\nbreak.txt', 'conteudo\n'); f.git('add', 'line\nbreak.txt');
   const index = readFileSync(join(f.root, '.git/index'));
@@ -297,7 +297,7 @@ test('coleta automatica recusa filtro aplicado sem executa-lo e scope continua d
   assert.deepEqual(readFileSync(join(f.root, '.git/index')), index);
 });
 
-test('gate recusa split-index sem alterar indice ou sharedindex', t => {
+test("gate refuses split-index without changing index or shareindex", t => {
   const f = fixture(t); f.git('add', 'src/main.mjs'); f.git('update-index', '--split-index');
   const sharedPath = f.git('rev-parse', '--shared-index-path').trim();
   assert.ok(sharedPath);
@@ -319,7 +319,7 @@ test('coleta automatica recusa flags ocultas sem modifica-las', async t => {
   });
 });
 
-test('gate recusa flags que ocultam diferencas entre indice e arquivo', async t => {
+test("gate refuses flags that hide differences between index and file", async t => {
   for (const [name, options] of [
     ['assume-unchanged', ['--assume-unchanged']],
     ['skip-worktree', ['--skip-worktree']],
@@ -391,7 +391,7 @@ test('gate recusa nomes Git UTF-8 invalidos antes de aprovar ou gerar relatorio'
   assert.deepEqual(readFileSync(join(f.root, '.git/index')), index);
 });
 
-test('caminho com surrogate isolado nao e convertido em outro arquivo', t => {
+test("path with isolated surrogate not converted into another file", t => {
   const f = fixture(t); f.put('collision\ufffd.txt', 'arquivo humano\n');
   assert.throws(() => prepareReview({ root: f.root, id: 'invalido', scope: ['collision\ud800.txt'] }), /Caminho invalido/);
   assert.equal(readFileSync(join(f.root, 'collision\ufffd.txt'), 'utf8'), 'arquivo humano\n');
@@ -423,7 +423,7 @@ test('nome iniciado por BOM e preservado em staged e na consulta de ignores', as
   });
 });
 
-test('check-commit bloqueia staged humano fora da revisao sem altera-lo', t => {
+test("check-commit blocks human staged out of review without altering it", t => {
   const f = approved(t, {}, f => {
     f.git('add', 'src/main.mjs');
     f.put('humano extra.txt', 'arquivo preparado por outra pessoa\n');
@@ -557,7 +557,7 @@ test('fixtures isolam Git externo herdado antes de criar commits', t => {
   assert.equal(existsSync(marker), false, 'O fsmonitor externo não deve executar durante a fixture.');
 });
 
-test('gate rejeita blob transformado por clean filter sem executar filtro na verificacao', t => {
+test("gate rejects blob transformed by clean filter without running filter in check", t => {
   const f = approved(t, {}, f => {
     f.git('add', '.');
     f.git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', '-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=/dev/null', 'commit', '-q', '-m', 'test: base');
@@ -577,7 +577,7 @@ test('gate rejeita blob transformado por clean filter sem executar filtro na ver
   assert.deepEqual(readFileSync(join(f.root, '.git/index')), index);
 });
 
-test('gate aceita blob identico com clean filter configurado sem executar filtro', t => {
+test("gate accepts identity blob with clean filter configured without running filter", t => {
   const f = approved(t, {}, f => {
     const executable = process.execPath.replaceAll('\\', '/');
     const clean = `"${executable}" -e "require('fs').writeFileSync('filter-marker','hit');process.stdin.pipe(process.stdout)"`;
@@ -593,7 +593,7 @@ test('gate aceita blob identico com clean filter configurado sem executar filtro
   assert.deepEqual(readFileSync(join(f.root, '.git/index')), index);
 });
 
-test('gate bloqueia staged CRLF normalizado quando difere dos bytes revisados', t => {
+test("gate blocks staged CRLF normalized when different from revised bytes", t => {
   const f = approved(t, {}, f => {
     f.git('add', '.');
     f.git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', '-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=/dev/null', 'commit', '-q', '-m', 'test: base');
@@ -702,7 +702,7 @@ test('todos os gates recusam partial clone antes de buscar objetos', t => {
   assert.equal(existsSync(join(target, '.agent-tests/parcial')), false);
 });
 
-test('check-commit nao oculta submodulo por configuracao Git', t => {
+test("check-commit does not hide submodule by Git configuration", t => {
   const f = approved(t, {}, f => {
     f.git('add', '.');
     f.git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', '-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=/dev/null', 'commit', '-q', '-m', 'test: base');
@@ -717,7 +717,7 @@ test('check-commit nao oculta submodulo por configuracao Git', t => {
   assert.deepEqual(readFileSync(join(f.root, '.git/index')), index);
 });
 
-test('alterar evidencia apos a aprovacao invalida o selo', t => {
+test("change evidence after approval invalidates the seal", t => {
   const f = approved(t); f.put(f.proof, 'TESTE FALHOU\n');
   assert.throws(() => checkReview(f.file, { root: f.root }), /apos selar/);
   assert.throws(() => sealReview(f.file, { root: f.root }), /apos selar/);
@@ -732,7 +732,7 @@ test('remover spec e criterios do JSON nao altera a baseline do preparo', t => {
   assert.throws(() => checkReview(f.file, { root: f.root }), /Baseline/);
 });
 
-test('check exige selo sem permitir bypass pela API', t => {
+test("check requires seal without allowing bypass by API", t => {
   const f = approved(t, {}, () => {}, false);
   assert.throws(() => checkReview(f.file, { root: f.root, requireSeal: false }), /nao selada/);
   sealReview(f.file, { root: f.root });
@@ -747,7 +747,7 @@ function stageUntrack(f, file = 'generated.md', ignore = true) {
   if (ignore) f.put('.git/info/exclude', `/${file}\n`);
 }
 
-test('desindexação real registra ação e hash físico sem exigir documento local', async t => {
+test("real desigradation records action and physical hash without requiring local document", async t => {
   for (const scope of [[], ['generated.md']]) await t.test(scope.length ? 'scope' : 'git', t => {
     const f = approved(t, { scope }, f => stageUntrack(f));
     const file = f.report.snapshot.files.find(file => file.path === 'generated.md');
@@ -763,13 +763,13 @@ test('desindexação real registra ação e hash físico sem exigir documento lo
   });
 });
 
-test('desindexação sem ignore continua bloqueada em git e scope', async t => {
+test("unignored desidication remains blocked in git and scope", async t => {
   for (const scope of [[], ['generated.md']]) await t.test(scope.length ? 'scope' : 'git', t => {
     assert.throws(() => approved(t, { scope }, f => stageUntrack(f, 'generated.md', false)), /Indice Git difere/);
   });
 });
 
-test('mudanças no arquivo, índice ou ignore invalidam a revisão de desindexação', async t => {
+test("changes in file, index or ignore invalidate the revision of deindication", async t => {
   const cases = [
     ['conteudo', f => f.put('generated.md', '# Editado depois\n')],
     ['indice', f => f.git('add', '-f', 'generated.md')],
@@ -783,7 +783,7 @@ test('mudanças no arquivo, índice ou ignore invalidam a revisão de desindexa�
   });
 });
 
-test('entradas ignoradas fora do índice não entram nos documentos obrigatórios', t => {
+test("Inputs ignored outside the index do not enter the required documents", t => {
   const f = approved(t, {}, f => {
     f.put('AGENTS.md', '# Gerado\n'); f.put('CLAUDE.md', '# Gerado\n'); f.put('GEMINI.md', '# Gerado\n');
     f.put('.git/info/exclude', '/AGENTS.md\n/CLAUDE.md\n/GEMINI.md\n');
@@ -792,7 +792,7 @@ test('entradas ignoradas fora do índice não entram nos documentos obrigatório
   assert.equal(checkReview(f.file, { root: f.root }).status, 'passed');
 });
 
-test('documentos rastreados permanecem obrigatórios mesmo com regra de ignore', t => {
+test("Tracked documents remain mandatory even with a rule of ignoring", t => {
   const f = approved(t, {}, f => {
     f.put('AGENTS.md', '# Instrução versionada\n');
     f.git('add', 'AGENTS.md', 'spec.md');
@@ -827,7 +827,7 @@ function mergeFixture(t, { scope = ['src/main.mjs', 'src/old.txt', 'src/new.txt'
   return { ...f, ...made, commit };
 }
 
-test('check-merge prova fast-forward completo sem alterar indice ou arquivos humanos', t => {
+test("check-merge proof fast-forward complete without changing index or human files", t => {
   const f = mergeFixture(t);
   f.put('human.txt', 'staged humano\n'); f.git('add', 'human.txt'); f.put('human.txt', 'alteracao humana\n');
   const index = readFileSync(join(f.root, '.git/index')), human = readFileSync(join(f.root, 'human.txt'));
@@ -849,7 +849,7 @@ test('check-merge funciona na CLI e rejeita relatorio duplicado por alias', t =>
   assert.throws(() => checkMerge([f.file, `./${f.file}`], 'refs/heads/main', { root: f.root }), /sem repeticao/);
 });
 
-test('check-merge bloqueia conteudo nao commitado e escopo parcial', async t => {
+test("check-merge blocks content not committed and partial scope", async t => {
   await t.test('working tree diferente do commit', t => {
     const f = mergeFixture(t, { dirty: true });
     assert.equal(checkReview(f.file, { root: f.root }).status, 'passed');
@@ -894,7 +894,7 @@ test('check-merge recusa origem e destino invalidos, divergencia e tipos nao com
     const f = mergeFixture(t); f.git('symbolic-ref', 'HEAD', 'refs/remotes/origin/feature');
     assert.throws(() => checkMerge([f.file], 'refs/heads/main', { root: f.root }), /origem deve ser uma branch local/);
   });
-  await t.test('submodulo ignorado pela configuracao Git', t => {
+  await t.test("submodule ignored by Git configuration", t => {
     const f = mergeFixture(t, { ignoredSubmodule: true });
     assert.throws(() => checkMerge([f.file], 'refs/heads/main', { root: f.root }), /modo nao comprovado: vendor/);
     const script = '.pbai4devs/scripts/revisar-entrega/SCRIPT.mjs', runtime = '.pbai4devs/scripts/lib/runtime.mjs';

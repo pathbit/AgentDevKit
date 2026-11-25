@@ -4,6 +4,8 @@ description: Exclusão local de clientes com escolha explícita do projeto.
 
 # Ignore de clientes
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 > Esta spec registra o contrato histórico da release. A decisão posterior é não
 > editar `.git/info/exclude` nem criar ou alterar ignores na raiz ou nos clientes.
 > Os ignores existentes no hub também são preservados, ainda que alguns arquivos
@@ -25,3 +27,7 @@ exclusões locais do Git e o projeto escolhe exceções no seu `.gitignore`.
   são preservados. Arquivos já rastreados continuam rastreados.
 - AC-005: Documentação e testes explicam e verificam precedência, limites,
   clones, clientes compartilhados, cenários sem Git e sistemas suportados.
+
+[reading-pt]: SPEC.md
+[reading-en]: ../../en/specs/client-ignore/SPEC.md
+[reading-es]: ../../es/specs/client-ignore/SPEC.md

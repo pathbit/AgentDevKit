@@ -28,7 +28,7 @@ function fixture(t) {
   return directory;
 }
 
-test('full prepara o CLI de skills antes do gate e a matriz executa as suítes nativas', () => {
+test("full prepares the CLI de skills before gate and the matrix executes native suites", () => {
   const calls = [];
   const stop = new Error('gate de teste');
   assert.throws(() => runPipeline('full', { root, run(_root, args) {
@@ -42,7 +42,7 @@ test('full prepara o CLI de skills antes do gate e a matriz executa as suítes n
   assert.ok(portable.every(args => !args.includes('.pbai4devs/scripts/sincronizar-agentes/tests/TEST.mjs')));
 });
 
-test('o gate de infraestrutura exige execução completa dos testes da plataforma atual', () => {
+test("the infrastructure gate requires complete execution of the tests of the current platform", () => {
   const skip = {
     name: 'ACL herdada no diretório de logs interrompe antes de executar suítes',
     file: '.pbai4devs/scripts/testar-infraestrutura/tests/TEST.mjs',
@@ -72,7 +72,7 @@ test('o gate de infraestrutura exige execução completa dos testes da plataform
   }
 });
 
-test('o gate exige suítes e confere a evidência mesmo quando o status é aprovado', () => {
+test("Gate requires suites and confers evidence even when status is approved", () => {
   const counts = { tests: 2, passed: 2, failed: 0, cancelled: 0, skipped: 0, todo: 0 };
   const evidence = { observed: 2, fileSummaries: 1, counts, skipped: [], pending: [] };
   const suite = { status: 'passed', name: 'arbitrária', log: 'infra.log', evidence };
@@ -95,7 +95,7 @@ test('a matriz nativa recusa skip do alias Windows delegado pelo perfil completo
 
 const reference = { object: { type: 'commit', sha: commit } };
 
-test('tag manual permite backfill sem alterar a seleção dos eventos push', () => {
+test("manual tag allows backfill without changing the selection of push events", () => {
   const push = { GITHUB_EVENT_NAME: 'push', GITHUB_REF_TYPE: 'tag', GITHUB_REF_NAME: 'v0.0.3', AGENTDEVKIT_RELEASE_TAG: 'v9.9.9' };
   assert.equal(releaseTag(push), 'v0.0.3');
   assert.equal(releaseTag({ ...push, GITHUB_EVENT_NAME: 'workflow_dispatch', GITHUB_REF_TYPE: 'branch', GITHUB_REF_NAME: 'master', AGENTDEVKIT_RELEASE_TAG: 'v0.0.3' }), 'v0.0.3');
@@ -104,7 +104,7 @@ test('tag manual permite backfill sem alterar a seleção dos eventos push', () 
   assert.throws(() => releaseTag({ GITHUB_EVENT_NAME: 'push', GITHUB_REF_TYPE: 'branch', GITHUB_REF_NAME: 'master', AGENTDEVKIT_RELEASE_TAG: 'v0.0.3' }), /vX.Y.Z/);
 });
 
-test('workflow mantém registries separados e permite completar uma tag sem recriar a release', () => {
+test("workflow keeps records separate and allows you to complete a tag without recreating the release", () => {
   const workflow = readFileSync(join(root, '.github/workflows/release.yml'), 'utf8');
   const step = name => workflow.split(`      - name: ${name}\n`)[1]?.split('\n      - name: ')[0];
   const npm = step('Publish the same tarball to public npm');
@@ -123,7 +123,7 @@ test('workflow mantém registries separados e permite completar uma tag sem recr
   assert.doesNotMatch(npm + github, /!inputs\.package_only/);
 });
 
-test('npm é localizado por Path quando Node não inclui npm, sem chamar wrappers', t => {
+test("npm is located by Path when Node does not include npm, without calling wrappers", t => {
   const directory = fixture(t), bin = join(directory, 'npm-prefix');
   const executable = join(bin, 'node_modules/npm/bin/npm-cli.js');
   mkdirSync(dirname(executable), { recursive: true }); writeFileSync(executable, '// npm fixture');
@@ -131,7 +131,7 @@ test('npm é localizado por Path quando Node não inclui npm, sem chamar wrapper
   assert.equal(npmExecutable({ Path: bin }, join(directory, 'isolated-node')), executable);
 });
 
-test('check Git distingue fontes de saídas e não gera arquivos no checkout', t => {
+test("check Git distinguishes sources of outputs and does not generate files in checkout", t => {
   const directory = join(fixture(t), 'source-check'); mkdirSync(directory);
   const put = (path, text = 'fixture') => { mkdirSync(dirname(join(directory, path)), { recursive: true }); writeFileSync(join(directory, path), text); };
   const git = (...args) => { const result = spawnSync('git', ['-C', directory, ...args], { encoding: 'utf8', shell: false }); assert.equal(result.status, 0, result.stderr); };
@@ -152,7 +152,7 @@ test('check Git distingue fontes de saídas e não gera arquivos no checkout', t
   assert.ok(guardSourceOnlyGit(directory).files > 0);
 });
 
-test('perfis portáteis cobrem cada suíte uma vez e o comando local executa todos', () => {
+test("portable profiles cover each suite once and the local command executes all", () => {
   assert.deepEqual(portableProfiles['portable-selection'], ['client-selection.test.mjs']);
   assert.deepEqual(portableProfiles['portable-selection-lifecycle'], [
     'exact-native-cli.test.mjs', 'agent-sidecar-sync.test.mjs', 'stale-agent-reference.test.mjs',
@@ -227,7 +227,7 @@ test('perfis portáteis cobrem cada suíte uma vez e o comando local executa tod
   ]);
 });
 
-test('classificação exige justificar cada suíte e detecta ausências e duplicatas', () => {
+test("classification requires justifying each suite and detects absences and duplicates", () => {
   const files = readdirSync(join(root, 'tests'));
   verifyPortableClassification(files);
   assert.throws(() => verifyPortableClassification([...files, 'nova.test.mjs']), /faltam: nova\.test\.mjs/);
@@ -236,7 +236,7 @@ test('classificação exige justificar cada suíte e detecta ausências e duplic
   assert.throws(() => verifyPortableClassification(['a.test.mjs'], { profiles: { a: [] }, fullOnly: { 'a.test.mjs': '' } }), /justificativa/);
 });
 
-test('perfil completo isola recuperação e obstruções pesadas e executa cada suíte uma vez', () => {
+test("Full profile isolates recovery and heavy obstructions and performs each suite once", () => {
   const files = readdirSync(join(root, 'tests'));
   const groups = fullTestGroups(files);
   assert.deepEqual(groups[0], ['concurrent-recovery.test.mjs']);
@@ -275,7 +275,7 @@ test('perfil completo isola recuperação e obstruções pesadas e executa cada 
   ]);
 });
 
-test('perfil completo não aceita filtro herdado que oculte testes', t => {
+test("Full profile does not accept inherited filter hiding tests", t => {
   const directory = fixture(t), file = join(directory, 'gate.test.mjs');
   writeFileSync(file, "import test from 'node:test'; test('required gate', () => { throw Error('gate-executed'); });\n");
   const stop = new Error('prova concluída'); let executed = false;
@@ -293,7 +293,7 @@ test('perfil completo não aceita filtro herdado que oculte testes', t => {
   assert.equal(executed, true);
 });
 
-test('gate do runner recusa TODO, skip sem motivo e execução sem prova, e preserva a justificativa', t => {
+test("runner gate refuses TODO, skip for no reason and execution without proof, and preserves the justification", t => {
   const directory = fixture(t);
   const runner = join(directory, 'gate.mjs');
   const passed = "test('executado', () => {});";
@@ -316,7 +316,7 @@ test('gate do runner recusa TODO, skip sem motivo e execução sem prova, e pres
   assert.throws(() => executeNode(directory, ['--test', runner, empty]), /sem evidência completa/);
 });
 
-test('as suítes de obstrução particionam os cinco casos sem duplicar cobertura', () => {
+test("the obstruction suites partition the five cases without doubling coverage.", () => {
   assert.deepEqual(obstructionKinds, ['root-link', 'skills-file', 'group-file', 'leaf-link', 'leaf-directory']);
   const codexFile = join(root, 'tests/client-selection-obstructions-codex.test.mjs');
   assert.ok(readFileSync(codexFile, 'utf8').includes("registerObstructionTests('codex')"));
@@ -334,7 +334,7 @@ test('as suítes de obstrução particionam os cinco casos sem duplicar cobertur
   assert.equal(new Set(covered).size, obstructionKinds.length);
 });
 
-test('matriz roda cada grupo portátil exatamente uma vez em cada SO e falhas bloqueiam o CI', () => {
+test("matrix rotates each portable group exactly once in each OS and failures block the CI", () => {
   const workflow = readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8');
   assert.match(workflow, /fail-fast:\s*false/);
   assert.doesNotMatch(workflow, /continue-on-error:/);
@@ -384,7 +384,7 @@ test('executor informa status e sinal do processo que falhou', () => {
   assert.throws(() => executeNode(root, ['-e', 'process.exit(7)']), /status=7; sinal=none; erro=none/);
 });
 
-test('seleção aguarda o CI correto e recusa origem de PR, fork, branch ou SHA diferentes', async () => {
+test("selection awaits the correct IC and refusal source of PR, fork, branch or SHA different", async () => {
   let clock = 0, polls = 0;
   const request = async (_method, path) => {
     if (path.includes('/git/ref/')) return reference;
@@ -402,7 +402,7 @@ test('seleção aguarda o CI correto e recusa origem de PR, fork, branch ou SHA 
   assert.deepEqual(found, resolution); assert.equal(polls, 2);
 });
 
-test('tag anotada é resolvida; artefato expirado não provoca novo build', async () => {
+test("annotated tag is resolved; expired artifact does not cause new build", async () => {
   const calls = [];
   const request = async (method, path) => {
     calls.push([method, path]);
@@ -415,14 +415,14 @@ test('tag anotada é resolvida; artefato expirado não provoca novo build', asyn
   assert(calls.every(([method]) => method === 'GET'));
 });
 
-test('ausência de CI termina no limite sem publicar ou disparar workflow', async () => {
+test("absence of IC ends at the limit without publishing or firing workflow", async () => {
   let clock = 0, requests = 0;
   const request = async (_method, path) => { requests++; return path.includes('/git/ref/') ? reference : { workflow_runs: [] }; };
   await assert.rejects(resolveVerifiedPackage({ repository, tag: 'v1.2.3', request, now: () => clock, sleep: async ms => { clock += ms; }, pollMs: 5, timeoutMs: 10 }), /Tempo esgotado/);
   assert.equal(clock, 10); assert.equal(requests, 4);
 });
 
-test('verificação exige bytes, checksum, commit e execução aprovados', t => {
+test("verification requires approved bytes, checksum, commit and execution", t => {
   const directory = fixture(t);
   assert.equal(verifyDistribution(directory, resolution).archive.toString(), 'exact archive bytes');
   for (const change of [
@@ -442,7 +442,7 @@ test('verificação exige bytes, checksum, commit e execução aprovados', t => 
   assert.throws(() => verifyDistribution(directory, resolution), /SHA256SUMS/);
 });
 
-test('publicação envia os bytes verificados e só torna pública após ambos uploads', async t => {
+test("post sends verified bytes and only makes public after both uploads", async t => {
   const directory = fixture(t), calls = [];
   const request = async (method, path, body) => {
     calls.push({ method, path, body });
@@ -462,7 +462,7 @@ test('publicação envia os bytes verificados e só torna pública após ambos u
   assert.deepEqual(writes[3].body, { draft: false });
 });
 
-test('CI reprovado, tag movida e release existente bloqueiam qualquer escrita', async t => {
+test("IC failed, tag moved and release existing block any writing", async t => {
   const directory = fixture(t);
   for (const scenario of ['failed', 'moved', 'existing']) {
     const request = async (method, path) => {
@@ -476,7 +476,7 @@ test('CI reprovado, tag movida e release existente bloqueiam qualquer escrita', 
   }
 });
 
-test('origem aprovada pode ser revalidada sem criar uma release', async () => {
+test("approved origin can be revalidated without creating a release", async () => {
   const calls = [];
   const request = async (method, path) => {
     calls.push([method, path]);
@@ -494,7 +494,7 @@ test('origem aprovada pode ser revalidada sem criar uma release', async () => {
   await assert.rejects(assertApprovedSource(resolution, async (_method, path) => path.endsWith('/actions/runs/42') ? run : { object: { type: 'commit', sha: 'b'.repeat(40) } }), /tag mudou/);
 });
 
-test('falha no upload mantém draft e não publica parcialmente', async t => {
+test("upload failure keeps draft and does not partially publish", async t => {
   const directory = fixture(t), writes = [];
   const request = async (method, path) => {
     if (path.endsWith('/actions/runs/42')) return run;
@@ -508,7 +508,7 @@ test('falha no upload mantém draft e não publica parcialmente', async t => {
   assert.deepEqual(writes, ['POST', 'POST']);
 });
 
-test('staging não reempacota; pacote alterado é recusado antes de marcar aprovação', t => {
+test("staging does not repackage; modified package is refused before marking approval", t => {
   const directory = fixture(t), runner = mkdtempSync(join(root, '.agent-tests', 'runner-test-'));
   t.after(() => rmSync(runner, { recursive: true, force: true }));
   const sourceBefore = readFileSync(join(directory, 'package-manifest.json'));
@@ -530,8 +530,8 @@ test('cliente HTTP limita o token aos hosts oficiais e propaga falhas', async ()
   await assert.rejects(request('POST', 'https://other.example/upload'), /Destino/);
 });
 
-// A criação da tag é isolada da publicação e não chama a rede nestes testes.
-test('tag automática cria referência para o commit da matriz e dispara release explicitamente', async () => {
+// The creation of the tag is isolated from the publication and does not call the network in these tests.
+test("auto tag creates reference for matrix commit and shoots release explicitly", async () => {
   const { autoTagRelease } = await import('../scripts/release/auto-tag.mjs');
   const f = autoTagFixture();
   const result = await autoTagRelease(f.options);
@@ -570,7 +570,7 @@ function autoTagFixture({ currentVersion = version, beforeVersion = '1.2.2', exi
   return { options: { event, environment, checkoutCommit: commit, packageInfo, lock, request }, event, environment, packageInfo, lock, calls, writes };
 }
 
-test('tag recém-criada aguarda visibilidade sem repetir a criação ou relaxar a conferência do commit', async t => {
+test("newly created tag awaits visibility without repeating creation or relaxing the commit conference", async t => {
   const { autoTagRelease } = await import('../scripts/release/auto-tag.mjs');
   const expected = { object: { type: 'commit', sha: commit } };
   const different = { object: { type: 'commit', sha: 'd'.repeat(40) } };
@@ -595,7 +595,7 @@ test('tag recém-criada aguarda visibilidade sem repetir a criação ou relaxar 
   });
 });
 
-test('tag automática recusa evento não confiável, versão divergente e branch remoto inválido antes de escrever', async () => {
+test("auto tag refuses unreliable event, divergent version and invalid remote branch before writing", async () => {
   const { autoTagRelease } = await import('../scripts/release/auto-tag.mjs');
   const changes = [
     f => { f.environment.GITHUB_EVENT_NAME = 'pull_request'; },
@@ -623,7 +623,7 @@ test('tag automática recusa evento não confiável, versão divergente e branch
   assert.equal((await autoTagRelease(f.options)).reason, 'branch-advanced'); assert.deepEqual(f.writes, []);
 });
 
-test('tag automática não move versão publicada e rejeita colisão ou histórico inacessível', async () => {
+test("auto tag does not move published version and rejects inaccessible collision or history", async () => {
   const { autoTagRelease } = await import('../scripts/release/auto-tag.mjs');
   const existing = { object: { type: 'commit', sha: 'c'.repeat(40) } };
   const published = { tag_name: 'v1.2.3', draft: false };
@@ -639,7 +639,7 @@ test('tag automática não move versão publicada e rejeita colisão ou históri
   await assert.rejects(autoTagRelease(f.options), /anterior não disponível/); assert.deepEqual(f.writes, []);
 });
 
-test('tag automática consulta CI exato e artefato atual antes de qualquer alteração', async () => {
+test("auto tag exact CI query and current artifact before any change", async () => {
   const { autoTagRelease } = await import('../scripts/release/auto-tag.mjs');
   const badRuns = [
     { ...run, conclusion: 'failure' }, { ...run, status: 'in_progress' },
@@ -656,7 +656,7 @@ test('tag automática consulta CI exato e artefato atual antes de qualquer alter
   }
 });
 
-test('tag automática bloqueia downgrade de latest com comparação inteira sem overflow', async () => {
+test("auto tag blocks downgrade of later with whole comparison without overflow", async () => {
   const { autoTagRelease } = await import('../scripts/release/auto-tag.mjs');
   for (const [currentVersion, beforeVersion] of [
     ['1.2.3', '1.2.4'], ['1.9.9', '2.0.0'],
@@ -670,7 +670,7 @@ test('tag automática bloqueia downgrade de latest com comparação inteira sem 
   assert.equal((await autoTagRelease(f.options)).status, 'dispatched');
 });
 
-test('tag maior impede publicação mesmo após commit sem mudança de versão; ignora pré-releases', async () => {
+test("major tag prevents publication even after commit without version change; skip pre-releases", async () => {
   const { autoTagRelease } = await import('../scripts/release/auto-tag.mjs');
   let f = autoTagFixture({ currentVersion: '1.2.3', beforeVersion: '1.2.3', onCall: ({ path }) => path.endsWith('/git/matching-refs/tags/v') ? { handled: true, value: [{ ref: 'refs/tags/v1.2.4' }] } : null });
   await assert.rejects(autoTagRelease(f.options), /inferior a uma tag existente/); assert.deepEqual(f.writes, []);
@@ -680,7 +680,7 @@ test('tag maior impede publicação mesmo após commit sem mudança de versão; 
   await assert.rejects(autoTagRelease(f.options), /inferior a uma tag existente/); assert.deepEqual(f.writes, []);
 });
 
-test('tag automática retoma tag criada no mesmo commit e evita despachar release existente ou em andamento', async () => {
+test("auto tag resume tag created in the same commit and avoid dispatching existing or ongoing release", async () => {
   const { autoTagRelease } = await import('../scripts/release/auto-tag.mjs');
   const existing = { object: { type: 'commit', sha: commit } };
   let f = autoTagFixture({ existing });
@@ -695,7 +695,7 @@ test('tag automática retoma tag criada no mesmo commit e evita despachar releas
   assert.equal((await autoTagRelease(f.options)).reason, 'release-in-progress'); assert.deepEqual(f.writes, []);
 });
 
-test('tag automática resolve tags anotadas, concorrência e propagação de falhas sem mover referências', async () => {
+test("auto tag solves annotated tags, competition and fault propagation without moving references", async () => {
   const { autoTagRelease } = await import('../scripts/release/auto-tag.mjs');
   const annotated = { object: { type: 'tag', sha: 'c'.repeat(40) } };
   let f = autoTagFixture({ existing: annotated, onCall: ({ path }) => path.includes('/git/tags/') ? { handled: true, value: { object: { type: 'commit', sha: commit } } } : null });
@@ -721,7 +721,7 @@ test('tag automática resolve tags anotadas, concorrência e propagação de fal
   await assert.rejects(autoTagRelease(f.options), /HTTP 503/); assert.equal(f.writes.length, 2);
 });
 
-test('tag criada em CI concluída continua publicável se o branch avançar; tag movida impede dispatch', async () => {
+test("tag created in finished IC remains publicable if branch advances; tag moved prevents dismatch", async () => {
   const { autoTagRelease } = await import('../scripts/release/auto-tag.mjs');
   let branchReads = 0;
   let f = autoTagFixture({ onCall: ({ path }) => {
@@ -738,7 +738,7 @@ test('tag criada em CI concluída continua publicável se o branch avançar; tag
   assert.deepEqual(f.writes.map(x => x.path), [`/repos/${repository}/git/refs`]);
 });
 
-test('workflow real cria tag somente depois do CI concluído e chama release sem aguardá-la', () => {
+test("real workflow creates tag only after IC completed and calls release without waiting for it", () => {
   const workflow = readFileSync(join(root, '.github/workflows/auto-release.yml'), 'utf8');
   const job = workflow.split('\n  tag:\n')[1];
   assert.ok(job, 'Job tag ausente');
@@ -757,7 +757,7 @@ test('workflow real cria tag somente depois do CI concluído e chama release sem
   assert.doesNotMatch(job, /gh run watch|workflow.*wait/);
 });
 
-test('CI envia artefato da execução pelo caminho exclusivo e opção explícita', () => {
+test("IC sends execution artifact by unique path and explicit option", () => {
   const workflow=readFileSync(join(root,'.github/workflows/ci.yml'),'utf8');
   assert.match(workflow,/node scripts\/release\/pipeline\.mjs \$\{\{ matrix\.profile \}\} --github-output/);
   assert.match(workflow,/id: verify/);

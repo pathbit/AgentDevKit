@@ -39,7 +39,7 @@ test('coleta a spec escolhida e documentos configurados sem tocar Git', t => {
   protectedNames.forEach((name, index) => assert.deepEqual(fs.readFileSync(join(root, name)), before[index]));
 });
 
-test('não lê documentos quando a spec está fora da pasta configurada', t => {
+test("does not read documents when spec is outside the configured folder", t => {
   const { root, put } = fixture(t); put('fora/SPEC.md', '# Não selecionada\n');
   const open = fs.openSync, opened = [];
   t.mock.method(fs, 'openSync', (name, ...args) => { opened.push(name); return open(name, ...args); });
@@ -63,7 +63,7 @@ for (const target of ['.env', '.pbai4devs/private.md']) test(`configuração nã
   assert.ok(Object.values(result.documents).every(item => item.text === undefined && item.sha256 === undefined));
 });
 
-test('configuração ambígua não libera a coleta ou abre documentos', t => {
+test("ambiguous configuration does not release the collection or opens documents", t => {
   const { root } = fixture(t), state = join(root, '.pbai4devs/state/configuracao/ESTADO.md');
   fs.writeFileSync(state, fs.readFileSync(state, 'utf8').replace('  prd: docs/product/prd.md', '  prd: docs/product/prd.md\n    item: inesperado'));
   const open = fs.openSync, opened = [];
@@ -74,7 +74,7 @@ test('configuração ambígua não libera a coleta ou abre documentos', t => {
   assert.ok(Object.values(result.documents).every(item => item.text === undefined && item.sha256 === undefined));
 });
 
-test('descarta coleta quando o estado muda durante a releitura de outro documento', t => {
+test("discards collects when the state changes during rereading another document", t => {
   const { root } = fixture(t);
   const state = join(root, '.pbai4devs/state/configuracao/ESTADO.md');
   const design = join(root, 'docs/product/design.md');
@@ -102,7 +102,7 @@ for (const value of ['null', '~']) test(`documentos ${value} não aceita caminho
   assert.ok(Object.values(result.documents).every(item => item.text === undefined && item.sha256 === undefined));
 });
 
-test('spec explícita continua selecionada quando há mais de uma', t => {
+test("explicit spec remains selected when there is more than one", t => {
   const { root, put } = fixture(t); put('docs/specs/segunda/SPEC.md', '---\nstatus: rascunho\n---\n\n# Segunda\n');
   const result = gatherContext(root, 'docs/specs/primeira/SPEC.md');
   assert.equal(result.selection.status, 'selected'); assert.equal(result.documents.spec.path, 'docs/specs/primeira/SPEC.md');
@@ -119,7 +119,7 @@ test('spec ausente interrompe a coleta antes de abrir os documentos de produto',
   assert.ok(Object.values(result.documents).every(item => item.text === undefined && item.sha256 === undefined));
 });
 
-test('documento ausente não vira conteúdo vazio ou coleta completa', t => {
+test("missing document does not turn empty content or complete collection", t => {
   const { root } = fixture(t); fs.rmSync(join(root, 'docs/product/design.md'));
   const result = gatherContext(root, 'docs/specs/primeira/SPEC.md');
   assert.equal(result.documentsComplete, false); assert.equal(result.documents.design.status, 'missing');
@@ -138,7 +138,7 @@ test('rejeita link em ancestral sem ler o destino externo', t => {
   assert.equal(result.documents.design.text, undefined); assert.equal(fs.readFileSync(join(outside, 'design.md'), 'utf8'), 'segredo externo\n');
 });
 
-test('recusa arquivo grande ou UTF-8 inválido sem emitir conteúdo parcial', t => {
+test("refuses large file or UTF-8 invalid without issuing partial content", t => {
   const { root, put } = fixture(t);
   put('docs/product/design.md', Buffer.alloc(256 * 1024 + 1, 65));
   let result = gatherContext(root, 'docs/specs/primeira/SPEC.md');
@@ -150,7 +150,7 @@ test('recusa arquivo grande ou UTF-8 inválido sem emitir conteúdo parcial', t 
   assert.equal(result.documents.design.text, undefined);
 });
 
-test('descarta leitura alterada durante a coleta', t => {
+test("discards altered reading during collection", t => {
   const { root, put } = fixture(t), file = join(root, 'docs/product/design.md');
   const open = fs.openSync, read = fs.readSync; let target, changed = false;
   t.mock.method(fs, 'openSync', (name, ...args) => { const fd = open(name, ...args); if (name === file) target = fd; return fd; });
@@ -163,7 +163,7 @@ test('descarta leitura alterada durante a coleta', t => {
   assert.equal(changed, true); assert.equal(result.status, 'changed'); assert.equal(result.text, undefined);
 });
 
-test('seletor raw mantém JSON limpo e diferencia coleta completa, incompleta e entrada inválida', t => {
+test("Raw selector keeps JSON clean and differentiate complete collection, incomplete and invalid entry", t => {
   const { root } = fixture(t), scripts = new URL('../../', import.meta.url);
   for (const name of ['reunir-contexto-spec/SCRIPT.mjs', 'executar-script/SCRIPT.mjs', 'lib/runtime.mjs', 'lib/state-path.mjs', 'lib/project-metadata.mjs', 'lib/script-config.mjs']) {
     const target = join(root, '.pbai4devs/scripts', name); fs.mkdirSync(dirname(target), { recursive: true });

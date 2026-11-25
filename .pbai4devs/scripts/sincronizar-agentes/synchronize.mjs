@@ -232,6 +232,7 @@ function runSynchronization({ root = projectRoot, check = false, force = false, 
     try {
       let patterns = readFileSync(absolute(template), 'utf8');
       if (target !== '.pbai4devs/.gitignore') patterns = renderClientIgnore(patterns, ignoreClients[posix.dirname(target)]);
+      else if (installed?.local === true) patterns = `${patterns.trimEnd()}\n*`;
       merged = mergeGitignore(current, patterns);
     }
     catch (error) { fail(`${target}: ${error.message}`); }
@@ -323,7 +324,7 @@ function runSynchronization({ root = projectRoot, check = false, force = false, 
     const sourceText = ruleSourceBytes ? normalize(ruleSourceBytes.toString('utf8')) : read(safe(source));
     if (claudeRule) {
       claudeRuleInputs.set(target, metadata ? [[source, ruleSourceBytes], [metadata, metadataBytes]] : [[source, ruleSourceBytes]]);
-      // Referência legada exata não estabelece ownership nem ativação nativa.
+      // Exact legacy reference does not establish ownership or native activation.
       const legacyName = target.match(/^\.claude\/rules\/([a-z0-9]+(?:-[a-z0-9]+)*)\/RULE\.md$/)?.[1];
       const legacyTitle = sourceText.match(/^# [^\r\n]+$/m)?.[0];
       const legacyGenerated = legacyName && legacyTitle && !metadata && claudeRule.trigger === 'always_on'
@@ -450,8 +451,8 @@ function runSynchronization({ root = projectRoot, check = false, force = false, 
     if (!info?.isFile() || readFileSync(absolute(target), 'utf8') !== content) changed.push(target);
   }
   if (agents.has('.claude')) {
-    // Claude carrega regras mesmo em diretórios ignorados como .local/.cache.
-    // Limite ou erro de varredura bloqueia a escrita e mantém a proveniência.
+    // Claude carries rules even in ignored directories like .local/.cache.
+    // Scan limit or error blocks the writing and maintains the provenance.
     for (const item of scanRetainedClaude(root)) {
       const file = item.path;
       if (item.reason === 'claude-scan-incomplete') {
@@ -470,7 +471,7 @@ function runSynchronization({ root = projectRoot, check = false, force = false, 
           continue;
         }
       }
-      // Hash não comprova que inode, modo, ACL ou xattrs não mudaram.
+      // Hash doesn't prove that it does, so, ACL or xattrs haven't changed.
       protectedClaudeStale.add(file); remember(file, 'claude-metadata-unverified');
       conflicts.add(file); protectedConflicts.add(file);
     }
@@ -588,7 +589,7 @@ function runSynchronization({ root = projectRoot, check = false, force = false, 
   });
   const summary = { changed: changed.length + rootEntryChanges.length, stale: removals.length, conflicts: conflicts.size, missing: missing.length, legacy: legacy.length, registries: registries.size, gitignores: ignoreFiles.size, manifests: configExists ? 0 : 1, localIgnores: localStatus.changed + localStatus.missing.length + localStatus.trackedOutputs.length + (localStatus.pending?.filter(isBlockingLocalIgnore).length || 0) + (localStatus.status === 'no-git' ? 1 : 0) };
   const retainedClaudeRules = agents.has('.claude') ? [] : scanRetainedClaude(root);
-  // Qualquer obstrução em rules pode ocultar instruções, mesmo sem omissões.
+  // Any obstruction in rules can hide instructions, even without omissions.
   const activeClaudeBoundaries = agents.has('.claude') ? [...preserved].filter(([path, item]) =>
     (path === '.claude' || path === '.claude/rules' || path.startsWith('.claude/rules/'))
       && ['symbolic-link', 'non-directory', 'non-file'].includes(item.reason)) : [];
@@ -611,7 +612,7 @@ function runSynchronization({ root = projectRoot, check = false, force = false, 
   if (lineEndingConflicts.length) output(`Finais de linha divergentes preservados; revise antes de sincronizar: ${lineEndingConflicts.slice(0, 10).map(path => JSON.stringify(path)).join(', ')}${lineEndingConflicts.length > 10 ? ` (+${lineEndingConflicts.length - 10})` : ''}`);
   const claudeRetiredTargets = [...omittedClaude.entries()].map(([target, item]) => ({ target, source: item.source, trigger: item.trigger }));
   // Um alvo legado preservado pode continuar sendo carregado globalmente.
-  // Uma omissão descreve o plano, não comprova o estado ativo no cliente.
+  // An omission describes the plan, does not prove the active status of the client.
   const claudeScopeConflicted = claudeScopeBoundaries.size > 0 || activeClaudeBoundaries.length > 0 || [...conflicts].some(path => path.startsWith('.claude/rules/'));
   const scopeOmissions = [...omittedClaude.entries()]
     .filter(([, item]) => ![...entries].some(([target, entry]) => target.startsWith('.claude/rules/') && entry.source === item.source))

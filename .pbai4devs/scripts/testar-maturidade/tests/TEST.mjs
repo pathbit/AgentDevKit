@@ -25,7 +25,7 @@ const spawnSync = (command, args, options = {}) => {
   return childProcess.spawnSync(command, ['-c', 'core.fsmonitor=false', ...args], { ...options, env });
 };
 
-// As fixtures pequenas isolam a cópia; o caso source-only usa o renderizador real.
+// Small fixtures isolate copy; the source-only case uses the real renderer.
 const prepareExamples = options => prepare({ ...options, renderResources: () => {} });
 
 requireNode();
@@ -90,7 +90,7 @@ function gitFixtureSnapshot(directory) {
   return snapshot;
 }
 
-test('inicialização do exemplo não herda diretório, worktree ou índice Git externo', t => {
+test("example startup does not inherit directory, worktree or external Git index", t => {
   const { root, space, outputRoot } = fixture(t), external = join(space, 'external');
   const env = isolatedGitEnvironment();
   let result = spawnSync('git', ['init', '--quiet', '--template=', external], { env, encoding: 'utf8' }); assert.equal(result.status, 0, result.stderr);
@@ -109,7 +109,7 @@ test('inicialização do exemplo não herda diretório, worktree ou índice Git 
   assert.equal(result.status, 0, result.stderr); assert.equal(realpathSync(result.stdout.trim()), realpathSync(example.root));
 });
 
-test('comparação de índice considera nomes curtos Windows sem til e distingue entradas reais', t => {
+test("index comparison considers Windows short names without til and distinguishes real entries", t => {
   const root = mkdtempSync(join(realpathSync(tmpdir()), 'maturity-short-name-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const staged = 'tmp/ALT/human', target = 'tmp/long-directory/run';
@@ -123,7 +123,7 @@ test('comparação de índice considera nomes curtos Windows sem til e distingue
   assert.equal(mayAliasPath('tmp/LONGDI~1/human', target, { root, platform: 'win32' }), existsSync(join(root, 'tmp', 'LONGDI~1')));
 });
 
-test('fluxo de maturidade simulado em Windows aceita ancestral de saída ausente e src staged existente', t => {
+test("simulated maturity flow on Windows accepts absent output ancestor and src staged existing", t => {
   const { root } = fixture(t), target = join(root, 'tmp', 'long-directory', 'run');
   let result = spawnSync('git', ['init', '--quiet', '--template=', root], { encoding: 'utf8' }); assert.equal(result.status, 0, result.stderr);
   writeFileSync(join(root, '.gitignore'), '/tmp/\n'); mkdirSync(join(root, 'src'));
@@ -141,7 +141,7 @@ test('fluxo de maturidade simulado em Windows aceita ancestral de saída ausente
   assert.deepEqual(readFileSync(join(root, '.git/index')), index);
 });
 
-test('Windows nativo ou simulado recusa nome curto staged ausente sem alterar índice', t => {
+test("Native or simulated Windows refusal short name staged missing without changing index", t => {
   const { root } = fixture(t), target = join(root, 'tmp', 'long-directory');
   let result = spawnSync('git', ['init', '--quiet', '--template=', root], { encoding: 'utf8' }); assert.equal(result.status, 0, result.stderr);
   writeFileSync(join(root, '.gitignore'), '/tmp/\n'); mkdirSync(join(root, 'tmp'));
@@ -155,7 +155,7 @@ test('Windows nativo ou simulado recusa nome curto staged ausente sem alterar í
   assert.equal(existsSync(target), false); assert.deepEqual(readFileSync(join(root, '.git/index')), before);
 });
 
-test('índice com alias Unicode decomposto bloqueia saída composta antes da criação', t => {
+test("index with unicode decomposed alias blocks composite output before creation", t => {
   const { root } = fixture(t), target = join(root, 'tmp', 'é', 'run');
   let result = spawnSync('git', ['init', '--quiet', '--template=', root], { encoding: 'utf8' }); assert.equal(result.status, 0, result.stderr);
   result = spawnSync('git', ['-C', root, 'config', 'core.precomposeunicode', 'false'], { encoding: 'utf8' }); assert.equal(result.status, 0, result.stderr);
@@ -167,7 +167,7 @@ test('índice com alias Unicode decomposto bloqueia saída composta antes da cri
   assert.equal(existsSync(target), false); assert.deepEqual(readFileSync(join(root, '.git/index')), index);
 });
 
-test('prefixo de projeto decomposto encontra alias composto no índice', t => {
+test("decomposed design prefix finds alias compound in the index", t => {
   const { space } = fixture(t), repo = join(space, 'repo-unicode');
   let result = spawnSync('git', ['init', '--quiet', '--template=', repo], { encoding: 'utf8' }); assert.equal(result.status, 0, result.stderr);
   result = spawnSync('git', ['-C', repo, 'config', 'core.precomposeunicode', 'false'], { encoding: 'utf8' }); assert.equal(result.status, 0, result.stderr);
@@ -182,7 +182,7 @@ test('prefixo de projeto decomposto encontra alias composto no índice', t => {
   assert.equal(existsSync(target), false); assert.deepEqual(readFileSync(join(repo, '.git/index')), index);
 });
 
-test('ignore local respeita configuração global Git efetiva e injetada', t => {
+test("Ignore local respects effective and injected global Git configuration", t => {
   const { root, space } = fixture(t), home = join(space, 'test-home'); mkdirSync(home);
   const configuredIgnore = join(space, 'configured-ignore'), emptyIgnore = join(space, 'empty-ignore');
   writeFileSync(configuredIgnore, 'tmp/\n'); writeFileSync(emptyIgnore, '');
@@ -212,7 +212,7 @@ test('ignore local respeita configuração global Git efetiva e injetada', t => 
   } finally { for (const key of keys) { if (previous[key] === undefined) delete process.env[key]; else process.env[key] = previous[key]; } }
 });
 
-test('consulta respeita COUNT ausente, zero e configuração Git injetada incompleta', t => {
+test("consultation respects COUNT missing, zero and incompletely injected Git configuration", t => {
   const { root, space } = fixture(t), config = join(space, 'effective-config');
   const ignored = join(space, 'ignored-global'), empty = join(space, 'empty-global');
   writeFileSync(ignored, '/tmp/\n'); writeFileSync(empty, ''); writeFileSync(config, '');
@@ -248,7 +248,7 @@ test('consulta respeita COUNT ausente, zero e configuração Git injetada incomp
   } finally { for (const name of names) { if (previous[name] === undefined) delete process.env[name]; else process.env[name] = previous[name]; } }
 });
 
-test('saída local recusa índice Git alternativo sem alterar nenhum índice', t => {
+test("local output refusal alternative Git index without changing any index", t => {
   const { root, space } = fixture(t), alternate = join(space, 'alternate-index');
   const env = isolatedGitEnvironment();
   let result = spawnSync('git', ['init', '--quiet', '--template=', root], { env, encoding: 'utf8' }); assert.equal(result.status, 0, result.stderr);
@@ -266,7 +266,7 @@ test('saída local recusa índice Git alternativo sem alterar nenhum índice', t
   assert.deepEqual(existsSync(defaultPath) ? readFileSync(defaultPath) : null, defaultBefore);
 });
 
-test('saída local aceita repositório com espaço no fim do nome', t => {
+test("local output accepts repository with space at the end of name", t => {
   if (process.platform === 'win32') { t.skip('Windows não permite diretório com espaço final pelo caminho convencional.'); return; }
   const { space } = fixture(t), root = join(space, 'repo-space ');
   const initialized = spawnSync('git', ['init', '--quiet', '--template=', root], { encoding: 'utf8' }); assert.equal(initialized.status, 0, initialized.stderr);
@@ -276,7 +276,7 @@ test('saída local aceita repositório com espaço no fim do nome', t => {
   assert.ok(existsSync(join(target, '.gitignore')));
 });
 
-test('índice com alias Unicode de case folding desconhecido bloqueia saída', t => {
+test("index with alias Unicode case folding unknown block output", t => {
   const { root } = fixture(t);
   let result = spawnSync('git', ['init', '--quiet', '--template=', root], { encoding: 'utf8' }); assert.equal(result.status, 0, result.stderr);
   writeFileSync(join(root, '.gitignore'), '/tmp/\n');
@@ -292,7 +292,7 @@ test('índice com alias Unicode de case folding desconhecido bloqueia saída', t
   assert.deepEqual(readFileSync(join(root, '.git/index')), index);
 });
 
-test('consultas Git não executam fsmonitor local nem injetado', t => {
+test("Git queries do not perform local fsmonitor or injected", t => {
   if (process.platform === 'win32') { t.skip('Hook sentinela usa /bin/sh.'); return; }
   const { root, space } = fixture(t), hook = join(space, 'monitor-hook'), marker = join(space, 'monitor-ran');
   let result = spawnSync('git', ['init', '--quiet', '--template=', root], { encoding: 'utf8' }); assert.equal(result.status, 0, result.stderr);
@@ -319,7 +319,7 @@ test('consultas Git não executam fsmonitor local nem injetado', t => {
   } finally { for (const key of keys) { if (previous[key] === undefined) delete process.env[key]; else process.env[key] = previous[key]; } }
 });
 
-test('fixtures isolam Git externo mesmo quando a suíte recebe ambiente contaminado', { timeout: 60000 }, t => {
+test("fixtures isolate external Git even when the suite receives contaminated environment", { timeout: 60000 }, t => {
   const { space } = fixture(t), external = join(space, 'external-test-suite');
   let result = spawnSync('git', ['init', '--quiet', '--template=', external], { encoding: 'utf8' }); assert.equal(result.status, 0, result.stderr);
   writeFileSync(join(external, 'human.txt'), 'staged\n');
@@ -333,7 +333,7 @@ test('fixtures isolam Git externo mesmo quando a suíte recebe ambiente contamin
   assert.deepEqual(gitFixtureSnapshot(gitDir), before, 'Suíte alterou o Git externo.');
 });
 
-test('runner sintético desativa fsmonitor da configuração global do usuário', t => {
+test("synthetic runner disables user global configuration fsmonitor", t => {
   if (process.platform === 'win32') { t.skip('Hook sentinela usa /bin/sh.'); return; }
   const { space } = fixture(t), scenario = join(space, 'runner-work'), gitConfig = join(space, 'runner-gitconfig');
   mkdirSync(scenario);
@@ -354,7 +354,7 @@ test('runner sintético desativa fsmonitor da configuração global do usuário'
   }
 });
 
-test('subprocesso de cenário isola Git externo e inicializa repositório local', t => {
+test("scenario subprocess isolates external Git and initializes local repository", t => {
   const { space } = fixture(t), external = join(space, 'runner-external'), scenario = join(space, 'runner-scenario');
   const env = isolatedGitEnvironment();
   let result = spawnSync('git', ['init', '--quiet', '--template=', external], { env, encoding: 'utf8' }); assert.equal(result.status, 0, result.stderr);
@@ -376,7 +376,7 @@ test('subprocesso de cenário isola Git externo e inicializa repositório local'
   assert.equal(result.status, 0, result.stderr); assert.equal(realpathSync(result.stdout.trim()), realpathSync(scenario));
 });
 
-test('copia recursos e configurações, excluindo payloads, caches e segredos', t => {
+test("copy features and settings, excluding payloads, caches and secrets", t => {
   const { root, put } = fixture(t);
   put('.pbai4devs/tools/demo/TOOL.json', '{}'); put('.pbai4devs/tools/demo/SCRIPT.mjs', 'export {};'); put('.pbai4devs/tools/demo/README.md', '# Tool');
   put('.pbai4devs/templates/demo/TEMPLATE.md', '# Template');
@@ -400,7 +400,7 @@ test('copia recursos e configurações, excluindo payloads, caches e segredos', 
   assert.deepEqual(result.roots, ['.pbai4devs', '.codex', '.github', '.agents', '.agent', '.gemini', '.vscode']);
 });
 
-test('destino explícito existente é recusado sem alterar projetos humanos ou gerados', t => {
+test("existing explicit destination is refused without altering human or generated projects", t => {
   const { root, put, outputRoot } = fixture(t);
   mkdirSync(join(outputRoot, 'anotacoes'), { recursive: true });
   writeFileSync(join(outputRoot, 'anotacoes/keep.txt'), 'preservado');
@@ -421,7 +421,7 @@ test('destino explícito existente é recusado sem alterar projetos humanos ou g
   assert.equal(existsSync(join(outputRoot, 'invalid')), false);
 });
 
-test('troca de ancestral por symlink antes da criação não escreve no destino externo', t => {
+test("switch from ancestor to symlink before creation does not write in external destination", t => {
   const { root, outputRoot } = fixture(t);
   const outside = mkdtempSync(join(dirname(root), 'maturity-outside-'));
   t.after(() => rmSync(outside, { recursive: true, force: true }));
@@ -455,7 +455,7 @@ test('troca de ancestral por symlink antes da criação não escreve no destino 
   }
 });
 
-test('troca de saída durante escrita é detectada, sem alegar atomicidade', t => {
+test("output exchange during writing is detected without claiming atomicity", t => {
   const { root, outputRoot } = fixture(t);
   mkdirSync(outputRoot);
   const target = join(outputRoot, 'race-output'), outside = mkdtempSync(join(root, 'race-outside-'));
@@ -478,13 +478,13 @@ test('troca de saída durante escrita é detectada, sem alegar atomicidade', t =
   } finally { fs.writeFileSync = original; syncBuiltinESMExports(); }
   assert.equal(injected, true);
   assert.equal(readFileSync(sentinel, 'utf8'), 'Não alterar.\n');
-  // O write já em curso pode ter criado o marcador no destino externo: a
-  // verificação detecta a troca, mas não é uma operação atômica de diretório.
+  // Writing already in progress may have created the marker in the external destination: a
+  // verification detects the exchange, but it's not an atomic directory operation.
   assert.equal(existsSync(join(outside, '.maturity-suite.json')), true);
   assert.equal(existsSync(join(outside, 'REPORT.json')), false);
 });
 
-test('cada destino padrão é exclusivo, fica fora de Git e preserva provas anteriores', t => {
+test("Each default destination is unique, stays out of Git and preserves previous proofs", t => {
   const { root, space } = fixture(t);
   const git = (...args) => {
     const result = spawnSync('git', ['-C', root, ...args], { encoding: 'utf8', shell: false });
@@ -510,7 +510,7 @@ test('cada destino padrão é exclusivo, fica fora de Git e preserva provas ante
   }
 });
 
-test('recusa saída não ignorada dentro de Git antes de copiar ou alterar índice', t => {
+test("refusal output not ignored within Git before copying or changing index", t => {
   const { root, put } = fixture(t);
   const git = (...args) => { const r = spawnSync('git', ['-C', root, ...args], { encoding: 'utf8' }); assert.ifError(r.error); assert.equal(r.status, 0, r.stderr); return r.stdout; };
   git('init', '--quiet', '--template=');
@@ -526,7 +526,7 @@ test('recusa saída não ignorada dentro de Git antes de copiar ou alterar índi
   assert.equal(existsSync(join(root, 'examples/generated/run')), false);
 });
 
-test('aceita tmp explicitamente ignorado sem alterar índice ou ignore humano', t => {
+test("explicitly ignored tmp without changing index or ignoring human", t => {
   const { root, put } = fixture(t), tmp = join(root, 'tmp'), target = join(tmp, 'run');
   const git = (...args) => { const r = spawnSync('git', ['-C', root, ...args], { encoding: 'utf8' }); assert.ifError(r.error); assert.equal(r.status, 0, r.stderr); return r.stdout; };
   git('init', '--quiet', '--template='); put('.gitignore', '/tmp/\n'); put('human.txt', 'staged\n'); git('add', '--', '.gitignore', 'human.txt'); mkdirSync(tmp);
@@ -538,7 +538,7 @@ test('aceita tmp explicitamente ignorado sem alterar índice ou ignore humano', 
   git('add', '-A'); assert.equal(git('ls-files', '--', 'tmp/run').trim(), '');
 });
 
-test('aceita raiz tmp ainda ausente ignorada por regra exclusiva de diretório', t => {
+test("accepts still missing tmp root ignored by exclusive directory rule", t => {
   const { root, put } = fixture(t), target = join(root, 'tmp');
   const init = spawnSync('git', ['init', '--quiet', '--template=', root], { encoding: 'utf8' }); assert.equal(init.status, 0, init.stderr);
   put('.gitignore', '/tmp/\n'); put('human.txt', 'preservado\n');
@@ -552,7 +552,7 @@ test('aceita raiz tmp ainda ausente ignorada por regra exclusiva de diretório',
   assert.equal(readFileSync(join(root, 'human.txt'), 'utf8'), 'preservado\n');
 });
 
-test('recusa diretório de saída cujo ancestral é arquivo staged ausente', t => {
+test("refuses output directory whose ancestor is missing staged file", t => {
   const { root, put } = fixture(t), target = join(root, 'tmp', 'run');
   const init = spawnSync('git', ['init', '--quiet', '--template=', root], { encoding: 'utf8' }); assert.equal(init.status, 0, init.stderr);
   put('.gitignore', '/tmp/\n'); put('tmp', 'arquivo humano staged\n');
@@ -564,7 +564,7 @@ test('recusa diretório de saída cujo ancestral é arquivo staged ausente', t =
   assert.deepEqual(readFileSync(join(root, '.git/index')), index); assert.deepEqual(readFileSync(join(root, '.gitignore')), ignore);
 });
 
-test('cria ancestrais ausentes de tmp ignorado sem tocar índice ou conteúdo humano', t => {
+test("creates absent ancestors of ignored tmp without touching human content or index", t => {
   const { root, put } = fixture(t), target = join(root, 'tmp', 'examples', 'run');
   const git = (...args) => { const r = spawnSync('git', ['-C', root, ...args], { encoding: 'utf8' }); assert.ifError(r.error); assert.equal(r.status, 0, r.stderr); return r.stdout; };
   git('init', '--quiet', '--template='); put('.gitignore', '/tmp/\n'); put('human.txt', 'staged humano\n'); git('add', '--', '.gitignore', 'human.txt');
@@ -576,7 +576,7 @@ test('cria ancestrais ausentes de tmp ignorado sem tocar índice ou conteúdo hu
   assert.deepEqual(readFileSync(join(root, '.git/index')), beforeIndex); assert.deepEqual(readFileSync(join(root, '.gitignore')), beforeIgnore);
 });
 
-test('não cria ancestrais locais se ignore não proteger o destino', t => {
+test("does not create local ancestors if ignore not protecting fate", t => {
   const { root, put } = fixture(t), target = join(root, 'tmp', 'examples', 'run');
   const initialized = spawnSync('git', ['init', '--quiet', '--template=', root], { encoding: 'utf8' }); assert.equal(initialized.status, 0, initialized.stderr);
   put('.gitignore', '/outra-pasta/\n');
@@ -584,7 +584,7 @@ test('não cria ancestrais locais se ignore não proteger o destino', t => {
   assert.equal(existsSync(join(root, 'tmp')), false); assert.equal(readFileSync(join(root, '.gitignore'), 'utf8'), '/outra-pasta/\n');
 });
 
-test('link criado concorrentemente no ancestral ausente não é seguido', t => {
+test("link created concurrently in the absent ancestor is not followed", t => {
   const { root, put, space } = fixture(t), outside = join(space, 'outside-user'), target = join(root, 'tmp', 'examples', 'run');
   mkdirSync(outside); writeFileSync(join(outside, 'human.txt'), 'não alterar\n');
   const probe = join(space, 'link-capability');
@@ -606,7 +606,7 @@ test('link criado concorrentemente no ancestral ausente não é seguido', t => {
   assert.deepEqual(readFileSync(join(root, '.git/index')), index); assert.deepEqual(readFileSync(join(root, '.gitignore')), ignore);
 });
 
-test('consulta índice grande integralmente e bloqueia aliases ou ambiguidades Unicode', t => {
+test("index consultation in full and blocks aliases or ambiguities Unicode", t => {
   const { root, put } = fixture(t);
   const git = (args, input) => { const r = spawnSync('git', ['-C', root, ...args], { input, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 }); assert.ifError(r.error); assert.equal(r.status, 0, r.stderr); return r.stdout; };
   git(['init', '--quiet', '--template=']); put('.gitignore', '/[Tt][Mm][Pp]/\n');
@@ -634,7 +634,7 @@ test('consulta índice grande integralmente e bloqueia aliases ou ambiguidades U
   assert.deepEqual(readFileSync(join(root, '.git/index')), beforeIndex); assert.deepEqual(readFileSync(join(root, '.gitignore')), beforeIgnore);
 });
 
-test('projeto aninhado aceita saída ignorada e preserva staged de projeto irmão', t => {
+test("nested project accepts ignored output and preserves staged sibling project", t => {
   const { space } = fixture(t), repo = space, source = join(repo, 'packages', 'app'), sibling = join(repo, 'packages', 'other');
   mkdirSync(source, { recursive: true }); mkdirSync(sibling, { recursive: true });
   const git = (...args) => { const r = spawnSync('git', ['-C', repo, ...args], { encoding: 'utf8' }); assert.ifError(r.error); assert.equal(r.status, 0, r.stderr); return r.stdout; };
@@ -670,7 +670,7 @@ test('projeto aninhado detecta aliases staged Unicode no prefixo e no destino', 
   assert.deepEqual(readFileSync(join(repo, '.git/index')), index); assert.deepEqual(readFileSync(join(repo, '.gitignore')), ignore);
 });
 
-test('índice inteiro é consultado quando prefixo aninhado não permite filtro Unicode seguro', t => {
+test("whole index is consulted when nested prefix does not allow Unicode filter safe", t => {
   const { space } = fixture(t), repo = space, source = join(repo, 'kappa', 'app'); mkdirSync(source, { recursive: true });
   const git = (args, input) => { const r = spawnSync('git', ['-C', repo, ...args], { input, encoding: 'utf8' }); assert.ifError(r.error); assert.equal(r.status, 0, r.stderr); return r.stdout; };
   git(['init', '--quiet', '--template=']); writeFileSync(join(repo, '.gitignore'), '/kappa/app/tmp/\n');
@@ -686,7 +686,7 @@ test('índice inteiro é consultado quando prefixo aninhado não permite filtro 
   assert.equal(existsSync(join(source, 'tmp')), false); assert.deepEqual(readFileSync(join(repo, '.git/index')), index); assert.deepEqual(readFileSync(join(repo, '.gitignore')), ignore);
 });
 
-test('projeto aninhado recusa alias staged Unicode em componente intermediário', t => {
+test("nested project refusal alias staged Unicode in intermediate component", t => {
   const { space } = fixture(t), repo = space, source = join(repo, 'packages', 'kit'); mkdirSync(source, { recursive: true });
   const git = (args, input) => { const r = spawnSync('git', ['-C', repo, ...args], { input, encoding: 'utf8' }); assert.ifError(r.error); assert.equal(r.status, 0, r.stderr); return r.stdout; };
   git(['init', '--quiet', '--template=']); writeFileSync(join(repo, '.gitignore'), '/packages/kit/tmp/\n');
@@ -697,7 +697,7 @@ test('projeto aninhado recusa alias staged Unicode em componente intermediário'
   assert.equal(existsSync(join(source, 'tmp')), false); assert.deepEqual(readFileSync(join(repo, '.git/index')), index); assert.deepEqual(readFileSync(join(repo, '.gitignore')), ignore);
 });
 
-test('recusa alias Unicode staged quando minúscula expande em ASCII e combinante', t => {
+test("Unicode staged alias refusal when lowercase expands on ASCII and combinant", t => {
   const { space } = fixture(t), repo = space, source = join(repo, 'i\u0307dea', 'app'); mkdirSync(source, { recursive: true });
   const git = (args, input) => { const r = spawnSync('git', ['-C', repo, ...args], { input, encoding: 'utf8' }); assert.ifError(r.error); assert.equal(r.status, 0, r.stderr); return r.stdout; };
   git(['init', '--quiet', '--template=']); writeFileSync(join(repo, '.gitignore'), '/i\u0307dea/app/tmp/\n');
@@ -732,7 +732,7 @@ test('recusa destino ignorado com entrada staged ausente no disco', t => {
   assert.equal(git('show', ':tmp/run/human.txt'), 'conteúdo humano staged\n');
 });
 
-test('mudança concorrente que remove ignore local é detectada sem ocultar o limite', t => {
+test("concurrent change that removes ignore local is detected without hiding the limit", t => {
   const { root, put } = fixture(t), target = join(root, 'tmp', 'run');
   let r = spawnSync('git', ['init', '--quiet', '--template=', root], { encoding: 'utf8' }); assert.equal(r.status, 0, r.stderr);
   put('.gitignore', '/tmp/\n'); mkdirSync(join(root, 'tmp')); let injected = false;
@@ -742,11 +742,11 @@ test('mudança concorrente que remove ignore local é detectada sem ocultar o li
   try { assert.throws(() => prepareExamples({ sourceRoot: root, outputRoot: target, scenarios: [SCENARIOS[0]], initializeGit: false }), /precisa estar ignorada/); }
   finally { fs.copyFileSync = original; syncBuiltinESMExports(); }
   assert.equal(injected, true); assert.equal(readFileSync(join(root, '.gitignore'), 'utf8'), '# removido pelo usuário\n');
-  // Entre as verificações um processo concorrente pode usar git add -f: isso
-  // não constitui uma garantia atômica de que arquivos não serão staged.
+  // Between checks a concurrent process can use git add -f: this
+  // does not constitute an atomic guarantee that files will not be staged.
 });
 
-test('remoção do ignore da execução é detectada sem editar o ignore do projeto', t => {
+test("ignore execution removal is detected without editing project ignore", t => {
   const { root, put } = fixture(t), target = join(root, 'tmp', 'run');
   const initialized = spawnSync('git', ['init', '--quiet', '--template=', root], { encoding: 'utf8' }); assert.equal(initialized.status, 0, initialized.stderr);
   put('.gitignore', '/tmp/\n'); mkdirSync(join(root, 'tmp')); let injected = false;
@@ -767,7 +767,7 @@ test('recusa TMPDIR dentro de Git, inclusive fora da origem e ignorado', t => {
   assert.deepEqual(readdirSync(local), []);
 });
 
-test('recusa destinos em repositório bare e ignora GIT_DIR/GIT_CEILING_DIRECTORY herdados', t => {
+test("refuses destinations in a bare repository and ignores GIT_DIR/GIT_CEILING_DIRECTORY inherited", t => {
   const { root, space } = fixture(t), bare = join(space, 'bare.git'), repo = join(space, 'git-work'); mkdirSync(repo);
   for (const args of [['init', '--bare', '--quiet', bare], ['init', '--quiet', '--template=', repo]]) { const r = spawnSync('git', args, { encoding: 'utf8' }); assert.equal(r.status, 0, r.stderr); }
   const previous = { GIT_DIR: process.env.GIT_DIR, GIT_CEILING_DIRECTORIES: process.env.GIT_CEILING_DIRECTORIES };
@@ -779,7 +779,7 @@ test('recusa destinos em repositório bare e ignora GIT_DIR/GIT_CEILING_DIRECTOR
   assert.equal(existsSync(join(bare, 'unsafe')), false); assert.equal(existsSync(join(repo, 'unsafe')), false);
 });
 
-test('repo bare é recusado antes de consultar Git que mente sobre o diretório', t => {
+test("repo bare is refused before consulting Git who lies about the directory", t => {
   const { root, space } = fixture(t), bare = join(space, 'bare.git'), parent = join(bare, 'outputs');
   const r = spawnSync('git', ['init', '--bare', '--quiet', bare], { encoding: 'utf8' }); assert.equal(r.status, 0, r.stderr); mkdirSync(parent);
   const head = readFileSync(join(bare, 'HEAD')), config = readFileSync(join(bare, 'config')); let invoked = false;
@@ -791,7 +791,7 @@ test('repo bare é recusado antes de consultar Git que mente sobre o diretório'
   assert.deepEqual(readFileSync(join(bare, 'HEAD')), head); assert.deepEqual(readFileSync(join(bare, 'config')), config);
 });
 
-test('repo bare é recusado mesmo com Git falso no PATH', t => {
+test("repo bare is refused even with fake Git in PATH", t => {
   if (process.platform === 'win32') { t.skip('Fixture de executável falso usa /bin/sh; a proteção bare foi testada acima.'); return; }
   const { root, space } = fixture(t), bare = join(space, 'bare.git'), parent = join(bare, 'outputs'), bin = join(space, 'fake-bin');
   const r = spawnSync('git', ['init', '--bare', '--quiet', bare], { encoding: 'utf8' }); assert.equal(r.status, 0, r.stderr); mkdirSync(parent); mkdirSync(bin);
@@ -802,7 +802,7 @@ test('repo bare é recusado mesmo com Git falso no PATH', t => {
   assert.equal(existsSync(join(parent, 'case')), false);
 });
 
-test('recusa temporário definido por symlink humano e Git indisponível', t => {
+test("temporary refusal defined by human symlink and Git unavailable", t => {
   const { root, space, outputs } = fixture(t), alias = join(space, 'temp-link');
   try { symlinkSync(outputs, alias, process.platform === 'win32' ? 'junction' : 'dir'); }
   catch (error) { if (['EPERM', 'EACCES', 'ENOTSUP'].includes(error.code)) { t.skip('Links simbólicos indisponíveis.'); return; } throw error; }
@@ -815,7 +815,7 @@ test('recusa temporário definido por symlink humano e Git indisponível', t => 
   assert.equal(existsSync(join(outputs, 'no-git')), false);
 });
 
-test('API sem inicialização Git prepara fora de repositórios mesmo sem Git no PATH', t => {
+test("API without startup Git prepares out of repositories even without Git in PATH", t => {
   const { root, outputRoot } = fixture(t);
   const previousPath = process.env.PATH; process.env.PATH = '';
   try {
@@ -826,7 +826,7 @@ test('API sem inicialização Git prepara fora de repositórios mesmo sem Git no
   } finally { process.env.PATH = previousPath; }
 });
 
-test('API sem Git continua bloqueando repositórios e saída local sem comprovar ignore', t => {
+test("API without Git keeps blocking repositories and local output without proving ignore", t => {
   const { root, space } = fixture(t), repo = join(space, 'repo'), bare = join(space, 'bare.git');
   for (const args of [['init', '--quiet', '--template=', repo], ['init', '--bare', '--quiet', bare], ['init', '--quiet', '--template=', root]]) {
     const result = spawnSync('git', args, { encoding: 'utf8' }); assert.equal(result.status, 0, result.stderr);
@@ -861,7 +861,7 @@ test('API sem Git recusa worktree definido externamente no ambiente', t => {
   }
 });
 
-test('sucesso vazio de executável Git não comprova ignore local', t => {
+test("empty Git executable success does not prove ignore local", t => {
   if (process.platform === 'win32') { t.skip('Fixture de executável falso usa /bin/sh.'); return; }
   const { root, space } = fixture(t), bin = join(space, 'fake-bin'), target = join(root, 'tmp', 'case');
   const initialized = spawnSync('git', ['init', '--quiet', '--template=', root], { encoding: 'utf8' }); assert.equal(initialized.status, 0, initialized.stderr);
@@ -889,7 +889,7 @@ test('sucesso vazio de executável Git não comprova ignore local', t => {
   }
 });
 
-test('resposta malformada na consulta ao índice bloqueia a saída antes de criar diretórios', t => {
+test("malformed response in index query blocks output before creating directories", t => {
   const { root, put } = fixture(t), target = join(root, 'tmp', 'case');
   let result = spawnSync('git', ['init', '--quiet', '--template=', root], { encoding: 'utf8' }); assert.equal(result.status, 0, result.stderr);
   put('.gitignore', '/tmp/\n'); put('human.txt', 'existente');
@@ -904,7 +904,7 @@ test('resposta malformada na consulta ao índice bloqueia a saída antes de cria
   assert.equal(existsSync(target), false); assert.deepEqual(readFileSync(join(root, '.git/index')), index);
 });
 
-test('as duas CLIs recusam --output dentro de Git antes de criar projeto', t => {
+test("the two ILCs refuse --output inside Git before creating project", t => {
   const { space } = fixture(t), repo = join(space, 'repo'), target = join(repo, 'tmp', 'output'); mkdirSync(repo);
   let r = spawnSync('git', ['init', '--quiet', '--template=', repo], { encoding: 'utf8' }); assert.equal(r.status, 0, r.stderr);
   mkdirSync(join(repo, 'tmp')); writeFileSync(join(repo, '.gitignore'), '/tmp/\n'); writeFileSync(join(repo, 'human'), 'staged\n');
@@ -922,7 +922,7 @@ test('as duas CLIs recusam --output dentro de Git antes de criar projeto', t => 
   }
 });
 
-test('destino de workflow anterior não recebe execução aninhada nem é substituído', t => {
+test("previous workflow destination does not receive nested execution or is replaced", t => {
   const { root, outputRoot } = fixture(t);
   const first = createExampleOutput({ sourceRoot: root, outputRoot, prefix: 'agentdevkit-workflows-' });
   const marker = join(first.outputRoot, '.agentdevkit-example-output.json');
@@ -933,7 +933,7 @@ test('destino de workflow anterior não recebe execução aninhada nem é substi
   assert.equal(existsSync(join(first.outputRoot, 'nova')), false);
 });
 
-test('preserva exemplos existentes na origem e aceita novos destinos fora da árvore', t => {
+test("preserves existing examples at source and accepts new destinations outside the tree", t => {
   const { root, put, space, outputs } = fixture(t);
   const options = { sourceRoot: root, scenarios: [SCENARIOS[0]], initializeGit: false };
   put('examples/generated/.gitignore', '!README.md\n');
@@ -953,7 +953,7 @@ test('preserva exemplos existentes na origem e aceita novos destinos fora da ár
   }
 });
 
-test('preparação interrompida não altera resultado anterior nem declara sucesso', t => {
+test("interrupted preparation does not change previous result or declare success", t => {
   const { root, put, space } = fixture(t);
   const options = { sourceRoot: root, scenarios: [SCENARIOS[0]], initializeGit: false };
   const [first] = prepareExamples(options);
@@ -971,7 +971,7 @@ test('preparação interrompida não altera resultado anterior nem declara suces
   assert.doesNotMatch(readFileSync(index, 'utf8'), /status: passed|\| passed \|/);
 });
 
-test('entradas simbólicas humanas são preservadas e informadas sem seguir o destino', t => {
+test("human symbolic inputs are preserved and informed without following destiny", t => {
   const { root, space, outputs } = fixture(t);
   const original = readFileSync(join(root, 'AGENTS.md'));
   const external = join(space, 'externo.txt');
@@ -997,7 +997,7 @@ test('entradas simbólicas humanas são preservadas e informadas sem seguir o de
   assert.deepEqual(report.copies[0].omittedEntrypoints, ['CLAUDE.md', 'GEMINI.md']);
 });
 
-test('fixture ignora artefatos locais sem alterar o gitignore da origem', t => {
+test("fixture ignores local artifacts without changing the origin gitignore", t => {
   const { root, put, outputs } = fixture(t);
   put('.gitignore', 'node_modules/\n');
   let git = spawnSync('git', ['init', '--quiet', '--template=', root], { encoding: 'utf8' });
@@ -1015,7 +1015,7 @@ test('fixture ignora artefatos locais sem alterar o gitignore da origem', t => {
   assert.equal(git.status, 0, git.stderr);
 });
 
-test('modo de fontes do pacote ignora seleção, espelhos e preferências locais', t => {
+test("package font mode ignores selection, mirrors and local preferences", t => {
   const { root, put, outputRoot } = fixture(t);
   put('package.json', JSON.stringify({
     name: '@pathbit/agentdevkit', version: '1.0.0', files: ['.pbai4devs/'],
@@ -1051,7 +1051,7 @@ test('modo de fontes do pacote ignora seleção, espelhos e preferências locais
   assert.equal(JSON.parse(readFileSync(join(outputRoot, 'REPORT.json'), 'utf8')).sourceMode, 'package-source');
 });
 
-test('sem estado comprovado conserva entradas humanas mesmo com template', t => {
+test("with no proven state conserves human inputs even with template", t => {
   const { root, put } = fixture(t);
   const template = '---\ndescription: Entrada genérica.\n---\n\n# Agentes do projeto\n';
   put('AGENTS.md', '# Produto do distribuidor\n\n[PRD](docs/prd.md)\n');
@@ -1065,7 +1065,7 @@ test('sem estado comprovado conserva entradas humanas mesmo com template', t => 
   assert.equal(readFileSync(join(root, 'AGENTS.md'), 'utf8'), '# Produto do distribuidor\n\n[PRD](docs/prd.md)\n');
 });
 
-test('cópias respeitam clientes e entradas de instalações parciais', async t => {
+test("copies respect customers and partial installations entrances", async t => {
   for (const [client, manifest, entrypoints] of [
     ['claude', 'agente|.claude|plano\n', ['AGENTS.md', 'CLAUDE.md']],
     ['codex', 'agente|.codex|agrupado\nagente|.agents|agrupado\n', ['AGENTS.md']],
@@ -1099,7 +1099,7 @@ test('cópias respeitam clientes e entradas de instalações parciais', async t 
   });
 });
 
-test('configurações do editor exigem registro explícito no manifesto', t => {
+test("editor settings require explicit log in manifest", t => {
   const { root, put } = fixture(t);
   put('.pbai4devs/espelhos.conf', 'agente|.codex|plano\nagente|.vscode|plano\ngitignore|.vscode\n');
   const destination = join(root, 'copy');
@@ -1108,7 +1108,7 @@ test('configurações do editor exigem registro explícito no manifesto', t => {
   assert.equal(readFileSync(join(destination, '.vscode/settings.json'), 'utf8'), '{"fixture":true}\n');
 });
 
-test('instalação parcial preserva entradas próprias e blocos editados', t => {
+test("Partial installation preserves own inputs and edited blocks", t => {
   const { root, put } = fixture(t);
   put('.pbai4devs/espelhos.conf', 'agente|.codex|agrupado\nagente|.agents|agrupado\n');
   const block = '<!-- BEGIN AGENTDEVKIT -->\nEntrada gerenciada.\n<!-- END AGENTDEVKIT -->';
@@ -1164,7 +1164,7 @@ test('respeita tipo sem espelho e exclui rotas Gemini do manifesto manual', t =>
   assert.ok(!command.some(target => /^\.gemini\//i.test(target)));
 });
 
-test('identifica o fallback Codex apenas para a skill cuja rota primária está obstruída', t => {
+test("identifies the fallback Codex only for the skill whose primary route is obstructed", t => {
   const { root, put } = fixture(t);
   put('.pbai4devs/espelhos.conf', [
     'agente|.agents|agrupado', 'agente|.codex|agrupado',
@@ -1180,7 +1180,7 @@ test('identifica o fallback Codex apenas para a skill cuja rota primária está 
   assert.deepEqual(resourceTargets(root, blocked), ['.agents/skills/projeto/demo/SKILL.md']);
 });
 
-test('checkout sem manifesto usa apenas o hub até haver seleção salva', t => {
+test("checkout without manifest uses only hub until saved selection", t => {
   const { root, put } = fixture(t);
   const manifest = join(root, '.pbai4devs/espelhos.conf');
   rmSync(manifest);
@@ -1236,7 +1236,7 @@ for (const withState of [false, true]) test(`prepare preserva catálogos humanos
   writeFileSync(join(sourceRoot, '.pbai4devs/espelhos.conf'), adapterManifest(sourceRoot, { clients: ['codex'] }));
   const state = join(sourceRoot, '.pbai4devs/state/agentdevkit.json');
   const derived = join(sourceRoot, '.pbai4devs/state/derived.json');
-  rmSync(state, { force: true }); rmSync(derived, { force: true }); // Só cópias criadas nesta fixture.
+  rmSync(state, { force: true }); rmSync(derived, { force: true }); // Only copies created in this fixture.
   if (withState) {
     mkdirSync(dirname(state), { recursive: true });
     writeFileSync(state, JSON.stringify({ schemaVersion: 1, version: '0.0.24', language: 'pt', clients: ['codex'], files: {}, blocks: {} }) + '\n');
@@ -1282,7 +1282,7 @@ for (const withState of [false, true]) test(`prepare preserva catálogos humanos
   assert.equal(existsSync(state), withState);
 });
 
-test('arquiva arquivos substituídos mesmo quando o cliente não está selecionado', t => {
+test("archive overwritten files even when client is not selected", t => {
   const { root, put } = fixture(t);
   put('.pbai4devs/espelhos.conf', 'agente|.codex|plano\n');
   const files = ['.vscode/settings.json', '.github/workflows/legacy.yml'];
@@ -1295,7 +1295,7 @@ test('arquiva arquivos substituídos mesmo quando o cliente não está seleciona
   }
 });
 
-test('arquivo de cliente não selecionado com ancestral simbólico é recusado', t => {
+test("Unselected client file with symbolic ancestor is refused", t => {
   const { root, put } = fixture(t);
   put('.pbai4devs/espelhos.conf', 'agente|.codex|plano\n');
   const outside = mkdtempSync(join(root, 'outside-'));
@@ -1307,7 +1307,7 @@ test('arquivo de cliente não selecionado com ancestral simbólico é recusado',
   assert.equal(readFileSync(join(outside, 'settings.json'), 'utf8'), 'Conteúdo externo.\n');
 });
 
-test('arquivos da fonte substituídos por fixtures têm cópias byte a byte', t => {
+test("source files replaced by fixtures have byte a byte copies", t => {
   const { root, put } = fixture(t);
   const files = ['README.md', 'Makefile', '.dockerignore', '.env.example', '.pbai4devs/state/README.md', '.pbai4devs/state/configuracao/ESTADO.md', '.vscode/settings.json', '.github/workflows/legacy.yml'];
   const contents = Object.fromEntries(files.map(file => [file, `Conteúdo humano sintético: ${file}\r\n`]));
@@ -1325,7 +1325,7 @@ test('arquivos da fonte substituídos por fixtures têm cópias byte a byte', t 
   }
 });
 
-test('saída não pode sobrepor recursos de origem nem escapar das áreas de teste', t => {
+test("output cannot override source resources or escape from test areas", t => {
   const { root, outputRoot } = fixture(t);
   const original = readFileSync(join(root, '.pbai4devs/espelhos.conf'), 'utf8');
   for (const location of ['.pbai4devs/generated', '.github', '.codex', '.agents', '.agent', '.gemini', 'examples', 'tmp', 'output']) {
@@ -1338,7 +1338,7 @@ test('saída não pode sobrepor recursos de origem nem escapar das áreas de tes
   assert.equal(readFileSync(join(root, '.pbai4devs/espelhos.conf'), 'utf8'), original);
 });
 
-test('oito cópias exercitam os seis níveis e preservam layouts legado/monorepo', t => {
+test("eight copies exercise the six levels and preserve layouts legado/monorepo", t => {
   const { root, outputRoot } = fixture(t);
   const examples = prepareExamples({ sourceRoot: root, outputRoot, initializeGit: false });
   assert.equal(examples.length, 8);
@@ -1359,13 +1359,13 @@ test('oito cópias exercitam os seis níveis e preservam layouts legado/monorepo
   assert.equal(existsSync(join(monorepo.root, 'src')), false);
 });
 
-test('cenários configurados completam fixtures ausentes sem alterar a origem ou arquivos copiados', t => {
+test("configured scenarios complete missing fixtures without changing source or copied files", t => {
   const { root, put, outputRoot } = fixture(t);
   mkdirSync(outputRoot);
   const files = ['.gitignore', '.gitattributes', '.editorconfig'];
   const source = Object.fromEntries(files.map(file => [file, `# configuração própria de ${file}\n`]));
-  // As duas fontes ausentes reproduzem uma instalação distribuída; o arquivo
-  // existente prova que a preparação não substitui configurações copiadas.
+  // The two missing fonts play a distributed installation; the file
+  // existing proof that the preparation does not replace copied settings.
   rmSync(join(root, '.gitattributes'));
   rmSync(join(root, '.editorconfig'));
   put('.gitignore', source['.gitignore']);
@@ -1401,7 +1401,7 @@ test('cenários configurados completam fixtures ausentes sem alterar a origem ou
   }
 });
 
-test('fixtures padrão, legado e monorepo executam HTTP real e encerram', t => {
+test("fixtures standard, legacy and monorepo perform HTTP real and close", t => {
   const { root, outputRoot } = fixture(t);
   const scenarios = SCENARIOS.filter(example => ['app-inicial', 'legado', 'monorepo'].includes(example.id));
   const examples = prepareExamples({ sourceRoot: root, outputRoot, scenarios, initializeGit: false });
@@ -1414,7 +1414,7 @@ test('fixtures padrão, legado e monorepo executam HTTP real e encerram', t => {
   }
 });
 
-test('recusa links de origem e de saída, inclusive quebrados', t => {
+test("refuses source and output links, including broken", t => {
   const { root, put, outputRoot } = fixture(t);
   const target = put('payload.txt', 'fora da cópia');
   const link = join(root, '.pbai4devs/scripts/alias.mjs');
@@ -1429,7 +1429,7 @@ test('recusa links de origem e de saída, inclusive quebrados', t => {
   assert.throws(() => prepareExamples({ sourceRoot: root, outputRoot, scenarios: [SCENARIOS[0]], initializeGit: false }), /não pode ser link/);
 });
 
-test('gerador de dois projetos usa pacote local offline e mantém saída fora de Git', { timeout: 240000 }, t => {
+test("two project generator uses local package offline and keeps out of Git", { timeout: 240000 }, t => {
   const runner = join(projectRoot, 'tests/example-workflows.mjs'), packageFile = join(projectRoot, 'package.json');
   if (!existsSync(runner) || !existsSync(packageFile)) { t.skip('Runner de desenvolvimento não é distribuído no pacote.'); return; }
   const npm = findNpmCli(); assert.ok(npm, 'npm CLI é necessário.');

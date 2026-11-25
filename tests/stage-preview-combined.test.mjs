@@ -171,7 +171,7 @@ for (const variant of ['valid', 'missing', 'wrong-digest']) {
 }
 
 // Run this file in its own Node test process: this case temporarily changes TMPDIR/TMP/TEMP.
-test('falha da prévia mantém diagnóstico de stage e não altera projeto', { timeout, concurrency: false }, t => {
+test("previous failure maintains stage diagnosis and does not alter design", { timeout, concurrency: false }, t => {
   const root = fixture(t);
   const agent = '.claude/agents/implementador.md';
   const metadata = '.pbai4devs/agents/implementador/claude.yaml';

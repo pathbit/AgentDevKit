@@ -1,51 +1,75 @@
 ---
-description: Instrucciones y herramientas portátiles para agentes de desarrollo.
+description: "Instrucciones y herramientas portátiles para agentes de desarrollo."
 language: es
 ---
 
 # AgentDevKit
 
-[Português](README.md) · [English](README.en.md) · [Paquete npm][npm-package]
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
+[Paquete npm][npm-package]
 
 [![npm][npm-badge]][npm-package] [![MIT][license-badge]](LICENSE)
 
-AgentDevKit orienta el trabajo con agentes de código, desde la planificación
-hasta la verificación. Skills, reglas, comandos y perfiles comparten una
-fuente en `.pbai4devs`. El kit genera referencias para [Codex, Claude, Cursor,
-Copilot, OpenCode y otros clientes compatibles][clients].
+AgentDevKit ayuda a los agentes de código a entender tu proyecto, planificar
+cambios y verificar el trabajo. Las instrucciones viven en `.pbai4devs` y se
+pueden usar en proyectos escritos en cualquier lenguaje. El kit genera
+referencias para [Codex, Claude, Cursor, Copilot, OpenCode y otros
+clientes compatibles][clients].
 
-## Empezar en tu proyecto
+## Requisitos previos
 
-Prepara [Node.js 24+ y npm][prerequisites] en Windows, macOS o Linux. Abre la
-terminal en la carpeta del proyecto. Si ya tiene archivos, [simula la
-instalación][preview] para revisar los cambios. Instala desde el **npm público**,
-sin iniciar sesión:
+- **Obligatorio para la CLI.** Instala Node.js 24 LTS o posterior con npm y
+  `npx`, incluidos en la distribución oficial. En Windows, usa como mínimo
+  la versión 24.13.1 de la serie 24 LTS o elige 26 LTS o posterior.
+  [Descargar Node.js][node-download] · [Instalación por sistema][prerequisites]
+- **Git para trabajar con un repositorio.** Instala Git para clonar el código
+  y comprobar las exclusiones. Puedes instalar el kit en una carpeta sin Git.
+  [Descargar Git][git-download]
+- **Agente de código y herramientas del proyecto.** Abre el proyecto en el
+  cliente que usas para trabajar con agentes. Sigue los requisitos de tu
+  proyecto para compilar y probar la aplicación. [Clientes compatibles][clients]
 
-```console
-npx @pathbit/agentdevkit init
-```
+## Inicio rápido
 
-El asistente inicial pregunta por el idioma, los clientes y el objetivo. Si ya
-sabes qué clientes usas, indica `--agents codex,claude`. Sin una selección
-explícita o guardada, `none` prepara los recursos compartidos y `AGENTS.md`
-sin crear carpetas de clientes. El proyecto guarda la selección y la CLI
-admite `pt`, `en` y `es`. Consulta
-las [opciones de instalación][install], que incluyen pnpm, Yarn, Bun y
-[GitHub Packages con autenticación][github-install].
-
-En un proyecto con Git, comprueba la instalación y la sincronización:
+Abre un terminal en la carpeta del proyecto y ejecuta:
 
 ```console
-npx @pathbit/agentdevkit doctor
-npx @pathbit/agentdevkit sync --check
+npx @pathbit/agentdevkit init --lang es --purpose agents
 ```
+
+En el asistente, usa las flechas para navegar y **Espacio** para marcar cada
+agente. Pulsa **Enter** para confirmar o **Esc** para cancelar. Si confirmas
+sin marcar ningún agente, el kit instala los recursos compartidos.
+
+Para cambiar la selección más adelante:
+
+```console
+npx @pathbit/agentdevkit agents --select
+```
+
+En una carpeta existente, puedes [revisar el plan antes de instalar][preview].
+Para automatización o terminales sin menú, indica los IDs de los clientes:
+
+```console
+npx @pathbit/agentdevkit init --lang es --agents codex,claude --dry-run
+npx @pathbit/agentdevkit init --lang es --agents codex,claude
+```
+
+Abre el proyecto en tu agente de código y pídele:
+
+> Lee AGENTS.md y el README. Muestra los comandos del proyecto y propón
+> un primer paso. Por ahora, solo lee los archivos.
+
+Consulta la selección con `npx @pathbit/agentdevkit agents`.
+[Opciones de instalación][install] · [Clientes compatibles][clients]
 
 ## Elige qué quieres hacer
 
 | Quiero… | Ejecuta en la terminal |
 | --- | --- |
 | Planificar el producto | `npx @pathbit/agentdevkit next --intent product` |
-| Ejecutar la aplicación | `npx @pathbit/agentdevkit next --intent run` |
+| Saber cómo ejecutar la app | `npx @pathbit/agentdevkit next --intent run` |
 | Documentar el sistema | `npx @pathbit/agentdevkit next --intent document` |
 | Inventariar antes de instalar | `npx @pathbit/agentdevkit document` |
 
@@ -68,56 +92,75 @@ empezar en cada caso.
 
 | Quiero… | Leer |
 | --- | --- |
-| Conocer los conceptos y encontrar una guía | [Documentación](docs/README.md) |
-| Mejorar documentación existente | [Inventario y complementos](docs/guides/documentation.md) |
-| Crear una skill o comando | [Recursos](docs/guides/resources.md) |
-| Elegir un flujo según el objetivo | [Recursos en la práctica](docs/guides/recursos-na-pratica.md) |
+| Conocer los conceptos y encontrar una guía | [Documentación](docs/es/README.md) |
+| Mejorar documentación existente | [Inventario y complementos](docs/es/guides/documentation.md) |
+| Crear una skill o comando | [Recursos](docs/es/guides/resources.md) |
+| Elegir un flujo según el objetivo | [Recursos en la práctica](docs/es/guides/recursos-na-pratica.md) |
 | Instalar herramientas y verificar | [Herramientas y pruebas][tests] |
-| Revisar seguridad con herramientas locales | [Seguridad local](docs/guides/security.md) |
+| Revisar seguridad con herramientas locales | [Seguridad local](docs/es/guides/security.md) |
 | Consultar opciones o resolver un error | [CLI][cli] · [Soluciones][help] |
-| Mejorar el kit | [Contribuir](CONTRIBUTING.md) |
-| Probar los escenarios | [Ejemplos](https://github.com/pathbit/AgentDevKit/tree/main/examples) |
+| Mejorar el kit | [Contribuir](docs/es/CONTRIBUTING.md) |
+| Probar los escenarios | [Ejemplos](docs/es/examples) |
 
 ## Desarrollar este repositorio
 
 Usa Node.js 24+ con npm. Ejecuta `npm ci --ignore-scripts`, `npm run check`,
 `npm test` y `npm run examples`. Los ejemplos se generan en una carpeta temporal
 del sistema fuera de Git; `npm run test:examples` ejecuta los escenarios.
-Consulta la [guía de desarrollo](docs/maintainers/development.md) para conocer
+Consulta la [guía de desarrollo](docs/es/maintainers/development.md) para conocer
 la estructura.
 
 Las guías detalladas están en portugués. Las herramientas locales se
 instalan por separado. Los [artefactos y sumas de la versión][release]
 permiten comprobar el paquete publicado en [ambos registros][packages].
 
-## Licencia y autoría
+[Changelog](docs/es/CHANGELOG.md) · [Roadmap](docs/es/product/roadmap.md)
+· [Plugins y créditos](docs/es/guides/plugins.md)
 
-Mantenido por [PathBit](https://www.pathbit.com.br),
-con licencia [MIT](LICENSE).
+---
+
+## Contributing and Branch Protection
+
+Abre un pull request desde tu fork hacia `develop`. Los cambios revisados pasan
+a `main` para la publicación. Consulta la [guía de contribución][contributing]
+para ejecutar las comprobaciones antes de enviarlo.
+
+¿Encontraste un problema o tienes una idea? [Abre una issue][issues] con los
+formularios. Consulta [cómo participar](docs/es/maintainers/community.md).
+
+---
+
+## 📄 License
+
+Distribuido bajo la [licencia MIT](LICENSE).
 La instalación incluye la licencia del kit en `.pbai4devs/LICENSE` y conserva
 la licencia y los archivos propios de tu proyecto.
 
-[Changelog](CHANGELOG.md) · [Roadmap](docs/product/roadmap.md)
-· [Plugins y créditos](docs/guides/plugins.md)
-
-¿Encontraste un problema o tienes una idea? [Abre una issue][issues] con los
-formularios. Consulta [cómo participar](docs/maintainers/community.md).
-
-[clients]: .pbai4devs/COMPATIBILIDADE.md
+[contributing]: docs/es/CONTRIBUTING.md
+[clients]: docs/es/kit/COMPATIBILIDADE.md
 [release]: https://github.com/pathbit/AgentDevKit/releases/latest
 [npm-package]: https://www.npmjs.com/package/@pathbit/agentdevkit
 [npm-badge]: https://img.shields.io/npm/v/%40pathbit%2Fagentdevkit
 [license-badge]: https://img.shields.io/badge/license-MIT-blue
-[tests]: docs/guides/tools-and-testing.md
-[cli]: docs/guides/cli.md
-[help]: docs/guides/troubleshooting.md
+[tests]: docs/es/guides/tools-and-testing.md
+[cli]: docs/es/guides/cli.md
+[help]: docs/es/guides/troubleshooting.md
 [issues]: https://github.com/pathbit/AgentDevKit/issues/new/choose
-[packages]: docs/maintainers/packages.md
-[prerequisites]: docs/guides/prerequisites.md
-[install]: docs/guides/installation.md
-[preview]: docs/guides/installation.md#simular-em-um-projeto-existente
-[update]: docs/guides/installation.md#atualizar-e-escolher-agentes
-[workflow]: docs/guides/workflow.md
-[plugins]: docs/guides/plugins.md
-[comparison]: docs/guides/comparacao.md
-[github-install]: docs/guides/installation.md#github-packages
+[packages]: docs/es/maintainers/packages.md
+[prerequisites]: docs/es/guides/prerequisites.md
+[node-download]: https://nodejs.org/en/download
+[git-download]: https://git-scm.com/install/
+[install]: docs/es/guides/installation.md
+[preview]: docs/es/guides/installation.md#simular-en-un-proyecto-existente
+[update]: docs/es/guides/installation.md#actualizar-y-elegir-agentes
+[workflow]: docs/es/guides/workflow.md
+[plugins]: docs/es/guides/plugins.md
+[comparison]: docs/es/guides/comparacao.md
+
+[reading-pt]: README.md
+[reading-en]: README.en.md
+[reading-es]: README.es.md
+
+---
+
+Developed with ❤️ by [Pathbit](https://www.pathbit.com.br/)

@@ -4,6 +4,8 @@ description: Como desenvolver, verificar e documentar o AgentDevKit.
 
 # Contribuir
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 Use [issues][issues] para bugs e propostas. Descreva o contexto, a versão e
 os passos necessários, removendo segredos e dados privados.
 
@@ -24,9 +26,10 @@ em uma pasta temporária fora de Git, informada pelo comando.
 Para escolher um destino local ignorado, consulte o guia em
 [`examples/`](https://github.com/pathbit/AgentDevKit/blob/main/examples/README.md).
 
-Use `develop` para integração e `main` para a versão pública. No checkout do
-kit, troque de branch com `git switch`. Contribuições de forks apontam para
-`develop`. A [manutenção][release] descreve a promoção à `main`.
+Este repositório mantém somente `develop` para integração e `main` para a
+versão pública. No checkout do kit, troque de branch com `git switch`.
+Contribuições de forks apontam para `develop`. A [manutenção][release] descreve
+a promoção à `main`.
 
 ## Escolher a origem da mudança
 
@@ -77,3 +80,7 @@ Mantenha tokens fora do código e do `.npmrc` versionado.
 [git]: .pbai4devs/rules/git/RULE.md
 [release]: docs/maintainers/maintenance.md
 [package]: docs/maintainers/packages.md
+
+[reading-pt]: CONTRIBUTING.md
+[reading-en]: docs/en/CONTRIBUTING.md
+[reading-es]: docs/es/CONTRIBUTING.md

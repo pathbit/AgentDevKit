@@ -12,7 +12,7 @@ import { applyPlan } from '../src/install.mjs';
 import { checkDoctorIssues, checkExcludeOrigin, checkHumanExcludeBytes, checkNativeOwnership, checkOriginals, checkPreservedLinks, checkPreservedManagedEdit, checkStandaloneSync, checkSyncIssues, classifyIgnoreStatus, environment, fileSnapshot, gitSnapshot, hash, linkedDirectoryPaths, mayAliasPath, outputDirectory, parseCliResult, prepareOutput, stateJson, workspace } from './oss-compatibility.mjs';
 import { readRegularEntrypoint } from './upgrade-packages.mjs';
 
-test('prova de upgrade recusa link que aparenta preservar modo e conteúdo do apontamento', t => {
+test("proof of upgrade refusal link that appears to preserve mode and content of the note", t => {
   const root = mkdtempSync(join(tmpdir(), 'agentdevkit-upgrade-entry-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const path = 'AGENTS.md', absolute = join(root, path), content = Buffer.from('Instrução humana.\n');
@@ -36,14 +36,14 @@ test('prova de upgrade recusa link que aparenta preservar modo e conteúdo do ap
   } finally { t.mock.restoreAll(); syncBuiltinESMExports(); }
 });
 
-test('artefatos visíveis são observados e falhas do Git são recusadas', () => {
+test("Visible artifacts are observed and Git failures are refused", () => {
   assert.deepEqual(classifyIgnoreStatus('tmp/probe', 0), { path: 'tmp/probe', ignored: true, status: 0 });
   assert.deepEqual(classifyIgnoreStatus('tmp/probe', 1), { path: 'tmp/probe', ignored: false, status: 1 });
   assert.throws(() => classifyIgnoreStatus('tmp/probe', 128), /Falha ao consultar ignore/);
   assert.throws(() => classifyIgnoreStatus('tmp/probe', null), /Falha ao consultar ignore/);
 });
 
-test('prova de exclusão humana exige a regra e origem exatas', () => {
+test("proof of human exclusion requires exact rule and origin", () => {
   const valid = '.git/info/exclude:2:/oss-human-private/\toss-human-private/probe\n';
   assert.doesNotThrow(() => checkExcludeOrigin(valid));
   assert.throws(() => checkExcludeOrigin(valid.replace('.git/info/exclude', '.gitignore')), /não foi a regra efetiva/);
@@ -51,7 +51,7 @@ test('prova de exclusão humana exige a regra e origem exatas', () => {
   assert.throws(() => checkExcludeOrigin(valid + valid), /não foi a regra efetiva/);
 });
 
-test('doctor deve identificar exatamente a fixture privada visível, sem omitir outras falhas', () => {
+test("doctor must identify exactly the visible private fixture without omitting other failures", () => {
   const path = '.opencode/settings.local.json';
   const extra = [{ code: 'ignore-ambiguous', path: '.gitignore: !*.cache/' }];
   assert.doesNotThrow(() => checkDoctorIssues({ issues: [{ code: 'private-file-visible', path }] }, path, false));
@@ -67,7 +67,7 @@ test('doctor deve identificar exatamente a fixture privada visível, sem omitir 
   assert.throws(() => checkDoctorIssues({}, path, true), /problemas ausentes/);
 });
 
-test('sync distingue alertas de visibilidade de erros além da fixture privada', () => {
+test("sync distinguishes error visibility alerts beyond private fixture", () => {
   const path = '.opencode/settings.local.json';
   const extraIssue = { code: 'ignore-ambiguous', path: '.gitignore: !*.cache/' };
   const value = { conflicts: [], localIgnore: { pending: [{ code: 'output-visible', path: 'AGENTS.md' }, { code: 'private-file-visible', path }], trackedOutputs: [] } };
@@ -84,7 +84,7 @@ test('sync distingue alertas de visibilidade de erros além da fixture privada',
   assert.throws(() => checkSyncIssues(value, path, true), /inesperados/);
 });
 
-test('sync independente confere resumo, ordenação e truncamento com JSON completo', () => {
+test("independent sync confers summary, ordering and truncation with JSON complete", () => {
   const summary = '0 desatualizadas; 0 obsoletas; 0 conflitos; 0 origens nativas ausentes; 0 documentos antigos; 0 indices derivados; 0 gitignores; ';
   const path = '.opencode/settings.local.json';
   const result = pending => ({ localIgnore: { pending } });
@@ -113,7 +113,7 @@ test('sync independente confere resumo, ordenação e truncamento com JSON compl
   assert.throws(() => checkStandaloneSync(long.replace('Pendente: private-file-visible: .client-0/settings.local.json', 'Pendente: ignore-ambiguous: unexpected'), result(longPending)), /Prévia de pendências inesperada/);
 });
 
-test('ambiente OSS não herda ignore padrão XDG da máquina', t => {
+test("environment OSS does not inherit ignore pattern XDG host", t => {
   const root = mkdtempSync(join(tmpdir(), 'agentdevkit-oss-xdg-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const output = join(root, 'output'), foreign = join(root, 'foreign'), project = join(root, 'project');
@@ -140,7 +140,7 @@ function outputFixture(t) {
   return { root, environment, git, target: 'tmp/oss/run', index: join(root, '.git/index'), config: join(root, '.git/config') };
 }
 
-test('exceção ampla do EF6 pode reabrir um cache dentro do cliente', t => {
+test("the broad exception of EF6 can reopen a cache inside the client", t => {
   const f = outputFixture(t), cache = join(f.root, '.claude/.Cache');
   mkdirSync(cache, { recursive: true }); writeFileSync(join(cache, 'probe'), 'fixture\n');
   const visible = () => f.git(['-c', 'core.excludesFile=', 'status', '--short', '--untracked-files=all']).stdout.split('\n').some(line => line.endsWith('.claude/.Cache/probe'));
@@ -150,7 +150,7 @@ test('exceção ampla do EF6 pode reabrir um cache dentro do cliente', t => {
   assert.equal(visible(), true);
 });
 
-test('destino OSS respeita ignore efetivo e recusa Git redirecionado sem alterar índice', t => {
+test("destination OSS respect ignore effective and refused Git redirected without changing index", t => {
   const f = outputFixture(t), originalIndex = readFileSync(f.index), originalConfig = readFileSync(f.config);
   for (const name of ['GIT_DIR', 'git_work_tree', 'GIT_INDEX_FILE', 'git_common_dir']) {
     const value = name.toUpperCase() === 'GIT_INDEX_FILE' ? f.index : name.toUpperCase() === 'GIT_WORK_TREE' ? f.root : join(f.root, '.git');
@@ -173,7 +173,7 @@ test('destino OSS respeita ignore efetivo e recusa Git redirecionado sem alterar
   assert.deepEqual(readFileSync(f.config), originalConfig);
 });
 
-test('comparação OSS considera nomes curtos Windows sem til e distingue entradas reais', t => {
+test("comparison OSS considers short names Windows without til and distinguishes real entries", t => {
   const root = mkdtempSync(join(realpathSync(tmpdir()), 'oss-short-name-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const staged = 'tmp/ALT/human', target = 'tmp/long-directory/run';
@@ -187,7 +187,7 @@ test('comparação OSS considera nomes curtos Windows sem til e distingue entrad
   assert.equal(mayAliasPath('tmp/LONGDI~1/human', target, { root, platform: 'win32' }), existsSync(join(root, 'tmp', 'LONGDI~1')));
 });
 
-test('fluxo OSS simulado em Windows aceita ancestral de saída ausente e src staged existente', t => {
+test("flow OSS simulated on Windows accepts missing output ancestor and src staged existing", t => {
   const f = outputFixture(t);
   mkdirSync(join(f.root, 'src')); writeFileSync(join(f.root, 'src/file.js'), 'humano\n');
   f.git(['add', '--', 'src/file.js']);
@@ -217,7 +217,7 @@ test('Windows nativo ou simulado recusa nome curto staged ausente no destino OSS
   assert.equal(existsSync(join(f.root, target)), false); assert.deepEqual(readFileSync(f.index), before);
 });
 
-test('destino OSS recusa ancestrais staged e aliases Unicode sem criar a pasta', async t => {
+test("destination OSS unhindered ancestrals and Unicode aliases without creating folder", async t => {
   for (const [staged, target] of [['tmp/oss', 'tmp/oss/run'], ['tmp/oss/Run/human', 'tmp/oss/run'], ['tmp/oss/SS/human', 'tmp/oss/ß']]) await t.test(staged, t => {
     const f = outputFixture(t), file = join(f.root, staged);
     mkdirSync(join(file, '..'), { recursive: true }); writeFileSync(file, 'conteúdo humano');
@@ -230,7 +230,7 @@ test('destino OSS recusa ancestrais staged e aliases Unicode sem criar a pasta',
   });
 });
 
-test('preparo OSS cria saída exclusiva com proteção local e preserva o índice', t => {
+test("preparation OSS creates exclusive output with local protection and preserves the index", t => {
   const f = outputFixture(t), index = readFileSync(f.index), config = readFileSync(f.config);
   const output = outputDirectory(f.target, { root: f.root, environment: f.environment });
   const prepared = prepareOutput(output, f.root);
@@ -242,7 +242,7 @@ test('preparo OSS cria saída exclusiva com proteção local e preserva o índic
   assert.throws(() => prepared.verifyOutput(), /Proteção da saída alterada/);
 });
 
-test('preparo OSS aceita caminhos equivalentes com nomes curtos ou longos', t => {
+test("preparation OSS accepts equivalent paths with short or long names", t => {
   const f = outputFixture(t), index = readFileSync(f.index), config = readFileSync(f.config);
   // GitHub Windows runners often expose TEMP with an 8.3 component. Exercise
   // both spellings when available and the same contract on other platforms.
@@ -254,7 +254,7 @@ test('preparo OSS aceita caminhos equivalentes com nomes curtos ou longos', t =>
   assert.deepEqual(readFileSync(f.index), index); assert.deepEqual(readFileSync(f.config), config);
 });
 
-test('preparo OSS recusa ancestral trocado por link depois da validação', t => {
+test("preparation OSS ancestral refusal swapped for link after validation", t => {
   const f = outputFixture(t), outside = mkdtempSync(join(tmpdir(), 'agentdevkit-oss-outside-'));
   t.after(() => rmSync(outside, { recursive: true, force: true }));
   writeFileSync(join(outside, 'human'), 'preservado');
@@ -273,7 +273,7 @@ test('preparo OSS recusa ancestral trocado por link depois da validação', t =>
   assert.deepEqual(readFileSync(f.index), index);
 });
 
-test('preparo OSS recusa link no caminho informado antes de canonizá-lo', t => {
+test("preparation OSS refuses link on the path informed before canonizing it", t => {
   const f = outputFixture(t), outside = mkdtempSync(join(tmpdir(), 'agentdevkit-oss-outside-'));
   t.after(() => rmSync(outside, { recursive: true, force: true }));
   try { symlinkSync(outside, join(f.root, 'tmp'), process.platform === 'win32' ? 'junction' : 'dir'); }
@@ -287,7 +287,7 @@ test('preparo OSS recusa link no caminho informado antes de canonizá-lo', t => 
   assert.deepEqual(readFileSync(f.index), index);
 });
 
-test('consulta OSS não executa fsmonitor configurado nem modifica o Git', t => {
+test("consultation OSS does not perform configured fsmonitor or modify Git", t => {
   const f = outputFixture(t), marker = join(f.root, 'fsmonitor-marker'), hook = join(f.root, 'fsmonitor.sh');
   writeFileSync(hook, '#!/bin/sh\nprintf called >> fsmonitor-marker\nprintf "\\0"\n'); chmodSync(hook, 0o700);
   f.git(['config', 'core.fsmonitor', './fsmonitor.sh']);
@@ -301,7 +301,7 @@ test('consulta OSS não executa fsmonitor configurado nem modifica o Git', t => 
   assert.deepEqual([readFileSync(f.index), readFileSync(f.config)], before);
 });
 
-test('sentinelas nativas humanas não são adotadas integralmente mesmo com bytes idênticos', async t => {
+test("native human sentries are not fully adopted even with identical bytes", async t => {
   const paths = ['.claude/skills/human/SKILL.md', '.claude/skills/human/REFERENCE.md', '.claude/agents/revisor.md', '.claude/settings.local.json'];
   const value = hash('user content');
   assert.doesNotThrow(() => checkNativeOwnership({ files: {}, blocks: { [paths[2]]: value } }, { blocks: { [paths[0]]: value } }, paths));
@@ -311,7 +311,7 @@ test('sentinelas nativas humanas não são adotadas integralmente mesmo com byte
   });
 });
 
-test('snapshot inclui alvos internos de diretório sem percorrer links nem aceitar alvos externos', () => {
+test("snapshot includes internal directory targets without going through links or accepting external targets", () => {
   const root = join(tmpdir(), 'agentdevkit-oss-link-snapshot');
   const snapshot = { '.codex/skills': { kind: 'symlink', target: '../.claude/skills' },
     '.codex/external': { kind: 'symlink', target: '../../outside' },
@@ -322,7 +322,7 @@ test('snapshot inclui alvos internos de diretório sem percorrer links nem aceit
   assert.deepEqual(linkedDirectoryPaths(root, snapshot).sort(), ['.claude/skills', '.claude/skills/human', '.claude/skills/human/SKILL.md'].sort());
 });
 
-test('links existentes são preservados mesmo sem rota fallback no plano', async t => {
+test("existing links are preserved even without fallback route in the plan", async t => {
   const link = '.codex/skills', entrypoint = 'CLAUDE.md';
   const snapshot = target => ({ kind: 'symlink', mode: 0o777, target, sha256: hash(target) });
   const before = { [link]: snapshot('../.claude/skills'), [entrypoint]: snapshot('AGENTS.md') };
@@ -345,7 +345,7 @@ test('links existentes são preservados mesmo sem rota fallback no plano', async
   ]) await t.test(label, () => assert.throws(() => checkPreservedLinks({ ...valid, ...change }), expected));
 });
 
-test('alvo interno aceita somente criações regulares diretamente planejadas', async t => {
+test("internal target accepts only regular creations directly planned", async t => {
   const root = join(tmpdir(), 'agentdevkit-oss-tree'), link = '.codex/skills', target = '.claude/skills';
   const directory = { kind: 'directory', mode: 0o755 };
   const file = value => ({ kind: 'file', mode: 0o644, sha256: hash(value) });
@@ -379,7 +379,7 @@ test('alvo interno aceita somente criações regulares diretamente planejadas', 
   assert.throws(() => checkPreservedLinks({ ...update, after: { ...after, [`${target}/human.md`]: file('changed human') }, treeBefore: after }), /sem update comprovado/);
 });
 
-test('leitura do estado recusa link no arquivo ou ancestral', async t => {
+test("read state refuse link in file or ancestor", async t => {
   for (const component of ['.pbai4devs', '.pbai4devs/state', '.pbai4devs/state/agentdevkit.json']) await t.test(component, t => {
     const root = mkdtempSync(join(tmpdir(), 'agentdevkit-oss-state-link-'));
     t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -399,7 +399,7 @@ test('leitura do estado recusa link no arquivo ou ancestral', async t => {
   });
 });
 
-test('atualização de arquivo humano exige bloco íntegro e preserva bytes originais', t => {
+test("human file update requires intact block and preserves original bytes", t => {
   const root = mkdtempSync(join(tmpdir(), 'agentdevkit-oss-human-block-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const link = '.codex/skills', destination = '.claude/skills', path = `${destination}/human.md`;
@@ -416,7 +416,7 @@ test('atualização de arquivo humano exige bloco íntegro e preserva bytes orig
   assert.throws(() => checkPreservedLinks({ ...valid, after: { ...after, [path]: fileSnapshot(root, path) } }), /sem update comprovado/);
 });
 
-test('verificação OSS identifica os conflitos devolvidos pela CLI sem ocultar o status', () => {
+test("verification OSS identifies the conflicts returned by CLI no hide status", () => {
   const options = { name: 'init-dry-run', expected: 0, version: '0.0.21' };
   const failure = JSON.stringify({ ok: false, version: '0.0.21', conflicts: ['.gitignore: !*.[Cc]ache/'] });
   assert.throws(() => parseCliResult(failure, 1, options), /conflitos: \.gitignore: !\*\.\[Cc\]ache\//);
@@ -425,7 +425,7 @@ test('verificação OSS identifica os conflitos devolvidos pela CLI sem ocultar 
   assert.equal(parseCliResult(JSON.stringify({ ok: true, version: '0.0.21' }), 0, options).ok, true);
 });
 
-test('verificação OSS aceita edição humana preservada e rejeita perdas ou alteração do Git', async t => {
+test("verification OSS accepts preserved human edition and rejects losses or alteration of Git", async t => {
   const managed = '.pbai4devs/rules/qualidade/RULE.md', statePath = '.pbai4devs/state/agentdevkit.json';
   const edited = Buffer.from('Conteúdo humano preservado.\n'), backup = '.agent-tests/agentdevkit/backups/123-abc';
   const file = value => ({ kind: 'file', mode: 0o644, sha256: hash(value) });
@@ -461,7 +461,7 @@ test('verificação OSS aceita edição humana preservada e rejeita perdas ou al
   ]) await t.test(label, () => assert.throws(() => checkPreservedManagedEdit({ ...valid, ...change }), message));
 });
 
-test('verificação OSS aceita somente os artefatos de recuperação do update comprovado', { timeout: 120000 }, t => {
+test("verification OSS accepts only the proof update recovery artifacts", { timeout: 120000 }, t => {
   const root = realpathSync(mkdtempSync(join(realpathSync(tmpdir()), 'agentdevkit-oss-edit-recovery-')));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const managed = '.pbai4devs/rules/qualidade/RULE.md', statePath = '.pbai4devs/state/agentdevkit.json';
@@ -505,7 +505,7 @@ test('verificação OSS aceita somente os artefatos de recuperação do update c
   assert.throws(() => checkPreservedManagedEdit({ ...valid, after: workspace(root) }), { code: 'E_RECOVERY_BACKUP_INVALID' });
 });
 
-test('verificação OSS detecta alteração dos bytes do índice com entradas inalteradas', t => {
+test("verification OSS detects change in the bytes of the index with unchanged entries", t => {
   const root = mkdtempSync(join(tmpdir(), 'agentdevkit-oss-index-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   mkdirSync(join(root, '.git')); writeFileSync(join(root, '.git/config'), 'config');
@@ -519,7 +519,7 @@ test('verificação OSS detecta alteração dos bytes do índice com entradas in
   assert.throws(() => checkOriginals(root, { files: {}, git: before }, git), /Git indexSha256 alterado/);
 });
 
-test('exclusões locais não podem receber acréscimos nem alterações do kit', t => {
+test("local exclusions may not receive additions or kit changes", t => {
   const root = mkdtempSync(join(tmpdir(), 'agentdevkit-oss-exclude-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   mkdirSync(join(root, '.git/info'), { recursive: true }); writeFileSync(join(root, '.git/config'), 'config');
@@ -534,7 +534,7 @@ test('exclusões locais não podem receber acréscimos nem alterações do kit',
   assert.throws(() => checkOriginals(root, baseline, git), /Exclusões locais humanas foram alteradas/);
 });
 
-test('snapshot OSS detecta alterações de modo dos arquivos internos Git', t => {
+test("snapshot OSS detects mode changes of Git internal files", t => {
   if (process.platform === 'win32') { t.skip('bits POSIX não comprovam ACL no Windows'); return; }
   const root = mkdtempSync(join(tmpdir(), 'agentdevkit-oss-mode-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -549,7 +549,7 @@ test('snapshot OSS detecta alterações de modo dos arquivos internos Git', t =>
   assert.doesNotThrow(() => checkOriginals(root, baseline, git));
 });
 
-test('leitura das exclusões recusa ancestral simbólico mesmo com conteúdo igual', t => {
+test("reading the exclusions symbolic ancestral refusal even with equal content", t => {
   const root = mkdtempSync(join(tmpdir(), 'agentdevkit-oss-exclude-link-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   mkdirSync(join(root, '.git')); writeFileSync(join(root, '.git/config'), 'config');
@@ -564,7 +564,7 @@ test('leitura das exclusões recusa ancestral simbólico mesmo com conteúdo igu
   assert.deepEqual(readFileSync(join(external, 'exclude')), original);
 });
 
-test('regra humana de exclusão continua efetiva e detecta exceção posterior', t => {
+test("human rule of exclusion remains effective and detects later exception", t => {
   const root = mkdtempSync(join(tmpdir(), 'agentdevkit-oss-ignore-semantics-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^git_/i.test(key)));
@@ -580,7 +580,7 @@ test('regra humana de exclusão continua efetiva e detecta exceção posterior',
   assert.equal(git('check-ignore', '--no-index', '--quiet', '--', 'oss-human-private/probe').status, 1);
 });
 
-test('snapshot Git recusa links e tipos inválidos antes de chamar Git', async t => {
+test("Snapshot Git refuses links and invalid types before calling Git", async t => {
   for (const path of ['.git/index', '.git/config', '.git/info/exclude', '.git/info', '.git']) await t.test(path, t => {
     const root = mkdtempSync(join(tmpdir(), 'agentdevkit-oss-git-link-'));
     t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -601,7 +601,7 @@ test('snapshot Git recusa links e tipos inválidos antes de chamar Git', async t
     assert.equal(calls, 0);
     assert.equal(readFileSync(join(outside, 'sentinel'), 'utf8'), 'outside unchanged\n');
   });
-  await t.test('índice não é arquivo regular', t => {
+  await t.test("index is not regular file", t => {
     const root = mkdtempSync(join(tmpdir(), 'agentdevkit-oss-git-type-'));
     t.after(() => rmSync(root, { recursive: true, force: true }));
     mkdirSync(join(root, '.git/index'), { recursive: true }); writeFileSync(join(root, '.git/config'), 'config');
@@ -611,7 +611,7 @@ test('snapshot Git recusa links e tipos inválidos antes de chamar Git', async t
   });
 });
 
-test('verificação OSS rejeita bloco gerenciado acrescentado a código de aplicação', t => {
+test("verification OSS rejects managed block added application code", t => {
   const root = mkdtempSync(join(tmpdir(), 'agentdevkit-oss-code-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   mkdirSync(join(root, '.git')); writeFileSync(join(root, '.git/config'), 'config');
@@ -624,7 +624,7 @@ test('verificação OSS rejeita bloco gerenciado acrescentado a código de aplic
   assert.throws(() => checkOriginals(root, { files: { 'src/index.mjs': original }, git: {} }, () => ''), /não aceita bloco gerenciado/);
 });
 
-test('verificação OSS aceita somente acréscimos íntegros em entradas e recursos nativos', t => {
+test("verification OSS accepts only intact additions in native inputs and resources", t => {
   const root = mkdtempSync(join(tmpdir(), 'agentdevkit-oss-native-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   mkdirSync(join(root, '.git')); writeFileSync(join(root, '.git/config'), 'config');
@@ -644,7 +644,7 @@ test('verificação OSS aceita somente acréscimos íntegros em entradas e recur
   assert.throws(() => checkOriginals(root, baseline, git), /Conteúdo original alterado/);
 });
 
-test('verificação OSS rejeita substituição de link por arquivo com bloco', { skip: process.platform === 'win32' ? 'A fixture de preservação exige symlink POSIX e compara seus metadados.' : false }, t => {
+test("verification OSS rejects link replacement by block file", { skip: process.platform === 'win32' ? 'A fixture de preservação exige symlink POSIX e compara seus metadados.' : false }, t => {
   const root = mkdtempSync(join(tmpdir(), 'agentdevkit-oss-link-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const path = join(root, 'CLAUDE.md');
@@ -663,7 +663,7 @@ test('verificação OSS rejeita substituição de link por arquivo com bloco', {
   assert.throws(() => checkOriginals(root, baseline, git), /Tipo do arquivo original alterado/);
 });
 
-test('verificação OSS não atravessa ancestral substituído por link mesmo com bytes iguais', { skip: process.platform === 'win32' ? 'A fixture de preservação exige symlink POSIX e compara seus metadados.' : false }, t => {
+test("verification OSS does not cross ancestor replaced by link even with equal bytes", { skip: process.platform === 'win32' ? 'A fixture de preservação exige symlink POSIX e compara seus metadados.' : false }, t => {
   const root = mkdtempSync(join(tmpdir(), 'agentdevkit-oss-ancestor-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   mkdirSync(join(root, 'src')); writeFileSync(join(root, 'src/index.mjs'), 'original code\n');

@@ -4,6 +4,8 @@ description: Incrementos verificáveis do AgentDevKit.
 
 # Specs
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 - [v0.0.1](v0.0.1/SPEC.md): primeira distribuição independente.
 - [v0.0.2](v0.0.2/SPEC.md): seleção persistente de agentes por projeto.
 - [v0.0.3](v0.0.3/SPEC.md): fontes, saídas locais e automações Node.
@@ -70,3 +72,7 @@ projeto, siga o [fluxo](../guides/workflow.md) e use os
 
 [additive]: additive-integration/SPEC.md
 [oss]: real-projects/SPEC.md
+
+[reading-pt]: README.md
+[reading-en]: ../en/specs/README.md
+[reading-es]: ../es/specs/README.md

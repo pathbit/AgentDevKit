@@ -228,7 +228,7 @@ for (const code of ['EEXIST', 'EIO']) for (const frozen of [false, true]) {
   });
 }
 
-test('diagnóstico truncado no sync preserva estágio mesmo sem lista de caminhos', { timeout: 120000 }, t => {
+test("truncated diagnosis in sync preserves stage even without path list", { timeout: 120000 }, t => {
   const root = fixture(t), originalRead = fs.readFileSync;
   let stage, sentinel;
   t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); if (stage) fs.rmSync(stage, { recursive: true, force: true }); });
@@ -571,7 +571,7 @@ for (const action of ['update', 'remove']) for (const force of [false, true]) {
   });
 }
 
-test('sync sem alterações conserva referência com hardlink humano', { timeout: 120000 }, t => {
+test("unaltered sync conserves reference with human hardlink", { timeout: 120000 }, t => {
   const root = fixture(t);
   put(root, '.pbai4devs/espelhos.conf', 'agente|.claude|plano\n');
   for (const name of ['agents.ignore', 'shared.ignore', 'local.ignore', 'clients.json']) {
@@ -594,7 +594,7 @@ test('sync sem alterações conserva referência com hardlink humano', { timeout
   assert.deepEqual(fs.readFileSync(target), contents); assert.deepEqual(fs.readFileSync(human), contents);
 });
 
-test('sync recusa hardlink criado após verificação inicial e antes da publicação', { timeout: 120000 }, t => {
+test("sync refuses hardlink created after initial verification and before publication", { timeout: 120000 }, t => {
   const root = fixture(t), skill = '.pbai4devs/skills/demo/SKILL.md';
   put(root, '.pbai4devs/espelhos.conf', 'agente|.claude|plano\n');
   for (const name of ['agents.ignore', 'shared.ignore', 'local.ignore', 'clients.json']) {
@@ -635,7 +635,7 @@ test('sync recusa hardlink criado após verificação inicial e antes da publica
   assert.deepEqual(fs.readFileSync(join(root, 'staged.txt')), staged);
 });
 
-test('sync recusa hardlink criado após verificação inicial e antes da remoção', { timeout: 120000 }, t => {
+test("sync refuses hardlink created after initial check and before removal", { timeout: 120000 }, t => {
   const root = fixture(t), skill = '.pbai4devs/skills/demo/SKILL.md';
   put(root, '.pbai4devs/espelhos.conf', 'agente|.claude|plano\n');
   for (const name of ['agents.ignore', 'shared.ignore', 'local.ignore', 'clients.json']) {
@@ -696,7 +696,7 @@ for (const action of ['update', 'remove']) {
   });
 }
 
-test('instalador recusa hardlink criado após verificação inicial e antes da publicação', { timeout: 120000 }, t => {
+test("installer refuses hardlink created after initial verification and before publication", { timeout: 120000 }, t => {
   const root = fixture(t), target = join(root, 'gerenciado.txt'), human = join(root, 'humano.txt');
   put(root, '.gitignore', '# humano\n'); put(root, 'staged.txt', 'staged\n');
   assert.equal(spawnSync('git', ['-C', root, 'add', '.gitignore', 'staged.txt']).status, 0);

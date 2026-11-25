@@ -60,7 +60,7 @@ function withoutGit(t, callback) {
   }
 }
 
-test('identidade do índice usa os campos de 32 bits do formato Git', () => {
+test("index identity uses 32 bit fields of Git format", () => {
   const info = { dev: 0x1_0000_0042n, ino: 0x3_0000_007bn };
   assert.equal(gitIndexStatIdentityMatches(0x42n, 0x7bn, info, 'darwin'), true);
   assert.equal(gitIndexStatIdentityMatches(info.dev, info.ino, info, 'darwin'), false);
@@ -72,7 +72,7 @@ test('identidade do índice usa os campos de 32 bits do formato Git', () => {
   assert.equal(gitIndexStatIdentityMatches(null, 0x7bn, info, 'darwin'), false);
 });
 
-test('consulta preserva o projeto mesmo com trace Git herdado', t => {
+test("query preserves the project even with trace Git inherited", t => {
   const root = fixture(t), trace = file(root, 'trace-sintetico.log');
   git(root, 'add', '-f', '--', '.gitignore');
   const env = { ...process.env, GIT_TRACE: trace };
@@ -177,7 +177,7 @@ for (const flag of ['--assume-unchanged', '--skip-worktree']) {
   });
 }
 
-test('índice com alias de caixa bloqueia alteração conservadoramente em qualquer sistema', t => {
+test("index with box alias blocks change conservatively in any system", t => {
   const root = fixture(t), generated = readFileSync(file(root, pointer));
   const alias = pointer.replace('/skills/', '/SKILLS/');
   put(root, alias, Buffer.concat([generated, Buffer.from('\nAlteração humana staged.\n')]));
@@ -204,7 +204,7 @@ test('índice com alias de caixa bloqueia alteração conservadoramente em qualq
   preserved();
 });
 
-test('comparação de índice entende CRLF autorizado e recusa filtros, binários e divergência', t => {
+test("index comparison CRLF authorised and refused filters, binaries and divergence", t => {
   const root = fixture(t), path = 'arquivo.txt';
   const crlf = Buffer.from('texto\r\noutra linha\r\n'), lf = Buffer.from('texto\noutra linha\n');
   git(root, 'config', 'core.autocrlf', 'false');
@@ -231,7 +231,7 @@ test('comparação de índice entende CRLF autorizado e recusa filtros, binário
   assert.equal(indexContentMatches(root, path, crlf, lf), true);
 });
 
-test('índice normalizado não distingue conversão CRLF antes ou depois de staging', t => {
+test("Standard index does not distinguish between conversions CRLF before or after staging", t => {
   const before = fixture(t), after = fixture(t);
   for (const root of [before, after]) git(root, 'config', 'core.autocrlf', 'true');
   put(before, pointer, readFileSync(file(before, pointer), 'utf8').replaceAll('\n', '\r\n'));
@@ -244,7 +244,7 @@ test('índice normalizado não distingue conversão CRLF antes ou depois de stag
   assert.equal(records(before), records(after));
 });
 
-test('sync atualiza apontamento staged equivalente em repositório com autocrlf', t => {
+test("sync updates equivalent staged note in autocrlf repository", t => {
   const root = fixture(t), generated = readFileSync(file(root, pointer), 'utf8').replaceAll('\n', '\r\n');
   git(root, 'config', 'core.autocrlf', 'true');
   put(root, pointer, generated);
@@ -290,7 +290,7 @@ test('sync atualiza apontamento staged equivalente em repositório com autocrlf'
   assert.ok(updated.startsWith('---\nname: criar-skill\ndescription: Mudança real.\n---\n'), JSON.stringify(updated.slice(0, 180)));
 });
 
-test('sync preserva edição humana somente de finais de linha com autocrlf ativo', t => {
+test("sync preserves human edition only of line endings with active autocrlf", t => {
   const root = fixture(t);
   git(root, 'config', 'core.autocrlf', 'true');
   git(root, 'add', '-f', '--', pointer);
@@ -333,7 +333,7 @@ for (const recorded of [false, true]) test(`referência CRLF satisfeita permanec
   }
 });
 
-test('diagnóstico CRLF não classifica UTF-8 inválido como divergência apenas de finais de linha', t => {
+test("diagnosis CRLF does not classify UTF-8 invalid as divergence of end of line only", t => {
   const root = fixture(t);
   git(root, 'add', '-f', '--', pointer);
   const originalBytes = readFileSync(file(root, pointer));
@@ -410,7 +410,7 @@ for (const scenario of ['edição humana', 'conversão desativada', 'filtro pers
   });
 }
 
-test('referência obsoleta com conversão CRLF é preservada durante limpeza', t => {
+test("obsolete reference with conversion CRLF is preserved during cleaning", t => {
   const root = fixture(t);
   git(root, 'config', 'core.autocrlf', 'true');
   put(root, pointer, readFileSync(file(root, pointer), 'utf8').replaceAll('\n', '\r\n'));
@@ -423,7 +423,7 @@ test('referência obsoleta com conversão CRLF é preservada durante limpeza', t
   assert.deepEqual(readFileSync(file(root, '.git/index')), index);
 });
 
-test('sync preserva atributo Linux ao atualizar referência CRLF ou recusa sem alterar', { skip: nativeSkipReason('linux') }, t => {
+test("sync preserves Linux attribute when updating reference CRLF or refusal without change", { skip: nativeSkipReason('linux') }, t => {
   const probe = spawnSync('perl', ['-e', 'require "syscall.ph"; my $x = &SYS_setxattr; my $y = &SYS_getxattr;']);
   if (probe.status !== 0) { t.skip('Perl e syscall.ph não estão disponíveis para a fixture xattr.'); return; }
   const root = fixture(t), target = file(root, pointer);
@@ -452,7 +452,7 @@ test('sync preserva atributo Linux ao atualizar referência CRLF ou recusa sem a
   assert.deepEqual(readFileSync(file(root, '.git/index')), index);
 });
 
-test('sync preserva atributo Linux em atualização comum ou recusa sem alterar', { skip: nativeSkipReason('linux') }, t => {
+test("sync preserves Linux attribute in common update or refusal without changing", { skip: nativeSkipReason('linux') }, t => {
   const probe = spawnSync('perl', ['-e', 'require "syscall.ph"; my $x = &SYS_setxattr; my $y = &SYS_getxattr;']);
   if (probe.status !== 0) { t.skip('Perl e syscall.ph não estão disponíveis para a fixture xattr.'); return; }
   const root = fixture(t), target = file(root, pointer);
@@ -485,7 +485,7 @@ test('sync preserva atributo Linux em atualização comum ou recusa sem alterar'
   assert.deepEqual(readFileSync(file(root, '.git/index')), index);
 });
 
-test('sync avisa quando metadados Linux não foram verificados', { skip: nativeSkipReason('linux') }, t => {
+test("sync warns when Linux metadata have not been verified", { skip: nativeSkipReason('linux') }, t => {
   const exists = fs.existsSync;
   t.mock.method(fs, 'existsSync', path => path !== '/usr/bin/getfattr' && exists(path));
   syncBuiltinESMExports();
@@ -506,7 +506,7 @@ test('sync avisa quando metadados Linux não foram verificados', { skip: nativeS
   assert.deepEqual(readFileSync(file(root, '.git/index')), index);
 });
 
-test('sync preserva hardlink humano quando apontamento CRLF precisa mudar', t => {
+test("sync preserves human hardlink when pointing CRLF It needs to change.", t => {
   const root = fixture(t), target = file(root, pointer), human = file(root, 'humano.md');
   git(root, 'config', 'core.autocrlf', 'true');
   writeFileSync(target, readFileSync(target, 'utf8').replaceAll('\n', '\r\n'));
@@ -556,7 +556,7 @@ for (const target of ['.pbai4devs/state/derived.json']) {
   });
 }
 
-test('ignore de cliente com índice divergente é preservado, mesmo com force', t => {
+test("Ignore customer with divergent index is preserved even with force", t => {
   const root = fixture(t), target = '.claude/.gitignore';
   put(root, target, '# conteúdo staged\n'); git(root, 'add', '-f', '--', target);
   const index = git(root, 'ls-files', '--stage', '-z');
@@ -583,7 +583,7 @@ for (const options of [{ check: true }, { force: true }]) {
   });
 }
 
-test('projeto realmente sem Git pode limpar apontamento próprio sem executável Git', t => {
+test("design really without Git can clear own pointer without Git executable", t => {
   const root = fixture(t, false), human = '.claude/skills/criar-skill/equipe-vazia';
   mkdirSync(file(root, human));
   rmSync(dirname(file(root, original)), { recursive: true });
@@ -592,7 +592,7 @@ test('projeto realmente sem Git pode limpar apontamento próprio sem executável
   assert.ok(existsSync(file(root, human)));
 });
 
-test('preserva diretório preexistente sem prova de propriedade após remover único apontamento', t => {
+test("preserves preexisting directory without proof of ownership after removing single point", t => {
   const root = fixture(t), directory = dirname(file(root, pointer));
   rmSync(dirname(file(root, original)), { recursive: true });
   assert.equal(run(root, { force: true }).exitCode, 0);
@@ -600,7 +600,7 @@ test('preserva diretório preexistente sem prova de propriedade após remover ú
   assert.ok(existsSync(directory));
 });
 
-test('alteração concorrente no índice bloqueia limpeza antes de qualquer exclusão', t => {
+test("concurrent change in the index blocks cleaning before any exclusion", t => {
   const root = fixture(t), generated = readFileSync(file(root, pointer));
   rmSync(dirname(file(root, original)), { recursive: true });
   let staged;
@@ -618,7 +618,7 @@ test('alteração concorrente no índice bloqueia limpeza antes de qualquer excl
   assert.equal(git(root, 'ls-files', '--stage', '-z'), staged);
 });
 
-test('índice divergente é protegido quando o projeto fica em subpasta do repositório Git', t => {
+test("Diverging index is protected when project is in subfolder of Git repository", t => {
   const outer = mkdtempSync(join(tmpdir(), 'sync-parent-git-'));
   t.after(() => rmSync(outer, { recursive: true, force: true }));
   git(outer, 'init', '--quiet');
@@ -635,7 +635,7 @@ test('índice divergente é protegido quando o projeto fica em subpasta do repos
   assert.equal(git(outer, 'ls-files', '--stage', '-z'), index);
 });
 
-test('arquivo adicionado ao índice durante limpeza de projeto aninhado é preservado', t => {
+test("file added to the index during nested design cleaning is preserved", t => {
   const outer = mkdtempSync(join(tmpdir(), 'sync-parent-race-'));
   t.after(() => rmSync(outer, { recursive: true, force: true }));
   git(outer, 'init', '--quiet');
@@ -656,7 +656,7 @@ test('arquivo adicionado ao índice durante limpeza de projeto aninhado é prese
   assert.equal(git(outer, 'ls-files', '--stage', '-z'), staged);
 });
 
-test('plano de projeto aninhado registra somente a entrada selecionada do índice', t => {
+test("nested project plan records only the selected index entry", t => {
   const outer = mkdtempSync(join(tmpdir(), 'sync-parent-index-'));
   t.after(() => rmSync(outer, { recursive: true, force: true }));
   git(outer, 'init', '--quiet');
@@ -674,7 +674,7 @@ test('plano de projeto aninhado registra somente a entrada selecionada do índic
   assert.equal(plan.index, git(outer, 'ls-files', '--stage', '--', `projeto/${pointer}`).trimEnd());
 });
 
-test('conteúdo humano na pasta e apontamento gerenciado editado sobrevivem à limpeza forçada', t => {
+test("human content in the folder and edited managed note survive forced cleaning", t => {
   const root = fixture(t), human = '.claude/skills/criar-skill/notas-da-equipe.md';
   const notes = '# Referência própria\n', edited = Buffer.concat([readFileSync(file(root, pointer)), Buffer.from('\nNota própria.\n')]);
   put(root, human, notes);
@@ -685,7 +685,7 @@ test('conteúdo humano na pasta e apontamento gerenciado editado sobrevivem à l
   assert.deepEqual(readFileSync(file(root, pointer)), edited);
 });
 
-test('colisão com arquivo humano ancestral não é removida por --force', t => {
+test("collision with ancestral human file is not removed by --force", t => {
   const root = fixture(t), ancestor = '.claude/skills/equipe-custom';
   const human = 'Arquivo da equipe; não substituir.\n';
   put(root, ancestor, human);

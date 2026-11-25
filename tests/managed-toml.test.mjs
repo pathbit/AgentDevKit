@@ -6,7 +6,7 @@ import { extractTomlManagedBlock, stripTomlContent, tomlManagedBlockDigest } fro
 import { mergeTomlContent } from './fixtures/legacy-toml-writer.mjs';
 
 const body = '@{.pbai4devs/commands/revisar-entrega/COMMAND.md}';
-// Parser distribuido com o kit: valida semantica, sem alegar independencia.
+// Parser distributed with the kit: semantica valida, without alleging independence.
 const promptValue = text => smol.parse(text, { integersAsBigInt: true }).prompt;
 const sha = value => createHash('sha256').update(value).digest('hex');
 function withoutMetadata(text) {
@@ -78,7 +78,7 @@ test('preserva BOM, CRLF, chaves quoted e comentarios', () => {
   assert.equal(stripTomlContent(result.text, result.sha256), source);
 });
 
-test('insere prompt ausente antes de tabelas sem alterar prompt de tabela', () => {
+test("inserts missing prompt before tables without changing table prompt", () => {
   const source = '# meu comando\ndescription = "Descricao"\n[config]\nprompt = "Outro significado"\n';
   const result = mergeTomlContent(source, body);
   assert.ok(withoutMetadata(result.text).startsWith('# meu comando\ndescription = "Descricao"\nprompt = '));

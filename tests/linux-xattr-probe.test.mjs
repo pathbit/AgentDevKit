@@ -20,7 +20,7 @@ function skipUnavailable(t, reason) {
   t.skip(reason);
 }
 
-test('classificação recusa erros e distingue saída vazia e não vazia', () => {
+test("classification refuses errors and distinguishes empty and not empty output", () => {
   const result = { status: 0, stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) };
   assert.equal(classifyXattr(result), 'empty');
   assert.equal(classifyXattr({ ...result, stdout: Buffer.from('atributo') }), 'present');
@@ -40,7 +40,7 @@ test('consulta Linux identifica atributo e falha fechada sem expor seu valor', {
   assert.equal(inspectLinuxXattr(join(root, 'ausente')), 'unknown');
 });
 
-test('consulta Linux identifica ACL POSIX listável', { skip: linuxOnly }, t => {
+test("Linux query identifies ACL POSIX listable", { skip: linuxOnly }, t => {
   if (spawnSync('/usr/bin/getfattr', ['--version']).error || spawnSync('/usr/bin/setfacl', ['--version']).error) { skipUnavailable(t, 'Ferramentas attr ou acl indisponíveis.'); return; }
   const root = mkdtempSync(join(tmpdir(), 'adk-acl-probe-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -51,7 +51,7 @@ test('consulta Linux identifica ACL POSIX listável', { skip: linuxOnly }, t => 
   assert.equal(inspectLinuxXattr(file), 'present');
 });
 
-test('instalador atualiza os bytes e preserva o atributo Linux preexistente', { skip: linuxCliOnly }, t => {
+test("installer updates bytes and preserves preexisting Linux attribute", { skip: linuxCliOnly }, t => {
   if (spawnSync('/usr/bin/getfattr', ['--version']).error || spawnSync('/usr/bin/setfattr', ['--version']).error) { skipUnavailable(t, 'Ferramentas attr indisponíveis.'); return; }
   const root = mkdtempSync(join(tmpdir(), 'adk-install-xattr-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -66,7 +66,7 @@ test('instalador atualiza os bytes e preserva o atributo Linux preexistente', { 
   assert.equal(attribute.stdout, 'valor-sintetico');
 });
 
-test('instalador recusa atributo Linux adicionado antes da publicação', { skip: linuxCliOnly }, t => {
+test("installer refuses Linux attribute added before posting", { skip: linuxCliOnly }, t => {
   if (spawnSync('/usr/bin/getfattr', ['--version']).error || spawnSync('/usr/bin/setfattr', ['--version']).error) { skipUnavailable(t, 'Ferramentas attr indisponíveis.'); return; }
   const root = mkdtempSync(join(tmpdir(), 'adk-xattr-publication-'));
   t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); rmSync(root, { recursive: true, force: true }); });
@@ -94,7 +94,7 @@ test('instalador recusa atributo Linux adicionado antes da publicação', { skip
   assert.equal(attribute.stdout, 'fixture');
 });
 
-test('sync recusa atributo Linux adicionado antes da publicação', { skip: linuxCliOnly }, t => {
+test("sync refuses added Linux attribute before posting", { skip: linuxCliOnly }, t => {
   if (spawnSync('/usr/bin/getfattr', ['--version']).error || spawnSync('/usr/bin/setfattr', ['--version']).error) { skipUnavailable(t, 'Ferramentas attr indisponíveis.'); return; }
   const root = mkdtempSync(join(tmpdir(), 'adk-sync-xattr-publication-'));
   t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); rmSync(root, { recursive: true, force: true }); });
@@ -133,7 +133,7 @@ test('sync recusa atributo Linux adicionado antes da publicação', { skip: linu
   assert.equal(attribute.stdout, 'fixture');
 });
 
-test('instalador preserva atributo Linux adicionado antes da remoção', { skip: linuxCliOnly }, t => {
+test("installer preserves Linux attribute added before removal", { skip: linuxCliOnly }, t => {
   if (spawnSync('/usr/bin/getfattr', ['--version']).error || spawnSync('/usr/bin/setfattr', ['--version']).error) { skipUnavailable(t, 'Ferramentas attr indisponíveis.'); return; }
   const root = mkdtempSync(join(tmpdir(), 'adk-xattr-remove-'));
   t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); rmSync(root, { recursive: true, force: true }); });
@@ -161,7 +161,7 @@ test('instalador preserva atributo Linux adicionado antes da remoção', { skip:
   assert.equal(attribute.stdout, 'fixture');
 });
 
-test('sync preserva atributo Linux adicionado antes da remoção', { skip: linuxCliOnly }, t => {
+test("sync preserves added Linux attribute before removal", { skip: linuxCliOnly }, t => {
   if (spawnSync('/usr/bin/getfattr', ['--version']).error || spawnSync('/usr/bin/setfattr', ['--version']).error) { skipUnavailable(t, 'Ferramentas attr indisponíveis.'); return; }
   const root = mkdtempSync(join(tmpdir(), 'adk-sync-xattr-remove-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -231,7 +231,7 @@ test('novo plano Linux preserva o atributo detectado e recusa o plano anterior',
   assert.equal(attribute.stdout, 'valor-sintetico');
 });
 
-test('CLI informa metadados não verificados quando getfattr está ausente', { skip: linuxCliOnly, timeout: 120000 }, t => {
+test("CLI informs unchecked metadata when getfattr is missing", { skip: linuxCliOnly, timeout: 120000 }, t => {
   const root = mkdtempSync(join(tmpdir(), 'adk-no-getfattr-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const repo = resolve(dirname(fileURLToPath(import.meta.url)), '..'), cli = join(repo, 'bin/agentdevkit.mjs');

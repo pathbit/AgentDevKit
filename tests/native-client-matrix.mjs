@@ -23,7 +23,7 @@ export function destination(client, kind, item, policy = adapters) {
   if (format === 'agente' && kind === 'agents') return `${root}/agents/${item.name}.agent.md`;
   throw Error(`Formato não suportado pelo runner: ${client}/${kind}/${format}`);
 }
-// A checagem é física em cada componente; não garante atomicidade contra troca concorrente.
+// Checking is physical in each component; it does not guarantee atomicity against concurrent exchange.
 export function safeRead(project, path, encoding = 'utf8') {
   if (!path || path.split('/').some(part => !part || part === '.' || part === '..' || part.includes('\\'))) throw Error('Caminho inválido.');
   let current = project;
@@ -57,8 +57,8 @@ export function structural(project, client, kind, item, policy = adapters, packa
     path = destination(client, kind, item, policy);
     if (!path) return { status: 'unsupported', reason: 'O pacote não declara uma rota para este recurso.' };
     const full = join(project, path), text = safeRead(project, path);
-    // Fixtures sem colisões devem ter o apontamento gerado completo, não apenas
-    // uma substring que possa estar dentro de código, comentário ou texto escapado.
+    // Fixtures without collisions should have the full generated pointer, not only
+    // a substring that may be within code, comment or escaped text.
     const link = text.match(/^---\r?\n(?:(?!---(?:\r?\n|$))[^\r\n]*\r?\n)*---\r?\n\r?\n# [^\r\n]+\r?\n\r?\n<!-- gerado: sincronizar-agentes -->\r?\nLeia e siga \[origem\]\(([^)\r\n]+)\)\.\r?\n?$/);
     if (!link || relative(project, resolve(dirname(full), decodeURIComponent(link[1]))).split('\\').join('/') !== item.path) return { status: 'failed', path, reason: 'apontamento gerado divergente' };
     const source = safeRead(project, item.path, null), expected = safeRead(packageRoot, item.path, null);
@@ -146,7 +146,7 @@ async function main() {
       return { ...result, stdoutLog: join(caseDir, `${label}.stdout.log`), stderrLog: join(caseDir, `${label}.stderr.log`) };
     };
     const init = await invoke('init', process.execPath, [cli, 'init', '--target', project, '--agents', client, '--yes', '--json']);
-    let initOk = false; try { initOk = good(init) && JSON.parse(init.stdout).ok === true; } catch { /* saída inválida */ }
+    let initOk = false; try { initOk = good(init) && JSON.parse(init.stdout).ok === true; } catch { /* invalid output */ }
     entry.init = { status: initOk ? 'passed' : 'failed', log: init.stdoutLog, stderr: init.stderrLog };
     if (!initOk) throw Error('Instalação falhou.');
     const installedCatalog = JSON.parse(safeRead(project, '.pbai4devs/catalog.json'));
@@ -187,5 +187,5 @@ async function main() {
   const failed = cases.some(c => c.init.status !== 'passed' || !['completed', 'not-run'].includes(c.discovery?.status) || c.fixturePreserved === false || c.error || !c.inventory || Object.values(c.inventory).some(x => x.missing.length || x.extra.length || x.duplicates.length)) || rows.some(r => r.structure.status === 'failed' || r.discovery.status === 'not-observed');
   console.log(JSON.stringify({ report: file, cases: cases.length, rows: rows.length, failed })); if (failed) process.exitCode = 1;
 }
-let entry = false; try { entry = Boolean(process.argv[1]) && realpathSync(resolve(process.argv[1])) === realpathSync(fileURLToPath(import.meta.url)); } catch { /* importação */ }
+let entry = false; try { entry = Boolean(process.argv[1]) && realpathSync(resolve(process.argv[1])) === realpathSync(fileURLToPath(import.meta.url)); } catch { /* import */ }
 if (entry) main().catch(error => { console.error(error.message); process.exitCode = 1; });

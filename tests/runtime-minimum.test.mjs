@@ -10,7 +10,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { findNpmCli } from '../.pbai4devs/scripts/lib/npm.mjs';
 
 const repository = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-test('runtime de entrada preserva Git e skill própria em init, sync e update', { timeout: 900000 }, async t => {
+test("input runtime preserves Git and own skill in init, sync and update", { timeout: 900000 }, async t => {
   if (process.env.ADK_EXPECT_NODE18 === '1') assert.equal(process.versions.node, '18.20.8');
   const base = mkdtempSync(join(tmpdir(), 'adk-runtime-'));
   t.after(() => rm(base, { recursive: true, force: true, maxRetries: 6, retryDelay: 250 }));

@@ -6,6 +6,8 @@ version: 0.0.13
 
 # Projetos reais e exemplos incrementais
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 Validar a instalação e manutenção do pacote em commits fixos de projetos reais,
 preservando suas configurações e seu índice Git. Demonstrar o fluxo de produto,
 design e três specs em dois projetos novos, com resultados locais ignorados.
@@ -24,3 +26,7 @@ design e três specs em dois projetos novos, com resultados locais ignorados.
 Os testes de compatibilidade não executam nem compilam as aplicações externas.
 Aprovações de produto e revisão nos exemplos são simuladas. Código de teste é
 versionado; clones, projetos gerados e evidências permanecem fora do Git.
+
+[reading-pt]: SPEC.md
+[reading-en]: ../../en/specs/real-projects/SPEC.md
+[reading-es]: ../../es/specs/real-projects/SPEC.md

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-// O parser é distribuído com o kit; não é uma verificação independente.
+// The parser is distributed with the kit; it is not an independent check.
 import toml from '../.pbai4devs/scripts/lib/smol-toml.cjs';
 import { stripTomlContent } from '../.pbai4devs/scripts/lib/managed-toml.mjs';
 import { mergeTomlContent } from './fixtures/legacy-toml-writer.mjs';

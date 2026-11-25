@@ -4,11 +4,15 @@ description: Instalação do AgentDevKit e geração local dos agentes.
 
 # Instalação
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 O pacote traz o gerador e as fontes compartilhadas. A instalação prepara
 `.pbai4devs` e cria somente os apontamentos dos agentes escolhidos.
 
+- [Começo rápido com um cliente](../../README.md#começo-rápido).
 - [Instalar pela primeira vez](#instalar).
 - [Simular em um projeto existente](#simular-em-um-projeto-existente).
+- [Usar o hub apenas no checkout local](#usar-o-hub-apenas-no-checkout-local).
 - [Atualizar ou mudar clientes](#atualizar-e-escolher-agentes).
 
 ## Pré-requisitos
@@ -18,6 +22,10 @@ O guia inclui instalação manual e como pedir ao agente para preparar a máquin
 Git é opcional para instalar o kit. O launcher aceita Node 18 para preparar
 um runtime local usando `tar`. Veja o [bootstrap][bootstrap] para as regras
 de seleção e cache no Windows.
+
+Node.js é um pré-requisito da CLI. Uma API .NET continua usando seu SDK, um
+projeto Python continua usando seu ambiente e uma pasta de documentação
+pode receber o kit sem instalar ferramentas da aplicação.
 
 ## Instalar
 
@@ -31,6 +39,22 @@ Escolha um deles e execute na pasta do projeto.
 ```console
 npx @pathbit/agentdevkit init
 ```
+
+Se o npm pedir confirmação para baixar o pacote, confirme para continuar.
+
+No menu, use as setas e **Espaço** para marcar agentes.
+Pressione **Enter** para confirmar ou **Esc** para cancelar. Para trocar a
+seleção em um projeto instalado, execute:
+
+```console
+npx @pathbit/agentdevkit agents --select
+```
+
+Com Node.js e o npm que vem com ele, a instalação funciona em uma pasta
+sem Git. As ferramentas da aplicação e os clientes de código são necessários
+quando você for usá-los. O kit não os instala durante `init`.
+Para testar o menu no checkout em desenvolvimento, use
+`npm run cli -- init` ou `npm run cli -- agents --select`.
 
 Com outro gerenciador instalado, você também pode executar:
 
@@ -79,55 +103,81 @@ confira o [diagnóstico de registry](troubleshooting.md#download-plataforma-ou-f
 ### Opções e verificação
 
 Sem comando adicional, o pacote executa `init`. No primeiro uso interativo,
-quando falta o idioma ou a seleção de agentes, o assistente reúne essas escolhas
-e o objetivo. Com idioma e clientes explícitos, use também `--purpose`.
-No aplicativo desktop, reúna as escolhas pelo chat e passe-as à CLI.
+o assistente pede o idioma, a seleção de agentes e o objetivo que faltarem.
+Em terminais sem suporte ao menu, digite os IDs separados por vírgulas.
+Com idioma e clientes explícitos, use `--purpose` para indicar o objetivo.
+No chat de um agente desktop, diga qual cliente quer usar e peça para
+executar a CLI na pasta do projeto.
 
 Consulte [CLI](cli.md) para acrescentar seleção, destino e simulação. `--json`,
 `--yes`, `--dry-run` ou ausência de terminal interativo evitam perguntas.
-Sem escolha explícita ou salva, o modo `none` prepara o hub sem criar
-pastas de clientes. Use `--agents all` para selecionar todos os
-clientes ativos deliberadamente.
+Sem escolha explícita ou salva, `none` prepara as instruções compartilhadas
+e `AGENTS.md`. Comece com o ID do cliente que você usa. É possível acrescentar
+outro depois com `agents add <id>`. A opção `--agents all` seleciona todos
+os clientes ativos. [Lista de clientes][clients]
 
-Após instalar, confirme a versão, o diagnóstico e os apontamentos:
+Após instalar, confirme a versão e confira o diagnóstico:
 
 ```console
 npx @pathbit/agentdevkit --version
 npx @pathbit/agentdevkit doctor
-npx @pathbit/agentdevkit sync --check
 ```
 
-Sem Git, use `doctor` para conferir o kit. `sync --check` pode indicar
-pendência de Git. Para as diferenças entre diagnóstico e sincronização,
-consulte a [CLI](cli.md#diagnóstico-e-sincronização).
+Num projeto com Git, use também `npx @pathbit/agentdevkit sync --check`
+para conferir os apontamentos. Sem Git, `doctor` pode informar uma
+pendência de regras locais do Git. [Diagnóstico e sincronização][diagnostics]
 
 Se escolheu GitHub Packages, use o mesmo prefixo
 `npx --registry=https://npm.pkg.github.com` nesses comandos. Para fixar uma
-versão, acrescente-a ao nome do pacote, como `@pathbit/agentdevkit@0.0.31`.
+versão, acrescente-a ao nome do pacote. Use a mesma versão para simular,
+aplicar e verificar.
 Consulte `npx @pathbit/agentdevkit next` para retomar pelo objetivo do projeto.
 Prepare [as ferramentas](prerequisites.md#depois-de-instalar-o-kit) quando a
 tarefa exigir.
 
 ### Simular em um projeto existente
 
-Na raiz do projeto, simule com os clientes e o idioma que serão aplicados.
-Por exemplo, para preparar Codex e Claude em português:
+Na raiz do projeto, use o mesmo idioma e cliente na simulação e na aplicação.
+Neste exemplo, o cliente é Codex:
 
 ```console
-npx @pathbit/agentdevkit init --lang pt --agents codex,claude --dry-run
+npx @pathbit/agentdevkit init --lang pt --agents codex --dry-run
 ```
 
 O plano lista mudanças e conflitos. Acrescente `--json` para consultar a lista
 completa e os motivos de preservação. Depois da revisão, execute o mesmo
-`init` sem `--dry-run`. Se só quiser os recursos compartilhados, use
-`--agents none` no plano e na aplicação. Se o kit já está instalado, simule
-[`update`](#atualizar-e-escolher-agentes).
+`init` sem `--dry-run`. Para instalar só as instruções compartilhadas, use
+`--agents none` nos dois comandos. Se o kit já está instalado, simule
+[`update`](#atualizar-e-escolher-agentes). Em um monorepo, escolha a raiz
+onde a equipe mantém as instruções e abra o agente nesse mesmo diretório.
+
+### Usar o hub apenas no checkout local
+
+Use `init --local` quando quiser manter o hub `.pbai4devs` no seu checkout.
+O kit grava a regra em `.pbai4devs/.gitignore`. Isso também ajuda quando um
+validador do projeto usa a listagem do Git para selecionar seus próprios
+arquivos. Na pasta do projeto, simule a instalação.
+
+```console
+npx @pathbit/agentdevkit init --local --agents none --lang pt --dry-run
+```
+
+Revise o plano e repita o comando sem `--dry-run`. O mesmo `init --local`
+ativa o modo em uma instalação existente. Use `doctor` e `sync --check`
+na mesma pasta para conferir o resultado. `update` e `sync` preservam a
+escolha salva.
+
+A regra abrange arquivos ainda não rastreados dentro de `.pbai4devs`.
+O índice, a configuração e o `.gitignore` da raiz do projeto são preservados.
+Arquivos já rastreados continuam rastreados. `AGENTS.md`, arquivos dos
+clientes e artefatos de teste dependem das regras do projeto e podem aparecer
+em `git status`.
 
 ## O que fica no projeto
 
 | Conteúdo | Tratamento |
 | --- | --- |
-| `.pbai4devs` com recursos e templates | Fonte compartilhada versionável. |
+| `.pbai4devs` com recursos e templates | Fonte compartilhada do kit. |
 | Recursos nos clientes | Apontamentos locais; podem aparecer no Git. |
 | Entradas da raiz criadas pelo kit | Arquivos locais gerados. |
 | Índices, manifesto e seleção | Derivados locais; confira o ignore do kit. |
@@ -249,7 +299,13 @@ Se houver erro, consulte [solução de problemas](troubleshooting.md).
 [Wiki](../README.md) · [Spec de segurança][spec]
 
 [bootstrap]: ../../.pbai4devs/scripts/preparar-ferramentas/BOOTSTRAP.md
+[clients]: ../../.pbai4devs/COMPATIBILIDADE.md
+[diagnostics]: cli.md#diagnóstico-e-sincronização
 [migracao]: ../../.pbai4devs/COMPATIBILIDADE.md#migrar-pastas-legadas
 [spec]: ../specs/security-ecosystem/SPEC.md
 [tokens]: https://github.com/settings/tokens
 [github-auth]: https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-npm-registry#authenticating-to-github-packages
+
+[reading-pt]: installation.md
+[reading-en]: ../en/guides/installation.md
+[reading-es]: ../es/guides/installation.md

@@ -66,7 +66,7 @@ const catalog = {
   skills: [entry],
 };
 
-test('TOOL.json inválido é sanitizado e preserva bytes', t => {
+test("TOOL.json invalid is sanitized and preserves bytes", t => {
   const root = fixture(t);
   const file = join(root, '.pbai4devs/tools/demo/TOOL.json');
   put(file, bad);
@@ -74,7 +74,7 @@ test('TOOL.json inválido é sanitizado e preserva bytes', t => {
   assert.equal(readFileSync(file, 'utf8'), bad);
 });
 
-test('CATALOG.json inválido é sanitizado e preserva bytes', t => {
+test("CATALOG.json invalid is sanitized and preserves bytes", t => {
   const root = fixture(t);
   const file = join(root, '.pbai4devs/external-skills/CATALOG.json');
   put(file, bad);
@@ -85,7 +85,7 @@ test('CATALOG.json inválido é sanitizado e preserva bytes', t => {
   assert.equal(readFileSync(file, 'utf8'), bad);
 });
 
-test('manifesto inválido é sanitizado e ausência mantém ENOENT', t => {
+test("invalid manifesto is sanitized and absence keeps ENOENT", t => {
   const root = fixture(t);
   const file = join(root, 'node_modules/demo/package.json');
   put(file, bad);
@@ -98,7 +98,7 @@ test('manifesto inválido é sanitizado e ausência mantém ENOENT', t => {
   });
 });
 
-test('estado e lock de skill inválidos são sanitizados', t => {
+test("invalid skill status and lock are sanitized", t => {
   const root = fixture(t);
   const folder = join(root, '.pbai4devs/external-skills/.local/vendor-demo');
   mkdirSync(folder, { recursive: true });
@@ -122,12 +122,12 @@ test('estado e lock de skill inválidos são sanitizados', t => {
   assert.equal(readFileSync(lock, 'utf8'), bad);
 });
 
-test('catálogo externo ausente mantém ENOENT', t => {
+test("missing external catalog keeps ENOENT", t => {
   const root = fixture(t);
   assert.throws(() => loadExternal(root), error => error.code === 'ENOENT');
 });
 
-test('política local de adaptadores inválida não expõe conteúdo nem altera arquivos', t => {
+test("Invalid local adapter policy does not expose content or change files", t => {
   const root = fixture(t);
   assert.equal(spawnSync('git', ['init', '--quiet', '--template=', root]).status, 0);
   const file = join(root, '.pbai4devs/templates/clients/ADAPTERS.json');
@@ -148,7 +148,7 @@ test('política local de adaptadores inválida não expõe conteúdo nem altera 
   assert.deepEqual(readFileSync(join(root, '.git/index')), index);
 });
 
-test('sync direto não expõe política de adaptadores inválida na carga inicial', t => {
+test("direct sync does not expose invalid adapter policy in the initial load", t => {
   const root = fixture(t);
   assert.equal(spawnSync('git', ['init', '--quiet', '--template=', root]).status, 0);
   const scripts = join(root, '.pbai4devs/scripts');
@@ -173,7 +173,7 @@ test('sync direto não expõe política de adaptadores inválida na carga inicia
   assert.equal(readFileSync(join(root, 'human.txt'), 'utf8'), 'conteúdo humano\n');
 });
 
-test('CLI principal informa política de adaptadores inválida sem expor conteúdo ou caminhos', t => {
+test("CLI main informs invalid adapter policy without exposing content or paths", t => {
   const root = fixture(t), bundle = join(root, 'bundle'), target = join(root, 'projeto');
   mkdirSync(target);
   assert.equal(spawnSync('git', ['init', '--quiet', '--template=', target]).status, 0);
@@ -233,7 +233,7 @@ test('CLI principal informa política de adaptadores inválida sem expor conteú
   }
 });
 
-test('CLIs recusam JSON inválido sem expor conteúdo ou caminho', t => {
+test("CLIs refuse JSON invalid without exposing content or path", t => {
   const root = fixture(t);
   const scripts = join(root, '.pbai4devs/scripts');
   cpSync(join(project, '.pbai4devs/scripts'), scripts, { recursive: true });
@@ -262,7 +262,7 @@ test('CLIs recusam JSON inválido sem expor conteúdo ou caminho', t => {
   assert.equal(readFileSync(external, 'utf8'), bad);
 });
 
-test('erro ao ler diretório mantém EISDIR', t => {
+test("error while reading directory keeps EISDIR", t => {
   const root = fixture(t);
   const file = join(root, '.pbai4devs/external-skills/CATALOG.json');
   mkdirSync(file, { recursive: true });
@@ -271,7 +271,7 @@ test('erro ao ler diretório mantém EISDIR', t => {
   });
 });
 
-test('CLI principal preserva estado e índice ao encontrar JSON malformado', { timeout: 180000 }, t => {
+test("CLI main preserves state and index when finding JSON malformed", { timeout: 180000 }, t => {
   const root = fixture(t), bin = join(project, 'bin/agentdevkit.mjs');
   const command = (file, args) => spawnSync(file, args, { cwd: root, encoding: 'utf8', timeout: 120000 });
   assert.equal(command('git', ['init', '--quiet', '--template=', root]).status, 0);

@@ -32,7 +32,7 @@ function cli(root, args, status = 0) {
   assert.equal(result.status, status, `agentdevkit ${args.join(' ')}: ${result.error?.stack || ''}\nsignal: ${result.signal || 'none'}\n${result.stdout || ''}${result.stderr || ''}`); return JSON.parse(result.stdout);
 }
 
-test('doctor e sync check informam artefatos rastreados sem alterar o índice', t => {
+test("doctor and sync check report artifacts tracked without changing the index", t => {
   const root = fixture(t); cli(root, ['init', '--agents', 'claude']);
   write(root, '.playwright-mcp/trace.zip', 'trace');
   git(root, 'add', '-f', '.playwright-mcp/trace.zip');
@@ -44,7 +44,7 @@ test('doctor e sync check informam artefatos rastreados sem alterar o índice', 
   assert.equal(git(root, 'ls-files', '--stage', '-z'), before);
 });
 
-test('consumidor recebe recursos sem código do gerador e preserva entrada humana', t => {
+test("consumer receives resources without generator code and preserves human entry", t => {
   const root = fixture(t), human = '# Meu projeto\n\nInstruções próprias.\n';
   write(root, 'AGENTS.md', human); cli(root, ['init', '--agents', 'claude']);
   assert.ok(read(root, 'AGENTS.md').startsWith(human));
@@ -56,7 +56,7 @@ test('consumidor recebe recursos sem código do gerador e preserva entrada human
   assert.equal(spawnSync('git', ['-C', root, 'check-ignore', '-q', 'CLAUDE.md']).status, 1);
 });
 
-test('init transporta licença canônica sem alterar licença humana e sync a preserva', t => {
+test("init transports canonical license without altering human license and sync preserves it", t => {
   const root = fixture(t), canonical = readFileSync(join(project, 'LICENSE'));
   const human = Buffer.from('Licença exclusiva deste projeto.\r\n');
   write(root, 'LICENSE', human);
@@ -75,7 +75,7 @@ test('init transporta licença canônica sem alterar licença humana e sync a pr
   assert.equal(spawnSync('git', ['-C', root, 'check-ignore', '--no-index', '-q', '.pbai4devs/LICENSE']).status, 1);
 });
 
-test('instalação em Git vazio preserva README, licença, índice e evidencia visibilidade', t => {
+test("installation in empty Git preserves README, license, index and evidence of visibility", t => {
   const root = fixture(t), readme = '# Produto existente\n', license = 'Licença do produto\r\n';
   write(root, 'README.md', readme); write(root, 'LICENSE', license);
   write(root, '.agent-tests/human.txt', 'evidência própria\n');
@@ -99,7 +99,7 @@ test('instalação em Git vazio preserva README, licença, índice e evidencia v
   assert.equal(read(root, '.git/info/exclude'), exclude);
 });
 
-test('negação humana de artefatos é preservada mesmo com force', t => {
+test("human denial of artifacts is preserved even with force", t => {
   const root = fixture(t), human = '!/.agent-tests/**\n'; write(root, '.gitignore', human);
   const exclude = read(root, '.git/info/exclude');
   for (const option of ['--dry-run', '--force']) {
@@ -111,7 +111,7 @@ test('negação humana de artefatos é preservada mesmo com force', t => {
   }
 });
 
-test('sem Git mantém ignore raiz, informa pendência e protege após sincronizar', t => {
+test("without Git keeps ignore root, informs pending and protects after syncing", t => {
   const root = mkdtempSync(join(tmpdir(), 'agentdevkit-no-git-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const human = '# Regra do produto\ndist/\n'; write(root, '.gitignore', human);
@@ -130,7 +130,7 @@ test('sem Git mantém ignore raiz, informa pendência e protege após sincroniza
   assert.equal(read(root, 'README.md'), '# Meu produto\n'); assert.equal(read(root, 'LICENSE'), 'Minha licença\n');
 });
 
-test('sem Git não cria ignore de raiz ausente', t => {
+test("without Git does not create ignore missing root", t => {
   const root = mkdtempSync(join(tmpdir(), 'agentdevkit-no-ignore-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const result = cli(root, ['init', '--agents', 'claude']);
@@ -138,7 +138,7 @@ test('sem Git não cria ignore de raiz ausente', t => {
   assert.equal(existsSync(join(root, '.gitignore')), false);
 });
 
-test('ignore raiz registrado por versão antiga nunca é removido ou desindexado', t => {
+test("Ignore root registered by old version is never removed or unindexed", t => {
   const root = fixture(t), human = '# Regras do projeto\n.env.*\n!.env.example\n';
   write(root, '.gitignore', human); git(root, 'add', '.gitignore');
   cli(root, ['init', '--agents', 'claude']);
@@ -150,7 +150,7 @@ test('ignore raiz registrado por versão antiga nunca é removido ou desindexado
   assert.equal(git(root, 'ls-files', '--stage', '-z'), index);
 });
 
-test('update acrescenta licença em instalação anterior e detecta alteração posterior', t => {
+test("update adds license in previous installation and detects later change", t => {
   const root = fixture(t), licensePath = '.pbai4devs/LICENSE', canonical = readFileSync(join(project, 'LICENSE'));
   cli(root, ['init', '--agents', 'claude']);
   const old = JSON.parse(read(root, statePath)); delete old.files[licensePath];
@@ -168,7 +168,7 @@ test('update acrescenta licença em instalação anterior e detecta alteração 
   assert.equal(Object.hasOwn(JSON.parse(read(root, statePath)).files, licensePath), false);
 });
 
-test('licença própria dentro do hub é preservada inclusive com force', t => {
+test("own license within the hub is preserved including with force", t => {
   const root = fixture(t), licensePath = '.pbai4devs/LICENSE';
   const rootLicense = 'Licença do produto.\n', hubLicense = 'Licença humana existente.\r\n';
   write(root, 'LICENSE', rootLicense); write(root, licensePath, hubLicense);
@@ -181,7 +181,7 @@ test('licença própria dentro do hub é preservada inclusive com force', t => {
   assert.equal(read(root, licensePath), hubLicense);
 });
 
-test('update mantém derivados, fontes e estágio humano no índice', t => {
+test("update keeps derivatives, sources and human stage in the index", t => {
   const root = fixture(t); cli(root, ['init', '--agents', 'claude']);
   const derived = '.claude/skills/configurar-projeto/SKILL.md';
   const source = '.pbai4devs/skills/projeto/configurar-projeto/SKILL.md';
@@ -196,7 +196,7 @@ test('update mantém derivados, fontes e estágio humano no índice', t => {
   assert.equal(git(root, 'show', ':human.txt'), stagedHuman);
 });
 
-test('conteúdo humano diferente no índice permanece intacto mesmo com force', t => {
+test("different human content in the index remains intact even with force", t => {
   const root = fixture(t); cli(root, ['init', '--agents', 'claude']);
   const derived = '.claude/skills/configurar-projeto/SKILL.md', original = read(root, derived);
   write(root, derived, 'human staged version'); git(root, 'add', '-f', derived); write(root, derived, original);
@@ -207,7 +207,7 @@ test('conteúdo humano diferente no índice permanece intacto mesmo com force', 
   assert.equal(read(root, derived), original);
 });
 
-test('migração atualiza somente bloco legado de uma entrada humana rastreada', t => {
+test("migration updates only legacy block of a tracked human input", t => {
   const root = fixture(t); cli(root, ['init', '--agents', 'claude']);
   const block = '<!-- BEGIN AGENTDEVKIT -->\nInstrução gerada antiga.\n<!-- END AGENTDEVKIT -->';
   const mixed = `# Instruções humanas\n\n${block}\n\nPreserve este texto.\n`;
@@ -221,7 +221,7 @@ test('migração atualiza somente bloco legado de uma entrada humana rastreada',
   assert.equal(spawnSync('git', ['-C', root, 'check-ignore', '--no-index', '-q', 'AGENTS.md']).status, 1);
 });
 
-test('mudança concorrente nas exclusões é preservada sem alterar arquivos ou índice', t => {
+test("concurrent change in deletions is preserved without changing files or index", t => {
   const root = fixture(t); cli(root, ['init', '--agents', 'claude']);
   const derived = '.claude/skills/configurar-projeto/SKILL.md';
   git(root, 'add', '-f', derived);
@@ -243,7 +243,7 @@ test('mudança concorrente nas exclusões é preservada sem alterar arquivos ou 
   assert.equal(readFileSync(exclude, 'utf8'), '# concurrent human exclusion\n');
 });
 
-test('falha de escrita preserva arquivos já publicados, backup e entradas staged concorrentes', t => {
+test("write failure preserves previously published files, backup and concurrent staged entries", t => {
   const root = fixture(t); cli(root, ['init', '--agents', 'claude']);
   const derived = '.claude/skills/configurar-projeto/SKILL.md';
   write(root, 'human.txt', 'human staged before operation\n');
@@ -289,7 +289,7 @@ test('falha de escrita preserva arquivos já publicados, backup e entradas stage
   assert.equal(git(root, 'show', ':concurrent.txt'), 'concurrent staged content\n');
 });
 
-test('plano antigo de escrita de exclusão é recusado e preserva o índice', t => {
+test("old plan of exclusion writing is refused and preserves the index", t => {
   const root = fixture(t); cli(root, ['init', '--agents', 'claude']);
   const derived = '.claude/skills/configurar-projeto/SKILL.md';
   git(root, 'add', '-f', derived);
@@ -305,7 +305,7 @@ test('plano antigo de escrita de exclusão é recusado e preserva o índice', t 
   assert.equal(readFileSync(exclude, 'utf8'), '# initial exclusion\n');
 });
 
-test('regra humana que inclui entrada gerada é preservada durante init', t => {
+test("human rule that includes generated input is preserved during init", t => {
   const root = fixture(t), human = '!/AGENTS.md\n';
   write(root, '.gitignore', human);
   const exclude = resolve(root, git(root, 'rev-parse', '--git-path', 'info/exclude').trim());
@@ -319,7 +319,7 @@ test('regra humana que inclui entrada gerada é preservada durante init', t => {
   }
 });
 
-test('doctor e sync avisam sobre entrada visível sem sobrescrever regra humana', t => {
+test("doctor and sync warn about visible entry without overwriting human rule", t => {
   const root = fixture(t); cli(root, ['init', '--agents', 'claude']);
   const human = '!/AGENTS.md\n', original = read(root, 'AGENTS.md');
   write(root, '.gitignore', human);
@@ -333,7 +333,7 @@ test('doctor e sync avisam sobre entrada visível sem sobrescrever regra humana'
   assert.equal(read(root, 'AGENTS.md'), original);
 });
 
-test('upgrade preserva exclusões legadas com ownership comprovado', t => {
+test("upgrade preserves legacy exclusions with proven ownership", t => {
   const root = fixture(t); cli(root, ['init', '--agents', 'claude']);
   const state = JSON.parse(read(root, statePath));
   const ignores = {
@@ -350,7 +350,7 @@ test('upgrade preserva exclusões legadas com ownership comprovado', t => {
   for (const [path, block] of Object.entries(ignores)) assert.equal(read(root, path), `${block}\n`);
 });
 
-test('ownership legado preserva negações humanas fora do bloco e blocos alterados', t => {
+test("legacy ownership preserves human denials outside the block and changed blocks", t => {
   const root = fixture(t); cli(root, ['init', '--agents', 'claude']);
   const path = '.pbai4devs/.gitignore';
   const block = '# BEGIN AGENT IGNORE\n!/catalog.json\n# END AGENT IGNORE';

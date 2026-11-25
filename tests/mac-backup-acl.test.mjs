@@ -90,7 +90,7 @@ for (const kind of ['install', 'sync']) for (const scenario of ['herdada', 'indi
   });
 }
 
-test('CLI init recusa diário com ACL herdada antes de copiar dados', { timeout: 120000, skip: process.platform !== 'darwin' ? 'ACL macOS requer macOS' : false }, t => {
+test("CLI init daily refusal with ACL inherited before copying data", { timeout: 120000, skip: process.platform !== 'darwin' ? 'ACL macOS requer macOS' : false }, t => {
   const root = fs.realpathSync(fs.mkdtempSync(join(tmpdir(), 'adk-cli-private-acl-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   assert.equal(spawnSync('git', ['init', '-q', root]).status, 0);

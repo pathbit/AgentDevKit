@@ -8,7 +8,7 @@ const body = '\n# Regra sintética\n\n<!-- gerado: sincronizar-agentes -->\nLeia
 const old = Buffer.from('---\ntrigger: always_on\ndescription: Exemplo sintético para projetos.\n---\n' + body);
 const current = Buffer.from('---\ndescription: "Exemplo sintético para projetos."\n---\n' + body);
 
-test('referência legada exige bytes e subconjunto YAML explícito', () => {
+test("legacy reference requires bytes and subset YAML explicit", () => {
   assert(isLegacyExact(source, old, current, 'demo'));
   const text = source.toString('utf8');
   const variants = [
@@ -28,7 +28,7 @@ test('referência legada exige bytes e subconjunto YAML explícito', () => {
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 const target = '.claude/rules/demo/RULE.md';
 
-test('atualização Claude exige registro íntegro, origem canônica e mesmo escopo', () => {
+test("Claude update requires intact registration, canonical origin and even scope", () => {
   const replacement = Buffer.from('---\ndescription: "Nova descrição."\n---\n' + body);
   const prove = (prior, next = replacement, changes = {}) => canMigrateClaudeReference({
     target, current: prior, replacement: next, recordedHash: digest(prior), ...changes,
@@ -57,7 +57,7 @@ test('atualização Claude exige registro íntegro, origem canônica e mesmo esc
   }
 });
 
-test('remoção do Git exige apontamento publicado e registro simultaneamente', () => {
+test("Git removal requires published note and record simultaneously", () => {
   const recorded = Buffer.from('---\ntrigger: model_decision\ndescription: Aplique ao preparar, integrar ou publicar alterações Git.\n---\n'
     + '\n# Regras Git\n\n<!-- gerado: sincronizar-agentes -->\nLeia e siga [origem](../../../.pbai4devs/rules/git/RULE.md).\n');
   const proof = { target: legacyClaudeGitTarget, current: recorded, replacement: null, recordedHash: digest(recorded) };

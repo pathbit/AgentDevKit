@@ -6,6 +6,8 @@ version: 0.0.4
 
 # Estrutura padrão e exemplos
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 ## Objetivo
 
 Organizar o repositório para que uma pessoa consiga localizar o código,
@@ -51,3 +53,7 @@ Evidências em `.agent-tests/standard-layout/`, fora do versionamento. Testes
 web/desktop não se aplicam: esta entrega altera a CLI, arquivos e automações.
 
 [Desenvolvimento](../../maintainers/development.md) · [Specs](../README.md)
+
+[reading-pt]: SPEC.md
+[reading-en]: ../../en/specs/v0.0.4/SPEC.md
+[reading-es]: ../../es/specs/v0.0.4/SPEC.md

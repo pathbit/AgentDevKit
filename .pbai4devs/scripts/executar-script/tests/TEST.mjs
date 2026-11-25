@@ -31,7 +31,7 @@ test('Node 24 e necessario e nao ha tentativa de runtime alternativo', () => {
   assert.throws(() => requireNode(24, '22.22.0'), /Node.js >=24/);
 });
 
-test('plan resolve pasta ou arquivo sem executar; argumentos e cwd sao preservados', t => {
+test("plan resolves folder or file without running; arguments and cwd are preserved", t => {
   const { root, write } = fixture(t); const marker = join(root, 'output.json');
   const file = write('com espacos/SCRIPT.mjs', `import { writeFileSync } from 'node:fs'; writeFileSync(process.argv[2], JSON.stringify({args:process.argv.slice(3),cwd:process.cwd()}));`);
   const planned = run('--plan', dirname(file), marker); assert.equal(planned.status, 0, planned.stderr); assert.match(planned.stdout, /runtime=node/); assert.equal(existsSync(marker), false);
@@ -55,7 +55,7 @@ test('shell e Python sao recusados mesmo quando executaveis; js e cjs usam Node'
   }
 });
 
-test('caminhos fora da raiz, symlinks de arquivo, pasta ou conf nao escapam da contencao', async t => {
+test("off root paths, file symlinks, folder or conf do not escape the containment", async t => {
   const { root, write } = fixture(t); const workspace = join(root, 'workspace'); mkdirSync(workspace);
   const external = write('outside.mjs', 'process.exit(0);');
   assert.throws(() => resolveScript(external, { root: workspace }), /fora do repositorio/);
@@ -73,14 +73,14 @@ test('caminhos fora da raiz, symlinks de arquivo, pasta ou conf nao escapam da c
     if (!createSymlink(subtest, config, join(dirname(internal), 'SCRIPT.conf'))) return;
     assert.throws(() => resolveScript(internal, { root: workspace }), /simbolico/);
   });
-  await t.test('configuracao simbolica sem alvo', subtest => {
+  await t.test("targetless symbol configuration", subtest => {
     const script = write('workspace/dangling/SCRIPT.mjs', 'process.exit(0);');
     if (!createSymlink(subtest, join(workspace, 'missing.conf'), join(dirname(script), 'SCRIPT.conf'))) return;
     assert.throws(() => resolveScript(script, { root: workspace }), /simbolico/);
   });
 });
 
-test('Playwright mantem plano e codigo 69 sem executar o arquivo de conector', t => {
+test("Playwright keeps plan and code 69 without running connector file", t => {
   const { root, write } = fixture(t); const marker = join(root, 'should-not-exist');
   const file = write('browser/SCRIPT.js', `require('node:fs').writeFileSync(${JSON.stringify(marker)}, 'bad');`);
   write('browser/SCRIPT.conf', 'executor=playwright-mcp\n');
@@ -103,7 +103,7 @@ test('configuracao invalida nunca recai em Node nem executa outro script', t => 
   assert.equal(resolveScript(file).executor, 'node');
 });
 
-test('configuracao e alvo do conector precisam ser arquivos regulares', t => {
+test("connector configuration and target need to be regular files", t => {
   const { root, write } = fixture(t);
   const script = write('bad-config/SCRIPT.mjs', 'process.exit(0);');
   mkdirSync(join(dirname(script), 'SCRIPT.conf'));
@@ -117,7 +117,7 @@ test('configuracao e alvo do conector precisam ser arquivos regulares', t => {
   assert.throws(() => resolveScript(alternate), /exige o arquivo SCRIPT.js configurado/);
 });
 
-test('ausencia ou caminho invalido falha sem procurar interpretes do sistema', () => {
+test("missing or invalid path fails without looking for system interpreters", () => {
   assert.equal(run().status, 2); assert.equal(run('missing-agent-script').status, 2);
   assert.equal(run('--help').status, 0);
 });

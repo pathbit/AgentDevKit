@@ -40,7 +40,7 @@ function snapshot(root) {
   visit(); return result;
 }
 
-test('coexiste com aliases nativos e complementa colisões sem perder conteúdo humano', t => {
+test("coexists with native aliases and complements collisions without losing human content", t => {
   const root = fixture(t);
   put(root, '.claude/skills/existing/SKILL.md', '# Human skill\n');
   put(root, '.claude/agents/revisor.md', '# Human reviewer\n');
@@ -64,7 +64,7 @@ test('coexiste com aliases nativos e complementa colisões sem perder conteúdo 
   assert.deepEqual(snapshot(root), stable);
 });
 
-test('preserva raiz simbólica externa, link pendente e loop sem abri-los', t => {
+test("preserves external symbolic root, pending link and loop without opening them", t => {
   for (const targetKind of ['external', 'dangling', 'loop']) {
     const root = fixture(t), outside = fixture(t);
     put(outside, 'sentinel.txt', 'outside\n');
@@ -79,7 +79,7 @@ test('preserva raiz simbólica externa, link pendente e loop sem abri-los', t =>
   }
 });
 
-test('ignore nativo simbólico permanece opaco na política local do Git', t => {
+test("Ignore symbolic native remains opaque in local Git politics", t => {
   const root = fixture(t), outside = fixture(t);
   const git = spawnSync('git', ['-C', root, 'init', '-q'], { encoding: 'utf8' });
   assert.equal(git.status, 0, git.stderr);
@@ -92,7 +92,7 @@ test('ignore nativo simbólico permanece opaco na política local do Git', t => 
   assert.equal(run(root, { localIgnores: true, check: true }).exitCode, 0);
 });
 
-test('link em caminho registrado continua sendo erro antes de qualquer escrita', t => {
+test("link on recorded path remains error before any writing", t => {
   for (const source of ['files', 'blocks', 'derived', 'outputs']) {
     const root = fixture(t), path = source === 'derived' ? 'CLAUDE.md' : source === 'outputs' ? '.agents/skills.json' : '.claude/skills/demo/SKILL.md';
     if (!link(t, root, 'missing', path)) return;
@@ -104,7 +104,7 @@ test('link em caminho registrado continua sendo erro antes de qualquer escrita',
   }
 });
 
-test('manifesto standalone editado pelo usuário passa a ser preservado', t => {
+test("manifesto standalone edited by the user will be preserved", t => {
   const root = fixture(t); run(root);
   const path = '.agents/skills.json', original = fs.readFileSync(join(root, path), 'utf8');
   const derived = JSON.parse(fs.readFileSync(join(root, '.pbai4devs/state/derived.json')));
@@ -127,7 +127,7 @@ test('manifesto nativo inclui recursos humanos complementados com apontamento', 
   assert.equal(run(root, { check: true }).exitCode, 0);
 });
 
-test('preserva diretórios humanos no lugar de índices, ignores e entradas, e arquivo no lugar de raiz', t => {
+test("preserves human directories in place of indexes, ignores and entries, and file in place of root", t => {
   const root = fixture(t);
   for (const path of ['.agents/skills.json', '.claude/.gitignore', 'CLAUDE.md']) put(root, `${path}/keep.txt`, 'Human data\n');
   put(root, '.codex', 'Human native configuration\n');
@@ -143,7 +143,7 @@ test('preserva diretórios humanos no lugar de índices, ignores e entradas, e a
   assert.deepEqual(snapshot(root), stable);
 });
 
-test('tipo alterado em caminho nativo registrado continua recusado antes de gravar', t => {
+test("changed type on registered native path continues refused before recording", t => {
   for (const [path, owned] of [
     ['.agents/skills.json', '.agents/skills.json'],
     ['.claude/.gitignore', '.claude/.gitignore'],
@@ -165,7 +165,7 @@ test('tipo alterado em caminho nativo registrado continua recusado antes de grav
   }
 });
 
-test('classificação preservável não encobre aliases por caixa nem caminhos fora do escopo', t => {
+test("Preservable classification does not cover aliases per box or paths outside the scope", t => {
   const root = fixture(t);
   put(root, '.Claude/notes.txt', 'human\n');
   assert.throws(() => nativePathBoundary(root, '.claude/skills'), /maiusculas\/minusculas/);
@@ -173,7 +173,7 @@ test('classificação preservável não encobre aliases por caixa nem caminhos f
   for (const path of ['../outside', '/outside', '.claude//skills', '.claude/./skills', '.claude/skills\n']) assert.throws(() => nativePathBoundary(root, path), /Caminho invalido/);
 });
 
-test('variantes humanas de entradas da raiz são preservadas sem criar duplicatas', t => {
+test("human variants of root inputs are preserved without creating duplicates", t => {
   const root = fixture(t);
   for (const path of ['Readme.md', 'agents.md', 'claude.md', 'gemini.md']) put(root, path, `# Human ${path}\n`);
   const before = snapshot(root), result = run(root, { force: true });
@@ -194,7 +194,7 @@ test('variantes humanas de entradas da raiz são preservadas sem criar duplicata
   assert.deepEqual(snapshot(root), stable);
 });
 
-test('variante única de entrada registrada conserva conteúdo como arquivo misto', t => {
+test("unique variant of registered entry saves content as mixed file", t => {
   for (const owned of ['AGENTS.md', 'agents.md']) {
     const root = fixture(t); put(root, 'agents.md', '# Renamed human entry\n');
     assert.throws(() => nativePathBoundary(root, 'AGENTS.md', [owned], { preserveRootAliases: true }), /maiusculas\/minusculas/);

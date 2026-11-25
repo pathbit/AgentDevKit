@@ -36,7 +36,7 @@ function protectedFixture(parent, name = 'journal') {
 const contents = root => fs.readdirSync(join(root, 'records')).sort().map(name => [name, fs.readFileSync(join(root, 'records', name))]);
 const code = expected => error => error?.code === expected;
 
-test('diário vazio, pendente, concluído e nova geração mantêm a cadeia', t => {
+test("empty diary, pending, completed and new generation keep the chain", t => {
   const root = fixture(t);
   assert.deepEqual(inspectRecoveryJournal(root), { status: 'ready', generation: 0, head: null });
   const first = reserveRecovery(root);
@@ -59,7 +59,7 @@ test('diário vazio, pendente, concluído e nova geração mantêm a cadeia', t 
   if (process.platform !== 'win32') for (const name of fs.readdirSync(join(root, 'staging'))) assert.equal(fs.statSync(join(root, 'staging', name)).mode & 0o777, 0o400);
 });
 
-test('layout incompleto, conteúdo estranho, link e arquivo truncado falham fechados', t => {
+test("incomplete layout, strange content, link and truncated file fail closed", t => {
   const root = fixture(t), records = join(root, 'records'), record = join(records, '000000000001.claim.json');
   fs.writeFileSync(record, 'incompleto');
   assert.equal(inspectRecoveryJournal(root).status, 'invalid');
@@ -88,7 +88,7 @@ test('layout incompleto, conteúdo estranho, link e arquivo truncado falham fech
   assert.equal(inspectRecoveryJournal(join(root, 'ausente')).status, 'invalid');
 });
 
-test('store inválido e falha de leitura são distintos de operação pendente', t => {
+test("invalid store and read failure are distinct from pending operation", t => {
   const root = fixture(t), id = '12345678-1234-4234-8234-123456789abc';
   fs.writeFileSync(join(root, 'records', '000000000001.claim.json'), 'inválido');
   assert.throws(() => beginRecovery(root, id, manifest), code('E_RECOVERY_STORE'));
@@ -107,7 +107,7 @@ test('store inválido e falha de leitura são distintos de operação pendente',
   } finally { t.mock.restoreAll(); syncBuiltinESMExports(); }
 });
 
-test('troca por link após lstat não lê nem altera o arquivo externo', {
+test("link exchange after lstat does not read or change external file", {
   skip: process.platform === 'win32' ? 'A fixture cria um link simbólico de arquivo, que exige privilégio específico no Windows.' : false,
 }, t => {
   const root = fixture(t); reserveRecovery(root);
@@ -160,7 +160,7 @@ for (const when of ['antes do link', 'depois do link', 'fsync após o link']) te
   assert.equal(fs.readdirSync(join(root, 'staging')).length, 1);
 });
 
-test('colisão na reserva preserva o claim concorrente e reporta disputa', t => {
+test("collision in reserve preserves the competing clan and reports dispute", t => {
   const root = fixture(t), link = fs.linkSync, rival = '12345678-1234-4234-8234-123456789abc';
   t.mock.method(fs, 'linkSync', (from, to) => {
     const bytes = Buffer.from(JSON.stringify({ version: 1, generation: 1, id: rival, kind: 'claim', previous: null }) + '\n');
@@ -215,7 +215,7 @@ nodeTest('falha ao fechar arquivo de preparação não fecha o descritor duas ve
   assert.equal(fs.readdirSync(staging).length, 1);
 });
 
-test('limite de bytes é aplicado antes de interpretar registros inválidos', t => {
+test("byte limit is applied before interpreting invalid records", t => {
   const root = fixture(t), records = join(root, 'records');
   for (let n = 1; n <= 257; n++) fs.writeFileSync(join(records, `${String(n).padStart(12, '0')}.claim.json`), Buffer.alloc(4096), { mode: 0o400 });
   assert.deepEqual(inspectRecoveryJournal(root), { status: 'invalid', reason: 'limit-exceeded' });
@@ -223,7 +223,7 @@ test('limite de bytes é aplicado antes de interpretar registros inválidos', t 
   assert.equal(fs.readdirSync(records).length, 257);
 });
 
-test('falha no fsync depois do recibo pode deixar done visível apesar do erro', t => {
+test("failure in fsync after receipt may leave done visible despite error", t => {
   const root = fixture(t), claim = reserveRecovery(root);
   beginRecovery(root, claim.id, manifest);
   const sync = fs.fsyncSync; let directorySyncs = 0;
@@ -291,7 +291,7 @@ nodeTest('erro ao gravar a resolução deixa a operação pendente e permite rep
   assert.equal(resolveRecovery(root, generation, id).phase, 'resolved');
 });
 
-test('falha ao sincronizar registro anterior impede publicação seguinte', t => {
+test("Synchronizing failure previous record prevents next publication", t => {
   const root = fixture(t), claim = reserveRecovery(root), before = contents(root);
   const sync = fs.fsyncSync;
   t.mock.method(fs, 'fsyncSync', fd => {
@@ -306,7 +306,7 @@ test('falha ao sincronizar registro anterior impede publicação seguinte', t =>
   assert.equal(inspectRecoveryJournal(root).phase, 'claim');
 });
 
-test('limite reserva espaço para claim, begin e done sem modificar diário cheio', { timeout: 120000 }, t => {
+test("limit reserve space for clay, beginning and done without modifying full diary", { timeout: 120000 }, t => {
   const root = fixture(t), records = join(root, 'records'); let previous = null;
   const entry = (generation, id, kind, extra) => Buffer.from(JSON.stringify({ version: 1, generation, id, kind, ...extra }) + '\n');
   for (let generation = 1; generation <= 1332; generation++) {
@@ -336,7 +336,7 @@ function child(script, args) {
   return { process, done };
 }
 
-test('oito processos disputam a mesma geração; apenas um publica claim', { timeout: 60000 }, async t => {
+test("eight lawsuits compete with the same generation; only one publishes the", { timeout: 60000 }, async t => {
   const root = fixture(t);
   const script = `const {reserveRecovery}=await import(process.argv[1]);process.stdout.write('ready\\n');await new Promise(r=>process.stdin.once('data',r));process.stdin.pause();try{process.stdout.write(JSON.stringify({ok:true,value:reserveRecovery(process.argv[2])}))}catch(e){process.stdout.write(JSON.stringify({ok:false,code:e.code}))}`;
   const children = Array.from({ length: 8 }, () => child(script, [root]));
@@ -356,7 +356,7 @@ test('oito processos disputam a mesma geração; apenas um publica claim', { tim
   assert.equal(contents(root).length, 1);
 });
 
-test('encerrar o processo após claim deixa pendência reconhecível', { timeout: 30000 }, async t => {
+test("closing the process after the claim leaves recognisable pending", { timeout: 30000 }, async t => {
   const root = fixture(t);
   const script = `const {reserveRecovery}=await import(process.argv[1]);process.stdout.write(JSON.stringify(reserveRecovery(process.argv[2]))+'\\n');setInterval(()=>{},1000)`;
   const item = child(script, [root]);
@@ -372,7 +372,7 @@ test('encerrar o processo após claim deixa pendência reconhecível', { timeout
   assert.throws(() => reserveRecovery(root), code('E_RECOVERY_PENDING'));
 });
 
-test('interrupção entre link e fsync do diretório mantém claim visível', { timeout: 30000 }, async t => {
+test("link and fsync interruption of directory keeps clan visible", { timeout: 30000 }, async t => {
   const root = fixture(t);
   const script = `import fs from 'node:fs';import {syncBuiltinESMExports} from 'node:module';const link=fs.linkSync;fs.linkSync=(a,b)=>{link(a,b);fs.writeSync(1,'linked\\n');Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,30000)};syncBuiltinESMExports();const {reserveRecovery}=await import(process.argv[1]);reserveRecovery(process.argv[2]);`;
   const item = child(script, [root]);
@@ -498,7 +498,7 @@ for (const mode of ['ausente', 'exceção']) for (const phase of ['empty', 'clai
   });
 }
 
-test('registro legítimo pode ter dois links e avançar normalmente', t => {
+test("legitimate registration can have two links and move forward normally", t => {
   const root = fixture(t), claim = reserveRecovery(root);
   const record = join(root, 'records', '000000000001.claim.json');
   assert.equal(fs.statSync(record).mode & 0o7777, 0o400);
@@ -525,7 +525,7 @@ for (const mode of [0o600, 0o444, 0o4400]) test(`registro com modo ${mode.toStri
   assert.deepEqual(contents(root), before); assert.deepEqual(fs.readdirSync(join(root, 'staging')).sort(), staging);
   assert.equal(fs.statSync(record).mode & 0o7777, mode);
 });
-test('registro com UID divergente simulado é recusado antes de abrir ou escrever', t => {
+test("record with UID simulated divergent is refused before opening or writing", t => {
   const root = fixture(t), claim = reserveRecovery(root), record = join(root, 'records', '000000000001.claim.json');
   const before = contents(root), staging = fs.readdirSync(join(root, 'staging')).sort(), lstat = fs.lstatSync, open = fs.openSync; let opens = 0;
   t.mock.method(fs, 'lstatSync', (path, ...args) => {
@@ -576,7 +576,7 @@ nodeTest('Linux root recusa registro de outro UID sem gravar', {
   } finally { fs.chownSync(record, process.geteuid(), process.getegid()); }
 });
 
-test('alteração real no mesmo inode após fstat final é detectada e preservada', t => {
+test("real change in the same inode after final fstat is detected and preserved", t => {
   const root = fixture(t), record = join(root, 'records', '000000000001.claim.json');
   reserveRecovery(root);
   fs.chmodSync(record, 0o600);

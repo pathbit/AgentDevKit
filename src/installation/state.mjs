@@ -9,6 +9,7 @@ export function loadState(root, { rawClients = false } = {}) {
   const content = read(root, actualStatePath(root)); if (content === null) return null;
   let state; try { state = JSON.parse(content); } catch { fail('E_STATE', 'Invalid AgentDevKit state JSON.'); }
   if (state?.schemaVersion !== 1 || !normalizeLanguage(state.language) || typeof state.version !== 'string' || !state.files || typeof state.files !== 'object' || Array.isArray(state.files) || !state.blocks || typeof state.blocks !== 'object' || Array.isArray(state.blocks)) fail('E_STATE', 'Invalid AgentDevKit state.');
+  if (state.local !== undefined && state.local !== true) fail('E_STATE', 'Invalid AgentDevKit state.');
   if (state.clients !== undefined) {
     if (!Array.isArray(state.clients)) fail('E_STATE', 'Invalid client selection in AgentDevKit state.');
     try {
@@ -95,7 +96,7 @@ export function reconcileStateBytes(original, previous, next) {
     ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])]))
     : Array.isArray(value) ? value.map(canonical) : value;
   let result = original;
-  for (const key of ['schemaVersion', 'version', 'language', 'clients', 'files', 'blocks']) {
+  for (const key of ['schemaVersion', 'version', 'language', 'clients', 'files', 'blocks', 'local']) {
     if (JSON.stringify(canonical(previous?.[key])) !== JSON.stringify(canonical(next[key]))) result = replaceJsonMember(result, key, next[key]);
   }
   return result;

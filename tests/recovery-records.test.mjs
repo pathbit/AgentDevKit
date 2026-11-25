@@ -22,7 +22,7 @@ const resolved = (c, b = null, generation = 1, operation = id) => entry(generati
   claim: hash(c.bytes), begin: b ? hash(b.bytes) : null,
 }, operation);
 
-test('diário vazio, operação iniciada e conclusão produzem estados distintos', () => {
+test("empty diary, operation initiated and completion produce distinct states", () => {
   const c = claim(), b = begin(), d = done(b);
   assert.deepEqual(inspectRecoveryRecords([]), { status: 'ready', generation: 0, head: null });
   assert.deepEqual(inspectRecoveryRecords([c]), { status: 'pending', generation: 1, id, phase: 'claim' });
@@ -30,7 +30,7 @@ test('diário vazio, operação iniciada e conclusão produzem estados distintos
   assert.deepEqual(inspectRecoveryRecords([d, b, c]), { status: 'ready', generation: 1, terminal: 'done', resolvedCount: 0, head: hash(d.bytes) });
 });
 
-test('resolução explícita vincula os registros e permite nova geração', () => {
+test("explicit resolution links the records and allows new generation", () => {
   const c1 = claim(), b1 = begin(), r1 = resolved(c1, b1);
   const c2 = claim(2, other, hash(r1.bytes)), r2 = resolved(c2, null, 2, other);
   assert.deepEqual(inspectRecoveryRecords([r2, c1, b1, c2, r1]), { status: 'ready', generation: 2, terminal: 'resolved', resolvedCount: 2, head: hash(r2.bytes) });
@@ -46,7 +46,7 @@ test('resolução explícita vincula os registros e permite nova geração', () 
   });
 });
 
-test('vínculos usam SHA-256 dos bytes completos, inclusive quebra de linha', () => {
+test("Bonds use SHA-256 of complete bytes, including line breaking", () => {
   const c = claim(), b = begin();
   const terminal = entry(1, 'resolved', {
     claim: '567a27c69017802c65da837e81601b69742f6529343142df71a8b8b1416e7a7a',
@@ -57,7 +57,7 @@ test('vínculos usam SHA-256 dos bytes completos, inclusive quebra de linha', ()
   });
 });
 
-test('propriedades herdadas não transformam uma operação pendente em concluída', () => {
+test("Inherited properties do not transform a pending operation to complete", () => {
   const c = claim(), b = begin(), moduleUrl = new URL('../.pbai4devs/scripts/lib/recovery-records.mjs', import.meta.url).href;
   const source = `import fs from 'node:fs'; import {createHash} from 'node:crypto';
 const [c,b]=JSON.parse(fs.readFileSync(0,'utf8')).map(x=>({name:x.name,bytes:Buffer.from(x.base64,'base64')}));
@@ -72,7 +72,7 @@ process.stdout.write(JSON.stringify(result));`;
   assert.deepEqual(JSON.parse(child.stdout), { status: 'pending', generation: 1, id, phase: 'begin' });
 });
 
-test('interpreta apenas a faixa indicada sem alterar a entrada', () => {
+test("interprets only the indicated track without changing the input", () => {
   const c = claim(), padded = Buffer.concat([Buffer.from('antes'), c.bytes, Buffer.from('depois')]);
   const before = Buffer.from(padded), bytes = new Uint8Array(padded.buffer, padded.byteOffset + 5, c.bytes.length);
   const input = [{ name: c.name, bytes }];
@@ -81,7 +81,7 @@ test('interpreta apenas a faixa indicada sem alterar a entrada', () => {
   assert.equal(input.length, 1); assert.equal(input[0].name, c.name); assert.equal(input[0].bytes, bytes);
 });
 
-test('registros duplicados, ausentes e transições incompatíveis falham fechados', () => {
+test("duplicate records, absent and incompatible transitions fail closed", () => {
   const c = claim(), b = begin(), d = done(b), r = resolved(c, b);
   for (const records of [[c, c], [b], [c, d], [c, b, d, r], [claim(2, other)],
     [c, claim(2, other)], [c, begin(1, other)], [c, b, done(b, 1, other)],
@@ -95,7 +95,7 @@ test('registros duplicados, ausentes e transições incompatíveis falham fechad
   }
 });
 
-test('rejeita renomeação, elo anterior incorreto e buraco após geração completa', () => {
+test("rejects renaming, incorrect previous link and hole after full generation", () => {
   const c = claim(), b = begin(), d = done(b);
   for (const records of [
     [{ ...c, name: '000000000002.claim.json' }],
@@ -106,7 +106,7 @@ test('rejeita renomeação, elo anterior incorreto e buraco após geração comp
   ]) assert.equal(inspectRecoveryRecords(records).status, 'invalid');
 });
 
-test('recusa variações não canônicas, UUIDs e hashes inválidos', () => {
+test("refuses non-canonical variations, invalid UUIDs and hashes", () => {
   const c = claim(), b = begin(), text = c.bytes.toString();
   const alternatives = [
     text.replace('"version":1,"generation":1', '"generation":1,"version":1'),
@@ -123,7 +123,7 @@ test('recusa variações não canônicas, UUIDs e hashes inválidos', () => {
   }
 });
 
-test('recusa outras formas de entrada sem acessar conteúdo inesperado', () => {
+test("refuses other forms of entry without accessing unexpected content", () => {
   const c = claim();
   class OtherArray extends Array {}
   for (const value of [null, 'texto', {}, new OtherArray(c), runInNewContext('[]'), [null], [{ name: 42, bytes: c.bytes }]]) {
@@ -131,7 +131,7 @@ test('recusa outras formas de entrada sem acessar conteúdo inesperado', () => {
   }
 });
 
-test('recusa dados não canônicos ou desconhecidos sem divulgar conteúdo', () => {
+test("refuses non-canonical or unknown data without disclosing content", () => {
   const c = claim(), secret = 'SEGREDO_SINTETICO';
   const bad = [
     { ...c, name: '000000000001.CLAIM.json' },
@@ -155,7 +155,7 @@ test('recusa dados não canônicos ou desconhecidos sem divulgar conteúdo', () 
   }
 });
 
-test('limites são conferidos antes da interpretação e dados não são alterados', () => {
+test("limits are checked before interpretation and data are not changed", () => {
   const c = claim(), before = Buffer.from(c.bytes);
   assert.deepEqual(inspectRecoveryRecords(Array.from({ length: 4001 }, () => c)), { status: 'invalid', reason: 'limit-exceeded' });
   assert.deepEqual(inspectRecoveryRecords([{ ...c, bytes: Buffer.alloc(4097) }]), { status: 'invalid', reason: 'limit-exceeded' });
@@ -170,7 +170,7 @@ test('limites são conferidos antes da interpretação e dados não são alterad
   assert.deepEqual(c.bytes, before);
 });
 
-test('iteradores, getters e subclasses não contornam os limites', () => {
+test("iterators, getters and subclasses do not bypass limits", () => {
   const c = claim(), entries = [];
   entries[Symbol.iterator] = function* () { while (true) yield c; };
   assert.deepEqual(inspectRecoveryRecords(entries), { status: 'invalid', reason: 'invalid-input' });
@@ -223,7 +223,7 @@ test('iteradores, getters e subclasses não contornam os limites', () => {
   }
 });
 
-test('cada truncamento ou inserção de byte nulo invalida o registro', () => {
+test("each null byte truncation or insertion invalidates the record", () => {
   const c = claim();
   for (let offset = 0; offset <= c.bytes.length; offset++) {
     if (offset < c.bytes.length) assert.equal(inspectRecoveryRecords([{ ...c, bytes: c.bytes.subarray(0, offset) }]).status, 'invalid');
@@ -232,7 +232,7 @@ test('cada truncamento ou inserção de byte nulo invalida o registro', () => {
   }
 });
 
-test('alterar qualquer dígito dos hashes de vínculo impede a conclusão', () => {
+test("alter any digit of the binding hashes prevents the conclusion", () => {
   const c = claim(), b = begin(), d = done(b), r = resolved(c, b);
   for (const [record, field, preceding] of [[b, 'claim', [c]], [d, 'begin', [c, b]], [r, 'claim', [c, b]], [r, 'begin', [c, b]]]) {
     const value = JSON.parse(record.bytes), original = value[field];
@@ -244,7 +244,7 @@ test('alterar qualquer dígito dos hashes de vínculo impede a conclusão', () =
   }
 });
 
-test('histórico válido de mil operações permanece interpretável dentro dos limites', () => {
+test("valid history of a thousand operations remains interpretable within the limits", () => {
   const entries = []; let previous = null;
   for (let generation = 1; generation <= 1000; generation++) {
     const operation = `12345678-1234-4234-8234-${generation.toString(16).padStart(12, '0')}`;
@@ -254,7 +254,7 @@ test('histórico válido de mil operações permanece interpretável dentro dos 
   assert.deepEqual(inspectRecoveryRecords(entries.reverse()), { status: 'ready', generation: 1000, terminal: 'done', resolvedCount: 0, head: previous });
 });
 
-test('aceita exatamente quatro mil registros legítimos e identifica a pendência', () => {
+test("accepts exactly four thousand legitimate records and identifies the pending", () => {
   const entries = []; let previous = null;
   for (let generation = 1; generation <= 1333; generation++) {
     const operation = `12345678-1234-4234-8234-${generation.toString(16).padStart(12, '0')}`;

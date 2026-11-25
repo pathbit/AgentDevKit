@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Abre apenas um Chrome de teste e lê sua janela por acessibilidade.
+// Opens only a Chrome test and reads your window by accessibility.
 import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';

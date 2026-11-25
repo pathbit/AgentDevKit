@@ -4,6 +4,8 @@ description: Sincronização segura com recursos e alterações próprios do pro
 
 # Sincronização segura
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 Projetos podem ter arquivos próprios e recursos adicionais aos do pacote.
 Os comandos devem preservar esse conteúdo ao instalar, atualizar e sincronizar.
 
@@ -19,3 +21,7 @@ Os comandos devem preservar esse conteúdo ao instalar, atualizar e sincronizar.
   seus efeitos sobre arquivos, backups, seleção de clientes e Git.
 - AC-005: Testes exercitam instalações existentes, obsolescência, colisões,
   execução repetida, Git e falhas; a CI contempla Linux, Windows e macOS.
+
+[reading-pt]: SPEC.md
+[reading-en]: ../../en/specs/safe-synchronization/SPEC.md
+[reading-es]: ../../es/specs/safe-synchronization/SPEC.md

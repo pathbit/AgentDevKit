@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Inventario somente leitura; nomes e caminhos, nunca valores de configuracao.
+// Reading only inventory; names and paths, never configuration values.
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
@@ -18,9 +18,25 @@ const manifests = new Map([
   ['pyproject.toml', 'python'], ['Pipfile', 'python'], ['setup.py', 'python'], ['setup.cfg', 'python'],
   ['Cargo.toml', 'rust'], ['go.mod', 'go'], ['pom.xml', 'java'], ['build.gradle', 'java'], ['build.gradle.kts', 'kotlin'],
   ['composer.json', 'php'], ['Gemfile', 'ruby'], ['mix.exs', 'elixir'], ['pubspec.yaml', 'dart'],
-  ['Package.swift', 'swift'], ['CMakeLists.txt', 'cpp']
+  ['Package.swift', 'swift'], ['CMakeLists.txt', 'cpp'], ['meson.build', 'cpp'],
+  ['build.zig', 'zig'], ['build.zig.zon', 'zig'], ['cabal.project', 'haskell'], ['stack.yaml', 'haskell'],
+  ['build.sbt', 'scala'], ['deps.edn', 'clojure'], ['project.clj', 'clojure'], ['dune-project', 'ocaml'],
+  ['Project.toml', 'julia'], ['rebar.config', 'erlang'], ['gleam.toml', 'gleam'],
+  ['dub.json', 'd'], ['dub.sdl', 'd'], ['shard.yml', 'crystal'],
+  ['alire.toml', 'ada'], ['fpm.toml', 'fortran'], ['go.work', 'go']
 ]);
-const locks = new Set(['package-lock.json', 'npm-shrinkwrap.json', 'pnpm-lock.yaml', 'yarn.lock', 'bun.lock', 'bun.lockb', 'deno.lock', 'uv.lock', 'poetry.lock', 'Pipfile.lock', 'Cargo.lock', 'go.sum', 'composer.lock', 'Gemfile.lock', 'mix.lock', 'pubspec.lock', 'Package.resolved', 'packages.lock.json', 'gradle.lockfile']);
+const sourceExtensions = new Set([
+  '.js', '.jsx', '.cjs', '.cjsx', '.mjs', '.mjsx', '.ts', '.tsx', '.cts', '.ctsx', '.mts', '.mtsx',
+  '.vue', '.svelte', '.astro', '.py', '.go', '.rs', '.java', '.kt', '.kts', '.cs', '.fs', '.fsx', '.vb',
+  '.php', '.rb', '.ex', '.exs', '.dart', '.swift', '.m', '.mm', '.c', '.cpp', '.cc', '.cxx', '.h', '.hpp',
+  '.sh', '.bash', '.ps1', '.fish', '.lua', '.jl', '.zig', '.r', '.rkt', '.hs', '.lhs', '.clj', '.cljs', '.cljc',
+  '.scala', '.sc', '.ml', '.mli', '.erl', '.hrl', '.gleam', '.nim', '.cr', '.d', '.ada', '.ads', '.adb',
+  '.f90', '.f95', '.for', '.cob', '.cbl', '.pas', '.v', '.sv', '.vhd', '.vhdl', '.tf', '.ipynb',
+]);
+const locks = new Set(['package-lock.json', 'npm-shrinkwrap.json', 'pnpm-lock.yaml', 'yarn.lock', 'bun.lock', 'bun.lockb', 'deno.lock', 'uv.lock', 'poetry.lock', 'Pipfile.lock', 'Cargo.lock', 'go.sum', 'composer.lock', 'Gemfile.lock', 'mix.lock', 'pubspec.lock', 'Package.resolved', 'packages.lock.json', 'gradle.lockfile', 'renv.lock']);
+const commandManifests = new Set(['package.json', 'composer.json', 'deno.json', 'deno.jsonc', 'Makefile', 'makefile', 'GNUmakefile', 'pyproject.toml']);
+const requirementsName = /^requirements(?:[.-][A-Za-z0-9_-]+)?\.txt$/;
+const conventionalNames = new Map([...manifests.keys(), ...locks, ...commandManifests].map(name => [name.toLowerCase(), name]));
 const surveyFixtures = new Set(['fixtures', '__fixtures__', 'snapshots', '__snapshots__']);
 const requiredDirectories = ['.pbai4devs', 'src', 'tests', 'infra'];
 function agentRoots(root) {
@@ -460,8 +476,17 @@ export function inspectProject(root = repository, { check = false, documentation
   if (survey) report.testSources = [];
   const languages = new Set(); let entries = 0;
   const warning = (file, reason) => report.warnings.push({ file, reason });
+  function manifestName(directory, name, file) {
+    if (manifests.has(name) || locks.has(name) || commandManifests.has(name) || requirementsName.test(name)) return name;
+    const lower = name.toLowerCase();
+    const conventional = conventionalNames.get(lower) ?? (requirementsName.test(lower) ? lower : null);
+    if (!conventional) return name;
+    // Recognize a case variant only when the conventional spelling resolves to the same file.
+    const candidate = directory ? `${directory}/${conventional}` : conventional;
+    return sameIdentity(pathIdentity(root, file), pathIdentity(root, candidate)) ? conventional : name;
+  }
   function commands(file, name) {
-    if (!['package.json', 'composer.json', 'deno.json', 'deno.jsonc', 'Makefile', 'makefile', 'GNUmakefile', 'pyproject.toml'].includes(name)) return;
+    if (!commandManifests.has(name)) return;
     const identity = pathIdentity(root, file);
     if (!identity) { warning(file, 'manifest-nao-inspecionado'); return; }
     if (identity.at(-1).size > 1024 * 1024) { warning(file, 'manifest-grande-demais'); return; }
@@ -513,21 +538,25 @@ export function inspectProject(root = repository, { check = false, documentation
       }
       if (!item.isFile()) continue;
       if (!listing.verify()) { report.scan.truncated = true; warning(directory || '.', 'changed-during-read'); return; }
-      let language = manifests.get(item.name);
-      if (/\.(?:csproj|fsproj|vbproj|sln)$/.test(item.name)) language = 'dotnet';
-      if (/^requirements(?:[.-][A-Za-z0-9_-]+)?\.txt$/.test(item.name)) language = 'python';
+      const name = manifestName(directory, item.name, file);
+      let language = manifests.get(name);
+      if (/\.(?:csproj|fsproj|vbproj|slnx?)$/i.test(item.name)) language = 'dotnet';
+      if (/\.cabal$/i.test(item.name)) language = 'haskell';
+      if (/\.nimble$/i.test(item.name)) language = 'nim';
+      if (/\.rockspec$/i.test(item.name)) language = 'lua';
+      if (requirementsName.test(name)) language = 'python';
       if (language) { report.manifests.push(file); languages.add(language); }
-      if (locks.has(item.name)) report.lockfiles.push(file);
+      if (locks.has(name)) report.lockfiles.push(file);
       if (/^(?:docker-)?compose(?:\.[A-Za-z0-9_-]+)*\.ya?ml$/i.test(item.name)) report.compose.push(file);
       if (/^Dockerfile(?:\.[A-Za-z0-9_-]+)?$/.test(item.name) || /\.Dockerfile$/.test(item.name)) report.dockerfiles.push(file);
-      if (/\.(?:[cm]?[jt]sx?|py|go|rs|java|kt|cs|fs|vb|php|rb|ex|exs|dart|swift|c|cpp|cc|h|hpp|vue|svelte)$/.test(item.name)) {
+      if (sourceExtensions.has(path.extname(item.name).toLowerCase()) || /^index\.html?$/i.test(item.name)) {
         const fixture = /(^|\/)fixtures\//.test(file);
         const testSource = /(^|\/)(?:tests?|spec)\/|\.(?:test|spec)\./.test(file)
           || survey && /(^|\/)__tests__\/|(?:^|\/)test_|_test\.[^.]+$|Test\.[^.]+$/.test(file);
         if (!fixture && !testSource && report.sources.length < 12) report.sources.push(file);
         if (survey && !fixture && testSource && report.testSources.length < 12) report.testSources.push(file);
       }
-      commands(file, item.name);
+      commands(file, name);
     }
   }
   walk();

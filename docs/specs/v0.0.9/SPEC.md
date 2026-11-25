@@ -6,6 +6,8 @@ version: 0.0.9
 
 # Preservar agentes e documentação existentes
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 ## Objetivo
 
 Instalar e atualizar o AgentDevKit no Zod e em projetos com agentes próprios,
@@ -66,3 +68,7 @@ clonadas.
 
 Atualizar instalação, CLI, recuperação, recursos, sincronização, testes,
 changelog e índices. Preservar as specs antigas como histórico.
+
+[reading-pt]: SPEC.md
+[reading-en]: ../../en/specs/v0.0.9/SPEC.md
+[reading-es]: ../../es/specs/v0.0.9/SPEC.md

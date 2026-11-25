@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { copyFileWithNativeMetadata, stageReplacementWithNativeMetadata } from '../.pbai4devs/scripts/lib/native-metadata.mjs';
 import { inspectLinuxXattr } from '../.pbai4devs/scripts/lib/xattr-probe.mjs';
 
-test('falhas simultâneas de escrita e fechamento preservam o código do erro primário', { skip: !['darwin', 'linux'].includes(process.platform) && 'A escrita e o fechamento usam a implementação POSIX de macOS e Linux.' }, t => {
+test("simultaneous writing and closing failures preserve the primary error code", { skip: !['darwin', 'linux'].includes(process.platform) && 'A escrita e o fechamento usam a implementação POSIX de macOS e Linux.' }, t => {
   const root = fs.mkdtempSync(join(tmpdir(), 'adk-native-metadata-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const source = join(root, 'source'), staged = join(root, 'staged');
@@ -42,7 +42,7 @@ test('falhas simultâneas de escrita e fechamento preservam o código do erro pr
   }
 });
 
-test('Linux verifica os atributos visíveis da cópia mesmo sem getfattr e getfacl', {
+test("Linux checks the visible attributes of the copy even without getfattr and getfacl", {
   skip: process.platform !== 'linux' ? 'A fixture lê e grava xattr nativo no Linux.'
     : !fs.existsSync('/usr/bin/python3') && 'Python 3 em /usr/bin é necessário para ler e gravar xattr sem os utilitários attr.',
 }, t => {

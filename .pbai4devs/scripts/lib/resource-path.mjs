@@ -2,7 +2,7 @@ import { posix } from 'node:path';
 const principals = { skills: 'SKILL.md', agents: 'AGENT.md', commands: 'COMMAND.md', rules: 'RULE.md' };
 const layouts = new Set(['agrupado', 'plano', 'arquivo', 'mdc', 'instrucoes', 'prompt', 'agente']);
 const fail = message => { throw new Error(message); };
-// Layouts de arquivo preservam os grupos, retirando apenas o nome do principal.
+// File Layouts preserve the groups, removing only the main name.
 export function resourcePath(source, kind, mode = 'agrupado') {
   if (!Object.hasOwn(principals, kind) || !layouts.has(mode)) fail(`Formato invalido: ${kind}/${mode}`);
   const path = source.slice('.pbai4devs/'.length);
@@ -19,11 +19,11 @@ export function resourcePath(source, kind, mode = 'agrupado') {
   return `${scopes[mode] || kind}${folder.slice(kind.length)}${extensions[mode]}`;
 }
 
-// Copilot CLI carrega instructions sem applyTo globalmente; escopos sem
-// equivalente comprovado ficam disponíveis apenas como referência explícita.
+// Copilot CLI loads instructions without applyTo globally; scopes without
+// proven equivalent are available only as explicit reference.
 export function clientResourcePath(source, kind, mode, agent, rule, explicitMetadata = false) {
-  // Claude carrega regras sem paths globalmente. Sem equivalente comprovado,
-  // a origem continua acessível explicitamente no hub; não criar espelho.
+  // Claude carries rules without paths globally.
+  // the origin remains explicitly accessible in the hub; do not create mirror.
   if (agent === '.claude' && kind === 'rules' &&
       (['manual', 'model_decision'].includes(rule?.trigger) || rule?.trigger === 'glob' && !explicitMetadata)) return null;
   if (agent === '.github' && kind === 'rules' && mode === 'instrucoes' &&

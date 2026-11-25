@@ -55,13 +55,13 @@ for(const [label,bit] of [['setuid',0o4000],['setgid',0o2000]])test(`update recu
  const f=prepare(t,'update',false,bit,true);assert.ok(f);assert.equal(lstatSync(join(f.root,f.target)).mode&0o7000,bit);
  const r=f.run(process.execPath,[cli,...f.args]);assert.ok(r.status>0);assert.equal(r.signal,null);const out=JSON.parse(r.stdout);assert.equal(out.ok,false);assert.equal(out.error?.code,'E_PROTECTED_METADATA');assert.equal(out.error?.path,f.target);assert.deepEqual(snapshot(f.root),f.before);
 });
-test('erro em texto informa caminho e motivo sem mutação',{timeout:240000,skip:unsupported&&'somente POSIX macOS/Linux'},t=>{
+test("text error informs path and reason without mutation",{timeout:240000,skip:unsupported&&'somente POSIX macOS/Linux'},t=>{
  const f=prepare(t,'update');if(!f)return;const r=f.run(process.execPath,[cli,...f.args.filter(arg=>arg!=='--json')]);assert.ok(r.status>0);assert.match(r.stdout,/special POSIX mode bits/);assert.ok(r.stdout.includes(f.target));assert.deepEqual(snapshot(f.root),f.before);
 });
-test('bit especial em arquivo não afetado não bloqueia update real',{timeout:240000,skip:unsupported&&'somente POSIX macOS/Linux'},t=>{
+test("special bit in unaffected file does not block actual update",{timeout:240000,skip:unsupported&&'somente POSIX macOS/Linux'},t=>{
  const f=prepare(t,'update',true);if(!f)return;const previous=readFileSync(join(f.root,f.target));const r=f.run(process.execPath,[cli,...f.args]);assert.equal(r.status,0,r.stdout+'\n'+r.stderr);assert.equal(JSON.parse(r.stdout).ok,true);assert.notDeepEqual(readFileSync(join(f.root,f.target)),previous);assert.equal(lstatSync(join(f.root,f.special)).mode&0o7777,0o1644);assert.equal(readFileSync(join(f.root,f.special),'utf8'),'staged\nunstaged\n');
 });
-test('alvo real sem bit especial é atualizado normalmente',{timeout:240000,skip:unsupported&&'somente POSIX macOS/Linux'},t=>{
+test("real target without special bit is updated normally",{timeout:240000,skip:unsupported&&'somente POSIX macOS/Linux'},t=>{
  const f=prepare(t,'update');if(!f)return;chmodSync(join(f.root,f.target),0o644);const previous=readFileSync(join(f.root,f.target));const r=f.run(process.execPath,[cli,...f.args]);assert.equal(r.status,0,r.stdout+'\n'+r.stderr);assert.equal(JSON.parse(r.stdout).ok,true);assert.notDeepEqual(readFileSync(join(f.root,f.target)),previous);assert.equal(lstatSync(join(f.root,f.target)).mode&0o7777,0o644);
 });
 for(const [label,bit] of [['sticky',0o1000],['setgid',0o2000],['setuid',0o4000]])for(const force of [false,true])test(`agents recusa remoção planejada com ${label}${force?' --force':''}`,{timeout:240000,skip:unsupported&&'somente POSIX macOS/Linux'},t=>{

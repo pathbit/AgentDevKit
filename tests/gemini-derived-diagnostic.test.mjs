@@ -6,7 +6,7 @@ import { diagnosePreservedDerivedToml } from '../src/install.mjs';
 const target = '.gemini/commands/equipe-check.toml';
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 
-test('diagnóstico distingue falha de leitura, ausência e divergência sem inferir propriedade', () => {
+test("diagnosis distinguishes reading failure, absence and divergence without inferring property", () => {
   const recorded = { [target]: sha(Buffer.from('registro antigo')) }, preserved = new Map([[target, { reason: 'existing-file' }]]);
   const inspect = read => diagnosePreservedDerivedToml(recorded, preserved, {}, read);
   assert.deepEqual(inspect(() => { throw Object.assign(new Error('dados privados'), { code: 'EACCES' }); }), [{ code: 'derived-file-unverified', path: target }]);

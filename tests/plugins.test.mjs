@@ -71,7 +71,7 @@ function writeCatalogs(put) {
   put(`${skillsToolPath}/SCRIPT.mjs`, toolWrapper('skills'));
 }
 
-test('antes do init, list e info usam os catálogos empacotados sem criar arquivos', async t => {
+test("before init, list and info use packaged catalogs without creating files", async t => {
   const { target, call } = fixture(t);
   const result = await call('list', undefined, false);
   const ids = result.plugins.map(plugin => plugin.id);
@@ -96,7 +96,7 @@ test('antes do init, list e info usam os catálogos empacotados sem criar arquiv
   assert.deepEqual(readdirSync(target), []);
 });
 
-test('CLI publica o catálogo sem inicialização e verifica a ferramenta escolhida', t => {
+test("CLI publish the catalog without startup and check the chosen tool", t => {
   const { target, put } = fixture(t);
   const bin = fileURLToPath(new URL('../bin/agentdevkit.mjs', import.meta.url));
   const cli = (args, status = 0) => {
@@ -119,7 +119,7 @@ test('CLI publica o catálogo sem inicialização e verifica a ferramenta escolh
   for (const path of ['.agents', '.gemini', '.claude', '.codex']) assert.equal(existsSync(join(target, path)), false, path);
 });
 
-test('catálogo local é a autoridade e list/info não executam nem expõem o probe', async t => {
+test("local catalogue is the authority and list/info do not execute or expose the probe", async t => {
   const { target, put, call } = fixture(t);
   writeCatalogs(put);
   const probe = join(target, installFixtureTool(put));
@@ -138,7 +138,7 @@ test('catálogo local é a autoridade e list/info não executam nem expõem o pr
   assert.deepEqual(readdirSync(join(target, '.pbai4devs/tools/bin')), ['skills.mjs']);
 });
 
-test('skill revisada usa o CLI já instalado e permanece no armazenamento externo', async t => {
+test("revised skill uses the CLI already installed and remains in external storage", async t => {
   const { target, put, call } = fixture(t);
   writeCatalogs(put);
   const external = '.pbai4devs/external-skills/.local';
@@ -169,7 +169,7 @@ test('skill revisada usa o CLI já instalado e permanece no armazenamento extern
   assert.equal(readFileSync(join(target, file), 'utf8'), 'Alteração local.');
 });
 
-test('a fachada recusa IDs não exatos, catálogos corrompidos e colisões', async t => {
+test("the facade refuses non-exact IDs, corrupted catalogs and collisions", async t => {
   const { put, call } = fixture(t);
   writeCatalogs(put);
   for (const id of ['all', 'base', 'discovery', 'vendor/demo', 'https://example.invalid', '../skills']) {
@@ -184,7 +184,7 @@ test('a fachada recusa IDs não exatos, catálogos corrompidos e colisões', asy
   await assert.rejects(call('info', 'skills'), { code: 'E_PLUGIN', message: /Ambiguous plugin ID/ });
 });
 
-test('catálogo por link não permite leitura fora da raiz instalada', async t => {
+test("link catalog does not allow reading outside the installed root", async t => {
   const { target, call } = fixture(t), outside = fixture(t);
   outside.put('CATALOG.json', JSON.stringify(catalog));
   mkdirSync(join(target, '.pbai4devs'));

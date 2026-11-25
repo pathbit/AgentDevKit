@@ -4,6 +4,8 @@ description: Como relatar problemas e propor melhorias para o AgentDevKit.
 
 # Participar da evolução
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 Use as [issues do AgentDevKit][issues] para relatar problemas e sugerir melhorias.
 Procure relatos semelhantes antes de abrir um novo. Uma reação ou um exemplo
 reproduzível na issue existente ajuda a reunir o contexto.
@@ -47,3 +49,7 @@ continuam fora do Git, conforme o [guia de ferramentas](../guides/tools-and-test
 [bug]: https://github.com/pathbit/AgentDevKit/issues/new?template=bug_report.yml
 [feature]: https://github.com/pathbit/AgentDevKit/issues/new?template=feature_request.yml
 [contrib]: ../../CONTRIBUTING.md
+
+[reading-pt]: community.md
+[reading-en]: ../en/maintainers/community.md
+[reading-es]: ../es/maintainers/community.md

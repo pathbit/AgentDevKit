@@ -5,6 +5,8 @@ status: aprovado
 
 # Publicação sincronizada
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 ## Objetivo
 
 Remover as execuções antigas com erro, preservando execuções aprovadas e
@@ -41,3 +43,7 @@ Completar a versão `0.0.9` no GitHub com seu artefato original, comparar os
 registries e provar instalação, diagnóstico e sincronização.
 
 Provas ficam em `tmp/` ou `.agent-tests/`, ignoradas pelo Git.
+
+[reading-pt]: SPEC.md
+[reading-en]: ../../en/specs/dual-registry/SPEC.md
+[reading-es]: ../../es/specs/dual-registry/SPEC.md

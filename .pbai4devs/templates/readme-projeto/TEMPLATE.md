@@ -13,10 +13,18 @@ fase: preparacao
 [Fase atual, funcionalidades disponíveis e limites; vincule os documentos
 existentes. Evolua este resumo após PRD, design, configuração e entregas.]
 
+## Pré-requisitos
+
+[Liste o que a pessoa precisa instalar antes de começar. Inclua as versões
+mínimas verificadas, links oficiais de download e de configuração por sistema
+quando necessário. Indique em qual modo cada ferramenta é obrigatória e
+quais ferramentas são opcionais. Se a stack ainda estiver em definição,
+registre os pré-requisitos já conhecidos.]
+
 ## Começar
 
-[Pré-requisitos, configuração e comandos reais verificados. Antes da definição
-técnica, explique a próxima etapa em vez de inventar comandos ou uma stack.]
+[Configuração e comandos reais verificados. Antes da definição técnica,
+explique a próxima etapa.]
 
 ## Estrutura e documentação
 

@@ -4,6 +4,8 @@ description: Plugins opcionais, origens e licenças dos componentes usados pelo 
 
 # Plugins e créditos
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 Escolha uma ferramenta ou skill externa pela tarefa que precisa executar.
 O AgentDevKit instala o catálogo e os gerenciadores. A preparação de cada
 plugin é uma ação separada no projeto que vai usá-lo.
@@ -185,3 +187,7 @@ origens.
 [npm-license]: https://github.com/npm/cli/blob/latest/LICENSE
 [git]: https://github.com/git/git
 [git-license]: https://github.com/git/git/blob/master/COPYING
+
+[reading-pt]: plugins.md
+[reading-en]: ../en/guides/plugins.md
+[reading-es]: ../es/guides/plugins.md

@@ -35,7 +35,7 @@ function fixture(t) {
   return { project, fixture: original, packageRoot, manifest, events, prompt: 'Leia as skills.', process: { code: 0, signal: null, timedOut: false } };
 }
 
-test('Claude: comprovação exige origem, chamada, leitura e resposta coerentes', t => {
+test("Claude: proof requires coherent origin, call, reading and response", t => {
   const input = fixture(t); assert.equal(assessClaudeEvidence(input).verified, 2); assert.equal(assessClaudeEvidence(input).passed, true);
   assert.deepEqual(assessClaudeEvidence(input).rows[0].skillReturn, { contentType: 'text', expectedLaunch: true });
   const unexpectedReturn = structuredClone(input); unexpectedReturn.events[2].message.content[0].content = 'conteúdo privado de teste';
@@ -61,7 +61,7 @@ test('Claude: comprovação exige origem, chamada, leitura e resposta coerentes'
   const failed = structuredClone(input); failed.process.code = 1; assert.equal(assessClaudeEvidence(failed).processPassed, false);
 });
 
-test('Claude: leitura externa só é aceita como tentativa sem conteúdo quando retorna erro reconhecido', t => {
+test("Claude: external reading is only accepted as a non-content attempt when it returns recognized error", t => {
   const input = fixture(t);
   const call = { type: 'assistant', message: { content: [{ type: 'tool_use', id: 'outside', name: 'Read', input: { file_path: '/outside/file' } }] } };
   const answer = { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'outside', content: 'File does not exist.', is_error: true }] } };
@@ -75,7 +75,7 @@ test('Claude: leitura externa só é aceita como tentativa sem conteúdo quando 
   const missing = structuredClone(input); missing.events.splice(2, 1); assert.equal(assessClaudeEvidence(missing).passed, false);
 });
 
-test('Claude: arquivos adulterados e documentos humanos são detectados', t => {
+test("Claude: adulterated files and human documents are detected", t => {
   const input = fixture(t);
   writeFileSync(join(input.project, input.manifest[0].path), 'adulterado'); assert.equal(assessClaudeEvidence(input).rows[0].checks.sourceUnchangedAfterSetup, false);
   writeFileSync(join(input.project, 'README.md'), 'substituído'); assert.equal(assessClaudeEvidence(input).documentsPreserved, false);

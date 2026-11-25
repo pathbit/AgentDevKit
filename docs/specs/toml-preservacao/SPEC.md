@@ -5,6 +5,8 @@ status: rascunho
 
 # Preservação de prompts TOML
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 > Rascunho histórico. Desde `0.0.36`, o kit deixa de criar ou renovar
 > apontamentos em `.gemini/`. As provas abaixo registram o comportamento de
 > versões e protótipos anteriores. Na [migração][migration], o kit preserva
@@ -162,3 +164,7 @@ comprovada por este contrato de TOML.
 
 [gemini-command]: https://geminicli.com/docs/cli/custom-commands/
 [migration]: ../../guides/installation.md#atualizar-e-escolher-agentes
+
+[reading-pt]: SPEC.md
+[reading-en]: ../../en/specs/toml-preservacao/SPEC.md
+[reading-es]: ../../es/specs/toml-preservacao/SPEC.md

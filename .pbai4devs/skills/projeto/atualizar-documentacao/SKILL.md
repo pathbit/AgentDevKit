@@ -32,6 +32,11 @@ relevantes. Atualize só o que a mudança afeta; documente comportamento real,
 pré-requisitos, comandos, compatibilidade e limites. Evite repetir instruções.
 Segurança pública depende de suporte e canal confirmado, sem dados fictícios.
 
+No README principal, mantenha uma seção **Pré-requisitos** perto do início.
+Informe o que instalar em cada modo de uso, a versão mínima verificada e o
+link oficial de download. Identifique ferramentas opcionais ou específicas
+de desenvolvimento. Mantenha a seção quando a stack ou as versões mudarem.
+
 Registre por caminho a decisão `updated`, `no-impact` ou `not-applicable`, com
 justificativa, no relatório da entrega ou no resultado da tarefa. Verifique
 links e exemplos; compare o conteúdo anterior e confirme que arquivos fora

@@ -5,6 +5,8 @@ status: em andamento
 
 # Permissões de temporários do sync
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 Spec: [sync-permissoes](../../specs/sync-permissoes/SPEC.md). Release: pendente.
 
 - [x] Reproduzir o modo `666` em fixture de destino `600` no macOS e Linux.
@@ -19,3 +21,7 @@ Spec: [sync-permissoes](../../specs/sync-permissoes/SPEC.md). Release: pendente.
 As provas ficam em `.agent-tests/sync-permissoes/execucao-XZqfCZ/`. O pacote
 candidato local passou por seis operações em fixture isolada; isso não altera
 a versão publicada. Os onze testes estritos de preservação continuam falhando.
+
+[reading-pt]: TASKS.md
+[reading-en]: ../../en/tasks/sync-permissoes/TASKS.md
+[reading-es]: ../../es/tasks/sync-permissoes/TASKS.md

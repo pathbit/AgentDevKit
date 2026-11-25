@@ -5,6 +5,8 @@ status: aprovado
 
 # Pacote npm no GitHub Packages
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 ## Objetivo
 
 Publicar `@pathbit/agentdevkit` no GitHub Packages, vinculado a este repositório,
@@ -43,3 +45,7 @@ Evidências em `.agent-tests/github-packages/`, fora do Git. A publicação da
 versão 0.0.3 usa o artefato de sua tag existente; futuras versões seguem o CI.
 
 [Specs](../README.md) · [Roadmap](../../product/roadmap.md)
+
+[reading-pt]: SPEC.md
+[reading-en]: ../../en/specs/github-packages/SPEC.md
+[reading-es]: ../../es/specs/github-packages/SPEC.md

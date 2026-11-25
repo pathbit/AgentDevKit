@@ -5,10 +5,80 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, symlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { PassThrough } from 'node:stream';
 import { main, parseArgs } from '../src/cli.mjs';
+import { selectClientsFromMenu } from '../src/cli/client-menu.mjs';
 import { applyPlan, inspect, planInstallation } from '../src/install.mjs';
 
 import { fixture, read, state, statePath, put, cli } from './fixtures/client-selection-helpers.mjs';
+
+test('the keyboard menu marks multiple clients and restores terminal input', async () => {
+  const choices = [{ id: 'codex', name: 'Codex' }, { id: 'claude', name: 'Claude' }];
+  const output = new PassThrough();
+  let rendered = '';
+  output.on('data', chunk => { rendered += chunk; });
+  const openMenu = (language, initial = []) => {
+    const input = new PassThrough();
+    input.setRawMode = mode => { input.isRaw = mode; };
+    return { input, result: selectClientsFromMenu({ input, output, choices, initial, language }) };
+  };
+  const first = openMenu('pt');
+  first.input.write(' \x1b[B \r');
+  assert.deepEqual(await first.result, ['codex', 'claude']);
+  assert.equal(first.input.isRaw, false);
+  assert.equal(first.input.readableFlowing, false);
+  assert.match(rendered, /\[x\] Claude/);
+
+  const all = openMenu('en', ['all']);
+  all.input.write('\r');
+  assert.deepEqual(await all.result, ['all']);
+  const none = openMenu('en', ['codex']);
+  none.input.write(' \r');
+  assert.deepEqual(await none.result, ['none']);
+
+  const second = openMenu('es', ['claude']);
+  second.input.write('\x03');
+  await assert.rejects(second.result, { code: 'E_CANCELLED', exitCode: 130 });
+  assert.equal(second.input.isRaw, false);
+  assert.match(rendered, /Elige los agentes de código/);
+});
+
+test('cancelling an onboarding question leaves the project alone', async t => {
+  for (const [name, cancel] of [
+    ['Ctrl-C', input => input.write('\x03')],
+    ['Ctrl-D', input => input.write('\x04')],
+    ['end of input', input => input.end()],
+  ]) await t.test(name, { timeout: 5000 }, async subtest => {
+    const root = fixture(subtest);
+    const input = new PassThrough();
+    input.isTTY = true;
+    input.setRawMode = mode => { input.isRaw = mode; };
+    const output = new PassThrough();
+    output.isTTY = true;
+    output.columns = 80;
+    let rendered = '';
+    let answerSent = false;
+    let interrupted = false;
+    output.on('data', chunk => {
+      rendered += chunk;
+      if (!answerSent && rendered.includes('Idioma / Language')) {
+        answerSent = true;
+        setImmediate(() => input.write('en\r'));
+      }
+      if (!interrupted && rendered.includes('What do you want to do?')) {
+        interrupted = true;
+        setImmediate(() => cancel(input));
+      }
+    });
+    const status = await main(['init', '--target', root, '--agents', 'codex'], {
+      stdin: input, stdout: output, stderr: { isTTY: false, write: assert.fail },
+    });
+    assert.equal(status, 130, rendered);
+    assert.match(rendered, /Selection cancelled\./);
+    assert.equal(input.isRaw, false);
+    assert.deepEqual(readdirSync(root).filter(name => name !== '.git'), []);
+  });
+});
 
 function ruleSnapshot(root) {
   const result = [];
@@ -37,7 +107,7 @@ function verifyClaudeRetirement(root) {
   for (const path of humanClaude) assert.equal(read(root, path), `# Humano: ${path}\n`);
 }
 
-test('seleção valida aliases e entradas antes de escrever; consulta é somente leitura', t => {
+test("selection validates aliases and entries before writing; query is read only", t => {
   assert.deepEqual(parseArgs(['init', '--agents', 'CODEX,claude-code,codex']).clients, ['claude', 'codex']);
   assert.deepEqual(parseArgs(['clients', 'vscode']).clients, ['copilot']);
   for (const args of [['init', '--agents', ''], ['agents', 'unknown'], ['init', '--agents', 'all,codex'], ['doctor', '--agents', 'codex'], ['agents', '--dry-run']]) assert.throws(() => parseArgs(args), { code: 'E_ARGS' });
@@ -52,7 +122,7 @@ test('seleção valida aliases e entradas antes de escrever; consulta é somente
   assert.deepEqual(readdirSync(root).filter(name => name !== '.git'), []);
 });
 
-test('seleções novas criam somente os sucessores dos adaptadores aposentados', async t => {
+test("new selections create only the successors of the retired adapters", async t => {
   for (const [input, selected] of [['all', ['all']], ['antigravity-legacy,kimi-legacy', ['antigravity', 'kimi']]]) await t.test(input, t => {
     const root = fixture(t);
     cli(root, ['init', '--agents', input]);
@@ -63,7 +133,7 @@ test('seleções novas criam somente os sucessores dos adaptadores aposentados',
   });
 });
 
-test('update aposenta referências próprias antigas e preserva conteúdo humano e staged', async t => {
+test("update retires old own references and preserves human content and staged", async t => {
   for (const [saved, expected] of [[['all'], ['all']], [['antigravity-legacy', 'kimi-legacy'], ['antigravity', 'kimi']]]) await t.test(saved.join(','), t => {
     const root = fixture(t);
     cli(root, ['init', '--agents', saved[0] === 'all' ? 'all' : 'antigravity,kimi']);
@@ -118,7 +188,7 @@ test('update aposenta referências próprias antigas e preserva conteúdo humano
   });
 });
 
-test('claude isolado, skills do codex e persistência não criam clientes extras', t => {
+test("isolated claude, codex skills and persistence do not create extra customers", t => {
   const root = fixture(t);
   cli(root, ['init', '--agents', 'claude']);
   assert.deepEqual(state(root).clients, ['claude']); assert.ok(existsSync(join(root, 'CLAUDE.md')));
@@ -156,7 +226,7 @@ test('claude isolado, skills do codex e persistência não criam clientes extras
   assert.equal(existsSync(join(root, '.pbai4devs/tools/skills/.local')), false);
 });
 
-test('Codex usa uma única rota de skills e migra somente apontamentos próprios intactos', async t => {
+test("Codex uses a single skill route and migrates only intact own notes", async t => {
   for (const selection of ['codex', 'all']) await t.test(selection, t => {
     const root = fixture(t);
     const git = (...args) => {
@@ -208,7 +278,7 @@ test('Codex usa uma única rota de skills e migra somente apontamentos próprios
 });
 
 
-test('Codex falha sem alterar o projeto se as duas rotas estiverem obstruídas', t => {
+test("Codex fails without changing the project if the two routes are blocked", t => {
   const root = fixture(t);
   put(root, '.gitignore', '# project\n');
   assert.equal(spawnSync('git', ['-C', root, 'add', '.gitignore']).status, 0);
@@ -224,7 +294,7 @@ test('Codex falha sem alterar o projeto se as duas rotas estiverem obstruídas',
   assert.equal(existsSync(join(root, '.pbai4devs')), false);
 });
 
-test('Codex preserva skill humana na rota nativa e alterna seleção com fallback', t => {
+test("Codex preserves human skill on the native route and alternates selection with fallback", t => {
   const root = fixture(t), primary = '.agents/skills/qualidade/planejar-qa/SKILL.md';
   const human = '---\nname: planejar-qa\ndescription: Plano humano.\n---\n\n# QA humano\n\nPreserve meu trabalho.\n';
   put(root, '.gitignore', '# project\n');
@@ -246,7 +316,7 @@ test('Codex preserva skill humana na rota nativa e alterna seleção com fallbac
   assert.equal(read(root, '.gitignore'), '# project\n');
 });
 
-test('troca concorrente de obstrução interrompe o plano antes de escrever', async t => {
+test("Competing exchange of obstruction interrupts the plan before writing", async t => {
   for (const scenario of ['appears', 'removed', 'replaced']) await t.test(scenario, t => {
     const root = fixture(t), obstacle = '.agents/skills/qualidade';
     put(root, '.gitignore', '# project\n');
@@ -265,7 +335,7 @@ test('troca concorrente de obstrução interrompe o plano antes de escrever', as
   });
 });
 
-test('tombstone derivado não oculta hash divergente nem arquivo humano recriado', t => {
+test("Tombstone derivative does not hide divergent hash or human file recreated", t => {
   const root = fixture(t), obstacle = '.agents/skills/qualidade';
   const fallback = '.codex/skills/qualidade/planejar-qa/SKILL.md';
   put(root, obstacle, 'human obstacle\n');
@@ -289,7 +359,7 @@ test('tombstone derivado não oculta hash divergente nem arquivo humano recriado
   assert.throws(() => inspect(root), { code: 'E_STATE' });
 });
 
-test('sync standalone não remove fallback com alteração humana staged e divergente', t => {
+test("sync standalone does not remove fallback with human change staged and divergent", t => {
   const root = fixture(t), obstacle = '.agents/skills/qualidade';
   const fallback = '.codex/skills/qualidade/planejar-qa/SKILL.md';
   put(root, '.gitignore', '# human\n');
@@ -310,7 +380,7 @@ test('sync standalone não remove fallback com alteração humana staged e diver
   assert.ok(inspect(root).issues.some(issue => issue.path === fallback && issue.code === 'modified'));
 });
 
-test('obstrução criada sobre rota já gerenciada falha sem descartar conteúdo humano', t => {
+test("obstruction created on route already managed failure without discarding human content", t => {
   const root = fixture(t), path = '.agents/skills/qualidade';
   put(root, '.gitignore', '# human\n');
   cli(root, ['init', '--agents', 'codex']);
@@ -331,7 +401,7 @@ test('obstrução criada sobre rota já gerenciada falha sem descartar conteúdo
   assert.equal(cli(root, ['doctor']).ok, true);
 });
 
-test('sync da CLI recupera a rota nativa após remover obstrução', t => {
+test("sync da CLI recovers native route after removing obstruction", t => {
   const root = fixture(t), obstacle = '.agents/skills/qualidade';
   const primary = '.agents/skills/qualidade/planejar-qa/SKILL.md';
   const fallback = '.codex/skills/qualidade/planejar-qa/SKILL.md';
@@ -341,7 +411,7 @@ test('sync da CLI recupera a rota nativa após remover obstrução', t => {
   cli(root, ['init', '--agents', 'codex']);
   assert.ok(existsSync(join(root, fallback)));
   const index = readFileSync(join(root, '.git/index'));
-  rmSync(join(root, obstacle)); // A obstrução pertence à fixture.
+  rmSync(join(root, obstacle)); // The obstruction belongs to the fixture.
   assert.equal(cli(root, ['sync']).ok, true);
   assert.ok(existsSync(join(root, primary)));
   assert.equal(existsSync(join(root, fallback)), false);
@@ -425,7 +495,7 @@ test('sync preserva bytes de metadados humanos ao acrescentar e remover tombston
   assert.equal(read(root, '.gitignore'), '# human\n');
 });
 
-test('desmarcar preserva arquivos com texto humano e remove somente derivados intactos', t => {
+test("uncheck preserves files with human text and removes only intact derivatives", t => {
   const root = fixture(t); cli(root, ['init', '--agents', 'claude,codex']);
   const path = '.claude/skills/configurar-projeto/SKILL.md';
   const original = read(root, path), changed = `${original}\nUser edit.\n`;
@@ -451,7 +521,7 @@ test('desmarcar preserva arquivos com texto humano e remove somente derivados in
   assert.equal(read(root, path), changed);
 });
 
-test('estado legado equivale a all e consultas não escrevem migração', t => {
+test("legacy state equals all and queries do not write migration", t => {
   const root = fixture(t); cli(root, ['init', '--yes', '--agents', 'all']);
   const previous = state(root); delete previous.clients; put(root, statePath, `${JSON.stringify(previous, null, 2)}\n`);
   const before = read(root, statePath);
@@ -478,7 +548,7 @@ test('estado legado equivale a all e consultas não escrevem migração', t => {
   assert.deepEqual(ruleSnapshot(root), rulesBefore); assert.deepEqual(gitSnapshot(root), gitBefore);
 });
 
-test('TTY pergunta idioma, clientes e propósito; execução sem TTY e opções não perguntam', async t => {
+test('TTY setup asks for language, clients and purpose and skips prompts for scripted runs', async t => {
   const root = fixture(t), questions = [], answers = ['es', 'claude', '4']; let output = '';
   put(root, 'docs/existente.md', '# Documento existente\n');
   const status = await main(['init', '--target', root], { stdin: { isTTY: true }, stdout: { isTTY: true, write: value => { output += value; } }, ask: async question => { questions.push(question); return answers.shift(); } });
@@ -503,7 +573,7 @@ test('TTY pergunta idioma, clientes e propósito; execução sem TTY e opções 
   });
 });
 
-test('hub inicial, adição incremental e sincronização respeitam os clientes escolhidos', { timeout: 120000 }, t => {
+test("Initial hub, incremental addition and synchronization respect the chosen customers", { timeout: 120000 }, t => {
   const root = fixture(t);
   const direct = () => spawnSync(process.execPath, [join(root, '.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs')], { cwd: root, encoding: 'utf8' });
   const clientInfo = () => cli(root, ['agents']);
@@ -547,7 +617,7 @@ test('hub inicial, adição incremental e sincronização respeitam os clientes 
   cli(root, ['sync', '--check']);
 });
 
-test('manifesto seletivo exige runtime compatível e preserva um script antigo editado', { timeout: 120000 }, t => {
+test("selective manifesto requires compatible runtime and preserves an old edited script", { timeout: 120000 }, t => {
   const root = fixture(t);
   const relative = '.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs';
   const manifest = '.pbai4devs/espelhos.conf';
@@ -583,7 +653,7 @@ test('manifesto seletivo exige runtime compatível e preserva um script antigo e
   assert.deepEqual(state(root).clients, ['codex']);
 });
 
-test('propósito explícito mantém as perguntas de idioma e clientes e orienta a rota escolhida', async t => {
+test('explicit purpose keeps the language and client prompts and guides the chosen route', async t => {
   const root = fixture(t), questions = [], answers = ['en', 'codex']; let output = '';
   const code = await main(['init', '--target', root, '--purpose', 'run'], {
     stdin: { isTTY: true },
@@ -600,7 +670,7 @@ test('propósito explícito mantém as perguntas de idioma e clientes e orienta 
   assert.equal(existsSync(join(root, 'docs')), false);
 });
 
-test('clientes não selecionados com links próprios não são visitados', t => {
+test("Unselected clients with own links are not visited", t => {
   const root = fixture(t), outside = fixture(t);
   try { symlinkSync(outside, join(root, '.opencode'), 'dir'); } catch (error) { if (['EPERM', 'EACCES'].includes(error.code)) { t.skip('No symlink privilege'); return; } throw error; }
   cli(root, ['init', '--agents', 'codex']);

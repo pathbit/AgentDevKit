@@ -19,7 +19,7 @@ test('diagnostico funciona so com Node e informa dependencias opcionais ausentes
   assert.deepEqual(report.tools, []); assert.equal(existsSync(join(root, '.pbai4devs')), false);
 });
 
-test('falha de consulta ao Docker não comprova que daemon ou Compose estão parados', t => {
+test("Docker query failure does not prove that daemon or Compose are stopped", t => {
   const output = join(projectRoot, '.agent-tests'); mkdirSync(output, { recursive: true });
   const root = mkdtempSync(join(output, 'diagnose-docker-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -92,9 +92,9 @@ test('falha de consulta ao Docker não comprova que daemon ou Compose estão par
   assert.equal(existsSync(sentinel), false);
 });
 
-test('diagnóstico sem sondagem não usa APIs monitoradas de processo e rede', t => {
-  // Os controles provam spawnSync e https.request; as demais substituições
-  // são observações adicionais, não uma barreira completa contra rede.
+test("diagnostic without scanning does not use process and network monitored APIs", t => {
+  // The controls prove spamSync and https.request; the other substitutions
+  // are additional observations, not a complete barrier against network.
   const output = join(projectRoot, '.agent-tests'); mkdirSync(output, { recursive: true });
   const root = mkdtempSync(join(output, 'diagnose-offline-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -150,7 +150,7 @@ test('requisito comum recusa Node antigo e procura executaveis sem shell', t => 
   assert.equal(findExecutable('missing', { PATH: dirname(file) }), null);
 });
 
-test('isMain reconhece caminho principal por alias sem executar imports como entrada', t => {
+test("isMain recognizes main path by alias without executing imports as input", t => {
   const output = join(projectRoot, '.agent-tests'); mkdirSync(output, { recursive: true });
   const root = mkdtempSync(join(output, 'runtime alias espaço-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));

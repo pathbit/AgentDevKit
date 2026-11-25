@@ -4,6 +4,8 @@ description: Especialistas, colaboração e provas para desenvolvimento de softw
 
 # Ecossistema de desenvolvimento
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 O kit orienta equipes e agentes em arquitetura, backend, frontend, QA,
 segurança, revisão e performance, sem determinar a tecnologia do projeto.
 Os recursos são instruções: sua existência não executa agentes ou ferramentas.
@@ -30,3 +32,7 @@ Os recursos são instruções: sua existência não executa agentes ou ferrament
 Execute os testes de integração e a pipeline local completa. Verifique os
 adaptadores gerados, a preservação de conteúdo e o resultado da revisão
 independente. Registre provas e pendências conforme o gate de entrega.
+
+[reading-pt]: SPEC.md
+[reading-en]: ../../en/specs/development-ecosystem/SPEC.md
+[reading-es]: ../../es/specs/development-ecosystem/SPEC.md

@@ -4,6 +4,8 @@ description: Ferramentas e skills de segurança locais e open source.
 
 # Referências de segurança
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 As verificações do kit executam no computador do projeto. Não exigem conta,
 assinatura ou envio de código a um serviço. Downloads de ferramentas e bases
 públicas são etapas explícitas; a análise usa os arquivos locais.
@@ -95,3 +97,7 @@ estatísticas do artigo como comprovação de segurança do projeto.
 [authz]: https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html
 [secrets]: https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html
 [uploads]: https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html
+
+[reading-pt]: security-references.md
+[reading-en]: ../en/guides/security-references.md
+[reading-es]: ../es/guides/security-references.md

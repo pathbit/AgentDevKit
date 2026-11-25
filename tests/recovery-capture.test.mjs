@@ -15,7 +15,7 @@ function fixture(t) {
   return root;
 }
 
-test('descreve uma raiz ausente e seus ancestrais sem criá-los', t => {
+test("describes an absent root and its ancestors without creating them", t => {
   const root = fixture(t), target = join(root, 'novo', 'projeto');
   const before = fs.statSync(root, { bigint: true });
   const missing = inspectRecoveryTarget(target);
@@ -32,7 +32,7 @@ test('descreve uma raiz ausente e seus ancestrais sem criá-los', t => {
   assert.equal(present.anchor.ino, String(fs.statSync(target, { bigint: true }).ino));
 });
 
-test('recusa link ou arquivo em ancestral da raiz sem criar projeto', t => {
+test("refuse link or file in root ancestor without creating project", t => {
   const root = fixture(t), outside = fixture(t);
   fs.writeFileSync(join(root, 'arquivo'), 'humano');
   assert.throws(() => inspectRecoveryTarget(join(root, 'arquivo', 'novo')), { code: 'E_RECOVERY_CAPTURE_ROOT' });
@@ -43,7 +43,7 @@ test('recusa link ou arquivo em ancestral da raiz sem criar projeto', t => {
   assert.equal(fs.readFileSync(join(root, 'arquivo'), 'utf8'), 'humano');
 });
 
-test('recusa criação concorrente da raiz durante a inspeção', t => {
+test("refusal of concurrent root breeding during inspection", t => {
   const root = fixture(t), target = join(root, 'novo', 'projeto'), firstMissing = join(root, 'novo');
   const lstat = fs.lstatSync; let checks = 0;
   t.mock.method(fs, 'lstatSync', (path, ...args) => {
@@ -55,7 +55,7 @@ test('recusa criação concorrente da raiz durante a inspeção', t => {
   assert.equal(checks, 2); assert.equal(fs.existsSync(target), false);
 });
 
-test('captura ações e ancestrais e produz backup verificável sem alterar arquivos', { skip: process.platform === 'win32' && 'fixture de backup requer modo POSIX' }, t => {
+test("captures actions and ancestors and produces verifiable backup without changing files", { skip: process.platform === 'win32' && 'fixture de backup requer modo POSIX' }, t => {
   const root = fixture(t), backup = fixture(t);
   fs.mkdirSync(join(root, 'docs'));
   const data = Buffer.from([0, 255, 128, 10]);
@@ -82,7 +82,7 @@ test('captura ações e ancestrais e produz backup verificável sem alterar arqu
   assert.equal(fs.existsSync(join(root, 'docs/novo')), false);
 });
 
-test('recusa caminhos inválidos, aliases e conflitos de estado', t => {
+test("refuses invalid paths, aliases and state conflicts", t => {
   const root = fixture(t);
   fs.writeFileSync(join(root, 'human.txt'), 'humano');
   for (const path of ['../fora', '.git/config', '.agent-tests/teste', 'CON', 'diretorio/../fora', 'a\\b']) {
@@ -97,7 +97,7 @@ test('recusa caminhos inválidos, aliases e conflitos de estado', t => {
   assert.equal(fs.readFileSync(join(root, 'human.txt'), 'utf8'), 'humano');
 });
 
-test('distingue arquivo vazio de caminho ausente', t => {
+test("distinguishes empty file from missing path", t => {
   const root = fixture(t); fs.writeFileSync(join(root, 'vazio'), Buffer.alloc(0));
   const captured = captureRecoverySnapshot(root, [
     { path: 'vazio', action: 'update', beforeHash: sha(Buffer.alloc(0)) },
@@ -121,7 +121,7 @@ test('recusa links e hardlinks sem abrir ou modificar o destino', t => {
   assert.equal(fs.readFileSync(join(root, 'hardlink'), 'utf8'), 'vínculo');
 });
 
-test('recusa edição durante a leitura em vez de registrar snapshot inconsistente', t => {
+test("editing refusal while reading instead of registering inconsistent snapshot", t => {
   const root = fixture(t), path = join(root, 'arquivo'); fs.writeFileSync(path, 'original');
   const read = fs.readSync, lstat = fs.lstatSync, fstat = fs.fstatSync;
   const before = lstat(path, { bigint: true });
@@ -149,7 +149,7 @@ test('recusa edição durante a leitura em vez de registrar snapshot inconsisten
   assert.equal(changed, true); assert.equal(fs.readFileSync(path, 'utf8'), 'alterado');
 });
 
-test('troca de ancestral por link é detectada antes da leitura do arquivo externo', { skip: process.platform === 'win32' && 'fixture de link requer ambiente POSIX' }, t => {
+test("ancestor exchange by link is detected before reading external file", { skip: process.platform === 'win32' && 'fixture de link requer ambiente POSIX' }, t => {
   const root = fixture(t), outside = fixture(t), directory = join(root, 'docs');
   fs.mkdirSync(directory); fs.writeFileSync(join(directory, 'arquivo'), 'interno');
   const external = join(outside, 'arquivo'); fs.writeFileSync(external, 'externo');

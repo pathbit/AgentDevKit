@@ -5,6 +5,8 @@ status: rascunho
 
 # Integração da preservação TOML
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 > Registro histórico de uma candidata. Desde `0.0.36`, o kit deixa de criar
 > ou renovar apontamentos em `.gemini/`. Para atualizar versões anteriores,
 > siga a [migração de clientes][migration].
@@ -80,3 +82,7 @@ Não considerar esses pontos aprovados com base apenas em um helper ou teste
 em memória; os fluxos públicos e suas limitações precisam de evidências.
 
 [migration]: ../../guides/installation.md#atualizar-e-escolher-agentes
+
+[reading-pt]: INTEGRACAO.md
+[reading-en]: ../../en/specs/toml-preservacao/INTEGRACAO.md
+[reading-es]: ../../es/specs/toml-preservacao/INTEGRACAO.md

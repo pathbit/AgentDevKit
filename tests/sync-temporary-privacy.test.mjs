@@ -96,7 +96,7 @@ for (const mask of [0o000, 0o002, 0o022, 0o077]) {
   });
 }
 
-test('sync preserva edição humana e recusa sobrescrita mesmo com force', options, t => {
+test("sync preserves human edition and overwritten refusal even with force", options, t => {
   const { root, target, source, human, sync } = fixture(t);
   synchronize(sync);
   fs.appendFileSync(target, '\nEdição humana sintética.\n');

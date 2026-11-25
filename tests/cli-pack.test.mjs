@@ -11,7 +11,7 @@ import { findNpmCli } from '../.pbai4devs/scripts/lib/npm.mjs';
 const project = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const put = (root, path, content) => { const file = join(root, path); mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, content); };
 
-test('npm pack real exclui estado e payloads em qualquer caixa e preserva fontes e fixtures', t => {
+test("npm real pack deletes state and payloads in any box and preserves fonts and fixtures", t => {
   const npm = findNpmCli();
   assert.ok(npm, 'npm CLI is required for the package regression test.');
   const evidence = join(project, '.agent-tests'); mkdirSync(evidence, { recursive: true });

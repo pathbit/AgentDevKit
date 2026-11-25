@@ -94,8 +94,8 @@ for (const route of ['CLI', 'direto']) test(`sync ${route} migra apontamentos Cl
   assert.equal(beforeRecovery.status, 'ready');
   const direct = options => synchronize({ root, localIgnores: false, generateEntrypoints: false, output() {}, ...options });
 
-  // As duas formas de proteção do índice precisam impedir efeitos sobre o
-  // projeto: conteúdo staged diferente e remoção de entrada ainda indexada.
+  // The two forms of index protection need to prevent effects on the
+  // project: different staged content and still indexed input removal.
   put(root, modern, Buffer.concat([previous.get(modern), Buffer.from('\nEdição staged.\n')]));
   git(root, 'add', '-f', '--', modern, legacy);
   put(root, modern, previous.get(modern));
@@ -153,7 +153,7 @@ for (const route of ['CLI', 'direto']) test(`sync ${route} migra apontamentos Cl
   }
 });
 
-test('init Claude informa omissão sem ativação global e preserva Git humano', t => {
+test("init Claude informs omission without global activation and preserves human Git", t => {
   const root = fixture(t), before = protectedGit(root), result = init(root);
   assert.deepEqual(protectedGit(root), before);
   assert.ok(result.scopeOmissions.some(item => item.source === '.pbai4devs/rules/git/RULE.md' && item.status === 'explicit-reference-planned'));
@@ -167,7 +167,7 @@ test('init Claude informa omissão sem ativação global e preserva Git humano',
     assert.ok([0, 1].includes(check.status), JSON.stringify(check.body));
     assert.equal(check.body.error, undefined);
     assert.equal(check.body.ok, check.status === 0);
-    // A consulta em outro idioma pode planejar os blocos e o estado nesse idioma.
+    // The consultation in another language can plan the blocks and the state in that language.
     if (check.status === 1) {
       assert.ok(check.body.issues.length > 0);
       assert.ok(check.body.issues.every(issue => issue.code === 'outdated' && ['AGENTS.md', '.pbai4devs/state/agentdevkit.json'].includes(issue.path)), JSON.stringify(check.body.issues));
@@ -178,7 +178,7 @@ test('init Claude informa omissão sem ativação global e preserva Git humano',
   assert.deepEqual(protectedGit(root), before);
 });
 
-test('migração de regra Claude aninhada rejeita origem e sidecar alterados após planejamento', {
+test("rule migration Claude nested rejects origin and sidecar altered after planning", {
   timeout: process.platform === 'win32' ? 480000 : 120000,
 }, t => {
   const root = realpathSync.native(fixture(t));
@@ -191,8 +191,8 @@ test('migração de regra Claude aninhada rejeita origem e sidecar alterados ap�
   const sidecarText = '---\npaths: ["src/**/*.mjs"]\n---\n';
   put(root, source, sourceText); put(root, sidecar, sidecarText);
   assert.equal(cli(root, 'sync').status, 0);
-  // O título atualiza o apontamento e a descrição altera o catálogo, o que
-  // faz o sync --force preparar também o backup de compatibilidade.
+  // The title updates the note and the description changes the catalogue, which
+  // do sync --force also prepare the compatibility backup.
   put(root, source, sourceText.replace('anterior', 'atualizada').replace('Regra de revisão.', 'Regra de revisão atualizada.'));
   const originalTarget = read(root, target), originalState = read(root, stateFile), before = protectedGit(root);
   const changes = [[source, sourceText.replace('anterior', 'edição humana')], [sidecar, sidecarText.replace('src/', 'test/')]];
@@ -226,7 +226,7 @@ test('migração de regra Claude aninhada rejeita origem e sidecar alterados ap�
   assert.deepEqual(protectedGit(root), before);
 });
 
-test('sync bloqueia legado não rastreado quando há apenas hash de conteúdo', t => {
+test("sync blocks untraceable legacy when there is only content hash", t => {
   const root = fixture(t); init(root); addOwnedLegacy(root);
   const before = protectedGit(root), prior = read(root, legacy), state = read(root, '.pbai4devs/state/agentdevkit.json');
   for (const args of [['sync', '--check'], ['sync', '--force'], ['doctor']]) {
@@ -239,7 +239,7 @@ test('sync bloqueia legado não rastreado quando há apenas hash de conteúdo', 
   }
 });
 
-test('preview mantém motivo Claude específico e Git staged, com e sem force', { timeout: 180000 }, t => {
+test("preview keeps Claude motive specific and Git staged, with and without force", { timeout: 180000 }, t => {
   const root = fixture(t); init(root); addOwnedLegacy(root, { tracked: true });
   put(root, legacy, pointer + '\nEdição humana posterior.\n');
   const before = protectedGit(root), prior = read(root, legacy), previews = [];
@@ -281,7 +281,7 @@ for (const condition of ['unowned', 'tracked', 'edited']) test(`sync bloqueia le
   }
 });
 
-test('sync cria paths de claude.yaml explícito sem tratar glob de outro cliente como equivalente', t => {
+test("sync Creates Paths of claude.yaml explicit without treating another client's globe as equivalent", t => {
   const root = fixture(t); init(root);
   const source = '.pbai4devs/rules/custom/RULE.md';
   put(root, source, '---\ntrigger: glob\nglobs: "origem/**/*.ts"\ndescription: Regra própria.\n---\n\n# Regra própria\n');
@@ -296,7 +296,7 @@ test('sync cria paths de claude.yaml explícito sem tratar glob de outro cliente
   assert.deepEqual(protectedGit(root), before);
 });
 
-test('sync recusa colisão humana de escopo Claude em modo force', t => {
+test("sync refusal human scope collision Claude in force mode", t => {
   const root = fixture(t); init(root);
   put(root, '.pbai4devs/rules/custom/RULE.md', '---\ntrigger: glob\nglobs: "src/**/*.ts"\ndescription: Regra.\n---\n\n# Regra\n');
   put(root, '.pbai4devs/rules/custom/claude.yaml', '---\npaths: ["src/**/*.ts"]\n---\n');
@@ -307,7 +307,7 @@ test('sync recusa colisão humana de escopo Claude em modo force', t => {
   assert.equal(read(root, target).toString(), human); assert.deepEqual(protectedGit(root), before);
 });
 
-test('alvo alternativo histórico com hash bloqueia sync e é preservado ao desmarcar Claude', t => {
+test("historical alternative target with hash blocks sync and is preserved by unmarking Claude", t => {
   const root = fixture(t); init(root);
   const alt = '.claude/rules/custom.md', statePath = '.pbai4devs/state/agentdevkit.json';
   const state = JSON.parse(read(root, statePath));
@@ -332,7 +332,7 @@ test('alvo alternativo histórico com hash bloqueia sync e é preservado ao desm
   }
 });
 
-test('conflito alerta sobre risco de ativação global em português, inglês e espanhol', t => {
+test("alert conflict on risk of global activation in Portuguese, English and Spanish", t => {
   const root = fixture(t); init(root); addOwnedLegacy(root);
   const before = protectedGit(root);
   for (const [language, expression] of [['pt', /regras preservadas podem continuar ativas globalmente/], ['en', /preserved rules may still load globally/], ['es', /las reglas conservadas pueden seguir activas globalmente/]]) {
@@ -345,7 +345,7 @@ test('conflito alerta sobre risco de ativação global em português, inglês e 
   }
 });
 
-test('seleção preserva regra antiga substituída, modo e índice e mantém diagnóstico pendente', t => {
+test("selection preserves replaced old rule, mode and index and keeps diagnosis pending", t => {
   const root = fixture(t); init(root);
   const alt = '.claude/rules/custom.md', statePath = '.pbai4devs/state/agentdevkit.json';
   const state = JSON.parse(read(root, statePath)); put(root, alt, pointer);
@@ -375,7 +375,7 @@ test('seleção preserva regra antiga substituída, modo e índice e mantém dia
   assert.equal(read(root, alt).toString(), pointer); assert.deepEqual(protectedGit(root), before);
 });
 
-test('seleção detecta symlink de regra preservado preservando o alvo', t => {
+test("selection detects preserved rule symlink preserving the target", t => {
   const root = fixture(t); init(root);
   const external = mkdtempSync(join(tmpdir(), 'adk-claude-external-'));
   t.after(() => rmSync(external, { recursive: true, force: true }));
@@ -393,7 +393,7 @@ test('seleção detecta symlink de regra preservado preservando o alvo', t => {
   assert.ok(diagnostic.body.retainedClaudeRules.includes(alt));
 });
 
-test('cliente desmarcado com ancestral simbólico é considerado não verificado', t => {
+test("client unmarked with symbolic ancestor is considered not verified", t => {
   const root = fixture(t), external = mkdtempSync(join(tmpdir(), 'adk-claude-external-root-'));
   t.after(() => rmSync(external, { recursive: true, force: true }));
   assert.equal(cli(root, 'init', '--agents', 'codex').status, 0);
@@ -411,7 +411,7 @@ test('cliente desmarcado com ancestral simbólico é considerado não verificado
   assert.deepEqual(protectedGit(root), before);
 });
 
-test('doctor mantém alerta de legado com outra issue e não presume estado inválido', t => {
+test("doctor keeps legacy alert with another issue and does not assume invalid status", t => {
   const root = fixture(t); init(root);
   const selected = cli(root, 'agents', 'codex');
   assert.equal(selected.status, 0, JSON.stringify(selected.body));
@@ -431,7 +431,7 @@ test('doctor mantém alerta de legado com outra issue e não presume estado inv�
   assert.deepEqual(protectedGit(root), human);
 });
 
-test('regras em pastas ignoradas continuam com escopo não verificado após desmarcar Claude', t => {
+test("rules in ignored folders continue with unchecked scope after unchecking Claude", t => {
   const root = fixture(t); init(root);
   const selection = cli(root, 'agents', 'codex'); assert.equal(selection.status, 0, JSON.stringify(selection.body));
   for (const folder of ['node_modules', '.local', '.cache', 'opencode-loop']) put(root, `.claude/rules/${folder}/human.md`, '# Regra humana\n');
@@ -443,7 +443,7 @@ test('regras em pastas ignoradas continuam com escopo não verificado após desm
   }
 });
 
-test('limite de profundidade mantém escopo Claude como não verificado', t => {
+test("depth limit maintains Claude scope as not verified", t => {
   const root = fixture(t); init(root); assert.equal(cli(root, 'agents', 'codex').status, 0);
   let folder = join(root, '.claude/rules');
   for (let i = 0; i < 66; i++) { folder = join(folder, 'd'); mkdirSync(folder, { recursive: true }); }
@@ -455,7 +455,7 @@ test('limite de profundidade mantém escopo Claude como não verificado', t => {
   }
 });
 
-test('diretório ilegível mantém escopo Claude como não verificado', t => {
+test("unreadable directory keeps Claude scope as not checked", t => {
   if (process.platform === 'win32' || process.getuid?.() === 0) return t.skip('permissões Unix não aplicáveis');
   const root = fixture(t); init(root); assert.equal(cli(root, 'agents', 'codex').status, 0);
   const blocked = join(root, '.claude/rules/unreadable'); mkdirSync(blocked, { recursive: true }); chmodSync(blocked, 0);
@@ -469,7 +469,7 @@ test('diretório ilegível mantém escopo Claude como não verificado', t => {
   } finally { chmodSync(blocked, 0o700); }
 });
 
-test('limite de entradas mantém escopo Claude como não verificado', t => {
+test("entry limit maintains Claude scope as not verified", t => {
   const root = fixture(t); init(root); assert.equal(cli(root, 'agents', 'codex').status, 0);
   const directory = join(root, '.claude/rules/muitas'); mkdirSync(directory, { recursive: true });
   for (let i = 0; i < 10001; i++) writeFileSync(join(directory, `${i}.txt`), '');
@@ -479,7 +479,7 @@ test('limite de entradas mantém escopo Claude como não verificado', t => {
   assert.deepEqual(protectedGit(root), before);
 });
 
-test('sync direto --check detecta legado Claude após desmarcação e preserva Git', t => {
+test("direct sync --check detects Claude legacy after demarcation and preserves Git", t => {
   const root = fixture(t); init(root); assert.equal(cli(root, 'agents', 'codex').status, 0);
   const before = protectedGit(root), script = join(root, '.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs');
   const result = spawnSync(process.execPath, [script, '--check'], { cwd: root, encoding: 'utf8', timeout: 60000 });
@@ -487,7 +487,7 @@ test('sync direto --check detecta legado Claude após desmarcação e preserva G
   assert.match(result.stdout, /Escopo Claude nao verificado/); assert.deepEqual(protectedGit(root), before);
 });
 
-test('sync direto --check aprova ausência de legado Claude após instalar somente Codex', t => {
+test("direct sync --check approves lack of legacy Claude after installing only Codex", t => {
   const root = fixture(t); assert.equal(cli(root, 'init', '--agents', 'codex').status, 0);
   const before = protectedGit(root), script = join(root, '.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs');
   const result = spawnSync(process.execPath, [script, '--check'], { cwd: root, encoding: 'utf8', timeout: 60000 });
@@ -495,7 +495,7 @@ test('sync direto --check aprova ausência de legado Claude após instalar somen
   assert.doesNotMatch(result.stdout, /Escopo Claude nao verificado/); assert.deepEqual(protectedGit(root), before);
 });
 
-test('init preserva link de rules e checks sinalizam escopo desconhecido preservando o alvo', t => {
+test("init preserves rules link and checks signal unknown scope preserving target", t => {
   const root = fixture(t), external = mkdtempSync(join(tmpdir(), 'adk-claude-rule-boundary-'));
   t.after(() => rmSync(external, { recursive: true, force: true }));
   const sentinel = join(external, 'sentinel.md'); writeFileSync(sentinel, '# Externo\n');
@@ -514,7 +514,7 @@ test('init preserva link de rules e checks sinalizam escopo desconhecido preserv
   assert.deepEqual(protectedGit(root), before);
 });
 
-test('doctor e preview identificam link simbólico em regra preservada sem ler o destino', t => {
+test("doctor and preview identify symbolic link as usually preserved without reading the destination", t => {
   const root = fixture(t), external = mkdtempSync(join(tmpdir(), 'adk-claude-symlink-reason-'));
   t.after(() => rmSync(external, { recursive: true, force: true }));
   init(root);
@@ -537,7 +537,7 @@ test('doctor e preview identificam link simbólico em regra preservada sem ler o
   }
 });
 
-test('update preserva arquivo humano que impede diretório de regra Claude', t => {
+test("update preserves human file that prevents Claude rule directory", t => {
   const root = fixture(t); init(root);
   const boundary = '.claude/rules/git', content = 'arquivo humano não é diretório\n';
   put(root, boundary, content);
@@ -553,7 +553,7 @@ test('update preserva arquivo humano que impede diretório de regra Claude', t =
   }
 });
 
-test('update informa diretório humano no nome de regra Claude e preserva conteúdo', t => {
+test("update informs human directory in rule name Claude and preserves content", t => {
   const root = fixture(t); init(root);
   const directory = join(root, legacy), sentinel = join(directory, 'humano.txt');
   mkdirSync(directory, { recursive: true }); writeFileSync(sentinel, 'conteúdo humano\n');
@@ -569,7 +569,7 @@ test('update informa diretório humano no nome de regra Claude e preserva conte�
   }
 });
 
-test('init preserva diretório humano no nome de regra Claude', t => {
+test("init preserves human directory in rule name Claude", t => {
   const root = fixture(t), directory = join(root, legacy), sentinel = join(directory, 'humano.txt');
   mkdirSync(directory, { recursive: true }); writeFileSync(sentinel, 'conteúdo humano\n');
   const before = protectedGit(root), result = cli(root, 'init', '--agents', 'claude');
@@ -602,7 +602,7 @@ for (const record of ['files', 'blocks']) test(`regra Claude com registro ${reco
   }
 });
 
-test('doctor preserva categoria de erro duplo sem expor conteúdo da falha', async t => {
+test("doctor preserves double error category without exposing fault content", async t => {
   const root = fixture(t); init(root); assert.equal(cli(root, 'agents', 'codex').status, 0);
   const before = protectedGit(root); put(root, '.pbai4devs/INSTRUCTIONS.md', '# Alteração humana\n');
   const stagePrefix = join(fs.realpathSync(tmpdir()), 'agentdevkit-');
@@ -627,7 +627,7 @@ test('doctor preserva categoria de erro duplo sem expor conteúdo da falha', asy
   assert.deepEqual(protectedGit(root), before);
 });
 
-test('sync direto com apenas regra global sinaliza rules simbólico cíclico, externo ou pendente', t => {
+test("direct sync with only global rule signals symbolic cyclic, external or pending rules", t => {
   for (const kind of ['cycle', 'external', 'dangling']) {
     const root = fixture(t), outside = mkdtempSync(join(tmpdir(), 'adk-claude-only-global-'));
     t.after(() => rmSync(outside, { recursive: true, force: true }));
@@ -652,7 +652,7 @@ test('sync direto com apenas regra global sinaliza rules simbólico cíclico, ex
   }
 });
 
-test('somente always_on ou glob explícito detecta link interno ou raiz em init e checks', { timeout: 120000 }, t => {
+test("only always_on or explicit glob detects internal or root link in init and checks", { timeout: 120000 }, t => {
   const bundle = mkdtempSync(join(tmpdir(), 'adk-claude-only-always-package-'));
   t.after(() => rmSync(bundle, { recursive: true, force: true }));
   for (const folder of ['.pbai4devs', 'src', 'bin']) fs.cpSync(resolve(folder), join(bundle, folder), {
@@ -720,7 +720,7 @@ test('pacote integral detecta link interno de regra Claude global em init e chec
   assert.equal(readFileSync(sentinel, 'utf8'), '# Exterior\n'); assert.deepEqual(protectedGit(root), before);
 });
 
-test('sync direto distingue diretório irrelevante de obstruções no destino Claude', t => {
+test("direct sync distinguishes irrelevant directory from obstructions in Claude destination", t => {
   for (const kind of ['empty-unrelated', 'empty-target', 'root-file', 'ancestor-file', 'staged-root-file']) {
     const root = fixture(t);
     put(root, '.pbai4devs/templates/gitignore/agents.ignore', '# Cache\n/*\n!/.gitignore\n{{ALLOWLIST}}\n/cache/\n*.log\n');
@@ -745,7 +745,7 @@ test('sync direto distingue diretório irrelevante de obstruções no destino Cl
   }
 });
 
-test('pacote integral preserva arquivo humano staged na raiz de regras Claude e alerta', t => {
+test("integral package preserves human file staged at Claude root of rules and alert", t => {
   const root = fixture(t), path = '.claude/rules'; put(root, path, '# Humano\n'); git(root, 'add', '-f', '--', path);
   const before = protectedGit(root), bytes = read(root, path);
   const initial = cli(root, 'init', '--agents', 'claude'); assert.equal(initial.status, 0, JSON.stringify(initial.body));
@@ -757,7 +757,7 @@ test('pacote integral preserva arquivo humano staged na raiz de regras Claude e 
   assert.deepEqual(read(root, path), bytes); assert.deepEqual(protectedGit(root), before);
 });
 
-test('legado Claude em diretórios ignorados bloqueia sync sem perder registro, inclusive force', t => {
+test("legacy Claude in ignored directories blocks sync without losing record, including force", t => {
   for (const folder of ['.local', '.cache', 'node_modules', 'opencode-loop']) {
     const root = fixture(t), source = '.pbai4devs/rules/demo/RULE.md';
     const custom = `.claude/rules/${folder}/legacy.md`, normal = '.claude/rules/demo/RULE.md';
@@ -813,7 +813,7 @@ test('CLI e sync direto detectam legado oculto mesmo quando exclude humano o ign
   assert.deepEqual(read(root, custom), prior); assert.equal(lstatSync(join(root, custom), { bigint: true }).ino, identity.ino);
 });
 
-test('estado legado Claude recusa caminhos inválidos e artefatos ignorados de outros clientes', t => {
+test("legacy state Claude refuses invalid paths and ignored artifacts from other customers", t => {
   const root = fixture(t); init(root);
   const statePath = '.pbai4devs/state/derived.json', original = { schemaVersion: 1, entries: {} };
   const paths = ['.CLAUDE/rules/.local/legacy.md', '.claude/rules/.git/config.md', '.claude/rules/.local/../escape.md', '.codex/rules/.local/legacy.md', '.claude/rules/.local/README.md', '.claude/rules/.local/INSTRUCTIONS.md', '.claude/rules/README.md', '.claude/rules/INSTRUCTIONS.md'];
@@ -827,7 +827,7 @@ test('estado legado Claude recusa caminhos inválidos e artefatos ignorados de o
   }
 });
 
-test('marcador em exemplo cercado não adota nem bloqueia documento humano', t => {
+test("marker in surrounded example does not adopt or block human document", t => {
   for (const folder of ['.local', '.cache', 'node_modules', 'opencode-loop']) {
     const root = fixture(t), source = '.pbai4devs/rules/demo/RULE.md', custom = `.claude/rules/${folder}/human.md`;
     put(root, '.pbai4devs/templates/gitignore/agents.ignore', '# Cache\n/*\n!/.gitignore\n{{ALLOWLIST}}\n/cache/\n*.log\n');
@@ -848,7 +848,7 @@ test('marcador em exemplo cercado não adota nem bloqueia documento humano', t =
   }
 });
 
-test('marcador e apontamento reais fora de fence permanecem conflito sem adoção', t => {
+test("real marker and pointer outside fence remain conflict without adoption", t => {
   const root = fixture(t), source = '.pbai4devs/rules/demo/RULE.md', custom = '.claude/rules/.local/legacy.md';
   put(root, '.pbai4devs/templates/gitignore/agents.ignore', '# Cache\n/*\n!/.gitignore\n{{ALLOWLIST}}\n/cache/\n*.log\n');
   put(root, '.pbai4devs/templates/gitignore/clients.json', '{}\n'); put(root, '.pbai4devs/templates/gitignore/shared.ignore', '# Compartilhado\n');
@@ -862,7 +862,7 @@ test('marcador e apontamento reais fora de fence permanecem conflito sem adoçã
   assert.equal(existsSync(join(root, '.pbai4devs/state/derived.json')), false);
 });
 
-test('detecção de apontamento distingue fences comuns, listas e referência editada', () => {
+test("pointing detection distinguishes common feces, lists and edited reference", () => {
   const target = '.claude/rules/.local/x.md', marker = '<!-- gerado: sincronizar-agentes -->';
   const pointer = 'Leia e siga [origem](../../../.pbai4devs/rules/demo/RULE.md).', body = marker + '\n' + pointer;
   const cases = [
@@ -885,7 +885,7 @@ test('detecção de apontamento distingue fences comuns, listas e referência ed
   for (const [name, text, expected] of cases) assert.equal(resemblesClaudeReference(target, text), expected, name);
 });
 
-test('exemplo YAML e formas Markdown alternativas são incerteza, sem adoção nem bloqueio de sync', t => {
+test("example YAML and alternative Markdown forms are uncertainty, no adoption or sync block", t => {
   for (const kind of ['yaml', 'label', 'angle', 'reference']) {
     const root = fixture(t), source = '.pbai4devs/rules/demo/RULE.md', custom = '.claude/rules/.local/human.md';
     put(root, '.pbai4devs/templates/gitignore/agents.ignore', '# Cache\n/*\n!/.gitignore\n{{ALLOWLIST}}\n/cache/\n*.log\n');

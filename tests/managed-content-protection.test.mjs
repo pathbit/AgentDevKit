@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { applyPlan, planInstallation } from '../src/install.mjs';
 import { extractManagedBlock } from '../.pbai4devs/scripts/lib/managed-content.mjs';
 
-test('edição humana durante o planejamento não pode entrar só no hash do snapshot', t => {
+test("Human editing during planning cannot enter only the hash of the snapshot", t => {
   const { root, put, read } = fixture(t);
   const path = join(root, 'AGENTS.md'), original = '# Regra humana original\n';
   put('AGENTS.md', original);
@@ -48,7 +48,7 @@ for (const window of ['backup', 'temporary-write']) test(`edição humana durant
   assert.equal(read('AGENTS.md'), newer);
 });
 
-test('arquivo humano criado depois da ausência observada não é sobrescrito com force', t => {
+test("human file created after observed absence is not overwritten with force", t => {
   const { root, read } = fixture(t);
   const path = join(root, 'AGENTS.md'), human = '# Criado durante o planejamento\n';
   const originalRead = fs.readFileSync;
@@ -68,7 +68,7 @@ test('arquivo humano criado depois da ausência observada não é sobrescrito co
   assert.equal(existsSync(join(root, '.pbai4devs')), false);
 });
 
-test('falha do instalador conserva edição humana, identidade e backup', t => {
+test("installer failure saves human edition, identity and backup", t => {
   const { root, put, read } = fixture(t);
   const path = join(root, 'AGENTS.md'), original = '# Minhas instruções\n', human = '# Alteração humana\n';
   put('AGENTS.md', original);
@@ -107,7 +107,7 @@ for (const corruption of ['alterado', 'duplicado', 'incompleto']) test(`bloco ${
   }
 });
 
-test('desmarcar cliente não remove um bloco adulterado nem seu arquivo humano', async t => {
+test("unselect client does not remove an adulterated block or its human file", async t => {
   const { root, put, read } = fixture(t);
   const path = '.claude/agents/revisor.md';
   put(path, '# Meu revisor\n');
@@ -120,7 +120,7 @@ test('desmarcar cliente não remove um bloco adulterado nem seu arquivo humano',
   assert.equal(read('.pbai4devs/state/agentdevkit.json'), before);
 });
 
-test('limpeza preserva metadados humanos mesmo quando o corpo ainda parece um apontamento', async t => {
+test("cleaning preserves human metadata even when the body still looks like a pointer", async t => {
   const { root, put, read } = fixture(t);
   await cli(root, ['init', '--agents', 'claude', '--yes']);
   const source = '.pbai4devs/skills/projeto/local-known/SKILL.md';
@@ -137,7 +137,7 @@ test('limpeza preserva metadados humanos mesmo quando o corpo ainda parece um ap
   assert.equal(JSON.parse(read('.pbai4devs/state/agentdevkit.json')).files[path], undefined);
 });
 
-test('marcador copiado em um arquivo sem ownership não autoriza sua remoção', async t => {
+test("bookmark copied into a file without ownership does not authorize its removal", async t => {
   const { root, put, read } = fixture(t);
   const path = '.claude/skills/existing/SKILL.md';
   const content = '---\nname: existing\ndescription: Minha definição.\n---\n\n# Minha definição\n\n<!-- gerado: sincronizar-agentes -->\nLeia e siga [origem](../../../.pbai4devs/skills/projeto/criar-skill/SKILL.md).\n';

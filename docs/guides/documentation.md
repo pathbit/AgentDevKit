@@ -4,6 +4,8 @@ description: Evoluir documentos existentes e criar somente o que falta.
 
 # Documentação sem perder o contexto
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 Use `document` para começar um levantamento de sistema e
 `atualizar-documentacao` para revisar os documentos afetados por uma entrega.
 O agente usa o inventário como ponto de partida para ler as fontes e propor
@@ -92,3 +94,7 @@ Use `verificar-trabalho` e `revisar-entrega`; salve as provas em `.agent-tests/`
 [legado]: ../../.pbai4devs/skills/projeto/documentar-legado/SKILL.md
 [levantamento]: ../../.pbai4devs/templates/levantamento-legado/TEMPLATE.md
 [tests]: https://github.com/pathbit/AgentDevKit/blob/main/tests/README.md
+
+[reading-pt]: documentation.md
+[reading-en]: ../en/guides/documentation.md
+[reading-es]: ../es/guides/documentation.md

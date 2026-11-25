@@ -36,7 +36,7 @@ export function assessCopilotEvidence({ project, fixture, packageRoot, manifest,
     const keys = [...content.matchAll(/"([a-z0-9-]+)"\s*:/g)].map(match => match[1]);
     const parsed = JSON.parse(content);
     if (parsed && !Array.isArray(parsed) && typeof parsed === 'object' && keys.length === manifest.length && new Set(keys).size === keys.length && Object.keys(parsed).length === manifest.length) answers = parsed;
-  } catch { /* resposta não comprovada */ }
+  } catch { /* unproven response */ }
   const expectedNames = new Set(manifest.map(item => item.name));
   const expectedPaths = new Set(manifest.map(item => resolve(project, item.path)));
   const unexpectedTools = starts.filter(({ event }) => {
@@ -103,5 +103,5 @@ function main(args) {
 }
 
 let entry = false;
-try { entry = Boolean(process.argv[1]) && realpathSync(resolve(process.argv[1])) === realpathSync(fileURLToPath(import.meta.url)); } catch { /* importação */ }
+try { entry = Boolean(process.argv[1]) && realpathSync(resolve(process.argv[1])) === realpathSync(fileURLToPath(import.meta.url)); } catch { /* import */ }
 if (entry) { try { main(process.argv.slice(2)); } catch (error) { console.error(error.message); process.exitCode = 1; } }

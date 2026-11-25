@@ -32,7 +32,7 @@ function snapshots() {
   ];
 }
 
-test('backup preserva bytes, ausências, diretórios e modos no manifesto', t => {
+test("backup preserves bytes, absences, directories and modes in manifest", t => {
   const parent = fixture(t), root = join(parent, 'backup'), publicFile = join(parent, 'arquivo-humano');
   fs.mkdirSync(root, { mode: 0o700 }); fs.writeFileSync(publicFile, 'conteúdo humano');
   const oldMask = process.umask(0o000); let result;
@@ -115,7 +115,7 @@ for (const alteration of ['extra', 'modo', 'blob anterior', 'manifesto anterior'
   assert.equal(changed, true);
 });
 
-test('limite de entradas aceita o máximo e limite total impede escrita', t => {
+test("entry limit accepts maximum and total limit prevents writing", t => {
   const root = fixture(t);
   const atLimit = Array.from({ length: 4096 }, (_, i) => ({ path: `criados/item-${String(i).padStart(4, '0')}`, action: 'create', type: 'absent', mode: null }));
   const result = prepareRecoveryBackup(root, atLimit);
@@ -126,14 +126,14 @@ test('limite de entradas aceita o máximo e limite total impede escrita', t => {
   assert.deepEqual(fs.readdirSync(other), []);
 });
 
-test('arquivo no limite de 32 MiB é copiado e verificado', { timeout: 60000 }, t => {
+test("file within 32 MiB limit is copied and verified", { timeout: 60000 }, t => {
   const root = fixture(t), bytes = Buffer.alloc(32 * 1024 * 1024, 0x5a);
   const result = prepareRecoveryBackup(root, [{ path: 'limite.bin', action: 'update', type: 'file', mode: 0o600, data: bytes }]);
   assert.equal(verifyRecoveryBackup(root, result.manifest).files, 1);
   assert.equal(fs.statSync(join(root, 'blobs', '00000001.bin')).size, bytes.length);
 });
 
-test('manifesto acima de 4 MiB é recusado antes de criar arquivos', t => {
+test("manifest above 4 MiB is refused before creating files", t => {
   const root = fixture(t), prefix = Array(6).fill('界'.repeat(70)).join('/');
   const entries = Array.from({ length: 4096 }, (_, i) => ({ path: `${prefix}/item-${String(i).padStart(4, '0')}`, action: 'create', type: 'absent', mode: null }));
   const control = fixture(t), valid = prepareRecoveryBackup(control, [entries[0]]);
@@ -142,7 +142,7 @@ test('manifesto acima de 4 MiB é recusado antes de criar arquivos', t => {
   assert.deepEqual(fs.readdirSync(root), []);
 });
 
-test('pasta de backup ampla é recusada sem mudar arquivos existentes', t => {
+test("wide backup folder is refused without changing existing files", t => {
   const root = fixture(t), sentinel = join(root, 'humano'); fs.writeFileSync(sentinel, 'preservar');
   fs.chmodSync(root, 0o755);
   assert.throws(() => prepareRecoveryBackup(root, snapshots()), code('E_RECOVERY_BACKUP_STORE'));
@@ -150,7 +150,7 @@ test('pasta de backup ampla é recusada sem mudar arquivos existentes', t => {
   assert.equal(fs.statSync(root).mode & 0o777, 0o755);
 });
 
-test('umask que remove acesso do dono deixa resíduo e interrompe preparo', t => {
+test("umask that removes owner access leaves residue and interrupts preparation", t => {
   const root = fixture(t), blobs = join(root, 'blobs'), previous = process.umask(0o100);
   try { assert.throws(() => prepareRecoveryBackup(root, snapshots()), code('E_RECOVERY_BACKUP_STORE')); }
   finally { process.umask(previous); }
@@ -160,7 +160,7 @@ test('umask que remove acesso do dono deixa resíduo e interrompe preparo', t =>
   assert.equal(fs.existsSync(join(root, 'manifest.json')), false);
 });
 
-test('pasta e cópia com proprietário diferente são recusadas', {
+test("folder and copy with different owner are refused", {
   skip: typeof process.geteuid !== 'function' ? 'A comparação de proprietário exige o UID efetivo POSIX.' : false,
 }, t => {
   const root = fixture(t), lstat = fs.lstatSync;
@@ -199,7 +199,7 @@ for (const alteration of ['conteúdo', 'truncamento', 'remoção', 'extra', 'lin
   assert.throws(() => verifyRecoveryBackup(root, result.manifest), code('E_RECOVERY_BACKUP_INVALID'));
 });
 
-test('manifesto não canônico é recusado mesmo com hash correspondente', t => {
+test("non-canonical manifesto is refused even with corresponding hash", t => {
   const root = fixture(t); prepareRecoveryBackup(root, snapshots());
   const path = join(root, 'manifest.json'), original = fs.readFileSync(path, 'utf8');
   const altered = Buffer.from(original.replace('{"version":1', '{"version":1,"version":1'));
@@ -207,7 +207,7 @@ test('manifesto não canônico é recusado mesmo com hash correspondente', t => 
   assert.throws(() => verifyRecoveryBackup(root, sha(altered)), code('E_RECOVERY_BACKUP_INVALID'));
 });
 
-test('verificação recusa aliases Unicode mesmo com manifesto e hash correspondentes', t => {
+test("Unicode aliases refusal check even with manifesto and corresponding hash", t => {
   for (const paths of [['Straße.md', 'STRASSE.md'], ['Σ/a', 'ς/b'], ['ſ/a', 's/b'], ['.agent-teſts/segredo', 'outro'], ['CONıN$/segredo', 'outro'], ['NUL .txt', 'outro'], ['CON  .log', 'outro'], ['COM1 .txt', 'outro']]) {
     const root = fixture(t);
     prepareRecoveryBackup(root, [
@@ -249,7 +249,7 @@ nodeTest('hardlink em cópia é recusado sem alterar o segundo nome', t => {
   assert.deepEqual(fs.readFileSync(other), before);
 });
 
-test('troca por link durante abertura não lê nem altera arquivo externo', t => {
+test("link exchange during opening does not read or change external file", t => {
   const root = fixture(t), external = fixture(t), result = prepareRecoveryBackup(root, snapshots());
   const blob = join(root, 'blobs', '00000001.bin'), sentinel = join(external, 'privado');
   fs.writeFileSync(sentinel, 'conteúdo externo sintético');
@@ -269,7 +269,7 @@ test('troca por link durante abertura não lê nem altera arquivo externo', t =>
   assert.equal(fs.readFileSync(sentinel, 'utf8'), 'conteúdo externo sintético');
 });
 
-test('falha de sincronização preserva resíduo e não aceita reutilizar a pasta', t => {
+test("Synchronization failure preserves residue and does not accept reuse of folder", t => {
   const root = fixture(t), sync = fs.fsyncSync; let count = 0;
   t.mock.method(fs, 'fsyncSync', fd => {
     if (++count === 2) throw Object.assign(new Error('segredo sintético'), { code: 'EIO' });
@@ -283,7 +283,7 @@ test('falha de sincronização preserva resíduo e não aceita reutilizar a past
   assert.throws(() => prepareRecoveryBackup(root, snapshots()), code('E_RECOVERY_BACKUP_STORE'));
 });
 
-test('falha após manifesto pode deixar cópias verificáveis sem retornar sucesso', t => {
+test("failure after manifest can leave verifiable copies without returning success", t => {
   const root = fixture(t), sync = fs.fsyncSync, identity = fs.statSync(root, { bigint: true }); let rootSyncs = 0;
   t.mock.method(fs, 'fsyncSync', fd => {
     const item = fs.fstatSync(fd, { bigint: true });
@@ -339,7 +339,7 @@ for (const point of ['mkdir-blobs', 'open-blob', 'write-blob', 'sync-blob', 'syn
   });
 }
 
-test('hash do backup verificado é registrado no begin do diário isolado', t => {
+test("verified backup hash is registered in the isolated journal starter", t => {
   const parent = fixture(t), backup = join(parent, 'backup'), journal = join(parent, 'diario');
   fs.mkdirSync(backup, { mode: 0o700 }); fs.mkdirSync(journal, { mode: 0o700 });
   fs.mkdirSync(join(journal, 'records'), { mode: 0o700 }); fs.mkdirSync(join(journal, 'staging'), { mode: 0o700 });
@@ -349,7 +349,7 @@ test('hash do backup verificado é registrado no begin do diário isolado', t =>
   assert.equal(begin.manifest, result.manifest); assert.equal(inspectRecoveryJournal(journal).phase, 'begin');
 });
 
-test('snapshot de projeto Git existente permite conferir conteúdo após aplicação parcial sintética', t => {
+test("existing Git project snapshot allows checking content after synthetic partial application", t => {
   const parent = fixture(t), project = join(parent, 'projeto'), backup = join(parent, 'backup'), journal = join(parent, 'diario');
   for (const path of [project, backup, journal]) fs.mkdirSync(path, { mode: 0o700 });
   fs.mkdirSync(join(journal, 'records'), { mode: 0o700 }); fs.mkdirSync(join(journal, 'staging'), { mode: 0o700 });
@@ -481,7 +481,7 @@ for (const mode of ['ausente', 'invalido', 'excecao']) for (const phase of ['pre
   });
 }
 
-test('UID indisponível após validar diretórios impede abertura do manifesto', t => {
+test("UID unavailable after validating directories prevents manifest opening", t => {
   const root = fixture(t);
   const prepared = prepareRecoveryBackup(root, snapshots());
   const manifest = join(root, 'manifest.json');

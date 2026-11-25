@@ -6,6 +6,8 @@ version: 0.0.11
 
 # Ecossistema de segurança local
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 ## Objetivo
 
 Instalar procedimentos de segurança com o kit e conectar skills, comandos,
@@ -51,3 +53,7 @@ Comparar snapshots do router antes e depois da atualização pelo npm.
 
 Código de testes é versionado; bases, binários, relatórios e snapshots ficam
 em `.agent-tests/`, `.local/` ou `tmp/`, ignorados pelo Git.
+
+[reading-pt]: SPEC.md
+[reading-en]: ../../en/specs/security-ecosystem/SPEC.md
+[reading-es]: ../../es/specs/security-ecosystem/SPEC.md

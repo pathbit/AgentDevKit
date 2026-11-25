@@ -22,10 +22,10 @@ const registry = 'https://registry.npmjs.org';
 const put = (path, text) => { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, text); };
 const json = path => JSON.parse(readFileSync(path, 'utf8'));
 const info = path => { try { return lstatSync(path); } catch (error) { if (error.code === 'ENOENT') return null; throw error; } };
-const expectedProjectIssues = projectId => projectId === 'ef6' ? [
+const expectedProjectIssues = (projectId, disjointDirectoryNegations) => projectId === 'ef6' ? [
   ...['.agents', '.agent', '.claude', '.codex', '.cursor', '.github', '.vscode', '.opencode', '.gemini', '.zcode', '.kimi-code', '.kimi', '.minimax', '.mimocode', '.dsh']
     .map(root => ({ code: 'private-file-visible', path: `${root}/.Cache/.agentdevkit-ignore-probe` })),
-  { code: 'ignore-ambiguous', path: '.gitignore: !**/[Pp]ackages/build/' },
+  ...(disjointDirectoryNegations ? [] : [{ code: 'ignore-ambiguous', path: '.gitignore: !**/[Pp]ackages/build/' }]),
   { code: 'ignore-ambiguous', path: '.gitignore: !*.[Cc]ache/' },
 ] : [];
 
@@ -680,8 +680,8 @@ function testProject(project, options, output, env, npm) {
     const protectedRun = (name, args, expected = 0) => {
       const before = workspace(directory);
       const text = run(name, process.execPath, args, directory, expected);
-      // O script standalone não retorna um plano estruturado; exija que as
-      // árvores dos alvos permaneçam estáveis nas chamadas desta prova.
+      // The standalone script does not return a structured plan; require that the
+      // Target trees remain stable in the calls of this evidence.
       verifyLinks(before, { plan: [], preserved: [] });
       checkOriginals(directory, baseline, git);
       return text;
@@ -704,7 +704,11 @@ function testProject(project, options, output, env, npm) {
       run('private-ignore-check', 'git', ['-c', `core.hooksPath=${join(output, 'empty-hooks')}`, '-C', directory, 'check-ignore', '--no-index', '--quiet', '--', nativeConfig], output, null);
       return classifyIgnoreStatus(nativeConfig, commands.at(-1).status);
     };
-    const extraIssues = expectedProjectIssues(project.id);
+    // The published 0.0.38 and the current checkout can share a version.
+    // Detect the newer CLI before expecting the narrower POSIX diagnostic.
+    const disjointDirectoryNegations = project.id === 'ef6' && process.platform !== 'win32'
+      && cli('agentdevkit-help', ['--help']).message.includes('--local');
+    const extraIssues = expectedProjectIssues(project.id, disjointDirectoryNegations);
     for (const issue of extraIssues) {
       if (issue.code === 'private-file-visible' && issue.path.endsWith('/.agentdevkit-ignore-probe')) {
         assert.equal(info(join(directory, issue.path)), null, `Sonda diagnostica nao deve existir: ${issue.path}`);

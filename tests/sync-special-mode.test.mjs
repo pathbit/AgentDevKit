@@ -54,14 +54,14 @@ for(const [label,bit] of [['setuid',0o4000],['setgid',0o2000]]) test(`recusa upd
  assert.equal(r.stderr.split(/\r?\n/)[0],`E_PROTECTED_METADATA: ${target}`);
  assert.deepEqual(snapshot(f.root),before);
 });
-test('arquivo especial sem alteração planejada não bloqueia atualização normal',{timeout:240000,skip:unsupported && 'guarda POSIX implementada somente em macOS e Linux'},t=>{
+test("special file without planned change does not block normal update",{timeout:240000,skip:unsupported && 'guarda POSIX implementada somente em macOS e Linux'},t=>{
  const f=prepare(t,'update',false);if(!f)return;
  const before=readFileSync(join(f.root,target)),mode=lstatSync(join(f.root,f.special)).mode&0o7777;
  const r=f.run(process.execPath,[f.script,'--root',f.root]);assert.equal(r.status,0,r.stdout+'\n'+r.stderr);
  assert.notDeepEqual(readFileSync(join(f.root,target)),before,'controle deve atualizar arquivo planejado');
  assert.equal(lstatSync(join(f.root,f.special)).mode&0o7777,mode);assert.equal(readFileSync(join(f.root,f.special),'utf8'),'staged\nunstaged\n');
 });
-test('arquivo planejado em modo comum é atualizado',{timeout:240000,skip:unsupported && 'guarda POSIX implementada somente em macOS e Linux'},t=>{
+test("file planned in common mode is updated",{timeout:240000,skip:unsupported && 'guarda POSIX implementada somente em macOS e Linux'},t=>{
  const f=prepare(t,'update');if(!f)return;chmodSync(join(f.root,target),0o644);
  const before=readFileSync(join(f.root,target));const r=f.run(process.execPath,[f.script,'--root',f.root]);assert.equal(r.status,0,r.stdout+'\n'+r.stderr);
  assert.notDeepEqual(readFileSync(join(f.root,target)),before);assert.equal(lstatSync(join(f.root,target)).mode&0o7777,0o644);

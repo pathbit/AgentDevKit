@@ -106,7 +106,7 @@ function matchedRules(root, paths) {
   });
 }
 
-test('reconstitui 0.0.21 e conserva as regras efetivas de ignore na mesma posição', t => {
+test("reconstitutes 0.0.21 and keeps the effective rules of ignoring in the same position", t => {
   const { root, requestedRoot, exclude, index } = fixture(t);
   writeFileSync(join(root, '.gitignore'), '# ignore humano\n!/.claude/\n');
   const prefix = Buffer.from('# regra humana \xff\r\n*.scratch\r\n!/.pbai4devs/skills.json\r\n', 'latin1');
@@ -143,7 +143,7 @@ test('reconstitui 0.0.21 e conserva as regras efetivas de ignore na mesma posiç
   assertUnchanged(human);
 });
 
-test('aceita entradas canônicas ordenadas do gerador e recusa outputs desconhecidos', t => {
+test("accepts ordered canonical inputs from the generator and refuses unknown outputs", t => {
   const { root, exclude } = fixture(t);
   const section = '\n# Estado privado dos clientes\n';
   const withEntrypoints = stockBody.replace(section, '/AGENTS.md\n/claude.md\n' + section);
@@ -163,7 +163,7 @@ test('aceita entradas canônicas ordenadas do gerador e recusa outputs desconhec
   }
 });
 
-test('recusa bloco de outra raiz e mudanças no conteúdo ou na estrutura autenticada', t => {
+test("block refusal of another root and changes in content or authenticated structure", t => {
   const { root, exclude } = fixture(t);
   const valid = legacyBlock(root);
   for (const original of [
@@ -183,7 +183,7 @@ test('recusa bloco de outra raiz e mudanças no conteúdo ou na estrutura autent
   }
 });
 
-test('revalidação recusa edição humana, outro after ou novo worktree compartilhado', t => {
+test("revalidation refusal human edition, other after or new worktree shared", t => {
   const { base, root, exclude } = fixture(t);
   git(root, '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '--quiet', '-m', 'fixture');
   const before = legacyBlock(root);
@@ -208,7 +208,7 @@ test('revalidação recusa edição humana, outro after ou novo worktree compart
   assert.equal(readFileSync(exclude, 'utf8'), before);
 });
 
-test('não planeja edição quando o arquivo exclude tem hardlink', t => {
+test("does not plan editing when the file excludes has hardlink", t => {
   const { base, root, exclude } = fixture(t);
   const before = legacyBlock(root), alias = join(base, 'alias');
   writeFileSync(exclude, before);
@@ -222,7 +222,7 @@ test('não planeja edição quando o arquivo exclude tem hardlink', t => {
   assert.equal(readFileSync(alias, 'utf8'), before);
 });
 
-test('raízes aposentadas detectam arquivos privados sem aderir ao catálogo ativo', t => {
+test("Retired roots detect private files without joining the active catalog", t => {
   const { root } = fixture(t);
   const ignore = join(root, '.gitignore');
   writeFileSync(ignore, '# ignore humano\n!/.agent/\n!/.codex/\n');
@@ -239,7 +239,7 @@ test('raízes aposentadas detectam arquivos privados sem aderir ao catálogo ati
   assert.ok(check.pending.some(item => item.code === 'private-file-visible' && item.path === '.agent/.env'));
 });
 
-test('init recusa trava externa antes de publicar arquivos ou abrir recuperação', {
+test("init refusal locks external before publishing files or open recovery", {
   skip: !supportsRuntime && 'A CLI do kit requer Node.js 24 ou superior nesta fixture.',
   timeout: 120000,
 }, t => {
@@ -355,7 +355,7 @@ for (const [name, marker, detected] of variants) {
   });
 }
 
-test('marcador legado bloqueia check; avisos de cobertura isolados não bloqueiam', t => {
+test("legacy marker blocks check; isolated coverage warnings do not block", t => {
   const { root, index, exclude } = fixture(t);
   const marker = '# BEGIN AGENTDEVKIT LOCAL 0123456789abcdef';
   const body = `${marker}\n/.claude/\n# END AGENTDEVKIT LOCAL 0123456789abcdef\n`;
@@ -365,7 +365,7 @@ test('marcador legado bloqueia check; avisos de cobertura isolados não bloqueia
   assert.equal(withMarker.ok, false);
   assert.ok(withMarker.pending.some(item => item.code === 'shared-ignore-legacy'));
   assertUnchanged(before);
-  // Somente a fixture é modificada; as regras de ignore continuam iguais.
+  // Only fixture is modified; ignore rules remain the same.
   writeFileSync(exclude, body.replace(marker, '# marcador desativado na fixture'));
   const edited = snapshots([exclude, index, join(root, '.git/config'), join(root, '.gitignore')]);
   const withoutMarker = checkLocalIgnore(planLocalIgnore(root));
@@ -427,7 +427,7 @@ test('comandos e sync direto preservam marcador reconhecido e Git', { skip: !sup
   }
 });
 
-test('worktree vinculada preserva exclude compartilhado e índices humanos', { skip: !supportsRuntime ? 'A CLI do kit requer Node.js 24 ou superior nesta fixture.' : false, timeout: 180000 }, t => {
+test("worktree linked preserves shared exclusion and human indices", { skip: !supportsRuntime ? 'A CLI do kit requer Node.js 24 ou superior nesta fixture.' : false, timeout: 180000 }, t => {
   const { base, root, index, exclude } = fixture(t);
   git(root, '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '--quiet', '--no-verify', '-m', 'fixture');
   writeFileSync(join(root, 'human.txt'), 'alteração preparada na principal\n');

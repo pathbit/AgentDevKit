@@ -16,7 +16,7 @@ function fixture(t) {
   return root;
 }
 
-test('modelos exigem comandos reais e configuração local explícita', () => {
+test("models require real commands and explicit local configuration", () => {
   const makefile = readFileSync(join(templates, 'Makefile.template'), 'utf8');
   const setup = makefile.slice(makefile.indexOf('\nsetup:'), makefile.indexOf('\nup:'));
   assert.ok(setup.indexOf('$(SETUP_COMMAND)') < setup.indexOf('$(DOCTOR_COMMANDS)'));
@@ -63,7 +63,7 @@ test('Makefile prepara o ambiente antes de validar e propaga falhas', t => {
   }
 });
 
-test('Compose aceita valores explícitos e rejeita configuração incompleta', t => {
+test("Compose accepts explicit values and rejects incomplete configuration", t => {
   const available = spawnSync('docker', ['compose', 'version'], { encoding: 'utf8' });
   if (available.error || available.status !== 0) { t.skip('Docker Compose CLI ausente; nenhum daemon é necessário.'); return; }
   const root = fixture(t);

@@ -1,4 +1,4 @@
-// Índices derivados das fontes versionadas; não lê instalações ou caches locais.
+// Indexes derived from the versioned sources; do not read local installations or caches.
 import { lstatSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
 import { join, posix, resolve } from 'node:path';
 import { loadCatalog as loadTools, toolActions } from '../preparar-ferramentas/SCRIPT.mjs';

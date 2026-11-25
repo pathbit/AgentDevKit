@@ -5,6 +5,8 @@ status: em andamento
 
 # Grupos de tarefas e melhorias
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 Esta lista consolida os pedidos da conversa por resultado esperado. Os detalhes,
 as provas e os limites estão em [andamento e evidências](TASKS.md); o
 [roadmap](../../product/roadmap.md) acompanha a evolução do produto. Uma tarefa
@@ -74,3 +76,7 @@ só fica concluída depois da validação correspondente.
 Os itens acima são agrupamentos de trabalho, não uma afirmação de que todos os
 pedidos anteriores permanecem abertos ou de que já foram implementados. Consulte
 as evidências para distinguir resultados parciais de pendências.
+
+[reading-pt]: GRUPOS.md
+[reading-en]: ../../en/tasks/evolucao-plataforma/GRUPOS.md
+[reading-es]: ../../es/tasks/evolucao-plataforma/GRUPOS.md

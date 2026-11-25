@@ -6,6 +6,8 @@ version: 0.0.6
 
 # Apresentação pública e licença
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 ## Objetivo e autorização
 
 Publicar uma versão estável do AgentDevKit com identificação clara no npm,
@@ -75,3 +77,7 @@ Atualizar README público, guias de instalação/publicação, PRD, design, road
 trechos do README do router afetados pela atualização, preservando seu contexto.
 
 [Specs](../README.md) · [Pacote npm](../../maintainers/packages.md)
+
+[reading-pt]: SPEC.md
+[reading-en]: ../../en/specs/v0.0.6/SPEC.md
+[reading-es]: ../../es/specs/v0.0.6/SPEC.md

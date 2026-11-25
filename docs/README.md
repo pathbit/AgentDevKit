@@ -1,20 +1,30 @@
 ---
 description: Wiki do AgentDevKit, do primeiro uso à manutenção do kit.
-language: pt
+language: pt-BR
 ---
 
 # Documentação do AgentDevKit
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 O AgentDevKit guarda instruções para agentes de código em `.pbai4devs` e
 gera apontamentos para os clientes escolhidos.
 
-## Primeiro uso
+## Começos rápidos
 
-1. [Prepare Node.js e npm](guides/prerequisites.md).
-2. [Instale e confira o kit][install]. Se o projeto já tem arquivos,
-   [simule antes de aplicar][preview].
-3. [Escolha um fluxo][flow] para planejar produto, rodar uma aplicação ou
+1. [Siga o começo rápido](../README.md#começo-rápido) para escolher um
+   cliente, instalar e fazer seu primeiro pedido.
+2. [Escolha um fluxo][flow] para planejar produto, rodar uma aplicação ou
    documentar um sistema existente.
+3. [Confira os arquivos gerados][install] antes de adicionar mudanças ao Git.
+
+| Quero | Caminho |
+| --- | --- |
+| Instalar com Node.js e npm | [Instalação via npx](guides/installation.md#instalar) |
+| Escolher ou trocar agentes | [Comandos de seleção](guides/cli.md#comandos) |
+| Preparar uma aplicação existente | [Executar o projeto](guides/workflow.md) |
+| Levantar a documentação atual | [Inventariar e complementar](guides/documentation.md) |
+| Conferir a instalação | [Ferramentas e testes](guides/tools-and-testing.md) |
 
 ## Consulte por objetivo
 
@@ -71,14 +81,13 @@ Os projetos que recebem o kit usam os
 após perguntas e decisões. A instalação não copia esta wiki para `docs/`
 do projeto atendido.
 
-Os guias completos estão em português; os READMEs de entrada também existem
-em [inglês](../README.en.md) e [espanhol](../README.es.md). O idioma salvo pela
-CLI orienta a comunicação dos agentes, sem traduzir documentos existentes.
+Os guias e as referências estão em [português do Brasil][reading-pt],
+[inglês][reading-en] e [espanhol][reading-es]. O idioma salvo na CLI
+orienta as mensagens da ferramenta e a comunicação dos agentes.
 
 [Voltar ao projeto](../README.md)
 
-[install]: guides/installation.md#instalar
-[preview]: guides/installation.md#simular-em-um-projeto-existente
+[install]: guides/installation.md#o-que-fica-no-projeto
 [update]: guides/installation.md#atualizar-e-escolher-agentes
 [flow]: guides/workflow.md
 [clients]: ../.pbai4devs/COMPATIBILIDADE.md
@@ -87,3 +96,7 @@ CLI orienta a comunicação dos agentes, sem traduzir documentos existentes.
 [examples]: https://github.com/pathbit/AgentDevKit/tree/main/examples
 [resources]: guides/resources.md
 [development]: maintainers/development.md
+
+[reading-pt]: README.md
+[reading-en]: en/README.md
+[reading-es]: es/README.md

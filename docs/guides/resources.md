@@ -4,6 +4,8 @@ description: Tipos de recursos, fontes compartilhadas e ciclo de manutenção.
 
 # Recursos compartilhados
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 [Documentação](../README.md) · [Fluxo](workflow.md) ·
 [Ferramentas e testes](tools-and-testing.md)
 
@@ -184,3 +186,7 @@ Para provas reais, consulte [ferramentas e testes](tools-and-testing.md).
 [auditor]: ../../.pbai4devs/agents/auditor-seguranca/AGENT.md
 [performance]: ../../.pbai4devs/agents/analista-performance/AGENT.md
 [reviewer]: ../../.pbai4devs/agents/revisor/AGENT.md
+
+[reading-pt]: resources.md
+[reading-en]: ../en/guides/resources.md
+[reading-es]: ../es/guides/resources.md

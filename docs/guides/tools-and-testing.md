@@ -4,6 +4,8 @@ description: Preparo das ferramentas e escolha de verificações reais.
 
 # Ferramentas e testes
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 O kit traz definições e automações. Instalar o kit não instala todas as tools
 nem escolhe a stack da aplicação. Consulte o [catálogo][tools].
 
@@ -91,3 +93,7 @@ feche a entrega pela [revisão][review].
 [matrix]: ../../.pbai4devs/scripts/testar-maturidade/README.md
 [review]: ../../.pbai4devs/commands/revisar-entrega/COMMAND.md
 [examples]: https://github.com/pathbit/AgentDevKit/tree/main/examples
+
+[reading-pt]: tools-and-testing.md
+[reading-en]: ../en/guides/tools-and-testing.md
+[reading-es]: ../es/guides/tools-and-testing.md

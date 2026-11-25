@@ -32,7 +32,7 @@ test('bloco humano alterado, duplicado ou incompleto nunca e sobrescrito', () =>
   assert.throws(() => mergeManagedContent(first.text, 'Outro conteudo.'), { code: 'E_MANAGED_BLOCK' });
 });
 
-test('exemplos entre fences nao sao tratados como propriedade do kit', () => {
+test("examples between fences are not treated as property of the kit", () => {
   const human = '# Manual\n\n```md\n<!-- BEGIN AGENTDEVKIT -->\nExemplo humano.\n<!-- END AGENTDEVKIT -->\n```\n';
   assert.equal(extractManagedBlock(human), null);
   const result = mergeManagedContent(human, reference);

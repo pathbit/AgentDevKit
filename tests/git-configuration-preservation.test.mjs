@@ -116,7 +116,7 @@ function checkRecoverablePartial(root, plan) {
 const bin = join(repo, 'bin/agentdevkit.mjs');
 const sync = join(repo, '.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs');
 
-test('diagnóstico truncado continua truncado após agregação e nova coleta', () => {
+test("truncated diagnosis continues truncated after aggregation and new collection", () => {
   const original = new Error('original');
   original.uncertainPaths = Array.from({ length: 4100 }, (_, index) => `caminho-${index}`);
   attachErrorDiagnostics(original);
@@ -127,7 +127,7 @@ test('diagnóstico truncado continua truncado após agregação e nova coleta', 
   assert.equal(collectErrorDiagnostics(summarized).truncated, true);
 });
 
-test('fronteira preserva causa e evita expor diagnósticos não mapeados', () => {
+test("border preserves cause and avoids exposing unmapped diagnoses", () => {
   const cause = Object.assign(new Error('erro do estágio'), { uncertainPaths: ['caminho/relativo'], cleanupFailures: [{ path: 'temporário/relativo', message: 'falha' }] });
   const retained = markDiagnosticsBoundary(Object.assign(new Error('erro externo', { cause }), {
     uncertainPaths: ['/tmp/estagio/caminho/relativo'],
@@ -148,7 +148,7 @@ const run = (cwd, command, args) => spawnSync(command, args, { cwd, env, encodin
 const git = (root, ...args) => { const r = run(root, 'git', args); assert.equal(r.status, 0, r.stderr); return r.stdout.trim(); };
 const put = (root, path, contents) => { const file = join(root, path); mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, contents); };
 
-test('diagnóstico reconhece marcador legado com BOM sem alterar exclusões ou índice', t => {
+test("diagnosis recognizes legacy marker with BOM without changing exclusions or index", t => {
   const root = mkdtempSync(join(tmpdir(), 'adk-legacy-bom-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   git(root, 'init', '-q');
@@ -169,14 +169,14 @@ const stageSynthetic = (root, path, contents) => {
   assert.equal(blob.status, 0, blob.stderr);
   git(root, 'update-index', '--add', '--cacheinfo', `100644,${blob.stdout.trim()},${path}`);
 };
-test('saída Git preserva espaços e trata CRLF no Windows', () => {
+test("Git exit preserves spaces and treats CRLF on Windows", () => {
   assert.deepEqual(gitOutputLines('/repo com espaço \n', 'linux'), ['/repo com espaço ']);
   assert.deepEqual(gitOutputLines('C:\\repo com espaço \r\n', 'win32'), ['C:\\repo com espaço ']);
   assert.deepEqual(gitOutputLines('/repo com CR\r\n', 'linux'), ['/repo com CR\r']);
   assert.deepEqual(gitOutputLines('C:\\repo \r\nC:\\repo \\.git\\info\\exclude\r\n', 'win32'), ['C:\\repo ', 'C:\\repo \\.git\\info\\exclude']);
 });
 
-test('diagnósticos percorrem agregados e ciclos com limites e deduplicação', () => {
+test("diagnostics run aggregates and cycles with limits and deduplication", () => {
   const primary = new Error('principal'); primary.rollbackPreservedPaths = ['primeiro', 'primeiro'];
   primary.cleanupFailures = [{ path: 'tmp', message: 'EACCES' }, { path: 'tmp', message: 'EACCES' }];
   const aggregate = new AggregateError([primary], 'agregado', { cause: primary }); primary.cause = aggregate;
@@ -194,7 +194,7 @@ test('diagnósticos percorrem agregados e ciclos com limites e deduplicação', 
   assert.equal(collectErrorDiagnostics(huge).truncated, true);
 });
 
-test('init/update/sync funcionam em repositório com espaço final', {
+test("init/update/sync run in repository with final space", {
   skip: process.platform === 'win32' ? 'A API Win32 usada pela fixture normaliza espaços no fim do nome.' : false,
   timeout: 120000,
 }, t => {
@@ -237,7 +237,7 @@ for (const targetName of ['main', 'linked']) test(`init/update/sync conservam Gi
   assert.equal(git(other, 'status', '--short', '--untracked-files=all'), otherStatus);
 });
 
-test('projeto novo cria somente ignore do kit, sem mexer na configuracao Git', { timeout: 120000 }, t => {
+test("new project creates only ignore the kit, without touching the Git configuration", { timeout: 120000 }, t => {
   const root = mkdtempSync(join(tmpdir(), 'adk-git-new-')); t.after(() => rmSync(root, { recursive: true, force: true }));
   git(root, 'init', '-q', '-b', 'main'); git(root, 'config', 'user.name', 'Teste'); git(root, 'config', 'user.email', 'teste@example.invalid');
   put(root, 'tracked.txt', 'base\n'); git(root, 'add', 'tracked.txt'); git(root, 'commit', '-qm', 'base');
@@ -297,7 +297,7 @@ test('projeto novo cria somente ignore do kit, sem mexer na configuracao Git', {
   }
 });
 
-test('comandos JSON aceitam negações genéricas e conservam Git e ignores byte a byte', { timeout: 180000 }, t => {
+test("commands JSON accept generic denials and keep Git and ignore byte a byte", { timeout: 180000 }, t => {
   const root = mkdtempSync(join(tmpdir(), 'adk-generic-ignore-')); t.after(() => rmSync(root, { recursive: true, force: true }));
   git(root, 'init', '-q', '-b', 'main');
   put(root, 'tracked.txt', 'staged humano\n'); git(root, 'add', 'tracked.txt');
@@ -337,7 +337,7 @@ test('comandos JSON aceitam negações genéricas e conservam Git e ignores byte
   paths.filter(path => path !== '.git/index').forEach(path => assert.deepEqual(readFileSync(join(root, path)), before[paths.indexOf(path)], path));
 });
 
-test('sem Git instalado, init nao cria nem sobrescreve ignore de agente', { timeout: 120000 }, t => {
+test("without Git installed, init does not create or overwrite agent ignore", { timeout: 120000 }, t => {
   const root = mkdtempSync(join(tmpdir(), 'adk-without-git-')); t.after(() => rmSync(root, { recursive: true, force: true }));
   put(root, '.claude/.gitignore', '# arquivo humano\n');
   const r = spawnSync(process.execPath, [bin, 'init', '--agents', 'claude', '--target', root, '--json'], { cwd: root, env: { ...env, PATH: '' }, encoding: 'utf8', timeout: 120000, maxBuffer: 20 * 1024 * 1024 });
@@ -358,7 +358,7 @@ test('helpers antigos recusam planos que escrevem no Git ou modificam o indice',
   assert.deepEqual(readFileSync(index), beforeIndex); assert.deepEqual(readFileSync(exclude), beforeExclude);
 });
 
-test('upgrade e remoção de seleção preservam ignores antes marcados como gerenciados', { timeout: 120000 }, t => {
+test("upgrade and removal of selection preserve unknowns previously marked as managed", { timeout: 120000 }, t => {
   const root = mkdtempSync(join(tmpdir(), 'adk-old-ignore-')); t.after(() => rmSync(root, { recursive: true, force: true }));
   git(root, 'init', '-q', '-b', 'main'); git(root, 'config', 'user.name', 'Teste'); git(root, 'config', 'user.email', 'teste@example.invalid');
   put(root, 'tracked.txt', 'base\n'); git(root, 'add', 'tracked.txt'); git(root, 'commit', '-qm', 'base');
@@ -395,7 +395,7 @@ for (const [name, rules] of [
   assert.equal(run(root, 'git', ['check-ignore', '--no-index', '-q', '--', '.claude/settings.json']).status, ignored);
 });
 
-test('playwright e resultados visíveis são informados em qualquer caixa', t => {
+test("playwright and visible results are reported in any box", t => {
   const root = mkdtempSync(join(tmpdir(), 'adk-visible-artifacts-')); t.after(() => rmSync(root, { recursive: true, force: true }));
   git(root, 'init', '-q', '-b', 'main');
   const samples = ['.playwright-mcp/session.json', '.PLAYWRIGHT-CACHE/dados.json', 'playwright-report/index.html', 'TestResults/resultado.xml'];
@@ -408,13 +408,13 @@ test('playwright e resultados visíveis são informados em qualquer caixa', t =>
   }
 });
 
-test('ambiente Git remove variáveis em qualquer caixa antes da consulta', () => {
+test("Git environment removes variables in any box before query", () => {
   const source = { git_dir: 'fora', GIT_WORK_TREE: 'fora', Git_Common_Dir: 'fora', git_index_file: 'fora', GIT_EXTERNAL_DIFF: 'fora', Git_Optional_Locks: '1', git_trace: 'fora', GIT_TRACE2_EVENT: 'fora', PATH: '/bin' };
   assert.deepEqual(safeGitEnvironment(source), { PATH: '/bin', GIT_OPTIONAL_LOCKS: '0', GIT_TRACE2: '0', GIT_TRACE2_EVENT: '0', GIT_TRACE2_PERF: '0' });
   assert.equal(source.git_dir, 'fora');
 });
 
-test('consultas Git não criam arquivos de trace herdados do ambiente ou da configuração global', t => {
+test("Git queries do not create trace files inherited from environment or global configuration", t => {
   const root = mkdtempSync(join(tmpdir(), 'adk-git-trace-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const config = join(root, 'gitconfig');
@@ -444,7 +444,7 @@ test('consultas Git não criam arquivos de trace herdados do ambiente ou da conf
   for (const item of configured) assert.equal(existsSync(item.path), false, `${item.name} não deve criar trace`);
 });
 
-test('diagnóstico de arquivos privados respeita a precedência real de ignore global', t => {
+test("private file diagnosis respects the real precedence of global ignore", t => {
   const root = mkdtempSync(join(tmpdir(), 'adk-private-global-')); t.after(() => rmSync(root, { recursive: true, force: true }));
   git(root, 'init', '-q', '-b', 'main'); put(root, 'global-ignore', '/.claude/auth.json\n');
   git(root, 'config', '--local', 'core.excludesFile', join(root, 'global-ignore'));
@@ -456,7 +456,7 @@ test('diagnóstico de arquivos privados respeita a precedência real de ignore g
   assert.deepEqual(readFileSync(join(root, '.git/config')), config);
 });
 
-test('diagnóstico cobre credenciais no hub e aliases de clientes visíveis e staged', t => {
+test("diagnosis covers credentials in the hub and aliases of visible and staged customers", t => {
   const root = mkdtempSync(join(tmpdir(), 'adk-private-alias-')); t.after(() => rmSync(root, { recursive: true, force: true }));
   git(root, 'init', '-q', '-b', 'main');
   put(root, '.pbai4devs/.gitignore', '# ignore humano\n');
@@ -472,7 +472,7 @@ test('diagnóstico cobre credenciais no hub e aliases de clientes visíveis e st
   assert.deepEqual(readFileSync(join(root, '.git/index')), index);
 });
 
-test('aliases Unicode e ancestrais staged são detectados conservadoramente', t => {
+test("Unicode aliases and staged ancestors are conservatively detected", t => {
   assert.equal(gitPathsOverlap('.claude/skills/ſincronizar/SKILL.md', '.claude/skills/sincronizar/SKILL.md'), true);
   assert.equal(gitPathsOverlap('.claude/skills/ſincronizar', '.claude/skills/sincronizar/SKILL.md'), true);
   assert.equal(gitPathsOverlap('.claude/skills/straße', '.claude/skills/STRASSE/SKILL.md'), true);
@@ -500,7 +500,7 @@ test('aliases Unicode e ancestrais staged são detectados conservadoramente', t 
   }
 });
 
-test('Windows preserva aliases curtos arbitrários e só descarta identidade comprovadamente distinta', () => {
+test("Windows preserves arbitrary short aliases and only discards provenly distinct identity", () => {
   for (const [a, b] of [['Z~1.TXT', 'README.md'], ['longfile.txt', 'longfilename.txt'], ['AGENTS.md.', 'AGENTS.md']]) {
     assert.equal(gitPathsOverlap(a, b, { platform: 'win32' }), true);
     assert.equal(gitPathsOverlap(a, b, { platform: 'win32', identity: () => 'same' }), true);
@@ -513,7 +513,7 @@ test('Windows preserva aliases curtos arbitrários e só descarta identidade com
   assert.equal(gitPathsOverlap('README.md::$DATA', 'README.md', { platform: 'win32' }), true);
 });
 
-test('identidade física simulada no Windows exige arquivos existentes e distintos', t => {
+test("Simulated physical identity on Windows requires existing and distinct files", t => {
   const root = mkdtempSync(join(tmpdir(), 'adk-file-identity-')); t.after(() => rmSync(root, { recursive: true, force: true }));
   put(root, 'README.md', 'um\n'); put(root, 'Z~1.TXT', 'outro\n');
   assert.equal(gitPathsOverlap('README.md', 'Z~1.TXT', { root, platform: 'win32' }), false);
@@ -532,7 +532,7 @@ test('identidade física simulada no Windows exige arquivos existentes e distint
   assert.equal(gitPathsOverlap(old, current, { root, platform: 'win32', allowMissingTarget: true }), true);
 });
 
-test('origem staged ausente permanece ambígua sem identidade física confiável', t => {
+test("staged origin absent remains ambiguous without reliable physical identity", t => {
   const root = mkdtempSync(join(tmpdir(), 'adk-uncertain-identity-')); t.after(() => rmSync(root, { recursive: true, force: true }));
   put(root, '.pbai4devs/state/agentdevkit.json', '{}');
   const old = '.pbai4devs/estado/outros/notas.txt', current = '.pbai4devs/state/agentdevkit.json';
@@ -552,7 +552,7 @@ test('origem staged ausente permanece ambígua sem identidade física confiável
   }
 });
 
-test('links staged continuam ambíguos para identidade igual, inode zero ou erro de leitura', t => {
+test("staged links remain ambiguous for equal identity, zero inode or read error", t => {
   const root = mkdtempSync(join(tmpdir(), 'adk-symlink-identity-')); t.after(() => rmSync(root, { recursive: true, force: true }));
   put(root, 'AGENTS.md', 'humano\n'); mkdirSync(join(root, '.agents'));
   try { fs.symlinkSync('AGENTS.md', join(root, 'HUMAN.md')); }
@@ -576,7 +576,7 @@ test('links staged continuam ambíguos para identidade igual, inode zero ou erro
   }
 });
 
-test('Windows não confunde diretórios staged existentes com ancestrais ausentes de outros destinos', { timeout: 120000 }, t => {
+test("Windows does not confuse existing staged directories with missing ancestors from other destinations", { timeout: 120000 }, t => {
   const outer = mkdtempSync(join(tmpdir(), 'adk-win-nested-')); t.after(() => rmSync(outer, { recursive: true, force: true }));
   git(outer, 'init', '-q');
   const root = join(outer, '.agent-tests', 'development-ecosystem-fixture'); mkdirSync(root, { recursive: true });
@@ -610,7 +610,7 @@ test('Windows não confunde diretórios staged existentes com ancestrais ausente
   assert.equal(gitPathsOverlap(legacy, '.pbai4devs/state/outros/minhas-notas.txt', { root, platform: 'win32', allowMissingTarget: true }), false);
 });
 
-test('protege índice quando caminho temporário e Git usam nomes físicos diferentes', { timeout: 120000 }, t => {
+test("Protects index when temporary path and Git use different physical names", { timeout: 120000 }, t => {
   const outer = mkdtempSync(join(tmpdir(), 'adk-physical-git-')); t.after(() => rmSync(outer, { recursive: true, force: true }));
   const physical = fs.realpathSync.native(outer);
   if (outer.toLowerCase() === physical.toLowerCase()) return t.skip('O diretório temporário não oferece alias físico neste sistema.');
@@ -651,7 +651,7 @@ for (const marker of ['diretório', 'arquivo']) for (const committed of [false, 
   });
 }
 
-test('init recusa projeto sob gitlink externo não inicializado', { timeout: 120000 }, t => {
+test("init project refusal under external gitlink not initialized", { timeout: 120000 }, t => {
   const outer = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-gitlink-parent-')));
   t.after(() => rmSync(outer, { recursive: true, force: true }));
   const root = join(outer, 'repository'), source = join(outer, 'source'), project = join(root, '.agents/project');
@@ -666,7 +666,7 @@ test('init recusa projeto sob gitlink externo não inicializado', { timeout: 120
   assert.equal(existsSync(join(project, '.pbai4devs')), false);
 });
 
-test('sync recusa projeto sob gitlink externo não inicializado', { timeout: 120000 }, t => {
+test("sync refuses project under external gitlink not initialized", { timeout: 120000 }, t => {
   const outer = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-sync-gitlink-parent-')));
   t.after(() => rmSync(outer, { recursive: true, force: true }));
   const root = join(outer, 'repository'), source = join(outer, 'source'), project = join(root, '.agents/project');
@@ -686,7 +686,7 @@ test('sync recusa projeto sob gitlink externo não inicializado', { timeout: 120
   assert.deepEqual(readFileSync(join(root, '.git/index')), index);
 });
 
-test('projeto dentro de submódulo inicializado usa seu próprio índice', { timeout: 120000 }, t => {
+test("project within initialized submodule uses its own index", { timeout: 120000 }, t => {
   const outer = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-initialized-submodule-')));
   t.after(() => rmSync(outer, { recursive: true, force: true }));
   const root = join(outer, 'repository'), project = join(root, 'module'); mkdirSync(project, { recursive: true });
@@ -703,7 +703,7 @@ test('projeto dentro de submódulo inicializado usa seu próprio índice', { tim
   assert.equal(git(project, 'show', ':humano.txt'), 'conteúdo staged');
 });
 
-test('gitlink não relacionado não bloqueia o cliente selecionado', { timeout: 120000 }, t => {
+test("unrelated gitlink does not block the selected client", { timeout: 120000 }, t => {
   const outer = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-gitlink-unrelated-')));
   t.after(() => rmSync(outer, { recursive: true, force: true }));
   const root = join(outer, 'project'), nested = join(root, 'vendor'); mkdirSync(nested, { recursive: true });
@@ -719,7 +719,7 @@ test('gitlink não relacionado não bloqueia o cliente selecionado', { timeout: 
   assert.ok(existsSync(join(root, '.agents/skills/projeto/criar-skill/SKILL.md')));
 });
 
-test('gitlink não inicializado não autoriza acrescentar bloco a arquivo interno', { timeout: 120000 }, t => {
+test("unbooted gitlink does not allow adding block to internal file", { timeout: 120000 }, t => {
   const outer = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-gitlink-block-')));
   t.after(() => rmSync(outer, { recursive: true, force: true }));
   const root = join(outer, 'project'), source = join(outer, 'source'); mkdirSync(root); mkdirSync(source);
@@ -826,7 +826,7 @@ for (const location of ['irmao', 'candidato', 'descendente', 'alias']) test(`syn
   assert.deepEqual(readFileSync(join(root, '.git/index')), index);
 });
 
-test('sync preserva pasta de backup criada concorrentemente', { timeout: 120000 }, t => {
+test("sync preserves concurrently created backup folder", { timeout: 120000 }, t => {
   const root = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-backup-exclusive-')));
   t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); rmSync(root, { recursive: true, force: true }); });
   git(root, 'init', '-q');
@@ -861,7 +861,7 @@ test('sync preserva pasta de backup criada concorrentemente', { timeout: 120000 
   assert.ok(collectErrorDiagnostics(failure).preservedPaths.includes(candidate));
 });
 
-test('sync não sobrescreve arquivo criado concorrentemente dentro do backup', { timeout: 120000 }, t => {
+test("sync does not overwrite file created concurrently within backup", { timeout: 120000 }, t => {
   const root = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-backup-file-exclusive-')));
   t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); rmSync(root, { recursive: true, force: true }); });
   git(root, 'init', '-q');
@@ -922,7 +922,7 @@ test('falha congelada durante backup parcial informa a pasta preservada', { time
   assert.ok(collectErrorDiagnostics(error).cleanupFailures.some(item => item.path === partial));
 });
 
-test('falha do sync após publicação informa backup sem alterar índice ou ignore', { timeout: 120000 }, t => {
+test("sync failure after posting informs backup without changing index or ignore", { timeout: 120000 }, t => {
   const root = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-sync-backup-diagnostic-')));
   t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); rmSync(root, { recursive: true, force: true }); });
   git(root, 'init', '-q');
@@ -950,7 +950,7 @@ test('falha do sync após publicação informa backup sem alterar índice ou ign
   assert.deepEqual(readFileSync(join(root, '.gitignore')), ignore);
 });
 
-test('sync executado diretamente orienta revisão após falha de publicação', { timeout: 120000 }, t => {
+test("sync executed directly orients revision after publication failure", { timeout: 120000 }, t => {
   const root = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-sync-direct-diagnostic-')));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   git(root, 'init', '-q'); put(root, '.gitignore', '# regra humana\n'); put(root, 'humano.txt', 'sentinela preparada\n');
@@ -1096,7 +1096,7 @@ for (const variant of ['iguais', 'diferentes']) test(`sync interrompe backup sub
   assert.ok(collectErrorDiagnostics(failure).preservedPaths.some(path => backup.startsWith(path + sep)));
 });
 
-test('sync limita backup quando origem cresce durante a cópia', { timeout: 120000 }, t => {
+test("sync limits backup when source grows during copying", { timeout: 120000 }, t => {
   const root = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-backup-growing-')));
   t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); rmSync(root, { recursive: true, force: true }); });
   git(root, 'init', '-q');
@@ -1124,7 +1124,7 @@ test('sync limita backup quando origem cresce durante a cópia', { timeout: 1200
   assert.ok(collectErrorDiagnostics(failure).preservedPaths.some(path => backup.startsWith(path + sep)));
 });
 
-test('sync detecta corrupção do backup com tamanho inalterado', { timeout: 120000 }, t => {
+test("sync detects backup corruption with unchanged size", { timeout: 120000 }, t => {
   const root = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-backup-corrupt-')));
   t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); rmSync(root, { recursive: true, force: true }); });
   git(root, 'init', '-q');
@@ -1154,7 +1154,7 @@ test('sync detecta corrupção do backup com tamanho inalterado', { timeout: 120
   assert.ok(collectErrorDiagnostics(failure).preservedPaths.some(path => backup.startsWith(path + sep)));
 });
 
-test('planejamento em estágio consulta o sync sem criar backups', { timeout: 120000 }, t => {
+test("stage planning query sync without creating backups", { timeout: 120000 }, t => {
   const root = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-stage-readonly-')));
   t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); rmSync(root, { recursive: true, force: true }); });
   git(root, 'init', '-q'); put(root, '.gitignore', '# humano\n'); git(root, 'add', '.gitignore');
@@ -1237,7 +1237,7 @@ for (const entry of ['planejador', 'CLI JSON', 'doctor JSON', 'doctor humano']) 
   assert.equal(readFileSync(join(root, 'humano.txt'), 'utf8'), 'sentinela preparada\n');
 });
 
-test('migração recusa Git aninhado antes de ler seus arquivos', { timeout: 120000 }, t => {
+test("migration refuses nested Git before reading your files", { timeout: 120000 }, t => {
   const root = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-nested-legacy-')));
   t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); rmSync(root, { recursive: true, force: true }); });
   git(root, 'init', '-q', '-b', 'main'); put(root, '.gitignore', '# humano\n'); git(root, 'add', '.gitignore');
@@ -1316,7 +1316,7 @@ for (const operation of ['init', 'sync']) test(`${operation} não reverte arquiv
   assert.equal(git(nested, 'show', `:${relative(nested, first).split(sep).join('/')}`), stagedBytes.toString('utf8').trim());
 });
 
-test('criação do instalador recusa arquivo humano surgido após validação', { timeout: 120000 }, t => {
+test("installer creation refuses human file emerged after validation", { timeout: 120000 }, t => {
   const root = recoveryFixture(), plan = planInstallation({ target: root, mode: 'init', clients: ['codex'] });
   const selected = plan.changes.find(change => change.action === 'create' && change.path.startsWith('.pbai4devs/'));
   const destination = join(root, selected.path);
@@ -1368,7 +1368,7 @@ for (const format of ['json', 'humano']) test(`init sem hardlinks no diário inf
   } finally { t.mock.restoreAll(); syncBuiltinESMExports(); }
 });
 
-test('falha de limpeza do stage informa diretório temporário real e preserva erro primário', { timeout: 120000 }, async t => {
+test("Stage cleaning failure informs real temporary directory and preserves primary error", { timeout: 120000 }, async t => {
   const root = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-stage-cleanup-'))); let stage;
   const remove = fs.rmSync, originalRead = fs.readFileSync;
   t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); if (stage) remove(stage, { recursive: true, force: true }); remove(root, { recursive: true, force: true }); });
@@ -1392,7 +1392,7 @@ test('falha de limpeza do stage informa diretório temporário real e preserva e
   assert.deepEqual(readFileSync(join(root, '.git/index')), index); assert.deepEqual(fs.readdirSync(root).sort(), ['.git', 'human.txt']);
 });
 
-test('volume sem hardlinks interrompe reserva e preserva arquivo e índice humanos', { timeout: 120000 }, t => {
+test("volume without hardlinks interrupts reservation and preserves human file and index", { timeout: 120000 }, t => {
   const root = recoveryFixture();
   put(root, 'human.txt', 'humano staged\n'); git(root, 'add', 'human.txt');
   const index = readFileSync(join(root, '.git/index')), plan = planInstallation({ target: root, mode: 'init', clients: ['codex'] });
@@ -1405,7 +1405,7 @@ test('volume sem hardlinks interrompe reserva e preserva arquivo e índice human
   assert.equal(existsSync(join(root, '.pbai4devs')), false);
 });
 
-test('falha após publicação exclusiva preserva os bytes publicados e sua identidade', { timeout: 120000 }, t => {
+test("failure after exclusive publication preserves the published bytes and their identity", { timeout: 120000 }, t => {
   const root = recoveryFixture(), plan = planInstallation({ target: root, mode: 'init', clients: ['codex'] });
   const selected = plan.changes.find(change => change.action === 'create'), target = join(root, selected.path);
   let before;
@@ -1419,7 +1419,7 @@ test('falha após publicação exclusiva preserva os bytes publicados e sua iden
   assert.equal(after.ino, before.ino); assert.equal(after.dev, before.dev); assert.equal(after.mode, before.mode);
 });
 
-test('erro após substituição preserva erro original, publicação e backup', { timeout: 120000 }, () => {
+test("error after replacement preserves original error, posting and backup", { timeout: 120000 }, () => {
   const root = recoveryFixture(); put(root, 'AGENTS.md', '# Humano\n');
   const target = join(root, 'AGENTS.md'), plan = planInstallation({ target: root, mode: 'init', clients: ['codex'] });
   const change = plan.changes.find(change => change.path === 'AGENTS.md' && change.action === 'update');
@@ -1436,7 +1436,7 @@ test('erro após substituição preserva erro original, publicação e backup', 
   assert.equal(fs.statSync(target, { bigint: true }).ino, identity.ino);
 });
 
-test('falha após publicação não apaga edição humana concorrente', { timeout: 120000 }, t => {
+test("failure after publication does not erase concurrent human edition", { timeout: 120000 }, t => {
   const root = recoveryFixture(), plan = planInstallation({ target: root, mode: 'init', clients: ['codex'] });
   const selected = plan.changes.find(change => change.action === 'create' && change.path.startsWith('.pbai4devs/'));
   const target = join(root, selected.path); let identity;
@@ -1649,7 +1649,7 @@ for (const doubleFailure of [false, true]) test(`sync preserva o arquivo após f
   assert.equal(failure.recovery.phase, 'begin');
 });
 
-test('instalador preserva substituto humano de bytes e modo idênticos após falha', { timeout: 120000 }, t => {
+test("installer preserves human byte replacement and identical mode after failure", { timeout: 120000 }, t => {
   const root = recoveryFixture(), plan = planInstallation({ target: root, mode: 'init', clients: ['codex'] });
   const first = join(root, plan.changes.find(change => change.action === 'create').path);
   let humanIdentity, bytes, mode;
@@ -1696,7 +1696,7 @@ for (const prior of [1, 2]) test(`pressão de descritores preserva ${prior} cria
   }
 });
 
-test('instalador preserva arquivo existente com dois nomes antes da criação planejada', { timeout: 120000 }, () => {
+test("installer preserves existing file with two names before planned creation", { timeout: 120000 }, () => {
   const root = recoveryFixture(), plan = planInstallation({ target: root, mode: 'init', clients: ['codex'] });
   const change = plan.changes.find(item => item.action === 'create'), target = join(root, change.path), original = join(root, 'original-humano.txt');
   writeFileSync(original, 'arquivo humano\n'); mkdirSync(dirname(target), { recursive: true });
@@ -1710,7 +1710,7 @@ test('instalador preserva arquivo existente com dois nomes antes da criação pl
   }
 });
 
-test('dezessete criações concluídas sobrevivem a erro operacional posterior', { timeout: 120000 }, t => {
+test("seventeen completed creations survive later operational error", { timeout: 120000 }, t => {
   const root = recoveryFixture(), plan = planInstallation({ target: root, mode: 'init', clients: ['codex'] });
   const creates = plan.changes.filter(item => item.action === 'create');
   assert.ok(creates.length > 17);
@@ -1726,7 +1726,7 @@ test('dezessete criações concluídas sobrevivem a erro operacional posterior',
 });
 
 
-test('falha na criação do sync não tenta remover os caminhos públicos já gravados', t => {
+test("sync creation failure does not try to remove public paths already recorded", t => {
   const root = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-sync-no-rollback-')));
   t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); rmSync(root, { recursive: true, force: true }); });
   git(root, 'init', '-q', '-b', 'main');
@@ -1759,7 +1759,7 @@ test('falha na criação do sync não tenta remover os caminhos públicos já gr
   assert.deepEqual(readFileSync(join(root, 'human.txt')), human);
 });
 
-test('sync preserva substituto idêntico criado após publicação', t => {
+test("sync preserves identical substitute created after publication", t => {
   const root = fs.realpathSync(mkdtempSync(join(tmpdir(), 'adk-sync-published-'))); t.after(() => rmSync(root, { recursive: true, force: true }));
   git(root, 'init', '-q', '-b', 'main'); put(root, '.pbai4devs/espelhos.conf', 'agente|.claude|plano\n');
   for (const name of ['agents.ignore', 'shared.ignore', 'local.ignore', 'clients.json']) put(root, `.pbai4devs/templates/gitignore/${name}`, readFileSync(join(repo, '.pbai4devs/templates/gitignore', name)));
@@ -1841,7 +1841,7 @@ for (const kind of ['EEXIST', 'falha ambígua de abertura', 'EEXIST com conteúd
   assert.deepEqual(readFileSync(destination), bytes);
 });
 
-test('NTFS protege short name arbitrário existente e removido', {
+test("NTFS protects existing and removed arbitrary short name", {
   skip: process.platform !== 'win32' ? 'O teste requer aliases nativos do NTFS.' : false,
   timeout: 120000,
 }, t => {
@@ -1886,7 +1886,7 @@ try { if (-not [AdkShortName]::SetFileShortName($handle, 'ZFILE.TXT')) { throw "
   assert.deepEqual(readFileSync(join(root, '.git/index')), index);
 });
 
-test('arquivo Unicode independente staged não impede init nem muda o índice', { timeout: 120000 }, t => {
+test("Unicode independent file staged does not prevent init or change index", { timeout: 120000 }, t => {
   const root = mkdtempSync(join(tmpdir(), 'adk-unrelated-unicode-')); t.after(() => rmSync(root, { recursive: true, force: true }));
   git(root, 'init', '-q', '-b', 'main');
   put(root, 'relatório.txt', 'conteúdo humano\n'); git(root, 'add', '--', 'relatório.txt');
@@ -1911,7 +1911,7 @@ for (const name of ['relatorio~1.txt', 'relatorio.txt.']) test(`arquivo staged i
   assert.equal(readFileSync(join(root, name), 'utf8'), 'conteúdo humano\n');
 });
 
-test('erro humano do sync é limitado e CLI JSON conserva o detalhe integral', () => {
+test("sync human error is limited and CLI JSON retains the integral detail", () => {
   const argument = `--${'x'.repeat(2000)}`;
   const direct = run(repo, process.execPath, [sync, argument]);
   assert.notEqual(direct.status, 0);
@@ -1939,7 +1939,7 @@ for (const command of ['init', 'update', 'sync']) test(`${command} preserva índ
   assert.equal(existsSync(join(root, canonical)), false, result.stdout + result.stderr);
 });
 
-test('prefixo aninhado com alias staged é diagnosticado e protegido', t => {
+test("prefix nestled with alias staged is diagnosed and protected", t => {
   const root = mkdtempSync(join(tmpdir(), 'adk-nested-index-')); t.after(() => rmSync(root, { recursive: true, force: true }));
   git(root, 'init', '-q', '-b', 'main');
   const sub = join(root, 'SubProject'); mkdirSync(sub);
@@ -1955,7 +1955,7 @@ test('prefixo aninhado com alias staged é diagnosticado e protegido', t => {
   assert.deepEqual(readFileSync(join(root, '.git/index')), index);
 });
 
-test('update aninhado preserva índice com prefixo de caixa diferente', { timeout: 120000 }, t => {
+test("nested update preserves index with different box prefix", { timeout: 120000 }, t => {
   const root = mkdtempSync(join(tmpdir(), 'adk-nested-update-')); t.after(() => rmSync(root, { recursive: true, force: true }));
   git(root, 'init', '-q', '-b', 'main');
   const sub = join(root, 'SubProject'); mkdirSync(sub);
@@ -1970,7 +1970,7 @@ test('update aninhado preserva índice com prefixo de caixa diferente', { timeou
   assert.deepEqual(readFileSync(join(root, '.git/index')), index);
 });
 
-test('sync direto bloqueia alias Unicode ẞ no índice', t => {
+test("direct sync blocks Unicode aliases in the index", t => {
   const root = mkdtempSync(join(tmpdir(), 'adk-sharp-s-direct-')); t.after(() => rmSync(root, { recursive: true, force: true }));
   git(root, 'init', '-q', '-b', 'main');
   put(root, '.pbai4devs/espelhos.conf', 'agente|.claude|plano\n');
@@ -1989,7 +1989,7 @@ test('sync direto bloqueia alias Unicode ẞ no índice', t => {
   assert.deepEqual(readFileSync(join(root, '.git/index')), index);
 });
 
-test('sync preserva apontamento e índice com alias Unicode staged', t => {
+test("sync preserves note and index with Unicode staged aliases", t => {
   const root = mkdtempSync(join(tmpdir(), 'adk-unicode-sync-')); t.after(() => rmSync(root, { recursive: true, force: true }));
   git(root, 'init', '-q', '-b', 'main');
   put(root, '.pbai4devs/espelhos.conf', 'agente|.claude|plano\n');
@@ -2010,7 +2010,7 @@ test('sync preserva apontamento e índice com alias Unicode staged', t => {
   assert.deepEqual(readFileSync(join(root, '.git/index')), index);
 });
 
-test('update não recria apontamento sobre alias Unicode staged', { timeout: 120000 }, t => {
+test("update does not recreate note on alias Unicode staged", { timeout: 120000 }, t => {
   const root = mkdtempSync(join(tmpdir(), 'adk-unicode-update-')); t.after(() => rmSync(root, { recursive: true, force: true }));
   git(root, 'init', '-q', '-b', 'main');
   const init = run(root, process.execPath, [bin, 'init', '--agents', 'codex', '--target', root, '--json']);
@@ -2027,7 +2027,7 @@ test('update não recria apontamento sobre alias Unicode staged', { timeout: 120
   assert.deepEqual(readFileSync(join(root, '.git/index')), index);
 });
 
-test('índice Git alternativo causa recusa antes de sync, update ou aplicação de plano', { timeout: 120000 }, t => {
+test("Alternative Git index causes refusal before sync, update or plan application", { timeout: 120000 }, t => {
   const root = mkdtempSync(join(tmpdir(), 'adk-alternate-index-')); t.after(() => rmSync(root, { recursive: true, force: true }));
   git(root, 'init', '-q', '-b', 'main'); git(root, 'config', 'user.name', 'Teste'); git(root, 'config', 'user.email', 'teste@example.invalid');
   put(root, 'seed.txt', 'base\n'); git(root, 'add', 'seed.txt'); git(root, 'commit', '-qm', 'base');
@@ -2060,7 +2060,7 @@ test('índice Git alternativo causa recusa antes de sync, update ou aplicação 
   watched.forEach((path, index) => assert.deepEqual(readFileSync(path), before[index], path));
 });
 
-test('filtragem de .local em qualquer caixa nunca remove ou desindexa arquivos humanos', { timeout: 120000 }, t => {
+test(".local filtering in any box never removes or unindexes human files", { timeout: 120000 }, t => {
   const root = mkdtempSync(join(tmpdir(), 'adk-private-local-')); t.after(() => rmSync(root, { recursive: true, force: true }));
   git(root, 'init', '-q', '-b', 'main');
   const paths = ['.claude/skills/.LoCaL/humano.md', '.pbai4devs/skills/.LoCaL/humano.md'];
@@ -2088,7 +2088,7 @@ test('filtragem de .local em qualquer caixa nunca remove ou desindexa arquivos h
   assert.deepEqual(readFileSync(join(root, '.git/index')), index);
 });
 
-test('consultas de init, update e verificações não executam fsmonitor configurado pelo usuário', {
+test("init, update and check queries do not perform user-configured fsmonitor", {
   skip: process.platform === 'win32' ? 'A fixture executa um hook com shebang /bin/sh e permissões POSIX.' : false,
   timeout: 120000,
 }, t => {

@@ -4,6 +4,8 @@ description: Tarefas e evidências registradas para as entregas do AgentDevKit.
 
 # Tarefas
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 - [Evolução da plataforma](evolucao-plataforma/TASKS.md).
 - [Pedidos agrupados e prioridades](evolucao-plataforma/GRUPOS.md).
 - [Permissões de temporários do sync](sync-permissoes/TASKS.md).
@@ -14,3 +16,7 @@ description: Tarefas e evidências registradas para as entregas do AgentDevKit.
 
 Para saber o que está publicado e o que depende de validação, consulte o
 [roadmap](../product/roadmap.md) e o [controle de specs](../product/spec-audit.md).
+
+[reading-pt]: README.md
+[reading-en]: ../en/tasks/README.md
+[reading-es]: ../es/tasks/README.md

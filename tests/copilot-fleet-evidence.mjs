@@ -34,7 +34,7 @@ export function assessFleetEvidence({ project, fixture, packageRoot, manifest, e
     const keys = [...content.matchAll(/"([a-z0-9-]+)"\s*:/g)].map(match => match[1]);
     const parsed = JSON.parse(content);
     if (parsed && !Array.isArray(parsed) && typeof parsed === 'object' && keys.length === manifest.length && new Set(keys).size === keys.length && Object.keys(parsed).length === manifest.length) answers = parsed;
-  } catch { /* resposta não comprovada */ }
+  } catch { /* unproven response */ }
   const allowed = new Set(['sql', 'task', 'view', 'glob', 'rg', 'read_agent']);
   const unexpectedTools = starts.filter(x => !allowed.has(x.event.data?.toolName)).map(x => x.event.data?.toolName || 'unknown');
   const names = new Set(manifest.map(item => item.name));
@@ -127,5 +127,5 @@ function main(args) {
 }
 
 let entry = false;
-try { entry = Boolean(process.argv[1]) && realpathSync(resolve(process.argv[1])) === realpathSync(fileURLToPath(import.meta.url)); } catch { /* importação */ }
+try { entry = Boolean(process.argv[1]) && realpathSync(resolve(process.argv[1])) === realpathSync(fileURLToPath(import.meta.url)); } catch { /* import */ }
 if (entry) { try { main(process.argv.slice(2)); } catch (error) { console.error(error.message); process.exitCode = 1; } }

@@ -58,7 +58,7 @@ function readProvenanceFile(file) {
     return bytes;
   } finally { closeSync(fd); }
 }
-// Esta medição cobre somente estes arquivos nos dois instantes observados.
+// This measurement only covers these files in the two observed moments.
 export function provenanceSnapshot(files) {
   return Object.fromEntries(Object.entries(files).map(([name, file]) => {
     try { return [name, { path: file, sha256: sha(readProvenanceFile(file)) }]; }
@@ -103,10 +103,10 @@ export function assessCoverage(operations) {
   }
   return { status: reasons.length ? 'not-verified' : 'verified', reasons };
 }
-// Corpos exatos confirmados nos 1.000 cenários das rodadas 1–25 com o tarball
+// Exact bodies confirmed in 1.000 scenarios of rounds 1–25 with tarball
 // npm 0.0.21 (SHA-512 registrado em .agent-tests/matrix-npm-021-20261115).
-// A correspondência não autentica o pacote fornecido: sua integridade deve ser
-// verificada separadamente. Outras versões/variantes permanecem não verificadas.
+// Correspondence does not authenticate the package provided: its integrity must be
+// checked separately. versões/variantes remain unchecked.
 const legacy021 = {
   new: { normal: 'b85536e82145fa8a9c651674c7883c99e61dd15fbc175fb4575901deb39b5b61', claude: '045810d8b0b972cd1d20de6a3a378a97830b0eeadbef94aa1a72a5b1c941341f', gemini: '4f21a8e1e2063bbeb7a2e9f56ebd1599bd6d10c6fa0f5f4d20db5d6c50c431ca', both: 'ee886e5631a5bbada1b8c2aa49ee79351545a697a0598fa6cb0c28d78aab96ff' },
   existing: { normal: 'a36d313b9e7f65316a5bad6dcf4ef97c98eecced86a377dcb062b0462075ca31', gemini: '05aee8c7484f129c20ede306e243254873162eafb563b64454701b1a9be85b2a' },
@@ -117,7 +117,7 @@ export function expectedLegacyExclude(item, version) {
   const key = item.kind === 'new' && gemini && claude ? 'both' : gemini ? 'gemini' : item.kind === 'new' && claude ? 'claude' : 'normal';
   return legacy021[item.kind][key] || null;
 }
-// Windows expõe apenas a distinção de escrita, sem equivalência de ACL POSIX.
+// Windows exposes only the distinction of writing, without equivalence of ACL POSIX.
 const modeMask = process.platform === 'win32' ? 0o200 : 0o777;
 const within = (root, path) => { const p = relative(root, path); return p === '' || (!isAbsolute(p) && p !== '..' && !p.startsWith(`..${sep}`)); };
 
@@ -149,7 +149,7 @@ export function options(args) {
   return out;
 }
 
-// Seleções canônicas, sem repetição semântica por ordem dos agentes.
+// Canon selections, no semantic repetition by order of agents.
 export function matrixCases(rounds, startRound = 1, matrixPlan = 'current') {
   if (!Number.isInteger(rounds) || rounds < 1 || rounds > 100) throw Error('--rounds deve estar entre 1 e 100.');
   if (!Number.isInteger(startRound) || startRound < 1 || startRound > 100 || startRound + rounds - 1 > 100) throw Error('--start-round e --rounds devem estar entre as rodadas 1 e 100.');
@@ -175,8 +175,8 @@ export function matrixCases(rounds, startRound = 1, matrixPlan = 'current') {
   return cases;
 }
 
-// Hash dos 500 pares extraídos dos relatórios 40+160+800, independentemente do
-// gerador. Se ele mudar, nenhuma nova combinação recebe autorização implícita.
+// Hash of 500 pairs extracted from reports 40+160+800, regardless of
+// generator. If it changes, no new combination gets implied authorization.
 const observedLegacyPairsHash = 'a4eb9070d1210ea79885552ca6ef5b4c4048465f02e47c774363c905c792f03a';
 export function verifiedLegacyPairs(items) {
   if (!Array.isArray(items) || items.length !== 1000) return new Set();
@@ -571,7 +571,7 @@ function inspectInstallation(root, version, selection, packageData, humanPaths, 
       if (path.endsWith('.toml')) {
         const lines = content.trimEnd().split(/\r?\n/);
         let description, prompt;
-        try { description = JSON.parse(lines[1]?.slice('description = '.length)); prompt = JSON.parse(lines[2]?.slice('prompt = '.length)); } catch { /* formato inválido */ }
+        try { description = JSON.parse(lines[1]?.slice('description = '.length)); prompt = JSON.parse(lines[2]?.slice('prompt = '.length)); } catch { /* invalid format */ }
         if (lines.length !== 3 || lines[0] !== '# gerado: sincronizar-agentes' || !lines[1]?.startsWith('description = ') || typeof description !== 'string' || !lines[2]?.startsWith('prompt = ') || prompt !== `@{${entry.path}}\n\n{{args}}` || !state.files[path]) throw Error(`Apontamento TOML ausente ou divergente: ${id}/${path}.`);
         coverage.checked[type]++; continue;
       }
@@ -657,7 +657,7 @@ export async function projectCase(item, directory, cli, version, env, runCommand
     '.agents/skills/projeto/criar-skill/SKILL.md': 'Leia e siga [origem](../../../../.pbai4devs/skills/projeto/criar-skill/SKILL.md).',
   };
   // As variantes adicionam dados humanos reais e caminhos nativos preexistentes.
-  // A última variante inclui uma colisão intencional com um destino gerenciado.
+  // The last variant includes an intentional collision with a managed destination.
   const fixture = item.fixture ?? 0;
   const extraFiles = {};
   if (fixture > 0) {
@@ -762,7 +762,7 @@ export async function projectCase(item, directory, cli, version, env, runCommand
           const others = Object.keys(baseline.unchanged).filter(path => path !== key).every(path => JSON.stringify(baseline.unchanged[path]) === JSON.stringify(stepSnapshot.after[path]));
           if (others && current && !current.error && current.mode === original.mode && JSON.stringify(current.directories) === JSON.stringify(original.directories)) {
             excludeInspected = true;
-            // snapshot rejeita links e ancestrais não regulares antes de ler.
+            // snapshot rejects non-regular links and ancestors before reading.
             const bytes = readFileSync(exclude), tailBytes = bytes.subarray(excludeOriginal.length), tail = tailBytes.toString('utf8');
             const block = /^# BEGIN AGENTDEVKIT LOCAL ([0-9a-f]{16})\n([\s\S]*)# END AGENTDEVKIT LOCAL \1\n$/.exec(tail);
             const expectedId = sha(realpathSync(root)).slice(0, 16), expectedBody = expectedLegacyExclude(item, version);
@@ -865,5 +865,5 @@ async function main() {
 }
 
 let entry = false;
-try { entry = Boolean(process.argv[1]) && realpathSync(resolve(process.argv[1])) === realpathSync(fileURLToPath(import.meta.url)); } catch { /* Importação ou entrada ausente. */ }
+try { entry = Boolean(process.argv[1]) && realpathSync(resolve(process.argv[1])) === realpathSync(fileURLToPath(import.meta.url)); } catch { /* Absent import or entry. */ }
 if (entry) main().catch(error => { console.error(error.message); process.exitCode = 1; });

@@ -33,7 +33,7 @@ function fixture(t, { gitRepository = true } = {}) {
   return root;
 }
 
-test('sincroniza seleção representativa em projeto sem repositório Git ancestral', t => {
+test("synchronises representative selection in project without ancestral Git repository", t => {
   const root = fixture(t, { gitRepository: false });
   for (let folder = root; ; folder = dirname(folder)) {
     if (existsSync(join(folder, '.git'))) return t.skip('diretório temporário dentro de um repositório');
@@ -83,7 +83,7 @@ test('clientes recebem grupos e excecoes nativas pesquisadas', t => {
   assert.equal(synchronize({ localIgnores: false, generateEntrypoints: false, root, check: true, output() {} }).exitCode, 0);
 });
 
-test('migra agentes ZCode para arquivos nativos sem alterar o índice ou referências editadas', t => {
+test("migrate ZCode agents to native files without changing index or edited references", t => {
   const root = fixture(t);
   const config = '.pbai4devs/espelhos.conf';
   const old = '.zcode/agents/revisor/AGENT.md';
@@ -116,7 +116,7 @@ test('migra agentes ZCode para arquivos nativos sem alterar o índice ou referê
   assert.deepEqual(readFileSync(join(root, '.git/index')), index);
 });
 
-test('perfis do kit no ZCode recebem as ferramentas previstas para cada função', t => {
+test("kit profiles in ZCode receive the tools provided for each function", t => {
   const root = fixture(t);
   const agents = '.pbai4devs/agents';
   const profiles = readdirSync(join(project, agents), { withFileTypes: true })
@@ -139,7 +139,7 @@ test('perfis do kit no ZCode recebem as ferramentas previstas para cada função
   }
 });
 
-test('regra Git no Cursor usa relevância e mantém bytes do índice da fixture', t => {
+test("Git rule on Cursor uses relevance and keeps bytes of fixture index", t => {
   const root = fixture(t);
   const rule = '.pbai4devs/rules/git/RULE.md', metadata = '.pbai4devs/rules/git/cursor.yaml';
   write(root, rule, read(project, rule));
@@ -167,7 +167,7 @@ test('regra Git no Cursor usa relevância e mantém bytes do índice da fixture'
   assert.deepEqual(readFileSync(join(root, '.git/index')), index);
 });
 
-test('revisor OpenCode gerado bloqueia edição, shell e delegação com permissões V2', t => {
+test("OpenCode editor generated blocks editing, shell and delegation with V2 permissions", t => {
   const root = fixture(t);
   const sidecar = '.pbai4devs/agents/revisor/opencode.yaml';
   write(root, sidecar, read(project, sidecar));
@@ -185,7 +185,7 @@ test('revisor OpenCode gerado bloqueia edição, shell e delegação com permiss
   assert.ok(generated.includes('.pbai4devs/agents/revisor/AGENT.md'));
 });
 
-test('implementador Claude declara preload da skill e mantém apontamentos para as fontes', t => {
+test("implementer Claude declares skill preload and keeps notes to the sources", t => {
   const root = fixture(t);
   const agent = '.pbai4devs/agents/implementador/AGENT.md';
   const metadata = '.pbai4devs/agents/implementador/claude.yaml';
@@ -277,8 +277,8 @@ test('cada selecao filtra todos os tipos de linha e sincroniza somente suas raiz
       assert.ok(roots.includes(target.split('/')[0]), `${client}: ${row}`);
     }
     assert.equal(synchronize({ localIgnores: false, generateEntrypoints: false, root, output() {} }).exitCode, 0);
-    // A raiz auxiliar .vscode só tinha um ignore gerado; não há recurso a
-    // instalar nela nesta fixture, portanto não criamos a pasta vazia.
+    // The auxiliary root .vscode had only one ignored generated; there is no recourse to
+    // install it in this fixture, so we do not create the empty folder.
     const generatedRoots = roots.filter(name => name !== '.vscode');
     assert.deepEqual(readdirSync(root).filter(name => adapterRoots.includes(name)).sort(), [...generatedRoots].sort());
     assert.equal(synchronize({ localIgnores: false, generateEntrypoints: false, root, check: true, output() {} }).exitCode, 0);
@@ -303,7 +303,7 @@ test('selecao combinada deduplica dependencias e mantem metadados nativos', t =>
   assert.equal(existsSync(join(root, '.vscode/skills')), false);
 });
 
-test('mudar selecao preserva arquivos anteriores e nao recria raiz excluida', t => {
+test("change selection preserves previous files and does not recreate deleted root", t => {
   const root = fixture(t);
   writeAdapterManifest(root);
   synchronize({ localIgnores: false, generateEntrypoints: false, root, output() {} });
@@ -324,7 +324,7 @@ test('mudar selecao preserva arquivos anteriores e nao recria raiz excluida', t 
   assert.equal(synchronize({ localIgnores: false, generateEntrypoints: false, root, check: true, output() {} }).exitCode, 0);
 });
 
-test('selecao invalida falha antes de alterar manifesto ou criar pastas', t => {
+test("selection invalidates failure before changing manifest or creating folders", t => {
   const root = fixture(t);
   writeAdapterManifest(root, { clients: 'claude' });
   const original = read(root, '.pbai4devs/espelhos.conf');

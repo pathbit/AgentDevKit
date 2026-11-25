@@ -4,6 +4,8 @@ description: Diagnóstico, conflitos, backups e recuperação do AgentDevKit.
 
 # Solução de problemas
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 Comece pelo comando, pelo erro e pela pasta do projeto. Os exemplos de
 diagnóstico abaixo usam o npm público. Nas demais seções, substitua
 `agentdevkit` por `npx @pathbit/agentdevkit`. Veja a [CLI][cli] para usar o
@@ -437,3 +439,7 @@ Use as [issues do projeto][issues] ou volte ao [índice](../README.md).
 [issues]: https://github.com/pathbit/AgentDevKit/issues
 [github-install]: installation.md#github-packages
 [opencode-cli]: https://opencode.ai/docs/cli/
+
+[reading-pt]: troubleshooting.md
+[reading-en]: ../en/guides/troubleshooting.md
+[reading-es]: ../es/guides/troubleshooting.md

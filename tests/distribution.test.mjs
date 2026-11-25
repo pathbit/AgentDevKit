@@ -31,7 +31,7 @@ function snapshot(folder) {
   return entries;
 }
 
-test('pacote real instala, preserva projetos e oferece próximos passos', { timeout: 600000 }, async t => {
+test("real package installs, preserves projects and offers next steps", { timeout: 600000 }, async t => {
   assert.ok(npm, 'Node 24+ com npm é necessário para testar a distribuição.');
   const artifacts = join(root, '.agent-tests'); mkdirSync(artifacts, { recursive: true });
   const work = mkdtempSync(join(artifacts, 'distribuicao com espaços-'));

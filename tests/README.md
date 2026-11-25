@@ -121,6 +121,18 @@ o reconhecimento estrito e a preservação de referências legadas, inclusive
 alterações staged e com `--force`. O alerta permanece: não comprovam ativação
 da regra no cliente nem preservação de todos os metadados do arquivo.
 
+Para conferir a instalação sem dependências da aplicação, execute:
+
+```console
+node --test tests/project-portability.mjs
+```
+
+O ensaio cobre pasta vazia, documentação e projetos em Python, Java, .NET,
+TypeScript, Rust, Go e C++. Em um monorepo, verifica o destino explícito com
+espaços e acentos e preserva os bytes dos arquivos humanos e do índice Git.
+As fixtures são locais e o teste usa Node 24+ e Git. Também faz parte da
+suíte portátil `project-matrix.test.mjs`.
+
 Para exercitar 40 projetos sintéticos com o tarball local, extraia o pacote em
 uma pasta temporária. Use Node.js 24 ou mais recente.
 

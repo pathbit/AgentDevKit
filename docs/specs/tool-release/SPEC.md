@@ -4,6 +4,8 @@ description: Atualização segura do agent-browser e recuperação por versão.
 
 # Atualização de ferramenta e versões
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 O agent-browser passou a distribuir executáveis em pacotes opcionais por
 plataforma. A atualização deve funcionar sem perder instalações existentes.
 
@@ -17,3 +19,7 @@ plataforma. A atualização deve funcionar sem perder instalações existentes.
   a documentação explica como consultar uma versão e simular seu uso.
 - AC-004: Testes automatizados cobrem layouts e falhas, e a CI verifica Linux,
   Windows e macOS na matriz configurada antes da publicação.
+
+[reading-pt]: SPEC.md
+[reading-en]: ../../en/specs/tool-release/SPEC.md
+[reading-es]: ../../es/specs/tool-release/SPEC.md

@@ -63,7 +63,7 @@ test('ambiente nao encaminha tokens, proxies, Node options ou configuracoes exte
   assert.equal(env.GIT_CONFIG_VALUE_0, 'false');
 });
 
-test('consultas Git nao executam fsmonitor nem modificam indice ou configuracao', async t => {
+test("Git queries do not perform fsmonitor nor modify index or configuration", async t => {
   const f = fixture(t), marker = join(f.root, 'fsmonitor-marker'), hook = join(f.root, 'fsmonitor-hook.sh');
   assert.equal(fixtureGit(['-C', f.root, 'add', 'app/index.js']).status, 0);
   // Git for Windows executes configured shell hooks through its bundled shell.
@@ -140,7 +140,7 @@ test('auditoria aceita raiz Git com espaco final inclusive para historico', { sk
   assert.ok(fs.existsSync(join(f.root, result.report)));
 });
 
-test('comparação da auditoria considera nomes curtos Windows sem til e distingue entradas reais', t => {
+test("audit comparison considers Windows short names without til and distinguishes real entries", t => {
   const root = fs.mkdtempSync(join(fs.realpathSync(tmpdir()), 'audit-short-name-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const staged = '.agent-tests/security/ALT/human', output = '.agent-tests/security/long-directory/report.json';
@@ -154,7 +154,7 @@ test('comparação da auditoria considera nomes curtos Windows sem til e disting
   assert.equal(mayAliasIndexPath('.agent-tests/security/LONGDI~1/human', output, { root, platform: 'win32' }), fs.existsSync(join(root, '.agent-tests', 'security', 'LONGDI~1')));
 });
 
-test('auditoria simulada em Windows aceita ancestral de saída ausente e src staged existente', async t => {
+test("Simulated Windows audit accepts absent exit ancestor and src staged existing", async t => {
   const f = fixture(t);
   write(join(f.root, 'src/file.js'), 'humano\n');
   assert.equal(fixtureGit(['-C', f.root, 'add', '--', 'src/file.js']).status, 0);
@@ -171,7 +171,7 @@ test('auditoria simulada em Windows aceita ancestral de saída ausente e src sta
   assert.deepEqual(fs.readFileSync(join(f.root, '.git/index')), index);
 });
 
-test('Windows nativo ou simulado recusa nome curto staged ausente antes de gravar evidências', async t => {
+test("Native or simulated Windows refusal short name staged absent before recording evidence", async t => {
   const f = fixture(t), staged = '.agent-tests/security/ALT/human', output = '.agent-tests/security/long-directory/report.json';
   const object = spawnSync('git', ['-c', 'core.fsmonitor=false', '-C', f.root, 'hash-object', '-w', '--stdin'], { input: 'humano', encoding: 'utf8' });
   assert.equal(object.status, 0, object.stderr);
@@ -206,7 +206,7 @@ test('auditoria recusa nome de evidencia ou ancestral presente no indice Git', a
   }
 });
 
-test('nome staged ancestral ao subprojeto nao e ocupado pela auditoria', async t => {
+test("name staged ancestral to subproject is not occupied by audit", async t => {
   const f = fixture(t), project = join(f.root, 'subprojeto');
   write(project, 'arquivo humano preparado');
   assert.equal(fixtureGit(['-C', f.root, 'add', '--', 'subprojeto']).status, 0);
@@ -227,7 +227,7 @@ test('nao cria snapshots se so o relatorio final estiver ignorado', async t => {
   assert.equal(f.calls.length, 0);
 });
 
-test('nao remove diretorio substituido por conteudo humano durante auditoria', async t => {
+test("does not remove directory replaced by human content during audit", async t => {
   const f = fixture(t); let sentinel, original;
   f.audit.execute = (_node, _args, options) => {
     original = `${options.cwd}.moved`;
@@ -242,7 +242,7 @@ test('nao remove diretorio substituido por conteudo humano durante auditoria', a
   assert.ok(fs.existsSync(original));
 });
 
-test('caminhos recusam escapes, links e output rastreado antes de executar', async t => {
+test("paths refuse escapes, links and output tracked before running", async t => {
   const f = fixture(t); const outside = fs.mkdtempSync(join(tmpdir(), 'pbai-outside-')); t.after(() => fs.rmSync(outside, { recursive: true, force: true }));
   fs.symlinkSync(outside, join(f.root, 'link'), process.platform === 'win32' ? 'junction' : undefined);
   assert.throws(() => safePath(f.root, '../outside')); assert.throws(() => safePath(f.root, 'link/file.json'));
@@ -256,7 +256,7 @@ test('caminhos recusam escapes, links e output rastreado antes de executar', asy
   assert.equal(f.calls.length, 0);
 });
 
-test('snapshot preserva originais e nao atravessa links nem diretorios gerados', t => {
+test("snapshot preserves originals and does not cross links or generated directories", t => {
   const f = fixture(t); write(join(f.root, 'app/node_modules/excluded.js'), 'secret'); write(join(f.root, 'app/.semgrepignore'), '*');
   fs.symlinkSync(join(f.root, 'app'), join(f.root, 'app/link'), process.platform === 'win32' ? 'junction' : 'dir');
   const destination = join(f.root, '.agent-tests/snapshot'); fs.mkdirSync(destination, { recursive: true });
@@ -266,7 +266,7 @@ test('snapshot preserva originais e nao atravessa links nem diretorios gerados',
   assert.throws(() => snapshotSources(f.root, join(f.root, 'app'), destination, { maxFileBytes: 1 }));
 });
 
-test('exemplos gerados só são excluídos quando ignorados e fora do índice', t => {
+test("generated examples are only excluded when ignored and out of index", t => {
   const f = fixture(t), examples = join(f.root, 'examples');
   write(join(examples, '.gitignore'), '/generated/\n');
   write(join(examples, 'generated', 'fixture.js'), 'const example = true;\n');
@@ -294,7 +294,7 @@ test('exemplos gerados só são excluídos quando ignorados e fora do índice', 
   assert.ok(!unverified.excluded.some(item => item.reason === 'ignored-generated-examples'));
 });
 
-test('ignores global, local e arquivo de regra não versionado não ocultam exemplos da auditoria', t => {
+test("global ignores, unversioned location and rule file do not hide audit examples", t => {
   const f = fixture(t), examples = join(f.root, 'examples');
   write(join(examples, 'generated', 'fixture.js'), 'const example = true;\n');
   const includes = () => snapshotSources(f.root, examples, null).files.some(item => item.path === 'generated/fixture.js');
@@ -333,7 +333,7 @@ test('parsers redigem segredos e recusam saidas invalidas ou falsas aprovacoes',
   assert.throws(() => parseOpengrep({ results: [], errors: [] }, 0, '/tmp'));
 });
 
-test('Opengrep usa IDs e fingerprints estaveis sem caminhos de Linux, Windows ou macOS', () => {
+test("Opengrep uses stable IDs and fingerprints without Linux, Windows or macOS paths", () => {
   const rules = ['pbai-eval-input', 'pbai-shell-input', 'pbai-sql-input', 'pbai-tls-verification-disabled'];
   const prefixes = ['', 'home.runner.work.AgentDevKit.AgentDevKit..agent-tests.security-smoke.run-eu1Fdm..pbai4devs.scripts.auditar-seguranca.rules.',
     'D.a.AgentDevKit.AgentDevKit..agent-tests.security-smoke.run-TpubGc..pbai4devs.scripts.auditar-seguranca.rules.',
@@ -350,7 +350,7 @@ test('Opengrep usa IDs e fingerprints estaveis sem caminhos de Linux, Windows ou
   }
 });
 
-test('Opengrep rejeita regras desconhecidas e semelhantes sem divulgar o ID bruto', () => {
+test("Opengrep rejects unknown and similar rules without disclosing the gross ID", () => {
   const unknown = ['unknown', 'pbai-eval-input-extra', 'prefix.pbai-eval-input.extra', 'prefix.pbai-unknown', '/private/person/pbai-eval-input', ''];
   for (const check_id of unknown) {
     assert.throws(() => parseOpengrep({ results: [{ check_id, path: 'src/handler.js', start: { line: 1 } }], errors: [], paths: { scanned: ['src/handler.js'] } }, 1, '/unused'),
@@ -358,7 +358,7 @@ test('Opengrep rejeita regras desconhecidas e semelhantes sem divulgar o ID brut
   }
 });
 
-test('regra Opengrep desconhecida torna a auditoria incompleta sem vazar caminho local', async t => {
+test("Unknown Opengrep rule makes audit incomplete without leaking local path", async t => {
   const f = fixture(t), check_id = 'Users.private-person.project.run-private.rules.unrecognized';
   f.audit.execute = () => ({ status: 1, stdout: JSON.stringify({ results: [{ check_id, path: 'index.js', start: { line: 1 } }], errors: [], paths: { scanned: ['index.js'] } }), stderr: '' });
   const report = await f.audit.run({ target: 'app', checks: ['sast'] });
@@ -391,7 +391,7 @@ test('alteracao da fonte durante a ferramenta invalida o resultado', async t => 
   assert.equal(result.status, 'incomplete'); assert.equal(result.exitCode, 2);
 });
 
-test('saida quebrada da ferramenta nao vira relatorio limpo', async t => {
+test("broken tool exit does not become clean report", async t => {
   const f = fixture(t); f.audit.execute = () => ({ status: 2, stdout: 'secret', stderr: 'secret' });
   const result = await f.audit.run({ target: 'app', checks: ['sast'] });
   assert.equal(result.exitCode, 2); assert.ok(!JSON.stringify(result).includes('secret'));
@@ -449,7 +449,7 @@ test('OSV recebe modo offline estrito e erro de outro scanner prevalece sobre ac
   const mixed = await f.audit.run({ target: 'app', checks: ['secrets', 'sast'] }); assert.equal(mixed.exitCode, 2); assert.equal(mixed.findings.length, 1);
 });
 
-test('OSV sem pacotes usa 128 explicito; erro sem JSON permanece incompleto', async t => {
+test("OSV without packages uses 128 explicit; error without JSON remains incomplete", async t => {
   const f = fixture(t); const zip = validZip(); f.audit.fetcher = async () => new Response(zip); await f.audit.updateData(['npm']);
   write(join(f.root, 'app/package-lock.json'), '{}');
   f.audit.execute = () => ({ status: 128, stdout: '', stderr: '' });

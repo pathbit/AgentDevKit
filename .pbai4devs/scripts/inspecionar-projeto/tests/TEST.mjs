@@ -28,7 +28,7 @@ function fixture(t) {
   return { root, directory, file, run };
 }
 
-test('inventaria várias specs em ordem estável', t => {
+test("inventory several specs in stable order", t => {
   const root = mkdtempSync(join(tmpdir(), 'adk-spec-inventory-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const file = (name, content) => {
@@ -54,7 +54,7 @@ test('inventaria várias specs em ordem estável', t => {
   assert.ok(report.items.every(item => item.status === 'aprovado'));
 });
 
-test('alterações tardias na pasta de specs invalidam o inventário', t => {
+test("late changes in specs folder invalidate inventory", t => {
   for (const mode of ['insert', 'remove']) {
     {
       const root = realpathSync(mkdtempSync(join(tmpdir(), 'adk-spec-race-')));
@@ -86,7 +86,7 @@ test('alterações tardias na pasta de specs invalidam o inventário', t => {
   }
 });
 
-test('limite agregado de entradas descarta inventário parcial', t => {
+test("aggregate limit of inputs discards partial inventory", t => {
   const root = mkdtempSync(join(tmpdir(), 'adk-spec-entries-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const file = (name, content) => { const target = join(root, name); mkdirSync(dirname(target), { recursive: true }); writeFileSync(target, content); };
@@ -99,7 +99,7 @@ test('limite agregado de entradas descarta inventário parcial', t => {
   assert.equal(specs.present, true); assert.equal(specs.complete, false); assert.deepEqual(specs.items, []);
 });
 
-test('alteração de spec já lida invalida o inventário mesmo com o mesmo tamanho', t => {
+test("spec change already read invalidates inventory even with the same size", t => {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'adk-spec-content-race-')));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const file = (name, content) => { const target = join(root, name); mkdirSync(dirname(target), { recursive: true }); writeFileSync(target, content); };
@@ -136,7 +136,7 @@ test('limite agregado de bytes permite o teto e recusa leitura parcial acima del
   assert.equal(specs.complete, false); assert.deepEqual(specs.items, []);
 });
 
-test('identifica repositório sem aplicação e informa estrutura ausente', t => {
+test("identifies repository without application and informs missing structure", t => {
   const { run } = fixture(t);
   const result = run();
   assert.equal(result.status, 0, result.stderr);
@@ -145,7 +145,7 @@ test('identifica repositório sem aplicação e informa estrutura ausente', t =>
   assert.equal(run('--check').status, 1);
 });
 
-test('ignora agentes, dependências, estado e links simbólicos', t => {
+test("ignores agents, dependencies, state and symbolic links", t => {
   const { root, file, run } = fixture(t);
   file('.pbai4devs/tools/node_modules/example/package.json', '{"scripts":{"wrong":"secret"}}');
   file('node_modules/example/package.json', '{}');
@@ -184,7 +184,34 @@ test('descobre linguagens e comandos sem expor valores nem executar Python', t =
   assert.equal(readFileSync(join(root, '.env'), 'utf8'), `TOKEN=${secret}`);
 });
 
-test('aceita estrutura completa e raízes de agentes configuradas', t => {
+test("manifests with alternative box follow the volume and preserve the spelling of the path", t => {
+  const { root, file, run } = fixture(t);
+  const module = 'Módulo local';
+  file(`${module}/PACKAGE.JSON`, '{"scripts":{"start":"echo test"}}');
+  file(`${module}/PACKAGE-LOCK.JSON`, '{}');
+  file(`${module}/REQUIREMENTS.TXT`, 'example');
+  file(`${module}/MAKEFILE`, 'build:\n\t@echo test\n');
+  const matchesCaseVariant = fs.existsSync(join(root, module, 'package.json'));
+  const { report } = run();
+  if (matchesCaseVariant) {
+    assert.deepEqual(report.manifests.toSorted(), [`${module}/PACKAGE.JSON`, `${module}/REQUIREMENTS.TXT`]);
+    assert.deepEqual(report.lockfiles, [`${module}/PACKAGE-LOCK.JSON`]);
+    assert.deepEqual(report.commands.toSorted((a, b) => a.file.localeCompare(b.file)), [
+      { file: `${module}/MAKEFILE`, names: ['build'] }, { file: `${module}/PACKAGE.JSON`, names: ['start'] },
+    ]);
+  } else {
+    assert.deepEqual(report.manifests, []);
+    assert.deepEqual(report.lockfiles, []);
+    assert.deepEqual(report.commands, []);
+
+    file(`${module}/package.json`, '{"scripts":{"test":"echo ok"}}');
+    const withDistinctFiles = run().report;
+    assert.deepEqual(withDistinctFiles.manifests, [`${module}/package.json`]);
+    assert.deepEqual(withDistinctFiles.commands, [{ file: `${module}/package.json`, names: ['test'] }]);
+  }
+});
+
+test("accepts complete structure and configured agent roots", t => {
   const { directory, file, run } = fixture(t);
   for (const name of ['.pbai4devs', '.agents', '.agent', '.gemini', '.claude', '.codex', '.cursor', '.github', '.opencode', 'src', 'tests', 'infra']) directory(name);
   for (const name of ['.gitignore', '.gitattributes', '.editorconfig', '.dockerignore', 'README.md', 'Makefile']) file(name);
@@ -209,7 +236,7 @@ test('aceita estrutura completa e raízes de agentes configuradas', t => {
   assert.equal(run('--check').status, 0);
 });
 
-test('estrutura completa com seleção none dispensa todas as pastas de clientes', t => {
+test("complete structure with selection none dispenses all client folders", t => {
   const { root, directory, file, run } = fixture(t);
   for (const name of ['.pbai4devs', 'src', 'tests', 'infra']) directory(name);
   for (const name of ['.gitignore', '.gitattributes', '.editorconfig', '.dockerignore', 'README.md', 'Makefile']) file(name);
@@ -225,7 +252,7 @@ test('estrutura completa com seleção none dispensa todas as pastas de clientes
   assert.deepEqual(result.report.structure.missing, []);
 });
 
-test('manifests inválidos geram aviso sem revelar seu conteúdo', t => {
+test("Invalid manifests generate warning without revealing its content", t => {
   const { file, run } = fixture(t);
   const secret = 'MALFORMED_PRIVATE_VALUE';
   file('package.json', '{ malformed ' + secret);
@@ -235,7 +262,7 @@ test('manifests inválidos geram aviso sem revelar seu conteúdo', t => {
   assert.ok(!result.stdout.includes(secret));
 });
 
-test('rejeita origens fora das fixtures e opções desconhecidas', () => {
+test("rejects origins outside fixtures and unknown options", () => {
   for (const args of [['--root', dirname(projectRoot)], ['--root', '.pbai4devs'], ['--root', 'examples'], ['--root', 'examples/custom'], ['--unknown']]) {
     const result = spawnSync(process.execPath, [script, ...args], { encoding: 'utf8' });
     assert.ifError(result.error);
@@ -245,7 +272,7 @@ test('rejeita origens fora das fixtures e opções desconhecidas', () => {
   }
 });
 
-test('classifica sinais de maturidade sem confundir planejamento com produto funcionando', t => {
+test("classifies signs of maturity without confusing planning with working product", t => {
   const { directory, file, run } = fixture(t);
   const state = stage => file('.pbai4devs/state/configuracao/ESTADO.md', `---\npreparacao: concluido\nconfiguracao_tecnica: ${stage}\ndocumentos:\n  prd: docs/PRD.md\n  ux_ui: docs/UX.md\n  design: docs/DESIGN.md\n  releases: docs/releases\n---\n# Estado\n`);
   assert.equal(run().report.maturity.level, 'preparacao');
@@ -267,7 +294,7 @@ test('classifica sinais de maturidade sem confundir planejamento com produto fun
   assert.match(result.report.maturity.limits[0], /nao substitui/);
 });
 
-test('inspeção lê decisões legadas e informa conflito entre pastas de estado', t => {
+test("inspection reads legacy decisions and reports conflict between state folders", t => {
   const { file, run } = fixture(t);
   const decisions = '---\npreparacao: concluido\nconfiguracao_tecnica: pendente\n---\n# Estado\n';
   file('.pbai4devs/estado/configuracao/ESTADO.md', decisions);
@@ -281,7 +308,7 @@ test('inspeção lê decisões legadas e informa conflito entre pastas de estado
   assert.match(JSON.parse(conflict.stderr).error, /coexistem/);
 });
 
-test('exemplos e caches Playwright não viram aplicação do projeto real', t => {
+test("Playwright examples and caches did not see actual project application", t => {
   const { file, run } = fixture(t);
   for (const folder of ['examples/generated/a', 'examples/fixture', 'tmp/examples/a', 'TEMP/project', '.PLAYWRIGHT-MCP', 'playwright-results']) {
     file(`${folder}/package.json`, '{}'); file(`${folder}/main.mjs`, 'export const fake=1;');
@@ -292,7 +319,7 @@ test('exemplos e caches Playwright não viram aplicação do projeto real', t =>
   assert.deepEqual(report.manifests, []); assert.deepEqual(report.sources, []);
 });
 
-test('aceita inspecionar cenário em examples/generated sem liberar outras pastas', t => {
+test("accepts to inspect scenario in examples/generated without releasing other folders", t => {
   const base = join(projectRoot, 'examples/generated'); mkdirSync(base, { recursive: true });
   const root = mkdtempSync(join(base, 'inspector-fixture-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -302,7 +329,7 @@ test('aceita inspecionar cenário em examples/generated sem liberar outras pasta
   assert.equal(JSON.parse(result.stdout).mode, 'aplicacao-detectada');
 });
 
-test('status arbitrários e referências fora da raiz não expõem dados da configuração', t => {
+test("arbitrary status and out-of-root references do not expose configuration data", t => {
   const { file, run } = fixture(t); const secret = 'PRIVATE_STATUS_192819';
   file('.pbai4devs/state/configuracao/ESTADO.md', `---\npreparacao: ${secret}\nconfiguracao_tecnica: ${secret}\ndocumentos:\n  prd: ../outside.md\n  design: docs/DESIGN.md\n---\n# Estado\n`);
   file('docs/DESIGN.md', `---\nstatus: ${secret}\n---\n# Design\n`);
@@ -312,7 +339,7 @@ test('status arbitrários e referências fora da raiz não expõem dados da conf
   assert.ok(!result.stdout.includes(secret));
 });
 
-test('inventário documental vazio não cria arquivos nem presume aprovação', t => {
+test("empty documentary inventory does not create files or assume approval", t => {
   const { root, run } = fixture(t);
   const result = run();
   assert.equal(result.status, 0, result.stderr);
@@ -324,7 +351,7 @@ test('inventário documental vazio não cria arquivos nem presume aprovação', 
   assert.match(result.report.documentation.limits.at(-1), /nao cria documentos/);
 });
 
-test('descobre documentação real sem impor caixa, pasta docs ou frontmatter', t => {
+test("discovers real documentation without imposing box, docs folder or frontmatter", t => {
   const { root, file, run } = fixture(t);
   const content = 'DOC_CONTENT_MUST_NOT_BE_EMITTED_182711';
   for (const name of ['Readme.md', 'CONTRIBUTING.rst', 'SECURITY.adoc', 'History.md', 'ARCHITECTURE.md', 'AGENTS.md', 'LICENSE', 'examples/README', '_examples/server/README.md', 'wiki/guide.mdx', 'rfcs/001-change.md', 'packages/docs/content/api.mdx', '.github/CONTRIBUTING.md', '.github/SECURITY.md', '.github/copilot-instructions.md']) file(name, content);
@@ -353,7 +380,7 @@ test('descobre documentação real sem impor caixa, pasta docs ou frontmatter', 
   assert.equal(readFileSync(join(root, 'Readme.md'), 'utf8'), content);
 });
 
-test('caminhos cadastrados têm proveniência sem assumir status ou ler arquivos de configuração', t => {
+test("registered paths have provenance without taking status or reading configuration files", t => {
   const { file, run } = fixture(t);
   file('.pbai4devs/state/configuracao/ESTADO.md', '---\ndocumentos:\n  design: architecture/current.md\n  specs: specifications\n  prd: planning/absent.md\n  readme: ../private-secret.md\n  seguranca: .env\n---\n# Estado\n');
   file('architecture/current.md', '# Existing architecture\n');
@@ -372,7 +399,7 @@ test('caminhos cadastrados têm proveniência sem assumir status ou ler arquivos
   assert.equal(docs.files.some(item => Object.hasOwn(item, 'status')), false);
 });
 
-test('documentos simbólicos permanecem opacos sem ler destinos internos, externos ou ausentes', t => {
+test("symbolic documents remain opaque without reading internal, external or absent destinations", t => {
   const { root, file, run } = fixture(t);
   const outside = mkdtempSync(join(projectRoot, '.agent-tests', 'outside-docs-'));
   t.after(() => rmSync(outside, { recursive: true, force: true }));
@@ -403,7 +430,7 @@ test('documentos simbólicos permanecem opacos sem ler destinos internos, extern
   assert.equal(readFileSync(join(outside, 'private.md'), 'utf8'), 'OUTSIDE_SECRET_MUST_NOT_APPEAR');
 });
 
-test('pastas documentais simbólicas sem cadastro não ocultam uma leitura incompleta', t => {
+test("symbolic documental folders without registration do not hide an incomplete reading", t => {
   const { root, run } = fixture(t);
   const outside = mkdtempSync(join(projectRoot, '.agent-tests', 'outside-doc-tree-'));
   t.after(() => rmSync(outside, { recursive: true, force: true }));
@@ -433,7 +460,7 @@ test('pastas documentais simbólicas sem cadastro não ocultam uma leitura incom
   assert.equal(limited.scan.complete, false);
 });
 
-test('limites documentais são explícitos e não retornam inventário parcial como completo', t => {
+test("documentary limits are explicit and do not return partial inventory as complete", t => {
   const { root, file } = fixture(t);
   file('a.md', '123'); file('b.md', '456'); file('deep/nested/c.md', '789');
   const files = inspectDocumentation(root, { maxFiles: 1 });
@@ -453,7 +480,7 @@ test('limites documentais são explícitos e não retornam inventário parcial c
   for (const limits of [{ maxFiles: -1 }, { maxEntries: 25001 }, { unknown: 1 }]) assert.throws(() => inspectDocumentation(root, limits), /Limite documental/);
 });
 
-test('inventário repetido preserva bytes, modos, caminhos e índice Git', t => {
+test("Repeated inventory preserves bytes, modes, paths and Git index", t => {
   const { root, file, run } = fixture(t);
   file('README.md', '# Existing\n'); file('docs/guide.md', 'No imposed frontmatter\n');
   const git = (...args) => {

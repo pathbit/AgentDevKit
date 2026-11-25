@@ -4,6 +4,8 @@ description: Compare abordagens de planejamento, entrega e contexto para agentes
 
 # Comparar ferramentas para desenvolvimento com agentes
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 Compare as funções que sua equipe precisa para planejar, implementar, verificar
 e manter o contexto do projeto. Cada ferramenta tem seu próprio fluxo, e você
 pode combinar opções que cumprem papéis diferentes no mesmo repositório.
@@ -239,3 +241,7 @@ ela usar os mesmos clientes ou caminhos.
 [dotcontext-evidence]: https://github.com/vinilana/dotcontext#executable-evidence
 [dotcontext-releases]: https://github.com/vinilana/dotcontext/releases
 [dotcontext-runtime]: https://github.com/vinilana/dotcontext#harness-runtime
+
+[reading-pt]: comparacao.md
+[reading-en]: ../en/guides/comparacao.md
+[reading-es]: ../es/guides/comparacao.md

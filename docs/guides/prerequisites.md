@@ -1,13 +1,16 @@
 ---
 description: Instalar Node.js e npm no Windows, macOS ou Linux antes de usar o kit.
-language: pt
+language: pt-BR
 ---
 
 # Preparar os pré-requisitos
 
-Instale **Node.js 24+ com npm**. O npm inclui o comando `npx`; não é preciso
-instalar Python, Bun ou o AgentDevKit globalmente. Git é opcional para instalar
-o kit e necessário para trabalhar com o controle de versão do projeto.
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
+Instale **Node.js 24+ com npm**. O npm inclui o comando `npx`, que executa o
+AgentDevKit sem instalação global. Use o runtime e o gerenciador de pacotes
+que seu projeto já usa para compilar e testar a aplicação. Git é opcional
+para instalar o kit.
 
 ## Confira antes de instalar
 
@@ -19,8 +22,9 @@ npm --version
 npx --version
 ```
 
-Com Node 24+ e os três comandos funcionando, siga para a
-[instalação pelo npm ou GitHub Packages](installation.md#instalar).
+Com Node 24+ e os três comandos funcionando, siga o
+[começo rápido](../../README.md#começo-rápido) ou consulte os
+[métodos de instalação](installation.md#instalar).
 Use o mesmo ambiente em que abrirá o projeto: Windows e WSL, por exemplo,
 têm instalações separadas.
 
@@ -132,3 +136,7 @@ da tarefa em [ferramentas e testes](tools-and-testing.md).
 [brew]: https://formulae.brew.sh/formula/node@24
 [nvm]: https://github.com/nvm-sh/nvm#installing-and-updating
 [bootstrap]: ../../.pbai4devs/scripts/preparar-ferramentas/BOOTSTRAP.md
+
+[reading-pt]: prerequisites.md
+[reading-en]: ../en/guides/prerequisites.md
+[reading-es]: ../es/guides/prerequisites.md

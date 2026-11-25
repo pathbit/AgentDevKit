@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { releaseCommand } from './config.mjs';
+import { packageRoot, releaseCommand } from './config.mjs';
 import { text as cliText } from './i18n.mjs';
 import { hasLegacyDocumentationSkill } from './legacy-documentation.mjs';
 import { inspectIntegrations, inspectProject } from '../.pbai4devs/scripts/inspecionar-projeto/SCRIPT.mjs';
@@ -20,6 +20,8 @@ const messages = {
     productEvidence: 'Confira os documentos e as evidências de aprovação; status registrado, por si só, não comprova aprovação.',
     ask: 'Use a skill indicada no agente; confirme as decisões ainda pendentes.',
     existing: 'Preserve código e decisões existentes; não reinicie a definição do produto.',
+    runReferences: 'Confira estes arquivos antes de escolher o comando de execução.',
+    runUnknown: 'Identifique o módulo ou peça o comando usado pela equipe. Consulte o README do projeto quando houver.',
     partial: 'A operação pode ter deixado alterações ou arquivos temporários.',
     partialInstruction: 'Interrompa outras operações; preserve arquivos e backups e revise o estado antes de tentar novamente. Backups podem estar incompletos: compare-os antes de restaurar.',
     check: 'Confira se os recursos dos agentes estão sincronizados.',
@@ -46,6 +48,8 @@ const messages = {
     productEvidence: 'Check the documents and evidence of approval; a recorded status alone does not establish approval.',
     ask: 'Use the indicated skill in your agent; confirm outstanding decisions.',
     existing: 'Preserve existing code and decisions; do not restart product discovery.',
+    runReferences: 'Review these files before choosing a startup command.',
+    runUnknown: 'Identify the module or ask for the command the team uses. Check the project README when available.',
     partial: 'The operation may have left changes or temporary files.',
     partialInstruction: 'Stop other operations; preserve files and backups and review the state before retrying. Backups may be incomplete: compare them before restoring.',
     check: 'Check whether your agent resources are in sync.',
@@ -72,6 +76,8 @@ const messages = {
     productEvidence: 'Revise los documentos y las evidencias de aprobación; un estado registrado no demuestra por sí solo la aprobación.',
     ask: 'Use la skill indicada en su agente y confirme las decisiones pendientes.',
     existing: 'Preserve el código y las decisiones existentes; no reinicie el producto.',
+    runReferences: 'Revise estos archivos antes de elegir el comando de ejecución.',
+    runUnknown: 'Identifique el módulo o pida el comando que usa el equipo. Consulte el README del proyecto si está disponible.',
     partial: 'La operación puede haber dejado cambios o archivos temporales.',
     partialInstruction: 'Detenga otras operaciones; conserve archivos y respaldos y revise el estado antes de reintentar. Los respaldos pueden estar incompletos: compárelos antes de restaurar.',
     check: 'Compruebe si los recursos de sus agentes están sincronizados.',
@@ -100,15 +106,21 @@ function commandLine(args, platform) {
   return (platform === 'win32' ? '& ' : '') + args.map(value => quote(value, platform)).join(' ');
 }
 
-export function nextCommand(action, target, language, platform = process.platform) {
-  return `${platform === 'win32' ? '& ' : ''}${releaseCommand} ${action} --target ${quote(target, platform)} --lang ${quote(language, platform)}`;
+export function nextCommand(action, target, language, platform = process.platform, useCurrentPackage = false) {
+  const executable = useCurrentPackage
+    ? commandLine([process.execPath, join(packageRoot, 'bin/agentdevkit.mjs')], platform)
+    : `${platform === 'win32' ? '& ' : ''}${releaseCommand}`;
+  return `${executable} ${action} --target ${quote(target, platform)} --lang ${quote(language, platform)}`;
 }
 
 function workflow(report, intent) {
   const state = report.maturity;
   const app = state.signals.application;
   if (report.scan.truncated || (intent === 'product' && !report.documentation.scan.complete)) return ['incomplete', null];
-  if (intent === 'run' && app) return ['prepare', 'preparar-dev'];
+  if (intent === 'run') {
+    if (app || report.compose.length || report.dockerfiles.length || report.commands.length) return ['prepare', 'preparar-dev'];
+    return ['inspect', null];
+  }
   if (intent === 'product') {
     if (!state.configuration.present || state.configuration.preparacao === 'pendente') return ['configure', 'configurar-projeto'];
     if (state.configuration.preparacao !== 'concluido') return ['inspect', null];
@@ -136,6 +148,18 @@ function workflow(report, intent) {
   if (!spec.linked || !['open', 'in-progress'].includes(spec.roadmapState) || !spec.status) return ['roadmap', 'gerenciar-roadmap'];
   if (spec.status !== 'aprovado') return ['spec', 'criar-spec'];
   return ['implement', 'implementar-spec'];
+}
+
+function runReferences(report) {
+  const testPath = /(?:^|[./_-])(?:tests?|fixtures?|e2e)(?:$|[./_-])/i;
+  const ordered = paths => [...new Set(paths.filter(path => path.length <= 512 && !/[\p{Cc}\p{Cf}]/u.test(path)))]
+    .sort((left, right) => Number(testPath.test(left)) - Number(testPath.test(right))
+      || left.split('/').length - right.split('/').length || (left < right ? -1 : Number(left > right)));
+  const readmes = ordered(report.documentation.files
+    .filter(file => file.kind === 'file' && file.sha256 && file.role === 'readme')
+    .map(file => file.path));
+  const launchFiles = ordered([...report.compose, ...report.dockerfiles, ...report.commands.map(({ file }) => file), ...report.manifests]);
+  return [...readmes.slice(0, 2), ...(launchFiles.length ? launchFiles : ordered(report.sources)).slice(0, 4)];
 }
 
 export function getNextSteps({ command, target, language = 'pt', installed, possiblePartial = false, platform = process.platform, intent }) {
@@ -168,13 +192,17 @@ export function getNextSteps({ command, target, language = 'pt', installed, poss
   }
   const inspector = join(target, '.pbai4devs/scripts/inspecionar-projeto/SCRIPT.mjs');
   const requiresEvidence = ['prd', 'ux', 'design', 'roadmap', 'spec', 'implement'].includes(key);
+  const references = intent === 'run' && ['prepare', 'inspect'].includes(key) ? runReferences(report) : [];
   const step = {
     label: text[key],
     command: existsSync(inspector) ? commandLine([process.execPath, inspector], platform) : cli('doctor'),
     skill, stage: intent === 'product' ? productStages[key] : report.maturity.level,
     ...(intent === 'product' ? { maturity: report.maturity.level } : {}),
+    ...(references.length ? { references } : {}),
     instruction: intent === 'product' && key === 'configure' ? text.productPreparation
       : intent === 'product' && key === 'inspect' ? text.productReview
+      : intent === 'run' && key === 'inspect' ? text.runUnknown
+      : references.length ? `${text.runReferences} ${text.ask} ${text.existing}`
       : `${text.ask}${key === 'prepare' ? ` ${text.existing}` : ''}${requiresEvidence ? ` ${text.productEvidence}` : ''}`,
   };
   return ['init', 'update', 'sync', 'lang', 'agents', 'tools'].includes(command) ? [verification, step] : [step];
@@ -183,7 +211,9 @@ export function getNextSteps({ command, target, language = 'pt', installed, poss
 export function operationalNext(result, options, { installed, planCanApply }) {
   const { command, language, target, ok } = result;
   const strings = messages[language];
-  const step = (key, action, stage = 'verificacao') => [{ label: strings[key], command: nextCommand(action, target, language), stage }];
+  const step = (key, action, stage = 'verificacao') => [{
+    label: strings[key], command: nextCommand(action, target, language, process.platform, options.local === true), stage,
+  }];
   if (result.clients?.length === 0 && command === 'agents') {
     return [{ label: strings.preview, instruction: result.message, stage: 'revisao' }];
   }
@@ -203,10 +233,11 @@ export function operationalNext(result, options, { installed, planCanApply }) {
   if (options.dryRun && !options.check && ok && !options.force) {
     if (installed && !result.plan.length) return step('next', 'next', 'fluxo');
     const purpose = options.purpose ? ` --purpose ${options.purpose}` : '';
+    const local = options.local ? ' --local' : '';
     const yes = command === 'init' ? ' --yes' : '';
     const action = command === 'agents' && options.positionals?.length === 2
       ? `agents ${options.positionals[0]} ${options.clients.join(',')}` : `${command}${selection}`;
-    return step('apply', `${action}${purpose}${yes}`, 'aplicacao');
+    return step('apply', `${action}${purpose}${local}${yes}`, 'aplicacao');
   }
   if (options.check || options.dryRun) {
     return [{ label: strings.review, stage: 'revisao' }];

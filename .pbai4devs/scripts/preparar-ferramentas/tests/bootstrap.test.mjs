@@ -69,7 +69,7 @@ function fixture(t) {
   return { root, options, archive, key, cache: join(root, '.pbai4devs/tools/.cache/runtime/node', key), script: name => write(join(root, '.pbai4devs/scripts', name, 'SCRIPT.mjs'), ''), setManifest: value => { manifest = value; }, calls: () => calls };
 }
 
-test('bootstrap Node extrai arquivo real, verifica npm e reutiliza cache sem rede', async t => {
+test("bootstrap Node extracts real file, scans npm and reuses cache without network", async t => {
   const f = fixture(t), runtime = await ensureRuntime(f.options);
   assert.equal(runtime.source, 'download'); assert.equal(runtime.version, fixtureVersion); assert.equal(f.calls(), 2);
   assert.ok(existsSync(runtime.node)); assert.ok(existsSync(runtime.npm));
@@ -78,7 +78,7 @@ test('bootstrap Node extrai arquivo real, verifica npm e reutiliza cache sem red
   assert.ok(readdirSync(f.cache).every(name => !name.startsWith('.stage.')));
 });
 
-test('checksum, manifesto ambíguo e download falho não promovem runtime', async t => {
+test("checksum, ambiguous manifesto and failed download do not promote runtime", async t => {
   for (const kind of ['checksum', 'manifest', 'download']) await t.test(kind, async subtest => {
     const f = fixture(subtest), previous = join(f.cache, `v${fixtureVersion}`); mkdirSync(previous, { recursive: true }); writeFileSync(join(previous, 'preserved'), 'original');
     if (kind === 'checksum') f.setManifest(`${'0'.repeat(64)}  node-v${fixtureVersion}-${f.key}.${process.platform === 'win32' ? 'zip' : 'tar.gz'}\n`);
@@ -125,13 +125,13 @@ test('bootstrap Windows ignora Node afetado e usa somente um runtime corrigido n
   assert.equal(result.node, supported);
 });
 
-test('validação recusa nomes fora da distribuição antes da extração', () => {
+test("validation refuses names outside the distribution before extraction", () => {
   const top = 'node-v24.1.2-linux-x64';
   assert.doesNotThrow(() => validateArchive(`${top}/bin/npm\n`, top));
   for (const name of ['../../outside', `${top}/../outside`, '/absolute/file', `${top}/C:file`]) assert.throws(() => validateArchive(`${name}\n`, top), /fora/);
 });
 
-test('links internos extraídos são aceitos e links externos são recusados', t => {
+test("extracted internal links are accepted and external links are refused", t => {
   const f = fixture(t), inside = join(f.root, 'inside'), outside = join(f.root, 'outside'); mkdirSync(inside); mkdirSync(outside); writeFileSync(join(inside, 'file'), 'safe');
   try { symlinkSync('file', join(inside, 'link')); } catch (error) { if (['EPERM', 'EACCES'].includes(error.code)) { t.skip('No symlink privilege'); return; } throw error; }
   assert.doesNotThrow(() => validateExtracted(inside));
@@ -139,25 +139,25 @@ test('links internos extraídos são aceitos e links externos são recusados', t
   assert.throws(() => validateExtracted(inside), /fora/);
 });
 
-test('cache simbólico é recusado sem tocar alvo externo', async t => {
+test("Symbolic cache is refused without playing external target", async t => {
   const f = fixture(t), outside = join(f.root, 'outside'); mkdirSync(outside);
   const cacheRoot = join(f.root, '.pbai4devs/tools/.cache'); mkdirSync(dirname(cacheRoot), { recursive: true });
   try { symlinkSync(outside, cacheRoot, 'dir'); } catch (error) { if (['EPERM', 'EACCES'].includes(error.code)) { t.skip('No symlink privilege'); return; } throw error; }
   await assert.rejects(ensureRuntime(f.options), /link simbolico/); assert.deepEqual(readdirSync(outside), []);
 });
 
-test('opções inválidas falham antes de rede ou criação de cache', async () => {
+test("invalid options fail before network or cache creation", async () => {
   await assert.rejects(main(['--runtime-only', 'all']), /nao aceita/);
   await assert.rejects(main(['--unknown']), /runtime-only/);
 });
 
-test('runtime atual saudável não altera PATH nem grava cache', async t => {
+test("current healthy runtime does not change PATH do not save cache", async t => {
   const f = fixture(t), original = process.env.PATH;
   const result = await ensureRuntime({ root: f.root, minimum: Number(process.versions.node.split('.')[0]) });
   assert.equal(result.source, 'current'); assert.equal(process.env.PATH, original); assert.equal(existsSync(f.cache), false);
 });
 
-test('preload síncrono verboso não impede localizar Node e npm nem altera sua entrada principal', async t => {
+test("verbose synchronous preload does not prevent locating Node and npm or altering its main entry", async t => {
   const f = fixture(t), bin = join(f.root, 'runtime com espaços');
   const executable = join(bin, process.platform === 'win32' ? 'node.exe' : 'node');
   const npm = join(bin, 'node_modules/npm/bin/npm-cli.js');
@@ -188,7 +188,7 @@ test('preload síncrono verboso não impede localizar Node e npm nem altera sua 
   }
 });
 
-test('preloads assíncronos ou injeção no canal recusam verificação sem expor saída nem acessar rede', async t => {
+test("asynchronous preloads or channel injection refuse verification without exposing output or accessing network", async t => {
   const f = fixture(t), bin = join(f.root, 'runtime com espaços');
   const executable = join(bin, process.platform === 'win32' ? 'node.exe' : 'node');
   const npm = join(bin, 'node_modules/npm/bin/npm-cli.js');
@@ -249,7 +249,7 @@ test('npm customizado que recusa contexto eval do probe falha fechado sem downlo
   assert.equal(existsSync(f.cache), false);
 });
 
-test('npm que escreve direto no fd 1 é reconhecido com e sem preload síncrono', async t => {
+test("npm writing direct in fd 1 is recognized with and without synchronous preload", async t => {
   const f = fixture(t), bin = join(f.root, 'node custom');
   const executable = join(bin, process.platform === 'win32' ? 'node.exe' : 'node');
   const npm = join(bin, 'node_modules/npm/bin/npm-cli.js');
@@ -261,7 +261,7 @@ test('npm que escreve direto no fd 1 é reconhecido com e sem preload síncrono'
   const common = { root: f.root, minimum: Number(process.versions.node.split('.')[0]), node: executable,
     allowDownload: false, download: async () => { throw new Error('rede indevida'); } };
   assert.equal((await ensureRuntime({ ...common, environment: env })).npm, npm);
-  // Sem NODE_OPTIONS, preserva o limite padrão do spawnSync e o trim anterior.
+  // No NODE_OPTIONS, preserves the standard spanSync limit and the previous trim.
   writeFileSync(npm, "process.stdout.write(' '.repeat(128*1024)+'11.0.0\\n');\n");
   assert.equal((await ensureRuntime({ ...common, environment: env })).npm, npm);
   writeFileSync(npm, "if(require.main!==module || process.execArgv.length || process.argv.slice(2).join(' ')!=='--version')process.exitCode=9;else require('node:fs').writeSync(1,'11.0.0\\n');\n");
@@ -271,7 +271,7 @@ test('npm que escreve direto no fd 1 é reconhecido com e sem preload síncrono'
   assert.equal(existsSync(f.cache), false);
 });
 
-test('probe isolado preserva execArgv acrescentado por preload e remove apenas seu eval', async t => {
+test("probe isolated preserves execArgv added by preload and removes only its eval", async t => {
   const f = fixture(t), bin = join(f.root, 'node flags');
   const executable = join(bin, process.platform === 'win32' ? 'node.exe' : 'node');
   const npm = join(bin, 'node_modules/npm/bin/npm-cli.js');
@@ -288,7 +288,7 @@ test('probe isolado preserva execArgv acrescentado por preload e remove apenas s
   assert.equal(existsSync(f.cache), false);
 });
 
-test('npm customizado ESM é executado como entrada com argumentos originais', async t => {
+test("npm customized ESM runs as input with original arguments", async t => {
   const f = fixture(t), bin = join(f.root, 'node esm');
   const executable = join(bin, process.platform === 'win32' ? 'node.exe' : 'node');
   const npm = join(bin, 'node_modules/npm/bin/npm-cli.js');
@@ -305,7 +305,7 @@ test('npm customizado ESM é executado como entrada com argumentos originais', a
   assert.equal(existsSync(f.cache), false);
 });
 
-test('marcador npm ausente ou duplicado não autoriza resultado nem download', async t => {
+test("missing or duplicate npm marker does not authorize result or download", async t => {
   const f = fixture(t), bin = join(f.root, 'isolated', 'bin'), node = join(bin, 'node');
   const npm = join(f.root, 'isolated', 'lib/node_modules/npm/bin/npm-cli.js');
   mkdirSync(bin, { recursive: true }); mkdirSync(dirname(npm), { recursive: true });
@@ -330,7 +330,7 @@ test('marcador npm ausente ou duplicado não autoriza resultado nem download', a
   }
 });
 
-test('Node_Options respeita caixa insensível somente no Windows', async t => {
+test("Node_Options respects insensitive box only on Windows", async t => {
   const f = fixture(t), bin = join(f.root, 'node-mock'), executable = join(bin, 'node.exe');
   mkdirSync(join(bin, 'node_modules/npm/bin'), { recursive: true });
   writeFileSync(executable, 'fixture-node');
@@ -343,7 +343,7 @@ test('Node_Options respeita caixa insensível somente no Windows', async t => {
     assert.equal(calls[0][0], expected);
     assert.equal(calls[1][0] === '-e', expected === '-e');
   }
-  // Chaves duplicadas no Windows são ordenadas e a primeira é mantida por spawn.
+  // Duplicate keys in Windows are sorted and the first is maintained by spamn.
   const calls = [], environment = { PATH: bin, Node_Options: '--require=exemplo', NODE_OPTIONS: '' };
   const run = (file, argv, options) => { calls.push(argv); return f.options.run(file, argv, options); };
   await ensureRuntime({ ...f.options, platform: 'win32', node: executable, environment, run, allowDownload: false });
@@ -351,7 +351,7 @@ test('Node_Options respeita caixa insensível somente no Windows', async t => {
   assert.equal(existsSync(f.cache), false);
 });
 
-test('probe interrompido, timeout ou limite de saída não acionam download nem cache', async t => {
+test("probe interrupted, timeout or exit limit do not trigger download or cache", async t => {
   const f = fixture(t);
   for (const result of [{ error: { code: 'ETIMEDOUT' }, status: null }, { error: { code: 'ENOBUFS' }, status: null }, { signal: 'SIGTERM', status: null }]) {
     let downloads = 0;
@@ -361,7 +361,7 @@ test('probe interrompido, timeout ou limite de saída não acionam download nem 
   }
 });
 
-test('runtime por symlink cujo probe falha não é tratado como ausente', async t => {
+test("runtime by symlink whose probe fails is not treated as absent", async t => {
   const f = fixture(t), target = join(f.root, 'node-real'), executable = join(f.root, 'node-link');
   writeFileSync(target, 'fixture-node');
   try { symlinkSync(target, executable, 'file'); }
@@ -430,7 +430,7 @@ test('preload que excede limite do stdout do npm falha sem rede nem cache', asyn
   assert.equal(existsSync(f.cache), false);
 });
 
-test('entrada única prepara runtime, diagnostica e encaminha argumentos e status sem shell', async t => {
+test("single entry prepares runtime, diagnoses and forwards arguments and status without shell", async t => {
   const f = fixture(t), calls = [];
   f.script('script com espaços');
   const args = ['script com espaços', '--flag', 'valor com espaços', '$(não executar)', '', '--', 'final'];
@@ -451,7 +451,7 @@ test('entrada única prepara runtime, diagnostica e encaminha argumentos e statu
   assert.equal(calls[1].settings.stdio, 'inherit');
 });
 
-test('falha de diagnóstico impede execução e propaga status', async t => {
+test("diagnostic failure prevents execution and spread status", async t => {
   const f = fixture(t), calls = [];
   f.script('qualquer');
   const options = { ...f.options, run: (file, argv, settings) => {
@@ -463,7 +463,7 @@ test('falha de diagnóstico impede execução e propaga status', async t => {
   assert.equal(calls[0][0], join(f.root, '.pbai4devs/scripts/diagnosticar-ambiente/SCRIPT.mjs'));
 });
 
-test('plano não instala nem diagnostica; usa apenas runtime disponível', async t => {
+test("plan does not install or diagnose; uses only runtime available", async t => {
   const f = fixture(t), calls = [];
   f.script('qualquer');
   await assert.rejects(main(['--executar', '--plan', 'qualquer'], f.options), /prepare o runtime/);
@@ -480,7 +480,7 @@ test('plano não instala nem diagnostica; usa apenas runtime disponível', async
   assert.deepEqual(calls, [[join(f.root, '.pbai4devs/scripts/executar-script/SCRIPT.mjs'), '--plan', 'qualquer', 'argumento']]);
 });
 
-test('--no-install falha sem runtime e usa cache sem rede; preserva flag do alvo', async t => {
+test("--no-install failure without runtime and uses networkless cache; preserve target flag", async t => {
   const f = fixture(t), calls = [];
   f.script('alvo');
   await assert.rejects(main(['--executar', '--no-install', 'alvo'], f.options), /prepare o runtime/);
@@ -499,7 +499,7 @@ test('--no-install falha sem runtime e usa cache sem rede; preserva flag do alvo
   assert.deepEqual(calls, [[join(f.root, '.pbai4devs/scripts/executar-script/SCRIPT.mjs'), '--plan', 'alvo']]);
 });
 
-test('modo novo encontra Node 24 no PATH com espaços sem baixar runtime', async t => {
+test("New mode meets Node 24 in PATH with spaces without downloading runtime", async t => {
   const f = fixture(t), calls = [], bin = join(f.root, 'bin com espaços');
   f.script('alvo');
   mkdirSync(join(bin, 'node_modules/npm/bin'), { recursive: true });
@@ -522,14 +522,14 @@ test('modo novo encontra Node 24 no PATH com espaços sem baixar runtime', async
   assert.equal(f.calls(), 0);
 });
 
-test('entrada única sem alvo falha antes de preparar runtime', async t => {
+test("single entry without target failure before preparing runtime", async t => {
   const f = fixture(t);
   for (const args of [['--executar'], ['--executar', '--plan'], ['--executar', '--no-install'], ['--executar', '--plan', '--no-install']]) await assert.rejects(main(args, f.options), /nome-ou-caminho/);
   assert.equal(f.calls(), 0);
   assert.equal(existsSync(f.cache), false);
 });
 
-test('ajuda não procura runtime, acessa rede ou inicia diagnóstico', async t => {
+test("help does not seek runtime, network access or start diagnosis", async t => {
   const f = fixture(t), unexpected = [];
   const options = { ...f.options, run: (...args) => { unexpected.push(args); return f.options.run(...args); } };
   for (const args of [['--executar', '--help'], ['--executar', '-h'], ['--executar', '--no-install', '--plan', '--help']]) assert.equal(await main(args, options), 0);
@@ -538,7 +538,7 @@ test('ajuda não procura runtime, acessa rede ou inicia diagnóstico', async t =
   assert.equal(existsSync(f.cache), false);
 });
 
-test('alvo ou configuração inválida falha antes de runtime, rede e diagnóstico', async t => {
+test("invalid target or configuration fails before runtime, network and diagnosis", async t => {
   const f = fixture(t), scripts = join(f.root, '.pbai4devs/scripts');
   const invalid = join(scripts, 'invalido'); mkdirSync(invalid, { recursive: true });
   writeFileSync(join(invalid, 'SCRIPT.mjs'), '');
@@ -554,7 +554,7 @@ test('alvo ou configuração inválida falha antes de runtime, rede e diagnósti
   assert.equal(existsSync(f.cache), false);
 });
 
-test('CLI preserva código do seletor quando alvo não existe', t => {
+test("CLI preserves selector code when target does not exist", t => {
   const f = fixture(t), target = join(f.root, 'ausente.mjs');
   const selector = join(project, '.pbai4devs/scripts/executar-script/SCRIPT.mjs');
   const bootstrap = join(project, '.pbai4devs/scripts/preparar-ferramentas/BOOTSTRAP.mjs');

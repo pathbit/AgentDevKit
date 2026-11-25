@@ -41,7 +41,7 @@ function fixture(t) {
   return root;
 }
 
-test('sync complementa Markdown humano, preserva CRLF/metadados e acompanha só o bloco', t => {
+test("sync complements human Markdown, preserves CRLF/metadados and follows only the block", t => {
   const root = fixture(t), path = '.claude/skills/demo/SKILL.md';
   const human = '\ufeff---\r\nname: meu-demo\r\ncustom: manter\r\n---\r\n\r\n# Minhas instrucoes\r\n\r\nTexto humano sem newline';
   put(root, path, human);
@@ -73,7 +73,7 @@ test('sync complementa Markdown humano, preserva CRLF/metadados e acompanha só 
   assert.equal(updated.split('<!-- BEGIN AGENTDEVKIT -->').length, 2);
 });
 
-test('sync recusa apontamento editado e nunca força bloco humano alterado', t => {
+test("sync refusal edited note and never altered human block strength", t => {
   const root = fixture(t), path = '.claude/skills/demo/SKILL.md';
   run(root);
   const generated = read(root, path);
@@ -108,7 +108,7 @@ test('sync recusa apontamento editado e nunca força bloco humano alterado', t =
   }
 });
 
-test('remover recurso ou cliente retira somente bloco próprio de Markdown misto', t => {
+test("Remove feature or client only removes own block from mixed Markdown", t => {
   for (const change of ['resource', 'client']) {
     const root = fixture(t), path = '.claude/skills/demo/SKILL.md', human = '# Humano\n\nMinha skill.\n';
     put(root, path, human); run(root);
@@ -123,7 +123,7 @@ test('remover recurso ou cliente retira somente bloco próprio de Markdown misto
   }
 });
 
-test('entradas raiz com caixa existente recebem só a referência e mantêm alterações humanas', t => {
+test("root inputs with existing box receive only the reference and maintain human changes", t => {
   const root = fixture(t), paths = ['agents.md', 'claude.md', 'Gemini.md'];
   put(root, '.pbai4devs/espelhos.conf', read(root, '.pbai4devs/espelhos.conf') + 'agente|.agents|plano\ndescoberta|.agents|antigravity\n');
   for (const path of paths) put(root, path, `# Minhas instrucoes de ${path}\n\nNao apague.\n`);
@@ -143,7 +143,7 @@ test('entradas raiz com caixa existente recebem só a referência e mantêm alte
   assert.equal(hash(read(root, 'agents.md')), beforeRepeat);
 });
 
-test('sync retira somente bloco TOML legado comprovado e restaura bytes humanos', t => {
+test("sync removes block only TOML proven legacy and restores human bytes", t => {
   const root = fixture(t), path = '.gemini/commands/check.toml';
   const before = 'description = "Escolha humana"\r\nprompt = \'Meu comando {{args}}\'\r\n# Comentario humano\r\n';
   // Fixture congelada no formato V3 antes de aposentar o escritor Gemini CLI.
@@ -183,14 +183,14 @@ test('retirada standalone registra tombstone para bloco do estado instalado', t 
   assert.equal(run(root, { check: true }).exitCode, 0);
 });
 
-test('stage pode gerar referências sem gravar estado derivado', t => {
+test("stage can generate references without recording derived state", t => {
   const root = fixture(t);
   run(root, { generateEntrypoints: false, recordDerivedState: false });
   assert.ok(fs.existsSync(join(root, '.claude/skills/demo/SKILL.md')));
   assert.ok(!fs.existsSync(join(root, '.pbai4devs/state/derived.json')));
 });
 
-test('regra Cursor mantém globs e modo humanos ao receber referência', t => {
+test("Cursor rule maintains human globs and mode when receiving reference", t => {
   const root = fixture(t), path = '.cursor/rules/code.mdc';
   put(root, '.pbai4devs/espelhos.conf', read(root, '.pbai4devs/espelhos.conf') + 'formato|.cursor|rules|mdc\n');
   put(root, '.pbai4devs/rules/code/RULE.md', '---\ntrigger: always_on\ndescription: Canonical.\n---\n\n# Rule\n');
@@ -203,7 +203,7 @@ test('regra Cursor mantém globs e modo humanos ao receber referência', t => {
   assert.equal(run(root, { check: true }).exitCode, 0);
 });
 
-test('edição humana durante planejamento não é sobrescrita pelo merge calculado antes', t => {
+test("Human edition during planning is not overwritten by the merge calculated before", t => {
   const root = fixture(t), path = '.claude/skills/demo/SKILL.md', before = '# Humano antes\n', concurrent = '# Humano durante planejamento\n';
   put(root, path, before);
   const originalRead = fs.readFileSync;
@@ -224,7 +224,7 @@ test('edição humana durante planejamento não é sobrescrita pelo merge calcul
   assert.ok(!fs.existsSync(join(root, '.pbai4devs/catalog.json')));
 });
 
-test('apontamento gerado que recebe edição concorrente antes do snapshot é preservado', t => {
+test("generated pointer receiving concurrent editing before snapshot is preserved", t => {
   const root = fixture(t), path = '.claude/skills/demo/SKILL.md', concurrent = '# Novo texto humano\n';
   run(root);
   const previousCatalog = read(root, '.pbai4devs/catalog.json');
@@ -247,7 +247,7 @@ test('apontamento gerado que recebe edição concorrente antes do snapshot é pr
   assert.equal(read(root, '.pbai4devs/catalog.json'), previousCatalog);
 });
 
-test('destino nativo customizado mantém compatibilidade e complementa o arquivo humano', t => {
+test("custom native destination maintains compatibility and complements the human file", t => {
   const root = fixture(t), path = '.claude/custom.md', human = '# Meu documento\n';
   put(root, path, human);
   put(root, '.pbai4devs/espelhos.conf', read(root, '.pbai4devs/espelhos.conf') + `nativo|${path}|.pbai4devs/skills/old/demo/SKILL.md\n`);
@@ -259,7 +259,7 @@ test('destino nativo customizado mantém compatibilidade e complementa o arquivo
   assert.equal(run(root, { check: true }).exitCode, 0);
 });
 
-test('alteração humana no YAML é preservada com e sem origem, inclusive force', t => {
+test("human YAML is preserved with and without origin, including force", t => {
   for (const stale of [false, true]) for (const force of [false, true]) {
     const root = fixture(t), path = '.claude/skills/demo/SKILL.md';
     run(root);
@@ -285,7 +285,7 @@ test('alteração humana no YAML é preservada com e sem origem, inclusive force
   }
 });
 
-test('destino Markdown com extensão em maiúsculas também preserva conteúdo humano', t => {
+test("Markdown destination with uppercase extension also preserves human content", t => {
   const root = fixture(t), path = '.claude/custom.MD', human = '# Humano\n';
   put(root, path, human);
   put(root, '.pbai4devs/espelhos.conf', read(root, '.pbai4devs/espelhos.conf') + `nativo|${path}|.pbai4devs/skills/old/demo/SKILL.md\n`);
@@ -295,7 +295,7 @@ test('destino Markdown com extensão em maiúsculas também preserva conteúdo h
   assert.equal(run(root, { check: true }).exitCode, 0);
 });
 
-test('marcador legado sem hash não autoriza substituir ou remover texto humano', t => {
+test("legacy marker without hash does not authorize to replace or remove human text", t => {
   for (const stale of [false, true]) {
     const root = fixture(t), path = '.claude/skills/demo/SKILL.md';
     const human = '---\ndescription: Metadado humano\n---\n\n# Escolha humana\n\n<!-- gerado: sincronizar-agentes -->\nLeia e siga [origem](../../origem.md).\n';
@@ -313,7 +313,7 @@ test('marcador legado sem hash não autoriza substituir ou remover texto humano'
   }
 });
 
-test('arquivo humano criado durante planejamento não é substituído por saída prevista', t => {
+test("Human file created during planning is not replaced by predicted output", t => {
   for (const path of ['.claude/skills/demo/SKILL.md', '.agents/skills.json', '.claude/.gitignore']) {
     const root = fixture(t), human = path.endsWith('.json') ? '{"entries":[],"human":true}\n' : '# Criado durante planejamento\n';
     if (path.startsWith('.agents/')) put(root, '.pbai4devs/espelhos.conf', read(root, '.pbai4devs/espelhos.conf') + 'agente|.agents|plano\ndescoberta|.agents|antigravity\n');
@@ -340,7 +340,7 @@ test('arquivo humano criado durante planejamento não é substituído por saída
   }
 });
 
-test('arquivo misto removido é recriado sem conservar propriedade do bloco ausente', t => {
+test("Removed mixed file is recreated without preserving missing block property", t => {
   for (const path of ['.claude/skills/demo/SKILL.md', 'AGENTS.md']) {
     const root = fixture(t);
     put(root, path, '# Humano\n'); run(root);
@@ -356,7 +356,7 @@ test('arquivo misto removido é recriado sem conservar propriedade do bloco ause
   }
 });
 
-test('renomear caixa de entrada mista transfere só a propriedade do bloco', t => {
+test("rename mixed inbox transfers only block property", t => {
   const root = fixture(t), before = '# Humano\n';
   put(root, 'AGENTS.md', before); run(root);
   const hash = managedBlockDigest(read(root, 'AGENTS.md'));

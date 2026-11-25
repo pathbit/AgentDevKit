@@ -16,6 +16,37 @@ import { buildCatalog } from '../.pbai4devs/scripts/lib/catalog.mjs';
 import { assertPrivateRecoveryPaths } from '../.pbai4devs/scripts/lib/recovery-privacy.mjs';
 
 const repository = fileURLToPath(new URL('..', import.meta.url));
+
+test('installation rejects a stale plan when the project directory changes', { timeout: 120000 }, t => {
+  const base = fs.realpathSync(fs.mkdtempSync(join(tmpdir(), 'adk-target-identity-')));
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const target = join(base, 'project'), relocated = join(base, 'relocated');
+  fs.mkdirSync(target);
+  fs.writeFileSync(join(target, 'app.txt'), 'original\n');
+  const plan = planInstallation({ target, clients: ['none'] });
+  fs.renameSync(target, relocated);
+  fs.mkdirSync(target);
+  fs.writeFileSync(join(target, 'app.txt'), 'replacement\n');
+
+  assert.throws(() => applyPlan(plan), { code: 'E_CHANGED' });
+  assert.deepEqual(fs.readdirSync(target), ['app.txt']);
+  assert.deepEqual(fs.readdirSync(relocated), ['app.txt']);
+  assert.equal(fs.readFileSync(join(target, 'app.txt'), 'utf8'), 'replacement\n');
+  assert.equal(fs.readFileSync(join(relocated, 'app.txt'), 'utf8'), 'original\n');
+});
+
+test('installation rejects a stale plan after the target is created separately', { timeout: 120000 }, t => {
+  const base = fs.realpathSync(fs.mkdtempSync(join(tmpdir(), 'adk-target-identity-')));
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const target = join(base, 'project');
+  const plan = planInstallation({ target, clients: ['none'] });
+  fs.mkdirSync(target);
+
+  assert.throws(() => applyPlan(plan), { code: 'E_CHANGED' });
+  assert.deepEqual(fs.readdirSync(base), ['project']);
+  assert.deepEqual(fs.readdirSync(target), []);
+});
+
 function fixture(t, kind) {
   const root = fs.realpathSync(fs.mkdtempSync(join(tmpdir(), 'adk-recovery-race-')));
   t.after(() => {
@@ -43,9 +74,9 @@ function prepareSyncUpdate(root) {
 }
 
 if (process.platform === 'win32') {
-  test('sync: troca de ancestral do backup não cria arquivo externo', { skip: 'fixture exige symlink em ambiente POSIX' });
+  test("sync: backup ancestor swap does not create external file", { skip: 'fixture exige symlink em ambiente POSIX' });
 } else {
-  test('sync: troca de ancestral do backup não cria arquivo externo', { timeout: 120000 }, t => {
+  test("sync: backup ancestor swap does not create external file", { timeout: 120000 }, t => {
     const root = fixture(t, 'sync'), external = fs.realpathSync(fs.mkdtempSync(join(tmpdir(), 'adk-backup-external-')));
     const originalCwd = process.cwd();
     t.after(() => fs.rmSync(external, { recursive: true, force: true }));
@@ -69,7 +100,7 @@ if (process.platform === 'win32') {
   });
 }
 
-test('sync: edição do backup após o hash não produz sucesso', { timeout: 120000 }, t => {
+test("sync: Backup editing after hash does not succeed", { timeout: 120000 }, t => {
     const root = fixture(t, 'sync'); prepareSyncUpdate(root);
     const source = join(root, '.pbai4devs/catalog.json'), original = fs.readFileSync(source);
     const open = fs.openSync, times = fs.futimesSync; let fd, backup, injected = false, human;
@@ -152,7 +183,7 @@ for (const kind of ['install', 'sync']) {
   });
 }
 
-test('sync: falha na criação posterior mantém atualização publicada e backup original', { timeout: 120000 }, t => {
+test("sync: later creation failure keeps published update and original backup", { timeout: 120000 }, t => {
   const root = fixture(t, 'sync'), { target, later, run } = prepareSyncUpdate(root);
   const before = fs.readFileSync(target), primary = Object.assign(new Error('falha sintética de publicação'), { code: 'ENOSPC' });
   const open = fs.openSync;
@@ -574,7 +605,7 @@ for (const variant of ['iguais', 'diferentes']) {
   });
 }
 
-test('install: falha após atualização não altera caminhos públicos na recuperação', { timeout: 120000 }, t => {
+test("install: failure after update does not change public paths in recovery", { timeout: 120000 }, t => {
   const root = fixture(t, 'install'), target = join(root, 'AGENTS.md');
   const before = '# Instruções humanas originais\n';
   fs.writeFileSync(target, before);
@@ -606,7 +637,7 @@ test('install: falha após atualização não altera caminhos públicos na recup
   assert.deepEqual(operations, []);
 });
 
-test('sync: falha após atualização não altera caminhos públicos na recuperação', { timeout: 120000 }, t => {
+test("sync: failure after update does not change public paths in recovery", { timeout: 120000 }, t => {
   const root = fixture(t, 'sync'), { run, target, later } = prepareSyncUpdate(root);
   const names = ['openSync', 'renameSync', 'linkSync', 'unlinkSync', 'rmSync', 'rmdirSync', 'mkdirSync', 'chmodSync', 'writeFileSync', 'appendFileSync', 'copyFileSync', 'cpSync', 'symlinkSync'];
   const original = Object.fromEntries(names.map(name => [name, fs[name]]));
@@ -627,9 +658,9 @@ test('sync: falha após atualização não altera caminhos públicos na recupera
   assert.ok(failed); assert.notDeepEqual(fs.readFileSync(target), before); assert.deepEqual(operations, []);
 });
 
-// Proposta de contrato: autorização para alterar o arquivo existente e
-// preservação dos seus metadados são verificações distintas. O snapshot final
-// não observa mutações revertidas, .agent-tests ou ACL/xattrs de outros arquivos.
+// Proposal for a contract: authorization to change the existing file and
+// preservation of your metadata are distinct checks.
+// does not observe reversed mutations, .agent-tests or ACL/xattrs from other files.
 function protectedMetadataTree(root) {
   const rows = [];
   const walk = (relative = '') => {
@@ -668,7 +699,7 @@ function assertObservedProtection({ failure, root, target, changed, gitChanged, 
   assert.equal(changed.length, 0, detail); assert.equal(gitChanged.length, 0, detail);
   assert.ok(inodePreserved, detail); assert.ok(metadataPreserved, detail);
 }
-test('verificador exige causa primária de proteção do alvo e estado observado preservado', () => {
+test("verifier requires primary cause of target protection and observed state preserved", () => {
   const root = resolve('fixture-contract'), target = join(root, 'protected.md');
   const permission = Object.assign(new Error('negado'), { code: 'EACCES', path: target });
   const control = { root, target, failure: permission, changed: [], gitChanged: [], inodePreserved: true, metadataPreserved: true };
@@ -723,7 +754,7 @@ for (const kind of ['install', 'update', 'sync']) for (const protection of ['acl
       const before = protectedMetadataTree(root), gitBefore = Object.fromEntries(['.git/index', '.git/config', '.git/HEAD', '.git/info/exclude'].map(p => [p, fs.readFileSync(join(root, p))]));
       const inode = fs.lstatSync(target, { bigint: true }).ino, metadata = command('/bin/ls', ['-ldeO@', target]);
       let failure; try { run(); } catch (error) { failure = error; }
-      // Colete evidência antes de qualquer asserção, inclusive sucesso indevido.
+      // Collect evidence before any assertion, including undue success.
       const after = protectedMetadataTree(root), gitAfter = Object.fromEntries(Object.keys(gitBefore).map(p => [p, fs.readFileSync(join(root, p))]));
       const current = fs.existsSync(target) ? fs.lstatSync(target, { bigint: true }) : null;
       const metadataAfter = current ? command('/bin/ls', ['-ldeO@', target]) : null;

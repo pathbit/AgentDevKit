@@ -14,14 +14,14 @@ const git=(r,...args)=>{const c=spawnSync('git',['-C',r,...args],{encoding:'utf8
 function prepare(t){const root=fixture(t);put(root,'.gitignore','# fixture\n');git(root,'add','--','.gitignore');cli(root,['init','--agents','codex']);return root}
 function seed(root,unknown){const s=JSON.parse(read(root,state)),digest=s.files[target];assert.ok(digest);const d=read(root,derived)?JSON.parse(read(root,derived)):{schemaVersion:1,entries:{}};d.removedFiles={...d.removedFiles,[target]:digest};if(unknown){delete s.files[target];put(root,state,JSON.stringify(s,null,2)+'\n')}put(root,derived,JSON.stringify(d,null,2)+'\n');return digest}
 
-test('correlacionado ausente é recriado e consolidado sem alterar índice', {timeout:180000}, t=>{
+test("correlated absent is recreated and consolidated without changing index", {timeout:180000}, t=>{
  const root=prepare(t),digest=seed(root,false),index=read(root,'.git/index');unlinkSync(join(root,target));
  const plan=planInstallation({target:root,mode:'update',language:'pt'});assert.equal(plan.canApply,true);assert.equal(plan.changes.find(x=>x.path===target)?.action,'create');applyPlan(plan);
  assert.ok(read(root,target));assert.equal(JSON.parse(read(root,state)).files[target],digest);assert.ok(!Object.hasOwn(JSON.parse(read(root,derived)).removedFiles??{},target));assert.ok(!inspect(root).issues.some(x=>x.path===target));assert.deepEqual(read(root,'.git/index'),index);
  assert.equal(cli(root,['sync','--check']).ok,true);assert.deepEqual(read(root,'.git/index'),index);
 });
 
-test('desconhecido selecionado mantém plano legado mas não pode ser aplicado com ou sem force', {timeout:180000}, t=>{
+test("selected unknown keeps legacy plan but cannot be applied with or without force", {timeout:180000}, t=>{
  const root=prepare(t);seed(root,true);put(root,target,'# humano sintético\n');git(root,'add','-f','--',target);put(root,target,'# humano sintético com edição não staged\n');const before=snapshot(root);
  for(const force of [false,true]){
   const direct=synchronize({root,check:true,localIgnores:false,generateEntrypoints:false,force,output(){}});assert.equal(direct.exitCode,1);assert.ok(direct.unverifiedRemovals.includes(target));
@@ -32,7 +32,7 @@ test('desconhecido selecionado mantém plano legado mas não pode ser aplicado c
  }
 });
 
-test('apontamento igual ao gerado com remoção desconhecida continua bloqueado', {timeout:180000}, t=>{
+test("point equal to that generated with unknown removal remains blocked", {timeout:180000}, t=>{
  const donor=prepare(t),reference=read(donor,target),root=prepare(t);assert.deepEqual(read(root,target),reference);seed(root,true);const before=snapshot(root);
  for(const force of [false,true]){
   const plan=planInstallation({target:root,mode:'sync',force,language:'pt'});
@@ -43,7 +43,7 @@ test('apontamento igual ao gerado com remoção desconhecida continua bloqueado'
  }
 });
 
-test('registro desconhecido fora da seleção sobrevive a operações independentes', {timeout:180000}, t=>{
+test("unknown record outside selection survives independent operations", {timeout:180000}, t=>{
  const root=prepare(t),path='.claude/skills/equipe/SKILL.md',human='# registro humano sintético\n';put(root,path,human);
  const d=read(root,derived)?JSON.parse(read(root,derived)):{schemaVersion:1,entries:{}};d.removedFiles={...d.removedFiles,[path]:'a'.repeat(64)};d.humanNote={value:'manter sintético'};put(root,derived,JSON.stringify(d,null,2)+'\n');
  const before=Object.fromEntries(['.git/index','.git/config','.git/info/exclude','.gitignore',path].map(p=>[p,read(root,p)]));

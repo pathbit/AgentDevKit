@@ -13,7 +13,7 @@ const file = (prompt, description = '"Comando humano"', comment = ' # preservar 
 const prompt = (human, body) => `${human}\n\n${begin}\n${body}\n${end}\n`;
 const goodChecks = Object.fromEntries(requiredIntegrityChecks.map(key => [key, true]));
 
-test('reconhece argumento no prompt humano ou no bloco, com preservação completa da fixture', () => {
+test("recognizes argument in human prompt or block, with complete preservation of fixture", () => {
   for (const [human, body] of [[marker, `${reference}\n\n{{args}}`], [`${marker} {{args}}`, reference]]) {
     const found = inspectFixture(file(prompt(human, body)), human);
     assert.equal(found.fixtureSyntaxValid, true);
@@ -26,7 +26,7 @@ test('reconhece argumento no prompt humano ou no bloco, com preservação comple
   }
 });
 
-test('argumento só em descrição ou comentário não satisfaz a contagem no prompt', () => {
+test("argument only in description or comment does not satisfy the count in the prompt", () => {
   const content = prompt(marker, reference);
   for (const input of [file(content, '"Comando humano {{args}}"'), file(content, '"Comando humano"', ' # preservar comentário {{args}}')]) {
     const found = inspectFixture(input, marker);
@@ -36,7 +36,7 @@ test('argumento só em descrição ou comentário não satisfaz a contagem no pr
   }
 });
 
-test('valida comentário V3 na posição esperada e atrelado aos bytes do bloco', () => {
+test("valid V3 comment in expected position and coupled to bytes of block", () => {
   const body = reference + '\n\n{{args}}';
   const blockHash = createHash('sha256').update(begin + '\n' + body + '\n' + end).digest('hex');
   const raw = file(prompt(marker, body));
@@ -66,7 +66,7 @@ test('valida comentário V3 na posição esperada e atrelado aos bytes do bloco'
   assert.equal(inspectFixture(invalidUnicode, marker).fixtureSyntaxValid, false);
 });
 
-test('conta valor decodificado, detecta duplicação e recusa mudança humana fora do bloco', () => {
+test("account decoded value, detects duplication and refuses human change outside the block", () => {
   const content = file(prompt(marker, `${reference}\n\n{{args}}`));
   const escaped = content.replace('{{args}}', '\\u007b\\u007bargs\\u007d\\u007d');
   assert.equal(inspectFixture(escaped, marker).promptPlaceholderCount, 1);
@@ -75,7 +75,7 @@ test('conta valor decodificado, detecta duplicação e recusa mudança humana fo
   assert.equal(inspectFixture(file(`${prompt(marker, `${reference}\n\n{{args}}`)}texto extra`), marker).humanPromptPreserved, false);
 });
 
-test('recusa referência ausente, bloco repetido e sintaxe fora do subconjunto da fixture', () => {
+test("missing reference refusal, repeated block and syntax outside fixture subset", () => {
   const inputs = [file(prompt(marker, 'outra referência')), file(prompt(marker, reference) + prompt(marker, reference)), 'prompt = "sem fechamento\n', `${file(marker)}extra = 1\n`];
   for (const input of inputs) assert.equal(inspectFixture(input, marker).managedReferencePresent, false);
   const original = inspectFixture(file(marker), marker);
@@ -83,7 +83,7 @@ test('recusa referência ausente, bloco repetido e sintaxe fora do subconjunto d
   assert.equal(original.managedReferencePresent, false);
 });
 
-test('classificação interrompe integridade e continua apenas argumento ou idempotência', () => {
+test("classification interrupts integrity and continues only argument or idempotence", () => {
   assert.equal(mustStop(goodChecks), false);
   for (const key of requiredIntegrityChecks) {
     assert.equal(mustStop({ ...goodChecks, [key]: false }), true, key);
@@ -94,7 +94,7 @@ test('classificação interrompe integridade e continua apenas argumento ou idem
   assert.equal(mustStop({ ...goodChecks, unknownCheck: false }), true);
 });
 
-test('recusa staged é esperada somente com erro exato e preservação integral', () => {
+test("staged refusal is expected only with exact error and integral preservation", () => {
   const digest = 'a'.repeat(64);
   const base = { gitState: 'staged-and-unstaged', phase: 'init', originalHash: digest,
     result: { status: 1, signal: null, error: null, json: { ok: false, command: 'init', errorCode: 'E_STAGED' } },

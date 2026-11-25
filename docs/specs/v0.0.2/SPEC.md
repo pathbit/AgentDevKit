@@ -6,6 +6,8 @@ version: 0.0.2
 
 # Selecionar agentes por projeto
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 ## Objetivo
 
 Criar apenas os apontamentos dos agentes escolhidos, mantendo a origem única
@@ -65,3 +67,7 @@ Código de testes é versionado. Resultados e relatório por critério ficam em
 carregamento em todo aplicativo; registre separadamente o que foi executado.
 
 [Todas as specs](../README.md) · [Wiki](../../README.md)
+
+[reading-pt]: SPEC.md
+[reading-en]: ../../en/specs/v0.0.2/SPEC.md
+[reading-es]: ../../es/specs/v0.0.2/SPEC.md

@@ -17,7 +17,7 @@ function put(root, path, content) {
   const file = join(root, path); fs.mkdirSync(dirname(file), { recursive: true }); fs.writeFileSync(file, content);
 }
 
-test('classificador recusa resultado ambíguo e identifica ACL mesmo com marcador de xattr', () => {
+test("classifier refuses ambiguous result and identifies ACL whether or not with xattr marker", () => {
   const result = output => ({ status: 0, signal: null, stdout: Buffer.from(output), stderr: Buffer.alloc(0) });
   assert.equal(classifyMacAcl(result('-rw-r--r--  1 user group 1 date arquivo\n')), 'empty');
   assert.equal(classifyMacAcl(result('-rw-r--r--@ 1 user group 1 date arquivo\n 0: group:everyone allow read\n')), 'present');

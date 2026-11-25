@@ -5,6 +5,8 @@ status: aprovado
 
 # Diretório privado de backup
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 O instalador preserva o modo dos arquivos copiados, mas uma cópia pode perder
 a proteção da pasta original. Este incremento, autorizado pelo usuário, mantém
 o contrato de modos da [spec histórica](../v0.0.8/SPEC.md) e cria cada backup
@@ -46,3 +48,7 @@ alguns volumes sem suporte adequado a modos POSIX podem impedir a operação.
 
 A recuperação conservadora, testes estritos, revisão independente e validação
 multiplataforma continuam necessários antes de qualquer publicação.
+
+[reading-pt]: SPEC.md
+[reading-en]: ../../en/specs/backup-privado/SPEC.md
+[reading-es]: ../../es/specs/backup-privado/SPEC.md

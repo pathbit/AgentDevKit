@@ -1,9 +1,11 @@
 ---
 description: Segurança com scanners locais, triagem e provas de controles.
-language: pt
+language: pt-BR
 ---
 
 # Segurança local
+
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
 
 O kit instala skills, regras, comandos e perfis para revisar segurança.
 Os scanners exigem preparo explícito; nenhuma auditoria ou aplicação começa
@@ -30,3 +32,7 @@ scanners sozinhos não aprovam a segurança de um produto.
 [audit]: ../../.pbai4devs/commands/auditar-seguranca/COMMAND.md
 [authorization]: ../../.pbai4devs/skills/seguranca/revisar-autorizacao/SKILL.md
 [threats]: ../../.pbai4devs/skills/seguranca/modelar-ameacas/SKILL.md
+
+[reading-pt]: security.md
+[reading-en]: ../en/guides/security.md
+[reading-es]: ../es/guides/security.md

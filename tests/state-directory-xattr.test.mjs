@@ -83,26 +83,26 @@ for(const nested of [false,true]) test('xattr sintético em diretório legado re
  let afterAttr=get();assert.equal(afterAttr.status,0);assert.deepEqual(afterAttr.stdout,beforeAttr.stdout);assert.equal(fs.statSync(dir).mode&0o7777,mode);assert.equal(fs.existsSync(join(root,newRoot)),false);for(const [p,b] of before)assert.deepEqual(read(root,p),b,p);
 });
 
-test('falha simulada do probe do diretório recusa sem alterar dados', {timeout:180000,skip:process.platform==='darwin' ? false : 'xattr em diretório não verificado neste sistema'},t=>{
+test("simulated failure of the directory probe refuses without changing data", {timeout:180000,skip:process.platform==='darwin' ? false : 'xattr em diretório não verificado neste sistema'},t=>{
  const f=fixture(t),{root}=f,relative=oldRoot+'/configuracao',dir=join(root,relative),paths=['.git/index','.git/config','.git/info/exclude','.gitignore',oldRoot+'/configuracao/ESTADO.md',oldRoot+'/agentdevkit.json'],before=new Map(paths.map(p=>[p,read(root,p)]));let fired=false;const original=childProcess.spawnSync;
  t.mock.method(childProcess,'spawnSync',(bin,args,opts)=>{if(bin==='/usr/bin/xattr'&&Array.isArray(args)&&args.includes(dir)){fired=true;return {status:null,signal:'SIGTERM',stdout:Buffer.alloc(0),stderr:Buffer.alloc(0)}}return original(bin,args,opts)});syncBuiltinESMExports();let caught;try{planInstallation({target:root,mode:'update'})}catch(e){caught=e}finally{t.mock.restoreAll();syncBuiltinESMExports()}
  assert.equal(fired,true);assert.equal(caught?.code,'E_METADATA_UNSUPPORTED');assert.equal(caught.path,relative);assert.equal(caught.metadataReason,'xattr-directory-unverified');assert.equal(fs.existsSync(join(root,newRoot)),false);for(const [p,b]of before)assert.deepEqual(read(root,p),b,p);
 });
 
-test('consultas na presença de xattr de diretório não alteram dados', {timeout:180000,skip:process.platform==='darwin' ? false : 'xattr em diretório não verificado neste sistema'},t=>{
+test("queries in the presence of directory xattr do not change data", {timeout:180000,skip:process.platform==='darwin' ? false : 'xattr em diretório não verificado neste sistema'},t=>{
  const f=fixture(t),{root}=f,relative=oldRoot+'/configuracao',dir=join(root,relative);let set=xattr('-w',xattrName,xattrValue,dir);assert.equal(set.error,undefined);assert.equal(set.signal,null);assert.equal(set.status,0,'fixture requer suporte a xattr');let attr=xattr('-p',xattrName,dir);assert.equal(attr.status,0);assert.equal(attr.stdout.toString().trim(),xattrValue);
  const paths=['.git/index','.git/config','.git/info/exclude','.gitignore','AGENTS.md','README.md',oldRoot+'/agentdevkit.json',oldRoot+'/configuracao/ESTADO.md',oldRoot+'/outros/minhas-notas.txt'],before=new Map(paths.map(p=>[p,read(root,p)]));
  for(const args of [['--help'],['--version'],['next','--intent','product'],['agents'],['lang'],['doctor'],['sync','--check'],['update','--dry-run']]){let r=spawnSync(process.execPath,[bin,...args,'--target',root,'--json'],{encoding:'utf8',timeout:180000,maxBuffer:8e6}),blocked=['doctor','sync','update'].includes(args[0]);assert.equal(r.error,undefined);assert.equal(r.signal,null);assert.equal(r.status,blocked?1:0,JSON.stringify(args));let j=JSON.parse(r.stdout);assert.equal(j.ok,!blocked);if(blocked){assert.equal(j.error.code,'E_PROTECTED_METADATA');assert.equal(j.error.path,relative);assert.equal(j.error.metadataReason,'xattr-directory-present')}assert.equal(fs.existsSync(join(root,newRoot)),false);for(const [p,b]of before)assert.deepEqual(read(root,p),b,p);}
  let after=xattr('-p',xattrName,dir);assert.equal(after.status,0);assert.deepEqual(after.stdout,attr.stdout);
 });
 
-test('revalidação de xattr não verificada bloqueia aplicação antes do backup', {timeout:180000,skip:process.platform==='darwin' ? false : 'xattr em diretório não verificado neste sistema'},t=>{
+test("unchecked xattr revalidation blocks application before backup", {timeout:180000,skip:process.platform==='darwin' ? false : 'xattr em diretório não verificado neste sistema'},t=>{
  const f=fixture(t),{root}=f,relative=oldRoot+'/configuracao',dir=join(root,relative),plan=planInstallation({target:root,mode:'update'}),paths=['.git/index','.git/config','.git/info/exclude','.gitignore',oldRoot+'/configuracao/ESTADO.md',oldRoot+'/agentdevkit.json'],before=new Map(paths.map(p=>[p,read(root,p)]));assert.equal(plan.canApply,true);
  let fired=false;const original=childProcess.spawnSync;t.mock.method(childProcess,'spawnSync',(bin,args,opts)=>{if(bin==='/usr/bin/xattr'&&Array.isArray(args)&&args.includes(dir)){fired=true;return {status:null,signal:'SIGTERM',stdout:Buffer.alloc(0),stderr:Buffer.alloc(0)}}return original(bin,args,opts)});syncBuiltinESMExports();let caught;try{applyPlan(plan)}catch(e){caught=e}finally{t.mock.restoreAll();syncBuiltinESMExports()}
  assert.equal(fired,true);assert.equal(caught?.code,'E_METADATA_UNSUPPORTED');assert.equal(caught.path,relative);assert.equal(caught.metadataReason,'xattr-directory-unverified');assert.equal(fs.existsSync(join(root,newRoot)),false);for(const [p,b]of before)assert.deepEqual(read(root,p),b,p);
 });
 
-test('doctor com outro problema informa xattr do diretório legado', {timeout:180000,skip:process.platform==='darwin' ? false : 'xattr em diretório não verificado neste sistema'},t=>{
+test("doctor with another problem informs xattr of legacy directory", {timeout:180000,skip:process.platform==='darwin' ? false : 'xattr em diretório não verificado neste sistema'},t=>{
  const f=fixture(t),{root}=f,relative=oldRoot+'/configuracao',dir=join(root,relative),set=xattr('-w',xattrName,xattrValue,dir);assert.equal(set.error,undefined);assert.equal(set.signal,null);assert.equal(set.status,0,'fixture requer suporte a xattr');
  const attr=xattr('-p',xattrName,dir);assert.equal(attr.status,0);fs.appendFileSync(join(root,'.pbai4devs/INSTRUCTIONS.md'),'\nObservação humana sintética.\n');
  const paths=['.git/index','.git/config','.git/info/exclude','.gitignore','.pbai4devs/INSTRUCTIONS.md',oldRoot+'/agentdevkit.json',relative+'/ESTADO.md'],before=new Map(paths.map(p=>[p,read(root,p)]));

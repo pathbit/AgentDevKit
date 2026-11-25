@@ -1,9 +1,11 @@
 ---
 description: Como usar os recursos do AgentDevKit no desenvolvimento de software.
-language: pt
+language: pt-BR
 ---
 
 # Recursos na prática
+
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
 
 O AgentDevKit organiza o trabalho de desenvolvimento de software com agentes
 que você escolhe. O kit reúne instruções e ferramentas; decisões de produto,
@@ -146,3 +148,7 @@ sincronize e verifique os apontamentos. Para dúvidas de operação, consulte
 [cli]: cli.md
 [resources]: resources.md
 [specialists]: resources.md#especialistas-e-colaboração
+
+[reading-pt]: recursos-na-pratica.md
+[reading-en]: ../en/guides/recursos-na-pratica.md
+[reading-es]: ../es/guides/recursos-na-pratica.md

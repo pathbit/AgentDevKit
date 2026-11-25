@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Exercita CLIs instaladas; resultados ficam em .agent-tests, sem instalar pacotes.
+// Exercise installed CLIs; results stay in .agent-tests, without installing packages.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';

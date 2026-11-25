@@ -42,7 +42,7 @@ function fixture(t) {
   return { project, fixture: original, packageRoot, manifest, events, prompt: 'Delegue aos perfis.', process: { code: 0, signal: null, timedOut: false } };
 }
 
-test('audita seleção nativa, perfil carregado, leitura do próprio agente e resposta', t => {
+test("audita native selection, loaded profile, agent reading and response", t => {
   const input = fixture(t), report = assessClaudeAgentsEvidence(input);
   assert.equal(report.passed, true); assert.equal(report.verified, 2);
   assert.equal(report.rows[0].childPromptTextObserved, false);
@@ -73,7 +73,7 @@ test('audita seleção nativa, perfil carregado, leitura do próprio agente e re
   const duplicateKey = structuredClone(input); duplicateKey.events.at(-1).result = duplicateKey.events.at(-1).result.replace('"perfil":', '"perfil":"forjado","perfil":'); assert.equal(assessClaudeAgentsEvidence(duplicateKey).passed, false);
 });
 
-test('rejeita alterações em arquivos, perfis e pacote original', t => {
+test("rejects changes in files, profiles and original package", t => {
   const input = fixture(t);
   writeFileSync(join(input.project, 'README.md'), 'alterado'); assert.equal(assessClaudeAgentsEvidence(input).otherFilesPreserved, false);
   writeFileSync(join(input.project, input.manifest[0].path), 'alterado'); assert.equal(assessClaudeAgentsEvidence(input).rows[0].checks.sourceUnchangedAfterSetup, false);
@@ -81,7 +81,7 @@ test('rejeita alterações em arquivos, perfis e pacote original', t => {
   writeFileSync(join(input.packageRoot, input.manifest[1].path), 'alterado'); assert.equal(assessClaudeAgentsEvidence(input).rows[1].checks.fixtureMatchesPackage, false);
 });
 
-test('aceita cópia movida apenas com o caminho original coerente nos eventos', t => {
+test("accepts copy moved only with the coherent original path in events", t => {
   const input = fixture(t), relocated = `${input.project}-copy`;
   cpSync(input.project, relocated, { recursive: true });
   const copied = { ...input, project: relocated, recordedProject: input.project };
@@ -90,7 +90,7 @@ test('aceita cópia movida apenas com o caminho original coerente nos eventos', 
   assert.throws(() => assessClaudeAgentsEvidence({ ...copied, recordedProject: 'relativo' }), /absoluto/);
 });
 
-test('reconhece paralelismo apenas quando todos iniciam antes da primeira conclusão', t => {
+test("recognizes parallelism only when everyone starts before the first conclusion", t => {
   const input = fixture(t), first = input.events.slice(1, 8), second = input.events.slice(8, 15);
   first[2].is_backgrounded = true; second[2].is_backgrounded = true;
   const completed = id => ({ type: 'system', subtype: 'task_updated', task_id: id, patch: { status: 'completed' } });

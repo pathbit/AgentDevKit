@@ -57,7 +57,7 @@ function setupNpm(root, { version = '10.0.0', exitCode = 0 } = {}) {
   return path;
 }
 
-// Descoberta e validacao acontecem antes de qualquer instalacao ou execucao.
+// Discovery and validation take place before any installation or execution.
 test('TOOL.json e a origem unica; configuracoes invalidas e caminhos perigosos falham', t => {
   const { root } = fixture(t); assert.deepEqual(Object.keys(loadCatalog(root)), ['test-tool']);
   assert.equal(loadCatalog(root)['test-tool'].download.channel, 'latest');
@@ -73,7 +73,7 @@ test('metadados incompletos nao se tornam ferramentas executaveis', () => {
   }
 });
 
-test('catalogo exige ponte real da ferramenta correta e ignora apenas estado conhecido', async t => {
+test("catalogo requires real bridge of the correct tool and ignores only known state", async t => {
   for (const scenario of ['missing-script', 'directory-script', 'wrong-tool', 'missing-config']) await t.test(scenario, subtest => {
     const { root } = fixture(subtest); const folder = join(root, '.pbai4devs/tools/test-tool');
     if (scenario === 'missing-config') rmSync(join(folder, 'TOOL.json'));
@@ -112,7 +112,7 @@ test('acoes comuns apontam para a ponte executavel e usam check para saude local
   assert.equal(state.installs, 1); assert.equal(state.fetches, 1);
 });
 
-test('pacote sem binario nao deixa uma instalacao marcada como pronta', async t => {
+test("package without binario does not leave an installation marked as ready", async t => {
   const { manager, state, local } = fixture(t); state.noBin = true;
   await assert.rejects(manager.install('test-tool'), /Executavel ausente/);
   assert.equal(existsSync(join(local, 'CURRENT.json')), false);
@@ -131,7 +131,7 @@ test('plataforma, pacote e origem oficiais sao conferidos antes de instalar', as
   await assert.rejects(manager.install('test-tool'), /Plataforma nao suportada/); assert.equal(state.fetches, 0);
 });
 
-test('install reutiliza sem rede; check, info e run nao instalam; argv e exit code preservados', async t => {
+test("install reuse without network; check, info and run do not install; argv and exit code preserved", async t => {
   const { root, manager, state, local } = fixture(t);
   assert.throws(() => manager.check('test-tool'), /ausente/); assert.equal(existsSync(local), false);
   assert.equal(manager.info('test-tool').installed, null); assert.equal(existsSync(local), false);
@@ -153,7 +153,7 @@ test('install reutiliza sem rede; check, info e run nao instalam; argv e exit co
   assert.equal(viaWrapper.status, 0, viaWrapper.stderr); assert.deepEqual(JSON.parse(viaWrapper.stdout), [arg]);
 });
 
-test('launchers recusam links de diretorio, arquivo e destino ausente sem escrever fora', async t => {
+test("Launchers refuse directory, file and destination links missing without writing off", async t => {
   for (const kind of ['directory', 'file', 'dangling']) await t.test(kind, subtest => {
     const { root, manager } = fixture(subtest);
     const bin = join(manager.home, 'bin'), outside = join(root, 'outside');
@@ -172,7 +172,7 @@ test('launchers recusam links de diretorio, arquivo e destino ausente sem escrev
   });
 });
 
-test('install preserva atalhos humanos mesmo com ferramenta já instalada; update recusa destino divergente antes de baixar', async t => {
+test("install preserves human shortcuts even with already installed tool; update refuses divergent destination before downloading", async t => {
   const { manager, state, local } = fixture(t);
   const name = 'test-tool';
   const bin = join(manager.home, 'bin'), launcher = join(bin, `${name}.mjs`);
@@ -201,7 +201,7 @@ test('install preserva atalhos humanos mesmo com ferramenta já instalada; updat
   assert.equal(state.installs, 1);
 });
 
-test('unlock recupera somente lock local com PID comprovadamente morto', async t => {
+test("unlock recovers only local lock with PID proven dead", async t => {
   const { manager, local, state } = fixture(t);
   assert.deepEqual(manager.unlock('test-tool'), { name: 'test-tool', removed: false, state: 'missing' });
   assert.equal(existsSync(local), false);
@@ -240,7 +240,7 @@ test('unlock detecta troca de dono antes de remover o lock', t => {
   assert.equal(existsSync(join(lock, 'recovery.json')), false);
 });
 
-test('update consulta latest; falhas de download, integridade e probe preservam instalacao', async t => {
+test("update query latest; download failures, integrity and probe preserve installation", async t => {
   const { manager, state, local } = fixture(t); await manager.install('test-tool');
   assert.equal((await manager.update('test-tool')).changed, false); assert.equal(state.fetches, 2); assert.equal(state.installs, 1);
   const before = readFileSync(join(local, 'CURRENT.json'), 'utf8'); state.version = '2.0.0'; state.fail = true;
@@ -278,7 +278,7 @@ test('versions simbolico existente ou quebrado e recusado antes de baixar ou esc
   });
 });
 
-test('recibo CURRENT e destino de versao simbolicos nao sao seguidos nem substituidos', async t => {
+test("receipt CURRENT and symbolical fate are neither followed nor replaced", async t => {
   for (const kind of ['current', 'target', 'broken-target']) await t.test(kind, async subtest => {
     const { root, manager, state, local } = fixture(subtest); await manager.install('test-tool');
     const receipt = readFileSync(join(local, 'CURRENT.json'));
@@ -354,7 +354,7 @@ test('duas atualizacoes nao disputam a mesma ferramenta nem apagam lock alheio',
   proceed(); await first; assert.equal(state.fetches, 1); assert.equal(state.installs, 1); assert.ok(!existsSync(join(local, '.update-lock')));
 });
 
-test('migracao move instalacao e cache antigos sem rede nem novo download', async t => {
+test("migration moves old installation and cache without network or new download", async t => {
   const { root, manager, state, local } = fixture(t);
   const legacy = join(root, '.pbai4devs/tools/test-tool'); const prefix = join(legacy, 'versions', `1.0.0-${platformKey()}`);
   packageFiles(prefix, 'test-tool', '1.0.0');
@@ -367,7 +367,7 @@ test('migracao move instalacao e cache antigos sem rede nem novo download', asyn
   assert.equal(readFileSync(join(root, '.pbai4devs/tools/.cache/npm/cache-marker'), 'utf8'), 'preserved'); assert.equal(state.installs, 0); assert.equal(state.fetches, 0);
 });
 
-test('rename do hub preserva pacote, caches e launcher relativo sem rede', async t => {
+test("hub rename preserves package, caches and relative nonnetwork launcher", async t => {
   const { root, manager, state, local } = fixture(t);
   await manager.install('test-tool');
   const hub = join(root, '.pbai4devs'); const oldHub = join(root, '.agents');
@@ -413,7 +413,7 @@ test('symlink de executavel para fora da instalacao e layout conflitante sao rec
   });
 });
 
-test('envPaths isola estado em probes e run sem trocar ambiente global ou permitir escapes', async t => {
+test("envPaths isolates state in probes and run without changing global environment or allowing escapes", async t => {
   for (const key of ['HOME', 'home', 'CODEX_HOME', 'Path', 'INVALID-NAME']) assert.throws(() => validateToolConfig('test-tool', { ...tool(), envPaths: { [key]: 'state' } }), /Variavel/);
   for (const location of ['', '.', '..', '../outside', '/tmp/outside', 'state/../outside', 'C:\\outside', 'C:outside', 'state\\outside']) assert.throws(() => validateToolConfig('test-tool', { ...tool(), envPaths: { TOOL_FIXTURE_HOME: location } }), /relativo/);
   assert.throws(() => validateToolConfig('test-tool', { ...tool(), envPaths: [] }), /envPaths/);
@@ -440,7 +440,7 @@ test('envPaths isola estado em probes e run sem trocar ambiente global ou permit
   }
 });
 
-test('ajuda focada e listagem concisa nao criam estado nem despejam configuracao', t => {
+test("focused help and concise listing do not create state or dump configuration", t => {
   const { root, local } = fixture(t);
   const script = join(root, '.pbai4devs/scripts/preparar-ferramentas/SCRIPT.mjs');
   const help = spawnSync(process.execPath, [script, '--tool', 'test-tool'], { encoding: 'utf8' });
@@ -463,7 +463,7 @@ test('interface simples, aliases e --tool roteiam sem executar atualizacao impli
   await assert.rejects(main(['unknown'],manager),/Uso/);
 });
 
-test('env literal aceita apenas strings e variaveis nao protegidas', () => {
+test("literal env accepts only strings and variable not protected", () => {
   assert.equal(validateToolConfig('test-tool', { ...tool(), env: { DISABLE_TELEMETRY: '1', EMPTY_VALUE: '' } }).env.EMPTY_VALUE, '');
   for (const key of ['HOME', 'home', 'CODEX_HOME', 'Path', 'INVALID-NAME']) assert.throws(() => validateToolConfig('test-tool', { ...tool(), env: { [key]: 'literal' } }), /Variavel/);
   for (const value of [null, 1, false, {}, [], 'bad\0value']) assert.throws(() => validateToolConfig('test-tool', { ...tool(), env: { TEST_VALUE: value } }), /Valor/);
@@ -471,7 +471,7 @@ test('env literal aceita apenas strings e variaveis nao protegidas', () => {
   assert.throws(() => validateToolConfig('test-tool', { ...tool(), env: { STATE: 'literal' }, envPaths: { state: 'state' } }), /duplicada/);
 });
 
-test('Node 24 e o unico runtime; versoes anteriores falham antes de alterar arquivos', async t => {
+test("Node 24 and the only runtime; previous verses fail before changing files", async t => {
   assert.doesNotThrow(() => requireNode(24, '24.0.0', 'linux'));
   assert.doesNotThrow(() => requireNode(24, '24.13.1', 'win32'));
   assert.doesNotThrow(() => requireNode(24, '24.13.1-pre', 'linux'));
@@ -531,7 +531,7 @@ test('env literal chega a probes e run; PATH selecionado e estado ficam restrito
   assert.equal(process.env.DISABLE_TELEMETRY, original.literal); assert.equal(process.env.PATH, original.path);
 });
 
-test('npm e CLI usam Node atual, sem scripts de instalacao ou npm real', async t => {
+test("npm and CLI use current Node, no actual installation scripts or npm", async t => {
   const config = { ...tool(), env: { DISABLE_TELEMETRY: '1' }, probe: ['require-literal', '1'] };
   const { root, local } = fixture(t, { 'test-tool': config });
   const npm = join(root, 'fake-npm/npm-cli.cjs'); mkdirSync(dirname(npm), { recursive: true });
@@ -590,7 +590,7 @@ test('setup padrao prepara todas as ferramentas compativeis e confirma cada inst
   assert.equal(state.installs, 1); assert.equal(state.fetches, 1); assert.ok(existsSync(join(local, 'CURRENT.json')));
 });
 
-test('setup geral preserva opt-in e grupo explícito prepara o plugin pedido', async t => {
+test("general setup preserves opt-in and explicit group prepares the order plugin", async t => {
   const optional = { ...tool('workflow-tool'), group: 'workflow', optIn: true };
   const { root, manager, state } = fixture(t, { 'test-tool': tool(), 'workflow-tool': optional });
   manager.npm = () => setupNpm(root);
@@ -607,7 +607,7 @@ test('setup geral preserva opt-in e grupo explícito prepara o plugin pedido', a
   assert.equal(state.fetches, 2);
 });
 
-test('setup verifica npm antes de mutar mesmo quando a ferramenta ja esta saudavel', async t => {
+test("setup checks npm before mutating even when the tool is already healthy", async t => {
   const { root, manager, state, local } = fixture(t); await manager.install('test-tool');
   const before = readFileSync(join(local, 'CURRENT.json'), 'utf8');
   manager.npm = () => join(root, 'npm-missing.cjs');
@@ -616,7 +616,7 @@ test('setup verifica npm antes de mutar mesmo quando a ferramenta ja esta saudav
   assert.equal(state.installs, 1); assert.equal(state.fetches, 1); assert.equal(readFileSync(join(local, 'CURRENT.json'), 'utf8'), before);
 });
 
-test('setup recusa npm ausente, quebrado ou invalido sem criar estado de ferramentas', async t => {
+test("setup npm refusal absent, broken or invalid without creating tool state", async t => {
   for (const scenario of ['missing', 'broken', 'invalid']) await t.test(scenario, async subtest => {
     const { root, manager, state, local } = fixture(subtest);
     const path = scenario === 'missing' ? join(root, 'missing-npm.cjs') : setupNpm(root, scenario === 'broken' ? { exitCode: 19 } : { version: 'not-a-version' });
@@ -658,7 +658,7 @@ test('CLI setup padrao all retorna o codigo agregado e rejeita argumentos excede
   await assert.rejects(main(['setup', 'all', 'extra'], manager), /excedentes/);
 });
 
-test('executables valida plataforma e caminhos relativos sem autorizar comandos arbitrarios', () => {
+test("executes valid platform and relative paths without authorizing arbitrary commands", () => {
   const base = { ...tool(), platforms: ['linux-x64', 'darwin-arm64'] };
   assert.deepEqual(validateToolConfig('test-tool', { ...base, executables: { 'linux-x64': ['bin/probe with space'] } }).executables, { 'linux-x64': ['bin/probe with space'] });
   for (const executables of [null, [], 'bin/probe', {}, { 'win32-x64': ['bin/probe'] }, { 'linux-arm64': ['bin/probe'] }, { 'linux-x64': [] }, { 'linux-x64': 'bin/probe' }, { 'linux-x64': ['bin/probe', 'bin/probe'] }]) {
@@ -669,7 +669,7 @@ test('executables valida plataforma e caminhos relativos sem autorizar comandos 
   }
 });
 
-test('executaveis opcionais validam pacotes e caminhos sem permitir escapes', () => {
+test("optional executables validate packages and paths without allowing escapes", () => {
   const target = platformKey(); const base = tool();
   const good = { [target]: [{ package: '@owner/cli-host', file: 'bin/probe' }] };
   assert.deepEqual(validateToolConfig('test-tool', { ...base, optionalExecutables: good }).optionalExecutables, good);
@@ -681,7 +681,7 @@ test('executaveis opcionais validam pacotes e caminhos sem permitir escapes', ()
   assert.throws(() => validateToolConfig('test-tool', { ...base, optionalExecutables: { [target]: [good[target][0], good[target][0]] } }), /relativo/);
 });
 
-test('atualizacao aceita layout opcional e preserva versao anterior se dependencia falhar', async t => {
+test("update accepts optional layout and preserves previous version if dependance fails", async t => {
   const targets = process.platform === 'win32' ? [platformKey()] : [platformKey(), 'win32-x64'];
   for (const target of targets) await t.test(target, async subtest => {
     const name = '@owner/cli-host'; const isWindowsTarget = target.startsWith('win32-');
@@ -725,7 +725,7 @@ test('atualizacao aceita layout opcional e preserva versao anterior se dependenc
   });
 });
 
-test('executables prepara somente binarios da plataforma no staging antes de executar probe real', { skip: process.platform === 'win32' && 'A fixture de binário executa um script POSIX via /bin/sh.' }, async t => {
+test("performables prepares only platform binaries in the staging before running real probe", { skip: process.platform === 'win32' && 'A fixture de binário executa um script POSIX via /bin/sh.' }, async t => {
   const other = process.platform === 'darwin' ? 'linux-x64' : 'darwin-arm64';
   const config = { ...tool(), platforms: [platformKey(), other], executables: { [platformKey()]: ['native/probe with space'], [other]: ['native/unused'] } };
   const { manager } = fixture(t, { 'test-tool': config });
@@ -743,7 +743,7 @@ test('executables prepara somente binarios da plataforma no staging antes de exe
   assert.equal(statSync(join(result.prefix, 'node_modules/test-tool/native/unused')).mode & 0o777, 0o644);
 });
 
-test('executables recusa arquivo ausente, diretorio e symlink fora do pacote sem promover staging', { skip: process.platform === 'win32' && 'A fixture de binário executa um script POSIX via /bin/sh.' }, async t => {
+test("executables rejects missing file, directory and symlink out of package without promoting staging", { skip: process.platform === 'win32' && 'A fixture de binário executa um script POSIX via /bin/sh.' }, async t => {
   for (const scenario of ['missing', 'directory', 'external-symlink']) await t.test(scenario, async subtest => {
     const config = { ...tool(), executables: { [platformKey()]: ['native/probe'] } };
     const { root, manager, local } = fixture(subtest, { 'test-tool': config });

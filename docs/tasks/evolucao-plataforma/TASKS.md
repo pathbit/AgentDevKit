@@ -5,6 +5,8 @@ status: em andamento
 
 # Evolução da plataforma
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 Este grupo reúne os pedidos de evolução; veja a [lista agrupada](GRUPOS.md)
 para prioridades e acompanhamento. Marque cada item concluído somente
 após implementação e validação; preserve arquivos e configurações existentes.
@@ -2208,3 +2210,7 @@ preservação; não demonstra o comportamento de outras barreiras estruturais.
 
 Resultados, capturas e projetos temporários ficam fora do Git. Registre aqui
 ou no roadmap as evidências, pendências e limites reais de cada etapa.
+
+[reading-pt]: TASKS.md
+[reading-en]: ../../en/tasks/evolucao-plataforma/TASKS.md
+[reading-es]: ../../es/tasks/evolucao-plataforma/TASKS.md

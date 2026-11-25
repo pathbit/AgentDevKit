@@ -70,7 +70,7 @@ function fixture(t) {
     index: git(root, 'ls-files', '--stage', '-z'), agents: read(root, 'AGENTS.md'), readme: read(root, 'README.md') };
 }
 
-test('migra estado legado preservando dados humanos, seleção, índice e ignore; atualização é idempotente', t => {
+test("migrating legacy state preserving human data, selection, index and ignore; update is idempotent", t => {
   const f = fixture(t), { root } = f;
   const oldManifest = read(root, `${oldRoot}/agentdevkit.json`);
   const preview = cli(root, ['update', '--dry-run']);
@@ -99,7 +99,7 @@ test('migra estado legado preservando dados humanos, seleção, índice e ignore
   assert.deepEqual(read(root, '.gitignore'), f.ignore);
 });
 
-test('atualização nativa após migração aceita estado legado staged ausente sem alterar o índice', { timeout: 120000 }, t => {
+test("native update after migration accepts legacy state staged absent without changing index", { timeout: 120000 }, t => {
   const f = fixture(t), { root } = f;
   const index = readFileSync(join(root, '.git/index'));
   const config = readFileSync(join(root, '.git/config'));
@@ -116,7 +116,7 @@ test('atualização nativa após migração aceita estado legado staged ausente 
   assert.deepEqual(readFileSync(join(root, '.git/config')), config);
 });
 
-test('conflito entre pastas legada e atual não substitui dados nem altera o índice, mesmo com force', t => {
+test("conflict between legacy and current folders does not replace data or change the index, even with force", t => {
   const f = fixture(t), { root } = f;
   const existing = Buffer.from('Conteúdo de state do projeto.\n');
   put(root, `${newRoot}/outros/minhas-notas.txt`, existing);
@@ -132,7 +132,7 @@ test('conflito entre pastas legada e atual não substitui dados nem altera o ín
   }
 });
 
-test('comandos legados somente de consulta não migram nem alteram a instalação', t => {
+test("legacy query only commands do not migrate or change the installation", t => {
   const f = fixture(t), { root } = f;
   const previous = read(root, `${oldRoot}/README.md`);
   const state = read(root, `${oldRoot}/agentdevkit.json`);
@@ -174,7 +174,7 @@ test('comandos legados somente de consulta não migram nem alteram a instalaçã
   assert.equal(git(root, 'ls-files', '--stage', '-z'), f.index);
 });
 
-test('README legado modificado continua humano e não causa divergência em doctor, sync ou atualização', t => {
+test("README modified legacy remains human and does not cause divergence in doctor, sync or update", t => {
   const f = fixture(t), { root } = f;
   const human = Buffer.from('---\r\ndescription: Orientações da equipe.\r\n---\r\n\r\n# Meu estado\r\n\r\nConteúdo próprio.\r\n');
   put(root, `${oldRoot}/README.md`, human);
@@ -190,7 +190,7 @@ test('README legado modificado continua humano e não causa divergência em doct
   assert.equal(git(root, 'ls-files', '--stage', '-z'), f.index);
 });
 
-test('README legado diferente do template é preservado como humano sem divergência posterior', t => {
+test("README different legacy of the template is preserved as human without further divergence", t => {
   const f = fixture(t), { root } = f;
   const readme = Buffer.from('---\ndescription: Conteúdo de uma versão anterior.\n---\n\n# Estado anterior\n\nTexto da versão antiga.\n');
   const digest = createHash('sha256').update(readme).digest('hex');
@@ -211,7 +211,7 @@ test('README legado diferente do template é preservado como humano sem divergê
   assert.equal(git(root, 'ls-files', '--stage', '-z'), f.index);
 });
 
-test('README gerenciado no caminho atual acompanha atualizações do template', t => {
+test("README managed on the current path follows template updates", t => {
   const base = join(repository, '.agent-tests');
   mkdirSync(base, { recursive: true });
   const root = mkdtempSync(join(base, 'state-readme-current-'));
@@ -237,7 +237,7 @@ test('README gerenciado no caminho atual acompanha atualizações do template', 
   assert.equal(cli(root, ['update', '--dry-run']).plan.length, 0);
 });
 
-test('referência legada na configuração bloqueia migração até ser ajustada sem perda', t => {
+test("legacy reference in configuration blocks migration until adjusted without loss", t => {
   const f = fixture(t), { root } = f;
   const oldPrd = `${oldRoot}/documentos/PRD.md`, newPrd = `${newRoot}/documentos/PRD.md`;
   const config = Buffer.from(`---\npreparacao: concluido\nconfiguracao_tecnica: pendente\ndocumentos:\n  prd: ${oldPrd}\n---\n\n# Decisões\n\nConteúdo próprio.\n`);
@@ -282,7 +282,7 @@ test('referência legada na configuração bloqueia migração até ser ajustada
   assert.equal(git(root, 'ls-files', '--stage', '-z'), f.index);
 });
 
-test('referência à raiz legada sem barra impede migração sem alterar o projeto', t => {
+test("root reference Legacy without bar prevents migration without changing project", t => {
   const f = fixture(t), { root } = f;
   const config = Buffer.from(`---\ndocumentos:\n  releases: ${oldRoot}\n---\n\n# Estado\n`);
   put(root, `${oldRoot}/configuracao/ESTADO.md`, config);
@@ -299,7 +299,7 @@ test('referência à raiz legada sem barra impede migração sem alterar o proje
   assert.equal(git(root, 'status', '--porcelain=v1', '-z'), status);
 });
 
-test('nome diferente iniciado por estado não bloqueia a migração', t => {
+test("different name initiated by state does not block migration", t => {
   const f = fixture(t), { root } = f;
   const config = Buffer.from('---\ndocumentos:\n  releases: .PBAI4DEVS/ESTADO-extra\n---\n\n# Estado\n');
   put(root, `${oldRoot}/configuracao/ESTADO.md`, config);
@@ -310,7 +310,7 @@ test('nome diferente iniciado por estado não bloqueia a migração', t => {
   assert.equal(git(root, 'ls-files', '--stage', '-z'), f.index);
 });
 
-test('referência legada com maiúsculas ou caixa mista bloqueia migração sem alterações', t => {
+test("legacy reference with capital letters or mixed box blocks migration without change", t => {
   const f = fixture(t), { root } = f;
   const manifest = read(root, `${oldRoot}/agentdevkit.json`);
   for (const reference of ['.PBAI4DEVS/ESTADO/documentos/PRD.md', '.PbAi4DeVs/EsTaDo']) {
@@ -329,7 +329,7 @@ test('referência legada com maiúsculas ou caixa mista bloqueia migração sem 
   }
 });
 
-test('referência legada codificada em escapes JSON bloqueia update, dry-run e force', t => {
+test("legacy reference coded in exhausts JSON blocks update, dry-run and force", t => {
   const f = fixture(t), { root } = f;
   const manifest = read(root, `${oldRoot}/agentdevkit.json`);
   const references = [String.raw`.pbai4devs/\u0065stado/documentos/PRD.md`, String.raw`.pbai4devs\/estado/documentos/PRD.md`];
@@ -353,7 +353,7 @@ test('referência legada codificada em escapes JSON bloqueia update, dry-run e f
   }
 });
 
-test('estado-extra codificado em escapes JSON não bloqueia a migração', t => {
+test("extra-state coded in exhausts JSON does not block migration", t => {
   const f = fixture(t), { root } = f;
   const reference = String.raw`.pbai4devs\/\u0065stado-extra`;
   const config = Buffer.from(`---\ndocumentos:\n  releases: "${reference}"\n---\n\n# Estado\n`);
@@ -365,7 +365,7 @@ test('estado-extra codificado em escapes JSON não bloqueia a migração', t => 
   assert.equal(git(root, 'ls-files', '--stage', '-z'), f.index);
 });
 
-test('não segue link simbólico de estado legado nem altera o destino externo', t => {
+test("does not follow legacy symbolic state link or alter external destination", t => {
   const f = fixture(t), { root } = f;
   const actual = join(root, 'human-backup');
   renameSync(join(root, oldRoot), actual);
@@ -378,7 +378,7 @@ test('não segue link simbólico de estado legado nem altera o destino externo',
   assert.equal(git(root, 'ls-files', '--stage', '-z'), f.index);
 });
 
-test('não segue link simbólico dentro do estado legado', { skip: process.platform === 'win32' && 'A fixture exige symlink de arquivo; junctions do NTFS só representam diretórios.' }, t => {
+test("does not follow symbolic link within the legacy state", { skip: process.platform === 'win32' && 'A fixture exige symlink de arquivo; junctions do NTFS só representam diretórios.' }, t => {
   const f = fixture(t), { root } = f;
   const external = join(root, 'external-data.txt');
   const original = Buffer.from('Conteúdo externo protegido.\n');
@@ -392,7 +392,7 @@ test('não segue link simbólico dentro do estado legado', { skip: process.platf
   assert.equal(git(root, 'ls-files', '--stage', '-z'), f.index);
 });
 
-test('alteração concorrente em arquivo legado invalida o plano sem substituí-la', t => {
+test("concurrent change in legacy file invalidates the plan without replacing it", t => {
   const f = fixture(t), { root } = f;
   const before = read(root, `${oldRoot}/agentdevkit.json`);
   const plan = planInstallation({ target: root, mode: 'update' });
@@ -496,7 +496,7 @@ for (const [moment, removeFirst, concurrent] of [
 }
 
 
-test('alteração concorrente na cópia migrada impede remoção da origem', t => {
+test("concurrent change in migrated copy prevents removal of origin", t => {
   const f = fixture(t), { root } = f;
   const oldPath = `${oldRoot}/configuracao/ESTADO.md`;
   const newPath = join(root, `${newRoot}/configuracao/ESTADO.md`);

@@ -30,7 +30,7 @@ function fixture(t){
  return {root,run,skill,target,other,options};
 }
 function snap(f){return ['.git/index','.git/config','.git/info/exclude','.gitignore','humano.txt',f.target,'outro-humano.md'].map(p=>fs.existsSync(join(f.root,p))?fs.readFileSync(join(f.root,p)):null);}
-test('check direto identifica hardlink somente quando há alteração planejada',t=>{
+test("direct check identifies hardlink only when there is planned change",t=>{
  const f=fixture(t);if(!f)return;const before=snap(f);
  const clean=synchronize({...f.options,check:true});assert.deepEqual(clean.hardlinkBlockers,[]);
  put(f.root,f.skill,'---\nname: demo\ndescription: Alterada.\n---\n\n# Demo\n');
@@ -50,11 +50,11 @@ test('plano real e CLI sync --check identificam hardlink do alvo planejado',t=>{
  assert.ok(result.issues.some(x=>x.path===f.target&&x.code==='hardlink-shared'));
  assert.deepEqual(snap(f),before);
 });
-test('hardlink não afetado não é bloqueador do plano',t=>{
+test("unaffected hardlink is not plan blocker",t=>{
  const f=fixture(t);if(!f)return;const plan=planInstallation({target:f.root,mode:'sync'});
  assert.equal(plan.hardlinkBlockers.some(x=>x.path===f.target),false);
 });
-test('link removido depois do plano não é declarado verificado',t=>{
+test("link removed after plan is not declared verified",t=>{
  const f=fixture(t);if(!f)return;put(f.root,f.skill,'---\nname: demo\ndescription: Alterada.\n---\n\n# Demo\n');
  const plan=planInstallation({target:f.root,mode:'sync'});
  assert.deepEqual(plan.conflicts,[]);assert.deepEqual(plan.hardlinkBlockers,[{path:f.target,code:'hardlink-shared'}]);
@@ -62,7 +62,7 @@ test('link removido depois do plano não é declarado verificado',t=>{
  assert.throws(()=>applyPlan(plan),e=>e.code==='E_CHANGED'&&e.metadataTargetVerified!==true);
  assert.deepEqual(snap(f),before);
 });
-test('link criado depois do plano é recusado antes da escrita',t=>{
+test("link created after plan is rejected before writing",t=>{
  const f=fixture(t);if(!f)return;fs.unlinkSync(f.other);
  put(f.root,f.skill,'---\nname: demo\ndescription: Alterada.\n---\n\n# Demo\n');
  const plan=planInstallation({target:f.root,mode:'sync'});
@@ -71,7 +71,7 @@ test('link criado depois do plano é recusado antes da escrita',t=>{
  assert.throws(()=>applyPlan(plan),e=>e.code==='E_PROTECTED_METADATA'&&e.path===f.target&&e.metadataTargetVerified===true);
  assert.deepEqual(snap(f),before);
 });
-test('conflito humano e hardlink planejado são relatados sem perder o conflito',t=>{
+test("planned human conflict and hardlink are reported without losing the conflict",t=>{
  const f=fixture(t);if(!f)return;
  const source='.pbai4devs/skills/outra/SKILL.md', conflict='.claude/skills/outra/SKILL.md';
  put(f.root,source,'---\nname: outra\ndescription: Outro recurso.\n---\n\n# Outro\n');
@@ -94,7 +94,7 @@ test('conflito humano e hardlink planejado são relatados sem perder o conflito'
  assert.deepEqual(fs.readFileSync(join(f.root,conflict)),humanBefore);assert.deepEqual(snap(f),before);
 });
 
-test('doctor e dry-run identificam hardlink nos três idiomas', {timeout:240000}, t=>{
+test("doctor and dry-run identify hardlink in all three languages", {timeout:240000}, t=>{
  const f=fixture(t);if(!f)return;
  put(f.root,f.skill,'---\nname: demo\ndescription: Alterada.\n---\n\n# Demo\n');
  const before=snap(f);
@@ -108,7 +108,7 @@ test('doctor e dry-run identificam hardlink nos três idiomas', {timeout:240000}
  }
 });
 
-test('plano e check distinguem contagem não verificada', {timeout:240000}, t=>{
+test("plan and check distinguish unchecked count", {timeout:240000}, t=>{
  const f=fixture(t);if(!f)return;
  put(f.root,f.skill,'---\nname: demo\ndescription: Alterada.\n---\n\n# Demo\n');
  const target=join(f.root,f.target), before=snap(f), lstat=fs.lstatSync;let injected=false;
@@ -125,7 +125,7 @@ test('plano e check distinguem contagem não verificada', {timeout:240000}, t=>{
  assert.ok(injected);assert.deepEqual(snap(f),before);
 });
 
-test('contagem que deixa de ser verificável após plano não confirma hardlink', {timeout:240000}, t=>{
+test("count that is no longer verifiable after plan does not confirm hardlink", {timeout:240000}, t=>{
  const f=fixture(t);if(!f)return;
  put(f.root,f.skill,'---\nname: demo\ndescription: Alterada.\n---\n\n# Demo\n');
  const before=snap(f),plan=planInstallation({target:f.root,mode:'sync'});

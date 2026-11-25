@@ -49,7 +49,7 @@ for (const oldAtime of [false, true]) test(`sync --force guarda cópia anterior 
   for (const [path, bytes] of protectedBefore) assert.deepEqual(fs.readFileSync(join(root, path)), bytes, path);
 });
 
-test('sync interrompe quando releitura altera horário do backup', { timeout: 120000 }, t => {
+test("sync interrupts when rereading changes backup time", { timeout: 120000 }, t => {
   const root = fs.realpathSync(fs.mkdtempSync(join(tmpdir(), 'adk-sync-backup-atime-')));
   t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); fs.rmSync(root, { recursive: true, force: true }); });
   assert.equal(spawnSync('git', ['init', '-q', root]).status, 0);

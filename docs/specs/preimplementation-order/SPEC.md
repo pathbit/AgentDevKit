@@ -4,6 +4,8 @@ description: Orientação e verificação da ordem anterior à implementação.
 
 # Ordem antes da implementação
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 O projeto deve partir de decisões de produto e design, passar por roadmap e
 spec e concluir a configuração técnica antes do código da aplicação.
 
@@ -21,3 +23,7 @@ spec e concluir a configuração técnica antes do código da aplicação.
 O status registrado não comprova a evidência por si só. Instruções e scripts
 não impedem escrita arbitrária por um agente que os ignore; essa proteção
 depende das permissões ou hooks do cliente usado.
+
+[reading-pt]: SPEC.md
+[reading-en]: ../../en/specs/preimplementation-order/SPEC.md
+[reading-es]: ../../es/specs/preimplementation-order/SPEC.md

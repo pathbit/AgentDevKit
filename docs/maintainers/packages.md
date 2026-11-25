@@ -4,6 +4,8 @@ description: Publicação sincronizada do AgentDevKit no npm e no GitHub Package
 
 # Pacote nos dois registries
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 O AgentDevKit é um único pacote: [`@pathbit/agentdevkit`][package]. Ele contém
 a CLI e os recursos compartilhados; a instalação prepara os apontamentos dos
 agentes escolhidos no projeto.
@@ -121,3 +123,7 @@ original; nunca recrie uma versão publicada com outro conteúdo.
 [github]: https://github.com/pathbit/AgentDevKit/pkgs/npm/agentdevkit
 [github-auth]: https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-npm-registry
 [fix]: ../guides/troubleshooting.md#download-plataforma-ou-ferramenta-falhando
+
+[reading-pt]: packages.md
+[reading-en]: ../en/maintainers/packages.md
+[reading-es]: ../es/maintainers/packages.md

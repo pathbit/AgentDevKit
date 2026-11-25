@@ -3,13 +3,15 @@ import assert from 'node:assert/strict';
 import { parseArgs } from '../src/cli.mjs';
 import { classifyRecoveryEffects } from '../.pbai4devs/scripts/lib/recovery-effects.mjs';
 
-test('classifica comandos reais sem tratar ferramentas opacas como consulta', () => {
+test('classifies parsed commands and handles opaque tools separately', () => {
   const cases = [
     [[], 'mutation'],
     [['init'], 'mutation'],
     [['init', '--dry-run'], 'planning'],
     ...['agents', 'product', 'run', 'document'].map(purpose => [['init', '--purpose', purpose], 'mutation']),
     [['init', '--purpose', 'document', '--dry-run'], 'planning'],
+    [['init', '--local'], 'mutation'],
+    [['init', '--local', '--dry-run'], 'planning'],
     [['update'], 'mutation'],
     [['update', '--force', '--dry-run'], 'planning'],
     [['sync'], 'mutation'],
@@ -20,6 +22,7 @@ test('classifica comandos reais sem tratar ferramentas opacas como consulta', ()
     [['lang', '--lang', 'pt'], 'mutation'],
     [['lang', '--agents', 'codex'], 'mutation'],
     [['agents'], 'query'],
+    [['agents', '--select'], 'mutation'],
     [['agents', '--lang', 'pt'], 'query'],
     [['agents', 'codex'], 'mutation'],
     [['agents', 'add', 'codex'], 'mutation'],
@@ -51,11 +54,12 @@ test('classifica comandos reais sem tratar ferramentas opacas como consulta', ()
   }
 });
 
-test('parser e classificador restringem o propósito e os formatos aos comandos correspondentes', () => {
+test("parser and classifier restrict the purpose and formats to the corresponding commands", () => {
   const invalid = [
     ['init', '--purpose'], ['init', '--purpose', 'other'],
     ['init', '--purpose', 'run', '--purpose', 'document'],
     ['update', '--purpose', 'document'], ['next', '--purpose', 'document'],
+    ['update', '--local'], ['init', '--local', '--local'],
     ['document', '--purpose', 'document'], ['document', '--intent', 'document'],
     ['next', '--markdown'], ['document', '--dry-run'], ['document', '--check'],
     ['document', '--force'], ['document', '--yes'],
@@ -79,7 +83,7 @@ test('parser e classificador restringem o propósito e os formatos aos comandos 
   ]) assert.equal(classifyRecoveryEffects(options), 'unsupported', JSON.stringify(options));
 });
 
-test('opções desconhecidas, acessores e proxies não recebem classificação confiável', () => {
+test("unknown options, accessors and proxies are not rated reliable", () => {
   const valid = () => parseArgs(['sync', '--check']);
   assert.equal(classifyRecoveryEffects({ ...valid(), command: 'comando-futuro' }), 'unsupported');
   assert.equal(classifyRecoveryEffects({ ...valid(), futuro: true }), 'unsupported');
@@ -102,7 +106,7 @@ test('opções desconhecidas, acessores e proxies não recebem classificação c
   assert.equal(called, false);
 });
 
-test('não consulta propriedades opcionais herdadas ao classificar', () => {
+test("no query optional properties inherited when rating", () => {
   const options = parseArgs(['doctor']);
   const old = Object.getOwnPropertyDescriptor(Object.prototype, 'intent');
   let called = false;
@@ -119,7 +123,7 @@ test('não consulta propriedades opcionais herdadas ao classificar', () => {
   }
 });
 
-test('combinações aceitas pelo parser continuam classificáveis', () => {
+test("combinations accepted by parser remain classifiable", () => {
   const commands = [[], ['init'], ['update'], ['sync'], ['lang'], ['lang', 'en'],
     ['agents'], ['agents', 'codex'], ['doctor'], ['next'], ['document'], ['tools', 'run', 'agent-browser'],
     ['help'], ['version'], ['clients'], ['language']];

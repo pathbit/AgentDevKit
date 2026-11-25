@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { sep, join, relative, basename, dirname, resolve, isAbsolute } from 'node:path';
+import { sep, join, relative, dirname, resolve, isAbsolute, parse } from 'node:path';
 import { types as utilTypes } from 'node:util';
 import { lstatSync, realpathSync, existsSync, readdirSync, chmodSync, writeFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { nativePathBoundary } from '../../.pbai4devs/scripts/lib/native-paths.mjs';
@@ -14,7 +14,7 @@ export const fail = (code, message) => { throw Object.assign(new Error(message),
 
 const missingCode = (error, accepted) => { try { if (utilTypes.isProxy(error)) return false; const d = Object.getOwnPropertyDescriptor(error, 'code'); return Boolean(d && 'value' in d && accepted.includes(d.value)); } catch { return false; } };
 
-export const stat = path => { try { return lstatSync(path); } catch (error) { if (missingCode(error, ['ENOENT'])) return null; throw error; } };
+export const stat = (path, ...options) => { try { return lstatSync(path, ...options); } catch (error) { if (missingCode(error, ['ENOENT'])) return null; throw error; } };
 
 export const ignored = new Set(['.git', '.local', '.cache', 'node_modules', '.agent-tests', 'opencode-loop']);
 
@@ -42,23 +42,46 @@ function normalizeSystemTemporaryAlias(target) {
   return target;
 }
 
-export function resolveTarget(input, cwd = process.cwd()) {
-  let target = resolve(cwd, input || '.');
-  checkTarget(target);
-  target = normalizeSystemTemporaryAlias(target);
-  let ancestor = target;
-  while (true) {
-    const info = stat(ancestor);
-    if (info && (info.isSymbolicLink() || !info.isDirectory())) fail('E_TARGET', 'Target must be a real directory, without a symbolic link.');
-    const parent = dirname(ancestor); if (parent === ancestor) break; ancestor = parent;
+function targetLayout(target) {
+  const root = parse(target).root;
+  const parts = relative(root, target).split(sep).filter(Boolean);
+  let ancestor = root, info = stat(root, { bigint: true });
+  if (!info?.isDirectory()) fail('E_TARGET', 'Target must be a real directory, without a symbolic link.');
+  for (const [index, part] of parts.entries()) {
+    const path = join(ancestor, part);
+    const child = stat(path, { bigint: true });
+    if (!child) return { ancestor, info, missing: parts.slice(index) };
+    if (!child.isDirectory()) fail('E_TARGET', 'Target must be a real directory, without a symbolic link.');
+    ancestor = path;
+    info = child;
   }
-  const missing = []; let parent = target;
-  while (!stat(parent)) { missing.unshift(basename(parent)); parent = dirname(parent); }
-  const info = stat(parent);
-  if (info.isSymbolicLink() || !info.isDirectory()) fail('E_TARGET', 'Target must be a real directory, without a symbolic link.');
-  const canonical = join(realpathSync(parent), ...missing);
+  return { ancestor, info, missing: [] };
+}
+
+export function resolveTarget(input, cwd = process.cwd()) {
+  const target = resolve(cwd, input || '.');
+  checkTarget(target);
+  const { ancestor, missing } = targetLayout(normalizeSystemTemporaryAlias(target));
+  const canonical = join(realpathSync(ancestor), ...missing);
   checkTarget(canonical);
   return canonical;
+}
+
+export function targetIdentity(target) {
+  const { ancestor, info } = targetLayout(normalizeSystemTemporaryAlias(resolve(target)));
+  return { ancestor, device: info.dev.toString(), inode: info.ino.toString() };
+}
+
+export function assertTargetUnchanged(target, expected) {
+  if (!expected) return;
+  let current;
+  try { current = targetIdentity(target); }
+  catch (error) {
+    if (error.code !== 'E_TARGET') throw error;
+  }
+  if (!current || current.ancestor !== expected.ancestor || current.device !== expected.device || current.inode !== expected.inode) {
+    fail('E_CHANGED', 'The target directory changed; review and create a new plan.');
+  }
 }
 
 export function safePath(root, path) {

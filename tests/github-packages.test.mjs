@@ -78,7 +78,7 @@ function mock(fixture, options = {}) {
     sleep: async milliseconds => sleeps.push(milliseconds), maxAttempts: 3, pollMs: 1 } };
 }
 
-test('publica o TGZ aprovado e prova instalação pelo registry em cache novo', async t => {
+test("publishes TGZ approved and proof installation by registry in new cache", async t => {
   const f = fixture(t), m = mock(f);
   const result = await publishRegistryPackage(m.options);
   assert.equal(result.status, 'published'); assert.equal(result.integrity, f.integrity);
@@ -110,7 +110,7 @@ test('publica o TGZ aprovado e prova instalação pelo registry em cache novo', 
   assert.deepEqual(readFileSync(f.path), f.archive);
 });
 
-test('versão já publicada com mesmos bytes é idempotente e ainda prova o consumidor', async t => {
+test("version already published with the same bytes is idempotent and still proves the consumer", async t => {
   const f = fixture(t), m = mock(f, { views: [{ integrity: f.integrity }] });
   m.options.env = { ...npmRuntime, GH_TOKEN: env.GH_TOKEN };
   const result = await publishRegistryPackage(m.options);
@@ -119,7 +119,7 @@ test('versão já publicada com mesmos bytes é idempotente e ainda prova o cons
   assert.deepEqual(m.calls.map(call => call.args[1]), ['pack', 'view', 'cache', 'exec', 'exec', 'exec', 'exec', 'exec']);
 });
 
-test('tarball baixado divergente nunca é executado', async t => {
+test("Tarball downloaded divergent never runs", async t => {
   const f = fixture(t), m = mock(f, { views: [{ integrity: f.integrity }], cachedArchive: Buffer.from('outros bytes') });
   await assert.rejects(publishRegistryPackage(m.options), /diverge do artefato aprovado/);
   assert.ok(!m.calls.some(call => call.args[1] === 'exec'));
@@ -131,21 +131,21 @@ test('seletor nominal exige o marcador esperado', async t => {
   await assert.rejects(publishRegistryPackage(m.options), /seletor npm/);
 });
 
-test('ausência de leitor de cache é detectada antes de publicar', async t => {
+test("no cache reader is detected before publishing", async t => {
   const f = fixture(t), m = mock(f);
   m.options.readCache = undefined; m.options.cacheReaderFactory = () => { throw new Error('cacache indisponível'); };
   await assert.rejects(publishRegistryPackage(m.options), /cacache indisponível/);
   assert.equal(m.calls.length, 0);
 });
 
-test('conflito de conteúdo nunca publica nem executa', async t => {
+test("content conflict never publishes or executes", async t => {
   const f = fixture(t), m = mock(f, { views: [{ integrity: 'sha512-other' }] });
   await assert.rejects(publishRegistryPackage(m.options), /tarball diferente/);
   assert.deepEqual(m.calls.map(call => call.args[1]), ['pack', 'view']);
   assert.ok(!existsSync(m.calls[0].config.cwd));
 });
 
-test('autenticação e rede não são confundidas com pacote ausente e não expõem token', async t => {
+test("authentication and network are not confused with missing package and do not expose token", async t => {
   for (const code of ['E401', 'E403', 'ENETUNREACH', 'ETIMEDOUT']) await t.test(code, async subtest => {
     const f = fixture(subtest), m = mock(f, { views: [code] });
     await assert.rejects(publishRegistryPackage(m.options), error => {
@@ -156,7 +156,7 @@ test('autenticação e rede não são confundidas com pacote ausente e não exp�
   });
 });
 
-test('nome, versão e integridade interna são conferidos antes de consultar o registry', async t => {
+test("name, version and internal integrity are checked before consulting the registry", async t => {
   for (const metadata of [{ name: '@other/agentdevkit' }, { version: '9.0.0' }, { integrity: 'sha512-other' }]) {
     const f = fixture(t), m = mock(f, { metadata });
     await assert.rejects(publishRegistryPackage(m.options), /interna do tarball/);
@@ -164,7 +164,7 @@ test('nome, versão e integridade interna são conferidos antes de consultar o r
   }
 });
 
-test('artefato alterado e namespace diferente falham sem npm', async t => {
+test("changed artifact and different namespace fail without npm", async t => {
   const f = fixture(t), m = mock(f);
   await assert.rejects(publishRegistryPackage({ ...m.options, packageName: '@other/tool' }), /não autorizado/);
   writeFileSync(f.path, 'changed');
@@ -172,7 +172,7 @@ test('artefato alterado e namespace diferente falham sem npm', async t => {
   assert.equal(m.calls.length, 0);
 });
 
-test('CI revogado ou tag movida impedem publicação no registry', async t => {
+test("Repealed IC or moved tag prevent publication in registry", async t => {
   for (const scenario of ['failed', 'moved']) {
     const f = fixture(t), m = mock(f);
     const invalidRequest = async (_method, path) => path.includes('/actions/runs/')
@@ -183,7 +183,7 @@ test('CI revogado ou tag movida impedem publicação no registry', async t => {
   }
 });
 
-test('visibilidade após publicar tem retentativas limitadas', async t => {
+test("visibility after publication has limited retentions", async t => {
   const f = fixture(t), m = mock(f, { views: [null, null, null, { integrity: f.integrity }] });
   assert.equal((await publishRegistryPackage(m.options)).status, 'published');
   assert.deepEqual(m.sleeps, [1, 1]);
@@ -194,7 +194,7 @@ test('visibilidade após publicar tem retentativas limitadas', async t => {
   assert.deepEqual(timeout.sleeps, [1, 1]);
 });
 
-test('janela padrão tolera vinte minutos de análise com uma única publicação', async t => {
+test("standard window tolerates twenty minutes of analysis with a single publication", async t => {
   const f = fixture(t), m = mock(f, { views: [...Array(121).fill(null), { integrity: f.integrity }] });
   delete m.options.maxAttempts; delete m.options.pollMs;
   let elapsed = 0;
@@ -211,7 +211,7 @@ test('janela padrão tolera vinte minutos de análise com uma única publicaçã
   assert.equal(result.probe.anonymous, true);
 });
 
-test('janela padrão expirada informa pendência e nunca tenta publicar novamente', async t => {
+test("expired default window informs pending and never tries to publish again", async t => {
   const f = fixture(t), m = mock(f, { views: [null] });
   delete m.options.maxAttempts; delete m.options.pollMs;
   let elapsed = 0; m.options.sleep = async milliseconds => { elapsed += milliseconds; };
@@ -229,7 +229,7 @@ test('janela padrão expirada informa pendência e nunca tenta publicar novament
   assert.deepEqual(readFileSync(f.path), f.archive);
 });
 
-test('versão existente espera o tarball sem publicar novamente e usa cache verificado', async t => {
+test("existing version waits for tarball without publishing again and uses verified cache", async t => {
   const f = fixture(t), m = mock(f, { views: [{ integrity: f.integrity }], downloads: [false, false, true] });
   const result = await publishRegistryPackage(m.options);
   assert.equal(result.status, 'skipped');
@@ -245,7 +245,7 @@ test('versão existente espera o tarball sem publicar novamente e usa cache veri
   assert.equal(downloads[0].config.env.npm_config_cache, m.calls.find(call => call.args[1] === 'exec').config.env.npm_config_cache);
 });
 
-test('versão existente sem tarball usa a mesma janela padrão e reconhece E404 textual', async t => {
+test("existing version without tarball uses the same default window and recognizes E404 text", async t => {
   const f = fixture(t), m = mock(f, { views: [{ integrity: f.integrity }], downloads: [{ status: 1, stdout: '', stderr: `npm error code E404\n${env.NPM_TOKEN}` }] });
   delete m.options.maxAttempts; delete m.options.pollMs;
   let elapsed = 0; m.options.sleep = async milliseconds => { elapsed += milliseconds; };
@@ -262,7 +262,7 @@ test('versão existente sem tarball usa a mesma janela padrão e reconhece E404 
   assert.ok(!existsSync(m.calls[0].config.cwd));
 });
 
-test('atraso de metadata e tarball compartilha tentativas após uma publicação', async t => {
+test("Metadata and tarball delay shares attempts after a post", async t => {
   const f = fixture(t), m = mock(f, { views: [null, null, { integrity: f.integrity }], downloads: [false, true] });
   assert.equal((await publishRegistryPackage(m.options)).status, 'published');
   assert.deepEqual(m.sleeps, [1, 1]);
@@ -271,7 +271,7 @@ test('atraso de metadata e tarball compartilha tentativas após uma publicação
   assert.equal(m.calls.filter(call => call.args[1] === 'publish').length, 1);
 });
 
-test('ETARGET transitório do cache é repetido sem republicar', async t => {
+test("ETARGET transient cache is repeated without republishing", async t => {
   const f = fixture(t), m = mock(f, { views: [null, { integrity: f.integrity }], downloads: ['ETARGET', true] });
   assert.equal((await publishRegistryPackage(m.options)).status, 'published');
   assert.deepEqual(m.sleeps, [1]);
@@ -279,7 +279,7 @@ test('ETARGET transitório do cache é repetido sem republicar', async t => {
   assert.equal(m.calls.filter(call => call.args[1] === 'publish').length, 1);
 });
 
-test('ETARGET fora do download não é tratado como propagação', async t => {
+test("ETARGET out of download is not treated as propagation", async t => {
   const f = fixture(t), m = mock(f, { views: ['ETARGET'] });
   await assert.rejects(publishRegistryPackage(m.options), /npm view falhou \(ETARGET\)/);
   assert.deepEqual(m.sleeps, []);
@@ -296,7 +296,7 @@ test('erro textual diferente de E404 no download interrompe sem expor credenciai
   assert.ok(!m.calls.some(call => ['publish', 'exec'].includes(call.args[1])));
 });
 
-test('falha de publicação ou integridade pós-publicação interrompe a prova de execução', async t => {
+test("publication failure or post-publication integrity interrupts the proof of execution", async t => {
   const f = fixture(t), rejected = mock(f, { publishResult: failure('E403') });
   await assert.rejects(publishRegistryPackage(rejected.options), /E403/);
   assert.equal(rejected.calls.length, 3);
@@ -305,7 +305,7 @@ test('falha de publicação ou integridade pós-publicação interrompe a prova 
   assert.equal(mismatch.calls.length, 4);
 });
 
-test('exec precisa informar sucesso e a mesma versão, inclusive quando já publicada', async t => {
+test("exec needs to inform success and the same version, even when already published", async t => {
   for (const execResult of [failure('E401'), success({ ok: true, command: 'version', version: '9.0.0' }), success('not JSON')]) {
     const f = fixture(t), m = mock(f, { views: [{ integrity: f.integrity }], execResult });
     await assert.rejects(publishRegistryPackage(m.options), /npm exec/);
@@ -313,7 +313,7 @@ test('exec precisa informar sucesso e a mesma versão, inclusive quando já publ
   }
 });
 
-test('cada etapa exige JSON aprovado da mesma versão e para ao falhar', async t => {
+test("Each step requires JSON approved of the same version and to fail", async t => {
   const steps = ['version', 'init', 'doctor', 'sync --check'];
   for (const [index, label] of steps.entries()) await t.test(label, async subtest => {
     const command = label === 'sync --check' ? 'sync' : label;
@@ -328,7 +328,7 @@ test('cada etapa exige JSON aprovado da mesma versão e para ao falhar', async t
   });
 });
 
-test('leituras e instalação são anônimas; publicação recebe somente seu token isolado', async t => {
+test("readings and installation are anonymous; publication only receives its isolated token", async t => {
   const f = fixture(t), m = mock(f);
   const delegate = m.options.execute;
   m.options.env = { ...env, NODE_AUTH_TOKEN: 'unrelated-auth', GITHUB_TOKEN: 'unrelated-github',
@@ -354,7 +354,7 @@ test('leituras e instalação são anônimas; publicação recebe somente seu to
   await publishRegistryPackage(m.options);
 });
 
-test('primeira publicação exige NPM_TOKEN ou OIDC válido e nunca usa GITHUB_TOKEN como npm', async t => {
+test("first publication requires NPM_TOKEN or OIDC valid and never use GITHUB_TOKEN as npm", async t => {
   for (const credentials of [{}, { GITHUB_TOKEN: 'github-only', NODE_AUTH_TOKEN: 'github-mapped-by-mistake' }, { NPM_TOKEN: 'bad\ntoken' }]) {
     const f = fixture(t), m = mock(f);
     m.options.env = { ...npmRuntime, ...credentials };
@@ -364,7 +364,7 @@ test('primeira publicação exige NPM_TOKEN ou OIDC válido e nunca usa GITHUB_T
   }
 });
 
-test('OIDC usa npm 11.5.1+ somente na publicação e mantém consumo anônimo', async t => {
+test("OIDC use npm 11.5.1+ only in the publication and keeps anonymous consumption", async t => {
   for (const npmVersion of ['11.5.1', '11.21.2', '12.2.0']) await t.test(npmVersion, async subtest => {
     const f = fixture(subtest), m = mock(f, { npmVersion });
     m.options.env = { ...npmRuntime, GITHUB_ACTIONS: 'true', ACTIONS_ID_TOKEN_REQUEST_URL: 'https://oidc.example', ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'oidc-secret' };
@@ -386,7 +386,7 @@ test('OIDC usa npm 11.5.1+ somente na publicação e mantém consumo anônimo', 
   }
 });
 
-test('token configurado tem prioridade e não tenta OIDC', async t => {
+test("configured token has priority and does not try OIDC", async t => {
   for (const npmVersion of ['11.5.0', '11.21.2']) await t.test(npmVersion, async subtest => {
     const f = fixture(subtest), m = mock(f, { npmVersion });
     m.options.env = { ...env, GITHUB_ACTIONS: 'true',
@@ -403,7 +403,7 @@ test('token configurado tem prioridade e não tenta OIDC', async t => {
   });
 });
 
-test('inspeção real preserva TGZ antigo e atual sem presumir o caminho do executável', async t => {
+test("Real inspection preserves TGZ old and current without assuming the executable path", async t => {
   for (const release of [{ version: '0.0.3', bin: '.pbai4devs/bin/agentdevkit.mjs' }, { version, bin: 'bin/agentdevkit.mjs' }]) await t.test(release.version, async subtest => {
     const f = fixture(subtest), source = join(f.directory, 'source'); mkdirSync(source);
     writeFileSync(join(source, 'package.json'), JSON.stringify({ name: packageName, version: release.version, bin: { agentdevkit: release.bin },
@@ -445,7 +445,7 @@ test('inspeção real preserva TGZ antigo e atual sem presumir o caminho do exec
   });
 });
 
-test('npm exec não executa o marcador quando o seletor está ausente', t => {
+test("npm exec does not execute the marker when the selector is missing", t => {
   const f = fixture(t), source = join(f.directory, 'empty'); mkdirSync(source);
   const probe = spawnSync(process.execPath, [npmExecutable(), 'exec', '--yes', '--offline', '--ignore-scripts', '--package=@pathbit/nonexistent-selector-59821@0.0.0', '--', 'echo', 'AGENTDEVKIT_SELECTOR_OK'], {
     cwd: source, env: { ...env, npm_config_cache: join(f.directory, 'empty-cache'), npm_config_offline: 'true' }, encoding: 'utf8', shell: false, timeout: 60000,
@@ -471,7 +471,7 @@ function githubMock(f, options = {}) {
   return { ...m, requests };
 }
 
-test('registry é um perfil validado, sem hosts arbitrários ou argumentos extras', async t => {
+test("registry is a validated profile without arbitrary hosts or extra arguments", async t => {
   assert.equal(parseRegistryArgs([]), 'npm');
   assert.equal(parseRegistryArgs(['publish']), 'npm');
   assert.equal(parseRegistryArgs(['publish', '--registry', 'npm']), 'npm');
@@ -522,7 +522,7 @@ test('GitHub publica os mesmos bytes e autentica consultas e consumo somente nes
   assert.ok(!JSON.stringify(result).includes('secret'));
 });
 
-test('GitHub já publicado mantém versão e tarball sem outra publicação', async t => {
+test("GitHub already published keeps version and tarball without another publication", async t => {
   const f = fixture(t), m = githubMock(f, { views: [{ integrity: f.integrity }] });
   const result = await publishRegistryPackage(m.options);
   assert.equal(result.status, 'skipped'); assert.equal(result.authentication, 'github-token');
@@ -532,7 +532,7 @@ test('GitHub já publicado mantém versão e tarball sem outra publicação', as
   assert.deepEqual(readFileSync(f.path), f.archive);
 });
 
-test('GitHub exige token próprio mesmo para pacote público e não usa token npm ou OIDC', async t => {
+test("GitHub requires token itself even for public package and does not use token npm or OIDC", async t => {
   for (const credentials of [{}, { NPM_TOKEN: 'npm-only' }, { GITHUB_TOKEN: 'wrong-name' },
     { GITHUB_ACTIONS: 'true', ACTIONS_ID_TOKEN_REQUEST_URL: 'https://oidc.example', ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'oidc-only' },
     { GITHUB_PACKAGES_TOKEN: 'bad\ntoken' }]) {
@@ -542,7 +542,7 @@ test('GitHub exige token próprio mesmo para pacote público e não usa token np
   }
 });
 
-test('GitHub não trata autenticação negada como versão ausente e não vaza segredos', async t => {
+test("GitHub does not treat denied authentication as a missing version and does not leak secrets", async t => {
   for (const code of ['E401', 'E403', 'ENETUNREACH']) {
     const f = fixture(t), m = githubMock(f, { views: [code] });
     await assert.rejects(publishRegistryPackage(m.options), error => {
@@ -552,7 +552,7 @@ test('GitHub não trata autenticação negada como versão ausente e não vaza s
   }
 });
 
-test('GitHub recusa integridade diferente e exige visibilidade pública associada ao repo', async t => {
+test("GitHub refuses different integrity and requires public visibility associated with the repo", async t => {
   const bad = fixture(t), mismatch = githubMock(bad, { views: [{ integrity: 'sha512-other' }] });
   await assert.rejects(publishRegistryPackage(mismatch.options), /tarball diferente/);
   assert.ok(!mismatch.calls.some(c => ['publish', 'exec'].includes(c.args[1])));

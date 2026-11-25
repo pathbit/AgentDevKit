@@ -9,7 +9,7 @@ import { dirname, join } from 'node:path';
 import { synchronize } from '../.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs';
 import { parseClaudePaths } from '../.pbai4devs/scripts/lib/claude-rule-scope.mjs';
 
-// localIgnores:false isola as regras; índice e exclude continuam sendo medidos.
+// localIgnores:false isolates the rules; index and excludes continue to be measured.
 const pendingTest = test;
 const source = '.pbai4devs/rules/demo/RULE.md';
 const native = '.claude/rules/demo/RULE.md';
@@ -67,7 +67,7 @@ function fixture(t) {
   return root;
 }
 
-test('regra global Claude existente é gerada sem paths e check não altera Git', t => {
+test("existing global rule Claude is generated without paths and check does not change Git", t => {
   const root = fixture(t), gitBefore = protectedGit(root);
   put(root, source, rule('always_on'));
   assert.equal(run(root).exitCode, 0);
@@ -79,7 +79,7 @@ test('regra global Claude existente é gerada sem paths e check não altera Git'
   assert.deepEqual(protectedGit(root), gitBefore);
 });
 
-test('glob com mapeamento nativo explícito usa paths e preserva índice e exclude', t => {
+test("glob with explicit native mapping uses paths and preserves index and excludes", t => {
   const root = fixture(t), gitBefore = protectedGit(root);
   put(root, source, rule('glob', 'globs: "src/**/*.ts"\n'));
   put(root, metadata, '---\npaths: ["src/**/*.ts"]\n---\n');
@@ -95,7 +95,7 @@ test('glob com mapeamento nativo explícito usa paths e preserva índice e exclu
   assert.deepEqual(protectedGit(root), gitBefore);
 });
 
-test('mapeamento Claude alternativo válido não é anunciado como leitura apenas explícita', t => {
+test("valid alternative Claude mapping is not announced as just explicit reading", t => {
   const root = fixture(t), gitBefore = protectedGit(root), alternate = '.claude/rules/custom-scope.md';
   put(root, source, rule('glob', 'globs: "origem/**/*.ts"\n'));
   put(root, metadata, '---\npaths: ["destino/**/*.ts"]\n---\n');
@@ -109,7 +109,7 @@ test('mapeamento Claude alternativo válido não é anunciado como leitura apena
   assert.deepEqual(protectedGit(root), gitBefore);
 });
 
-test('mapeamento alternativo não oculta regra global legada no destino padrão', t => {
+test("alternative mapping does not hide global rule legacy in default destination", t => {
   const root = fixture(t), alternate = '.claude/rules/custom-scope.md';
   put(root, source, rule('glob', 'globs: "origem/**/*.ts"\n'));
   put(root, metadata, '---\npaths: ["destino/**/*.ts"]\n---\n');
@@ -133,7 +133,7 @@ for (const trigger of ['manual', 'model_decision']) {
     assert.deepEqual(protectedGit(root), gitBefore);
     assert.equal(read(root, source).toString(), content);
     assert.equal(existsSync(file(root, native)), false, 'regra não deve ser carregada globalmente');
-    // Não exige que o fallback crie arquivo em references/rules.
+    // Does not require fallback to create file in references/rules.
   });
 }
 
@@ -269,7 +269,7 @@ pendingTest('migração bloqueia referência rastreada sem alterar índice ou ar
   assert.ok(error, 'a remoção rastreada deve ser bloqueada');
 });
 
-test('conteúdo staged divergente bloqueia alteração da regra nativa mesmo com force', t => {
+test("divergent staged content blocks change of native rule even with force", t => {
   const root = fixture(t);
   put(root, source, rule('always_on'));
   run(root);
@@ -303,7 +303,7 @@ pendingTest('legado sem ownership não é removido nem adotado mesmo com force',
   else assert.ok(result.preserved.some(item => item.path === native), 'a referência sem ownership deve ser relatada');
 });
 
-test('diagnóstico não afirma leitura explícita quando legado pode carregar globalmente', t => {
+test("diagnosis does not affirm explicit reading when legacy can carry globally", t => {
   const root = fixture(t); put(root, source, rule('manual'));
   put(root, native, '---\ndescription: legado\n---\n\n# Legado global\n');
   const before = snapshot(root), messages = [];

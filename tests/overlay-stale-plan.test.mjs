@@ -34,7 +34,7 @@ function overlayFixture(t) {
   return { root, agent, metadata, state, derived, plan };
 }
 
-test('plano não aplica estado após alteração da referência observada', { timeout: 180000 }, t => {
+test("plan does not apply status after change of observed reference", { timeout: 180000 }, t => {
   const { root, agent, metadata, state, derived, plan } = overlayFixture(t);
   writeFileSync(join(root, agent), `${readFileSync(join(root, agent), 'utf8')}\nAlteração humana posterior ao plano.\n`);
   const paths = [agent, state, derived, metadata, '.git/index', '.git/config', '.git/info/exclude', '.gitignore', 'human.txt'];
@@ -43,7 +43,7 @@ test('plano não aplica estado após alteração da referência observada', { ti
   for (const [path, content] of before) assert.deepEqual(readFileSync(join(root, path)), content, path);
 });
 
-test('mudança durante o backup bloqueia publicação do estado', { timeout: 180000 }, t => {
+test("change during backup blocks state publication", { timeout: 180000 }, t => {
   const { root, agent, metadata, state, derived, plan } = overlayFixture(t);
   const target = join(root, agent), originalWrite = fs.writeFileSync;
   const content = `${readFileSync(target, 'utf8')}\nAlteração humana durante o backup.\n`;

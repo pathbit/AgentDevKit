@@ -5,8 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-// Experimento em fixture: não é o mecanismo de escrita do AgentDevKit.
-test('escrita no mesmo inode preserva atributos observados, mas interrupção deixa conteúdo parcial', { skip: process.platform !== 'linux' ? 'O experimento exige inode, xattr e ACL nativos do Linux.' : false }, t => {
+// Fixture experiment: not AgentDevKit's writing mechanism.
+test("written in the same inode preserves observed attributes, but interruption leaves partial content", { skip: process.platform !== 'linux' ? 'O experimento exige inode, xattr e ACL nativos do Linux.' : false }, t => {
   for (const command of ['/usr/bin/getfattr', '/usr/bin/setfattr', '/usr/bin/setfacl']) {
     if (spawnSync(command, ['--version']).error) { t.skip('Ferramentas attr ou acl indisponíveis.'); return; }
   }

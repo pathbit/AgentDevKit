@@ -6,7 +6,7 @@ const target='.agents/skills/projeto/configurar-projeto/SKILL.md',state='.pbai4d
 const read=(root,path)=>existsSync(join(root,path))?readFileSync(join(root,path)):null;
 const git=(root,...args)=>{const r=spawnSync('git',['-C',root,...args],{encoding:'utf8'});assert.equal(r.status,0,r.stderr)};
 const snapshot=root=>Object.fromEntries(['.git/index','.git/config','.git/info/exclude','.gitignore','HUMAN.md',target,legacyState,legacyDerived].map(path=>[path,read(root,path)]));
-test('reativação correlacionada na migração recusa antes de alterar estado e índice', {timeout:180000}, t=>{
+test("Reactivation correlated in migration refusal before changing status and index", {timeout:180000}, t=>{
  for(const staged of [false,true]){
   const root=fixture(t);put(root,'.gitignore','# humano\n');put(root,'HUMAN.md','# humano staged\n');git(root,'add','--','.gitignore','HUMAN.md');cli(root,['init','--agents','codex']);
   const s=JSON.parse(read(root,state)),digest=s.files[target];assert.ok(digest);assert.ok(read(root,target));
@@ -25,7 +25,7 @@ test('reativação correlacionada na migração recusa antes de alterar estado e
  }
 });
 
-test('migração independente conserva marca desconhecida e arquivo humano fora da seleção', {timeout:180000}, t=>{
+test("independent migration preserves unknown brand and human file out of selection", {timeout:180000}, t=>{
  const root=fixture(t),human='.claude/skills/equipe/SKILL.md',old='.pbai4devs/state/derived.json';
  put(root,'.gitignore','# humano\n');put(root,'HUMAN.md','# staged\n');git(root,'add','--','.gitignore','HUMAN.md');cli(root,['init','--agents','codex']);
  const d=read(root,old)?JSON.parse(read(root,old)):{schemaVersion:1,entries:{}};d.removedFiles={...d.removedFiles,[human]:'a'.repeat(64)};d.humanNote={text:'decisão humana sintética'};
@@ -36,7 +36,7 @@ test('migração independente conserva marca desconhecida e arquivo humano fora 
  assert.equal(existsSync(join(root,'.pbai4devs/estado')),false);
 });
 
-test('migração independente preserva marcador correlacionado fora da seleção', {timeout:180000}, t=>{
+test("independent migration preserves correlated marker outside selection", {timeout:180000}, t=>{
  const root=fixture(t),old='.pbai4devs/state/derived.json';
  put(root,'.gitignore','# humano\n');put(root,'HUMAN.md','# staged\n');git(root,'add','--','.gitignore','HUMAN.md');cli(root,['init','--agents','codex']);
  const s=JSON.parse(read(root,state)),digest=s.files[target];assert.ok(digest);
@@ -47,7 +47,7 @@ test('migração independente preserva marcador correlacionado fora da seleção
  assert.deepEqual(read(root,'.git/index'),before.index);assert.deepEqual(read(root,'.git/config'),before.config);assert.deepEqual(read(root,'.git/info/exclude'),before.exclude);assert.deepEqual(read(root,'.gitignore'),before.ignore);assert.deepEqual(read(root,'HUMAN.md'),before.human);assert.deepEqual(read(root,'.pbai4devs/state/derived.json'),before.derived);assert.equal(read(root,target),null);
 });
 
-test('tombstone com caixa divergente do alvo planejado provoca revisão', {timeout:180000}, t=>{
+test("Tombstone with different target box planned causes review", {timeout:180000}, t=>{
  const root=fixture(t),old='.pbai4devs/state/derived.json',alias=target.replace('/SKILL.md','/skill.md');
  put(root,'.gitignore','# humano\n');put(root,'HUMAN.md','# staged\n');git(root,'add','--','.gitignore','HUMAN.md');cli(root,['init','--agents','codex']);
  const s=JSON.parse(read(root,state)),digest=s.files[target];assert.ok(digest);delete s.files[target];s.files[alias]=digest;put(root,state,JSON.stringify(s,null,2)+'\n');

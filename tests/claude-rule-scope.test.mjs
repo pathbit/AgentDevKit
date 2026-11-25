@@ -4,7 +4,7 @@ import { parseClaudePaths, planClaudeRule, serializeClaudePaths } from '../.pbai
 
 const meta = paths => `---\npaths: ${JSON.stringify(paths)}\n---\n`;
 
-test('always_on é global; manual e model_decision só têm referência explícita', () => {
+test("always_on is global; manual and model_decision only have explicit reference", () => {
   const global = planClaudeRule({ trigger: 'always_on' });
   assert.equal(global.status, 'ready');
   assert.equal(global.activation, 'always');
@@ -19,7 +19,7 @@ test('always_on é global; manual e model_decision só têm referência explíci
   }
 });
 
-test('glob sem metadados Claude não se torna global nem é inferido do Antigravity', () => {
+test("glo without metadata Claude does not become global nor is it inferred from Antigravity", () => {
   const result = planClaudeRule({ trigger: 'glob', globs: '**/*.ts' });
   assert.equal(result.status, 'reference-only');
   assert.equal(result.activation, 'explicit-only');
@@ -27,7 +27,7 @@ test('glob sem metadados Claude não se torna global nem é inferido do Antigrav
   assert.equal(result.equivalence, 'not-verified');
 });
 
-test('glob exige paths explícitos e aceita apenas o subconjunto listado', () => {
+test("glob requires explicit path and accepts only the subset listed", () => {
   const yaml = `---\npaths:\n  - 'src/**/*.ts'\n  - "tests/**/*.test.ts"\n  - '/README.md'\n  - 'docs/file#name.md'\n  - 'docs/it''s.md'\n---\n`;
   const result = planClaudeRule({ trigger: 'glob', nativeMetadata: yaml });
   assert.equal(result.status, 'ready');
@@ -39,7 +39,7 @@ test('glob exige paths explícitos e aceita apenas o subconjunto listado', () =>
   assert.deepEqual(parseClaudePaths('---\r\npaths: ["src/**/*.ts"]\r\n---\r\n'), { ok: true, paths: ['src/**/*.ts'] });
 });
 
-test('YAML não suportado, ambíguo ou inválido bloqueia sem criar regra global', () => {
+test("YAML not supported, ambiguous or invalid blocks without creating global rule", () => {
   const cases = [
     '', 'paths: ["src/**"]', '\uFEFF---\npaths: ["src/**"]\n---\n',
     '---\npaths: ["src/**"]\n', '---\rpaths: ["src/**"]\r---\r',
@@ -68,17 +68,17 @@ test('YAML não suportado, ambíguo ou inválido bloqueia sem criar regra global
   }
 });
 
-test('padrões que dependem de dialeto ou expansão não são divididos nem aceitos', () => {
+test("patterns that depend on dialect or expansion are not divided or accepted", () => {
   for (const pattern of ['src/**/*.{ts,tsx}', 'src/**/*.ts,tests/**/*.ts', 'photos \\[2024/**', '[abc]/**/*.js', 'src/[bad/**', 'foo\\bar/**', '!private/**', '../outside/**', '/a/../b', 'C:/src/**', '//host/**', 'src//**', ' a/**', 'a/** ', 'a\u2028b']) {
     const result = planClaudeRule({ trigger: 'glob', nativeMetadata: meta([pattern]) });
     assert.equal(result.status, 'blocked', JSON.stringify(pattern));
   }
-  // Sem chaves não há expansão de brace; texto além do limite documentado
-  // também é bloqueado antes de analisar ou produzir um frontmatter parcial.
+  // No keys no branch expansion; text beyond documented limit
+  // it is also blocked before analyzing or producing a partial frontmatter.
   assert.equal(planClaudeRule({ trigger: 'glob', nativeMetadata: meta(['x'.repeat(4 * 1024 * 1024)]) }).reason, 'metadata-too-large');
 });
 
-test('serialização cita os caminhos e preserva texto especial no round-trip', () => {
+test("serialization cites the paths and preserves special text in the round-trip", () => {
   const paths = Object.freeze(['src/**/*.ts', '/README.md', 'docs/ação #1.md', 'docs/it\'s "special".md', 'tests/🎯.test.js']);
   const frontmatter = serializeClaudePaths(paths);
   assert.equal(frontmatter, `---\npaths: ${JSON.stringify(paths)}\n---\n`);
@@ -90,7 +90,7 @@ test('serialização cita os caminhos e preserva texto especial no round-trip', 
   for (const invalid of [null, undefined, 'src/**', {}]) assert.throws(() => serializeClaudePaths(invalid));
 });
 
-test('surrogates Unicode isolados são recusados antes da geração e em conteúdo humano', () => {
+test("Unicode isolated surrogates are refused before generation and in human content", () => {
   for (const escape of ['\\ud800', '\\udc00', '\\ud800x', 'x\\udc00', '\\ud800\\ud800']) {
     const flow = `---\npaths: ["${escape}"]\n---\n`;
     const block = `---\npaths:\n  - "${escape}"\n---\n`;
@@ -107,7 +107,7 @@ test('surrogates Unicode isolados são recusados antes da geração e em conteú
   assert.deepEqual(parseClaudePaths(serializeClaudePaths(['tests/🎯.js'])), { ok: true, paths: ['tests/🎯.js'] });
 });
 
-test('caracteres fora de c-printable do YAML não são aceitos', () => {
+test("characters out of c-printable YAML are not accepted", () => {
   for (const escape of ['\\ufffe', '\\uffff']) {
     for (const yaml of [`---\npaths: ["${escape}"]\n---\n`, `---\npaths:\n  - "${escape}"\n---\n`]) {
       assert.equal(parseClaudePaths(yaml).ok, false);
@@ -118,7 +118,7 @@ test('caracteres fora de c-printable do YAML não são aceitos', () => {
   for (const char of ['\ufffe', '\uffff']) assert.throws(() => serializeClaudePaths([`a${char}b`]));
 });
 
-test('espaços Unicode ou de controle não são interpretados como separadores YAML', () => {
+test("Unicode or control spaces are not interpreted as separators YAML", () => {
   for (const separator of ['\u000b', '\u00a0', '\ufeff', '\u2028', '\u2029']) {
     for (const yaml of [`---\npaths:${separator}["src/**"]\n---\n`, `---\npaths: ${separator}["src/**"]\n---\n`, `---\npaths: ["src/**"]${separator}\n---\n`, `---\npaths: ["src/**"]\n---\n${separator}`]) {
       assert.equal(parseClaudePaths(yaml).ok, false, JSON.stringify(yaml));
@@ -128,7 +128,7 @@ test('espaços Unicode ou de controle não são interpretados como separadores Y
   }
 });
 
-test('metadados contraditórios e gatilhos inválidos nunca geram regra automática', () => {
+test("contradictory metadata and invalid triggers never generate automatic rule", () => {
   for (const trigger of ['always_on', 'manual', 'model_decision']) {
     const result = planClaudeRule({ trigger, nativeMetadata: meta(['src/**']) });
     assert.equal(result.status, 'blocked');
@@ -138,7 +138,7 @@ test('metadados contraditórios e gatilhos inválidos nunca geram regra automát
   assert.equal(planClaudeRule({ trigger: 'glob', nativeMetadata: null }).status, 'blocked');
 });
 
-test('colisões humanas são preservadas mesmo com escopo igual ou conteúdo idêntico', () => {
+test("human collisions are preserved even with equal scope or identical content", () => {
   const input = meta(['src/**/*.ts']);
   const human = `${input}\n# Instrução da equipe\n\nNão alterar.\n`;
   const same = planClaudeRule({ trigger: 'glob', nativeMetadata: input, humanFile: human });

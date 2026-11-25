@@ -4,6 +4,8 @@ description: Comandos, opções e respostas do AgentDevKit.
 
 # Referência da CLI
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 Execute o pacote do npm público por `npx`, sem login:
 
 ```console
@@ -31,10 +33,12 @@ o código local. No projeto atendido, use `npx` para executar o pacote.
 | `recovery` | Consulta o diário e a cópia da operação pendente. |
 | `recovery resolve <geração> <id>` | Encerra a pendência revisada. |
 | `next` | Mostra a próxima etapa, sem iniciá-la. |
+| `next --intent run` | Orienta a preparação de um projeto existente. |
 | `next --integrations` | Indica onde consultar artefatos de outros métodos. |
 | `document` | Inventaria um sistema existente em leitura local. |
 | `lang [idioma]` | Consulta ou altera o idioma: pt, en ou es. |
 | `agents` | Mostra os clientes disponíveis e a seleção salva. |
+| `agents --select` | Abre o menu da seleção em um terminal interativo. |
 | `agents codex,claude` | Substitui a seleção e sincroniza os apontamentos. |
 | `agents add <ids>`, `agents remove <ids>` | Alteram os IDs indicados. |
 | `agents all` | Seleciona todos os clientes compatíveis. |
@@ -61,6 +65,7 @@ antes de executar `recovery resolve`.
 | `--clients <lista>` | Alias de `--agents`. |
 | `--yes`, `-y` | Evita perguntas iniciais; não força conflitos. |
 | `--dry-run` | Exibe o plano sem aplicar alterações. |
+| `--local` | Em `init`, mantém os novos arquivos do hub no checkout local. |
 | `--check` | Em `sync`, confere o projeto sem aplicar a sincronização. |
 | `--force` | Solicita reparos gerenciados permitidos, com backup. |
 | `--json` | Produz uma resposta JSON para automação. |
@@ -69,9 +74,11 @@ antes de executar `recovery resolve`.
 | `--markdown` | Em `document`, emite o inventário em Markdown. |
 | `--integrations` | Em `next`: consulta de referências externas no projeto. |
 
-No primeiro uso em terminal, o assistente pergunta o idioma ou os clientes
-que faltam e o objetivo. Com idioma e clientes explícitos, use `--purpose`
-para indicar o objetivo. Sem interação, valem as opções explícitas, a
+No primeiro uso em terminal, use as setas e Espaço no menu de agentes.
+Enter confirma e Esc cancela. Em projetos instalados, `agents --select`
+abre a lista com a seleção existente. Com idioma e clientes explícitos,
+use `--purpose` para indicar o objetivo. Sem interação, valem as opções
+explícitas, a
 seleção salva e, por último, `none`. Confira os [IDs e dependências](../../.pbai4devs/COMPATIBILIDADE.md).
 
 `agents --json` informa `kitInstalled`, `configuredClients`, `clientRoots`
@@ -88,6 +95,33 @@ para substituir a seleção inteira.
 Use `init --purpose agents|product|run|document` para indicar se quer preparar
 os agentes, planejar produto, rodar a aplicação ou documentar o que existe.
 O objetivo orienta a próxima ação da CLI.
+
+`init --local` grava a regra no `.gitignore` do hub e salva essa escolha para
+`update` e `sync`. Teste com o executável do checkout conforme o
+[guia de instalação local](installation.md#usar-o-hub-apenas-no-checkout-local).
+
+## Preparar um projeto existente
+
+Na pasta que recebeu o kit, consulte `next --intent run` para preparar a
+execução. Num monorepo, use a raiz se a instalação é compartilhada. Mire um
+módulo quando ele tem instalação própria.
+
+```console
+npx @pathbit/agentdevkit@0.0.38 next --intent run --target "../Meu projeto"
+```
+
+Para testar a versão em desenvolvimento, execute este comando a partir da
+raiz do checkout do AgentDevKit.
+
+```console
+node bin/agentdevkit.mjs next --intent run --target "../Meu projeto"
+```
+
+Na versão em desenvolvimento, a consulta pode mostrar até seis caminhos para
+conferir, como READMEs, manifestos, Compose, Dockerfiles e Makefiles. Um projeto
+com apenas Compose ou tarefas declaradas já pode receber a skill `preparar-dev`.
+Se faltarem indícios, confira o README e confirme o módulo ou o comando da
+equipe. A consulta só lê arquivos. Você escolhe e executa o comando do projeto.
 
 ## Atualização e prévia
 
@@ -183,6 +217,9 @@ Leia os campos estruturados, não dependa da tradução da mensagem.
 Em `next --intent product`, após uma inspeção concluída, `stage` identifica a
 etapa sugerida e `maturity` indica a maturidade detectada. Sem kit instalado ou
 com inventário incompleto, `maturity` não é informado. Não são aprovações.
+Na versão em desenvolvimento, `next --intent run --json` inclui
+`next[0].references` quando encontra arquivos para orientar a execução. Os
+caminhos são relativos ao projeto-alvo.
 `next --integrations` acrescenta `integrations` à resposta normal, com
 `id`, `name`, `url`, `paths` relativos à raiz e `instruction` por método.
 Quando há um plugin correspondente, `plugin` indica o ID para `plugins info`.
@@ -209,10 +246,9 @@ Em um repositório Git saudável, siga o comando copiado da saída de `init` ou
 `update` para `doctor`, depois `sync --check` e `next`. Se houver
 divergências, revise o diagnóstico e use `sync --dry-run --json` quando
 indicado para conferir o plano de sincronização.
-Para uma nova funcionalidade, use `next --intent product`; para preparar a
-execução de um projeto existente, use `next --intent run`. Sem `--intent`, a
-consulta mantém o comportamento anterior. O diagnóstico não inicia a etapa nem comprova
-aprovações: confira os documentos e decisões existentes antes de agir.
+Para uma nova funcionalidade, use `next --intent product`. Sem `--intent`,
+`next` consulta o estado para escolher o fluxo. Confira os documentos e
+decisões existentes antes de seguir a etapa sugerida.
 Após produto e design, ele usa os caminhos de roadmap e specs registrados no
 estado. Para orientar uma spec existente, exige uma única referência aberta
 `[ ]` ou em andamento `[-]` no roadmap. Com mais de uma spec, entrega encerrada,
@@ -247,3 +283,7 @@ documental no [guia de documentação](documentation.md#documentar-um-sistema-em
 [Wiki](../README.md) · [Solução de problemas](troubleshooting.md)
 
 [update]: installation.md#atualizar-e-escolher-agentes
+
+[reading-pt]: cli.md
+[reading-en]: ../en/guides/cli.md
+[reading-es]: ../es/guides/cli.md

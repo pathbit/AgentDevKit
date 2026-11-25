@@ -109,7 +109,7 @@ for (const action of ['update', 'create', 'remove', 'mixed']) nodeTest(`plano co
   assert.equal(fs.existsSync(join(root, '.agent-tests')), false, 'plano inválido não deve criar backup');
 });
 
-test('mudança das ações durante backup é recusada antes das alterações públicas', { timeout: 120000 }, t => {
+test("change of actions during backup is refused before public changes", { timeout: 120000 }, t => {
   const root = fixture(t), human = '# Instruções humanas\n';
   put(root, 'AGENTS.md', human); put(root, '.gitignore', '# regra humana\n');
   git(root, 'add', '--', 'AGENTS.md', '.gitignore');
@@ -158,7 +158,7 @@ nodeTest('candidatos de poda respeitam limites e incluem diretórios legados con
   assert.deepEqual(effects.retiredRoots, ['.claude']);
 });
 
-test('mudança do plano durante backup bloqueia poda antes das alterações públicas', { timeout: 120000 }, t => {
+test("plan change during backup blocks pruning before public changes", { timeout: 120000 }, t => {
   const root = fixture(t), human = Buffer.from('# Instruções da equipe\n');
   put(root, 'AGENTS.md', human); put(root, '.gitignore', '# regra humana\n');
   git(root, 'add', '--', '.gitignore');
@@ -184,7 +184,7 @@ test('mudança do plano durante backup bloqueia poda antes das alterações púb
   assert.deepEqual(fs.readFileSync(join(root, '.git/index')), index);
 });
 
-test('iterador de uso único é recusado antes de criar backup ou mudar o projeto', { timeout: 120000 }, t => {
+test("Single-use iterator is refused before creating backup or changing the project", { timeout: 120000 }, t => {
   const root = fixture(t), human = Buffer.from('# Instruções da equipe\n');
   put(root, 'AGENTS.md', human); put(root, '.gitignore', '# regra humana\n');
   git(root, 'add', '--', '.gitignore');
@@ -201,7 +201,7 @@ test('iterador de uso único é recusado antes de criar backup ou mudar o projet
   assert.equal(fs.existsSync(join(root, '.agent-tests')), false);
 });
 
-test('mudança das raízes durante poda impede remover raiz desmarcada', { timeout: 120000 }, t => {
+test("root change during pruning prevents removing unmarked root", { timeout: 120000 }, t => {
   const root = fixture(t);
   applyPlan(planInstallation({ target: root, mode: 'init', clients: ['claude'] }));
   const plan = planInstallation({ target: root, mode: 'agents', clients: ['codex'] });
@@ -221,9 +221,9 @@ test('mudança das raízes durante poda impede remover raiz desmarcada', { timeo
   assert.equal(fs.statSync(join(root, '.claude')).isDirectory(), true);
 });
 
-test('mudança entre raízes retiradas impede podar a próxima raiz', { timeout: 120000 }, t => {
+test("change between roots removed prevents pruning the next root", { timeout: 120000 }, t => {
   const root = fixture(t);
-  // Claude mantém regras para revisão; use duas raízes efetivamente removíveis.
+  // Claude maintains rules for revision; use two effectively removable roots.
   applyPlan(planInstallation({ target: root, mode: 'init', clients: ['cursor', 'opencode'] }));
   const plan = planInstallation({ target: root, mode: 'agents', clients: ['codex'] });
   assert.ok(plan.retiredRoots.includes('.cursor') && plan.retiredRoots.includes('.opencode'));
@@ -360,7 +360,7 @@ function verifyCandidate(t, root, plan, { missingRoot = false } = {}) {
   let entries;
   if (missingRoot) {
     assert.throws(() => captureRecoverySnapshot(root, operations), { code: 'E_RECOVERY_CAPTURE_ROOT' });
-    entries = expected; // Candidato sintético: não representa a criação da raiz.
+    entries = expected; // Synthetic candidate: does not represent root creation.
   } else {
     entries = captureRecoverySnapshot(root, operations);
     assert.deepEqual(entries, expected);
@@ -373,7 +373,7 @@ function verifyCandidate(t, root, plan, { missingRoot = false } = {}) {
   return { entries, backup, data, result };
 }
 
-test('init real: candidato cobre chamadas observadas e conserva conteúdo e índice anteriores', { timeout: 120000 }, t => {
+test("real init: candidate covers observed calls and conserves previous content and index", { timeout: 120000 }, t => {
   const root = fixture(t);
   put(root, '.gitignore', '# humano\nsegredos/\n'); put(root, 'AGENTS.md', '# Orientações da equipe\n');
   put(root, '.claude/settings.json', '{"humano":true}\n'); git(root, 'add', '--', '.gitignore', 'AGENTS.md', '.claude/settings.json');
@@ -398,7 +398,7 @@ test('init real: candidato cobre chamadas observadas e conserva conteúdo e índ
   assert.equal(fs.readFileSync(join(root, '.claude/settings.json'), 'utf8'), '{"humano":true}\n');
 });
 
-test('migração real: candidato cobre arquivos, diretórios antigos e destinos observados', { timeout: 120000 }, t => {
+test("real migration: candidate covers files, old directories and observed destinations", { timeout: 120000 }, t => {
   const root = fixture(t); put(root, '.gitignore', '# humano\n');
   applyPlan(planInstallation({ target: root, mode: 'init', clients: ['codex'] }));
   const state = join(root, '.pbai4devs/state/agentdevkit.json'), value = JSON.parse(fs.readFileSync(state));
@@ -423,7 +423,7 @@ test('migração real: candidato cobre arquivos, diretórios antigos e destinos 
   assert.deepEqual(fs.readFileSync(join(root, '.git/index')), index);
 });
 
-test('remoção obsoleta real: candidato inclui diretórios possivelmente removidos', { timeout: 120000 }, t => {
+test("actual obsolete removal: candidate includes directories possibly removed", { timeout: 120000 }, t => {
   const root = fixture(t); applyPlan(planInstallation({ target: root, mode: 'init', clients: ['codex'] }));
   const obsolete = '.pbai4devs/skills/equipe/obsoleta/SKILL.md';
   const content = '---\nname: obsoleta\ndescription: Recurso antigo.\n---\n\n# Obsoleta\n'; put(root, obsolete, content);
@@ -445,7 +445,7 @@ test('remoção obsoleta real: candidato inclui diretórios possivelmente removi
   assert.deepEqual(verifyRecoveryBackup(snapshot.backup, snapshot.result.manifest), snapshot.result);
 });
 
-test('remoção obsoleta preserva arquivo humano no mesmo diretório', { timeout: 120000 }, t => {
+test("obsolete removal preserves human file in the same directory", { timeout: 120000 }, t => {
   const root = fixture(t); applyPlan(planInstallation({ target: root, mode: 'init', clients: ['codex'] }));
   const obsolete = '.pbai4devs/skills/equipe/obsoleta/SKILL.md', human = '.pbai4devs/skills/equipe/obsoleta/nota-humana.txt';
   const content = '---\nname: obsoleta\ndescription: Fixture.\n---\n\n# Obsoleta\n';
@@ -461,7 +461,7 @@ test('remoção obsoleta preserva arquivo humano no mesmo diretório', { timeout
   assert.equal(fs.readFileSync(join(root, human), 'utf8'), 'preservar\n');
 });
 
-test('projeto inexistente: arquivos do plano não representam criação da raiz', { timeout: 120000 }, t => {
+test("nonexistent project: Plan files do not represent root creation", { timeout: 120000 }, t => {
   const parent = fixture(t), root = join(parent, 'projeto-novo');
   assert.equal(fs.existsSync(root), false);
   const targetBefore = inspectRecoveryTarget(root);
@@ -479,7 +479,7 @@ test('projeto inexistente: arquivos do plano não representam criação da raiz'
   assert.equal(inspectRecoveryTarget(root).status, 'existing');
 });
 
-test('sync direto: novas saídas observadas exigem plano disponível antes da escrita', { timeout: 120000 }, t => {
+test("direct sync: new observed outputs require plan available before writing", { timeout: 120000 }, t => {
   const root = fixture(t);
   put(root, '.pbai4devs/espelhos.conf', 'agente|.claude|plano\n');
   for (const name of ['agents.ignore', 'shared.ignore', 'local.ignore', 'clients.json']) {
@@ -532,7 +532,7 @@ test('sync direto: novas saídas observadas exigem plano disponível antes da es
   assert.deepEqual(fs.readFileSync(join(root, '.claude/settings.json')), settings);
 });
 
-test('inspeção de efeitos não pode ser ativada em modo mutável', t => {
+test("effect inspection cannot be activated in changeable mode", t => {
   const root = fixture(t); put(root, 'README.md', '# Equipe\n'); git(root, 'add', '--', 'README.md');
   const index = fs.readFileSync(join(root, '.git/index'));
   const before = fs.readdirSync(root).sort();
@@ -541,7 +541,7 @@ test('inspeção de efeitos não pode ser ativada em modo mutável', t => {
   assert.deepEqual(fs.readFileSync(join(root, '.git/index')), index);
 });
 
-test('descrição de efeitos do sync cobre criação, atualização e remoção observadas', t => {
+test("description of sync effects covers creation, update and removal observed", t => {
   const root = fixture(t);
   const trickyParent = '.claude/skills/hub.sync.123e4567-e89b-42d3-a456-426614174000';
   put(root, '.pbai4devs/espelhos.conf', 'agente|.claude|plano\nnativo|.claude/skills/demo.sync.aprovado/SKILL.md|.pbai4devs/skills/demo/SKILL.md\n');
@@ -621,7 +621,7 @@ function describeCandidate(root, plan) {
   };
 }
 
-test('init Codex: candidato cobre diretórios observados e explicita exclusões', { timeout: 120000 }, t => {
+test("init Codex: candidate covers observed directories and explicit exclusions", { timeout: 120000 }, t => {
   const root = fixture(t);
   put(root, '.gitignore', '# equipe\n');
   put(root, 'HUMAN.txt', 'staged\n');
@@ -664,7 +664,7 @@ test('init Codex: candidato cobre diretórios observados e explicita exclusões'
   t.diagnostic(JSON.stringify({ candidateEntries: report.entries.length, newlyCreatedDirectories: newlyCreated.length, physicalTemporaries: temporaries.length, backupBytesMatch: true, agentsUpdated: true, completeness: report.completeness }));
 });
 
-test('raiz ausente permanece excluída da descrição incompleta', { timeout: 120000 }, t => {
+test("Missing root remains excluded from incomplete description", { timeout: 120000 }, t => {
   const parent = fixture(t), root = join(parent, 'projeto-novo');
   put(parent, '.gitignore', '# equipe\n');
   put(parent, 'HUMAN.txt', 'staged\n');
@@ -685,7 +685,7 @@ test('raiz ausente permanece excluída da descrição incompleta', { timeout: 12
   assert.deepEqual(paths.map(path => fs.readFileSync(join(parent, path))), before);
 });
 
-test('instalador pode ler o alvo externo se um ancestral vira symlink entre validação e leitura', { timeout: 120000 }, t => {
+test("installer can read external target if an ancestor turns symlink between validation and reading", { timeout: 120000 }, t => {
   const root = fs.realpathSync(fs.mkdtempSync(join('/tmp', 'adk-install-ancestor-race-')));
   const outside = fs.realpathSync(fs.mkdtempSync(join('/tmp', 'adk-install-ancestor-outside-')));
   t.after(() => {

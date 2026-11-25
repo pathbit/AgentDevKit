@@ -18,7 +18,7 @@ import { testGitConfig } from '../.pbai4devs/scripts/lib/test-git-environment.mj
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
-test('falha possivelmente parcial orienta revisão de backups nos três idiomas', () => {
+test("possibly partial failure orients backup review in all three languages", () => {
   for (const [language, incomplete] of [['pt', /incompletos/i], ['en', /incomplete/i], ['es', /incompletos/i]]) {
     const steps = getNextSteps({ command: 'error', target: tmpdir(), language, possiblePartial: true });
     assert.equal(steps.length, 1); assert.equal(steps[0].stage, 'revisao');
@@ -41,7 +41,7 @@ function state(write, { preparation = 'concluido', technical = 'pendente', prd =
   for (const [name, status] of [['prd', prd], ['ux', ux], ['design', design]]) write(`docs/${name}.md`, `---\nstatus: ${status}\n---\n\n# ${name}\n`);
 }
 
-test('inspeção exportada é somente leitura e não mantém exclusões entre projetos', t => {
+test("exported inspection is read-only and does not maintain exclusions between projects", t => {
   const first = fixture(t), second = fixture(t);
   first.write('.pbai4devs/espelhos.conf', 'agente|.custom|plano\n');
   second.write('.custom/code.js', 'export const source = true;\n');
@@ -49,7 +49,47 @@ test('inspeção exportada é somente leitura e não mantém exclusões entre pr
   assert.equal(inspectProject(second.target).mode, 'aplicacao-detectada');
 });
 
-test('novo projeto recebe preparação e projeto existente preserva descoberta', t => {
+test("execution indicates the README and the Compose configuration in codeless design", t => {
+  const { target, write } = fixture(t);
+  write('README.md', '# Serviços locais\n');
+  write('infra/compose.yaml', 'services: {}\n');
+  write('docker-compose.egress-test.yml', 'services: {}\n');
+  const before = intentTree(target);
+  const [step] = getNextSteps({ command: 'next', target, installed: true, intent: 'run' });
+  assert.equal(step.skill, 'preparar-dev');
+  assert.deepEqual(step.references, ['README.md', 'infra/compose.yaml', 'docker-compose.egress-test.yml']);
+  assert.match(step.command, /inspecionar-projeto/);
+  assert.deepEqual(intentTree(target), before);
+});
+
+test("execution in unknown stack query documentation instead of starting planning", t => {
+  const { target, write } = fixture(t);
+  write('Readme.rst', 'Build with the team launcher.\n');
+  write('app.custom-dialect', 'Source in a language unknown to the scanner.\n');
+  const next = () => getNextSteps({ command: 'next', target, installed: true, intent: 'run' })[0];
+  const initial = next();
+  assert.equal(initial.skill, null);
+  assert.deepEqual(initial.references, ['Readme.rst']);
+  assert.match(initial.instruction, /comando usado pela equipe/);
+  state(write, { prd: 'rascunho' });
+  assert.equal(next().skill, null);
+  assert.deepEqual(next().references, initial.references);
+});
+
+test("inventory recognizes new .NET solutions, additional languages and scripts", t => {
+  const { target, write } = fixture(t);
+  for (const file of ['Suite.slnx', 'pkg/build.zig.zon', 'notebooks/analysis.ipynb', 'scripts/Run.ps1', 'math/solver.f90', 'lang/solver.clj']) {
+    write(file, 'fixture\n');
+  }
+  const report = inspectProject(target);
+  assert.deepEqual(report.languages, ['dotnet', 'zig']);
+  assert.ok(report.manifests.includes('Suite.slnx'));
+  assert.ok(report.sources.includes('math/solver.f90'));
+  assert.ok(report.sources.includes('scripts/Run.ps1'));
+  assert.ok(report.sources.includes('notebooks/analysis.ipynb'));
+});
+
+test("new project receives preparation and existing project preserves discovery", t => {
   const { target, write } = fixture(t);
   assert.equal(getNextSteps({ command: 'next', target, installed: false })[0].stage, 'instalacao');
   assert.equal(getNextSteps({ command: 'next', target, installed: true })[0].skill, 'configurar-projeto');
@@ -64,7 +104,7 @@ test('novo projeto recebe preparação e projeto existente preserva descoberta',
   }
 });
 
-test('aprovações registradas determinam a etapa sem inventar aprovação', t => {
+test("recorded approvals determine the step without inventing approval", t => {
   const { target, write } = fixture(t);
   const next = () => getNextSteps({ command: 'doctor', target, installed: true })[0];
   state(write, { prd: 'rascunho' }); assert.equal(next().skill, 'criar-prd');
@@ -77,7 +117,7 @@ test('aprovações registradas determinam a etapa sem inventar aprovação', t =
   assert.doesNotMatch(next().command, /'next'/);
 });
 
-test('etapas de produto solicitam evidências também nos fluxos padrão e run', t => {
+test("product steps require evidence in standard and product flows", t => {
   const { target, write } = fixture(t);
   for (const [options, expected] of [
     [{ prd: 'rascunho' }, 'criar-prd'],
@@ -86,7 +126,7 @@ test('etapas de produto solicitam evidências também nos fluxos padrão e run',
     [{}, 'gerenciar-roadmap'],
   ]) {
     state(write, options);
-    for (const intent of [undefined, 'run', 'product']) {
+    for (const intent of [undefined, 'product']) {
       const [step] = getNextSteps({ command: 'next', target, installed: true, intent });
       assert.equal(step.skill, expected);
       assert.match(step.instruction, /status registrado, por si só, não comprova aprovação/i);
@@ -94,7 +134,7 @@ test('etapas de produto solicitam evidências também nos fluxos padrão e run',
   }
 });
 
-test('frontmatter CRLF legítimo mantém aprovação e seleção da spec', t => {
+test("frontmatter CRLF legitimate maintains approval and selection of spec", t => {
   const { target, write } = fixture(t);
   state(write);
   write('docs/planos/ROADMAP.md', '---\r\nstatus: aprovado\r\n---\r\n# Roadmap\r\n- [ ] [Spec](../incrementos/primeiro/SPEC.md)\r\n');
@@ -105,7 +145,7 @@ test('frontmatter CRLF legítimo mantém aprovação e seleção da spec', t => 
   assert.equal(getNextSteps({ command: 'next', target, installed: true })[0].skill, 'implementar-spec');
 });
 
-test('respeita roadmap, spec declarada e configuração antes de sugerir implementação', t => {
+test("respect roadmap, declared spec and configuration before suggesting implementation", t => {
   const { target, write } = fixture(t); const next = () => getNextSteps({ command: 'next', target, installed: true })[0];
   state(write);
   const roadmap = (status, link = '') => write('docs/planos/ROADMAP.md', `${status ? `---\nstatus: ${status}\n---\n` : ''}# Roadmap\n${link}\n`);
@@ -145,7 +185,7 @@ test('respeita roadmap, spec declarada e configuração antes de sugerir impleme
   assert.equal(next().skill, 'gerenciar-roadmap');
 });
 
-test('somente vínculos locais explícitos identificam a spec no caminho acordado', t => {
+test("only explicit local links identify the spec on the agreed path", t => {
   const { target, write } = fixture(t); const next = () => getNextSteps({ command: 'next', target, installed: true })[0];
   state(write, { specs: 'docs/incrementos com espaços' });
   write('docs/incrementos com espaços/primeiro/SPEC.md', '---\nstatus: aprovado\n---\n# Spec\n');
@@ -172,7 +212,7 @@ test('somente vínculos locais explícitos identificam a spec no caminho acordad
   assert.equal(next().skill, 'implementar-spec');
 });
 
-test('não reabre entrega concluída, cancelada, publicada ou ambígua', t => {
+test("do not reopen completed, cancelled, published or ambiguous delivery", t => {
   const { target, write } = fixture(t); const next = () => getNextSteps({ command: 'next', target, installed: true })[0];
   state(write, { technical: 'concluido' });
   write('docs/incrementos/primeiro/SPEC.md', '---\nstatus: aprovado\n---\n# Spec\n');
@@ -194,7 +234,7 @@ test('não reabre entrega concluída, cancelada, publicada ou ambígua', t => {
   assert.equal(next().skill, 'gerenciar-roadmap');
 });
 
-test('status duplicado ou sintaxe YAML relevante desconhecida não cria aprovação', t => {
+test("duplicate status or syntax YAML relevant unknown does not create approval", t => {
   const { target, write } = fixture(t); const next = () => getNextSteps({ command: 'next', target, installed: true })[0];
   const link = '- [ ] [Incremento](../incrementos/primeiro/SPEC.md)';
   const files = [
@@ -231,7 +271,7 @@ test('status duplicado ou sintaxe YAML relevante desconhecida não cria aprovaç
   assert.equal(next().skill, 'gerenciar-roadmap');
 });
 
-test('não presume caminhos ausentes, inválidos ou diretório com conteúdo ambíguo', t => {
+test("do not assume missing, invalid paths or directory with ambiguous content", t => {
   const { target, write } = fixture(t); const next = () => getNextSteps({ command: 'next', target, installed: true })[0];
   write('docs/planos/ROADMAP.md', '---\nstatus: aprovado\n---\n# Roadmap\n');
   for (const configured of ['null', '../fora', '/etc', 'docs/.GiT/specs', 'docs/incrementos\\externos', 'docs/incrementos:outros']) {
@@ -243,7 +283,7 @@ test('não presume caminhos ausentes, inválidos ou diretório com conteúdo amb
   assert.equal(next().skill, 'gerenciar-roadmap');
 });
 
-test('subárvores reservadas não são interpretadas como specs do projeto', t => {
+test("reserved subtrees are not interpreted as project specs", t => {
   const { target, write } = fixture(t); const next = () => getNextSteps({ command: 'next', target, installed: true })[0];
   state(write);
   write('docs/planos/ROADMAP.md', '---\nstatus: aprovado\n---\n# Roadmap\n[Spec](../incrementos/.GiT/SPEC.md)\n');
@@ -252,7 +292,7 @@ test('subárvores reservadas não são interpretadas como specs do projeto', t =
   assert.equal(inspectProject(target).maturity.planning.specs.complete, false);
 });
 
-test('enumeração de specs e seus filhos é limitada e não retorna seleção parcial', t => {
+test("enumeration of specs and their children is limited and does not return partial selection", t => {
   for (const mode of ['root', 'child']) {
     const { target, write } = fixture(t);
     state(write);
@@ -280,7 +320,7 @@ test('enumeração de specs e seus filhos é limitada e não retorna seleção p
   }
 });
 
-test('inventário genérico limitado pede inspeção manual sem presumir projeto vazio', t => {
+test("limited generic inventory asks manual inspection without assuming empty design", t => {
   const { target, write } = fixture(t), large = join(target, 'huge');
   mkdirSync(large);
   write('src/existing.mjs', 'export const existing = true;\n');
@@ -306,7 +346,7 @@ test('inventário genérico limitado pede inspeção manual sem presumir projeto
   assert.ok(openings.every(item => item.closed && item.reads <= 25001));
 });
 
-test('não segue links de roadmap ou specs, inclusive em ancestrais', t => {
+test("does not follow roadmap or specs links, including in ancestors", t => {
   const { target, write } = fixture(t); const next = () => getNextSteps({ command: 'next', target, installed: true })[0];
   state(write);
   write('outro/ROADMAP.md', '---\nstatus: aprovado\n---\n# Roadmap\n');
@@ -321,7 +361,7 @@ test('não segue links de roadmap ou specs, inclusive em ancestrais', t => {
   assert.equal(next().skill, 'gerenciar-roadmap');
 });
 
-test('spec e metadados humanos com links não são seguidos ou interpretados como aprovação', t => {
+test("spec and human metadata with links are not followed or interpreted as approval", t => {
   const { target, write } = fixture(t); const next = () => getNextSteps({ command: 'next', target, installed: true })[0];
   state(write);
   write('docs/planos/ROADMAP.md', '---\nstatus: aprovado\n---\n# Roadmap\n[Spec](../incrementos/primeiro/SPEC.md)\n');
@@ -336,7 +376,7 @@ test('spec e metadados humanos com links não são seguidos ou interpretados com
   assert.equal(readFileSync(join(target, 'externo/spec.md'), 'utf8'), '---\nstatus: aprovado\n---\n# Fora\n');
 });
 
-test('troca de ancestral durante inspeção não usa metadados externos', t => {
+test("ancestor exchange during inspection does not use external metadata", t => {
   const { target, write } = fixture(t);
   const outside = realpathSync(mkdtempSync(join(tmpdir(), 'adk-next-outside-')));
   t.after(() => rmSync(outside, { recursive: true, force: true }));
@@ -370,7 +410,7 @@ test('troca de ancestral durante inspeção não usa metadados externos', t => {
   assert.equal(readFileSync(join(outside, 'ROADMAP.md'), 'utf8'), '---\nstatus: aprovado\n---\n# Externo\n');
 });
 
-test('troca de diretório após a listagem não enumera conteúdo externo', t => {
+test("directory change after listing does not enumerate external content", t => {
   for (const mode of ['project', 'documentation']) {
     const { target, write } = fixture(t);
     const outside = realpathSync(mkdtempSync(join(tmpdir(), 'adk-next-dir-outside-')));
@@ -404,7 +444,7 @@ test('troca de diretório após a listagem não enumera conteúdo externo', t =>
   }
 });
 
-test('inspeção preserva destino com espaços e metacaracteres sem shell', t => {
+test("inspection preserves destination with spaces and metacharacters without shell", t => {
   const { target } = fixture(t);
   const [next] = getNextSteps({ command: 'next', target, language: 'en', installed: true });
   assert.ok(next.command.includes('inspecionar-projeto'));
@@ -413,7 +453,7 @@ test('inspeção preserva destino com espaços e metacaracteres sem shell', t =>
   assert.equal(JSON.parse(result.stdout).maturity.level, 'preparacao');
 });
 
-test('manutenção orienta roadmap e não cria um loop de next', t => {
+test("maintenance guides roadmap and does not create a loop next", t => {
   const { target, write } = fixture(t);
   state(write, { technical: 'concluido' });
   const file = join(target, '.pbai4devs/state/configuracao/ESTADO.md');
@@ -427,7 +467,7 @@ test('manutenção orienta roadmap e não cria um loop de next', t => {
   assert.doesNotMatch(next.command, /'next'/);
 });
 
-test('instalação usa pacote do registry em macOS e Windows com destino literal', t => {
+test("installation uses registry package in macOS and Windows with literal destination", t => {
   const { target } = fixture(t);
   for (const platform of ['darwin', 'win32']) {
     const [next] = getNextSteps({ command: 'next', target, language: 'es', installed: false, platform });
@@ -447,7 +487,7 @@ test('instalação usa pacote do registry em macOS e Windows com destino literal
   assert.doesNotMatch(command, /releases\/download|\.tgz|--package=https/);
 });
 
-test('comando respeita metadados do pacote e usa npmjs quando registry está ausente', async t => {
+test("command respects package metadata and uses npmjs when registry is missing", async t => {
   const { target } = fixture(t);
   const source = readFileSync(join(root, 'src/config.mjs'));
   for (const [id, registry] of [['custom', 'https://registry.example.test'], ['github', 'https://npm.pkg.github.com'], ['npmjs', 'https://registry.npmjs.org/'], ['default', undefined]]) {
@@ -460,7 +500,7 @@ test('comando respeita metadados do pacote e usa npmjs quando registry está aus
   }
 });
 
-test('repo usa npm público e sobrepõe mapeamento legado do usuário sem editar credenciais', t => {
+test("repo uses public npm and overrides legacy mapping of user without editing credentials", t => {
   const { target } = fixture(t), userConfig = join(target, 'user.npmrc');
   writeFileSync(userConfig, '@pathbit:registry=https://npm.pkg.github.com\n');
   assert.equal(packageInfo.publishConfig.registry, 'https://registry.npmjs.org');
@@ -506,7 +546,7 @@ function guidanceFixture(t) {
     git: (...args) => invoke('git', args).stdout };
 }
 
-test('document inventaria aplicação legada e exporta somente evidências de um rascunho', {
+test("document would inventory legacy application and export only evidence of a draft", {
   timeout: process.platform === 'win32' ? 480000 : 180000,
 }, t => {
   const { target, write, json, cli, git } = guidanceFixture(t);
@@ -562,7 +602,7 @@ test('document inventaria aplicação legada e exporta somente evidências de um
   assert.deepEqual(intentTree(target), before);
 });
 
-test('document distingue inventários parciais sem publicar dados dos arquivos ilegíveis', t => {
+test("document distinguishes partial inventories without publishing data from unreadable files", t => {
   const { target, write, json } = guidanceFixture(t);
   write('package.json', '{"scripts": "ADK_PRIVATE_INVALID_MANIFEST"');
   write('README.md', 'ADK_PRIVATE_OVERSIZED_DOC'.padEnd(2 * 1024 * 1024 + 1, ' '));
@@ -581,7 +621,7 @@ test('document distingue inventários parciais sem publicar dados dos arquivos i
   assert.deepEqual(intentTree(target), before);
 });
 
-test('document preserva evidência legível quando uma subpasta recusa acesso', async t => {
+test("document preserves legible evidence when a subfolder refuses access", async t => {
   const { target, write } = guidanceFixture(t);
   write('README.md', '# Documento existente\n');
   write('restrito/package.json', '{"scripts":{"ADK_PRIVATE_RESTRICTED":"node app.js"}}');
@@ -614,7 +654,7 @@ test('document preserva evidência legível quando uma subpasta recusa acesso', 
   assert.deepEqual(intentTree(target), before);
 });
 
-test('document usa português com estado legado pt-BR e preserva seus bytes', t => {
+test("document uses Portuguese with legacy state pt-BR and preserves its bytes", t => {
   const { target, write, cli, json } = guidanceFixture(t);
   const stateFile = '.pbai4devs/estado/agentdevkit.json';
   const legacyState = '{"schemaVersion":1,"version":"0.0.21","language":"pt-BR","files":{},"blocks":{}}\r\n';
@@ -630,7 +670,7 @@ test('document usa português com estado legado pt-BR e preserva seus bytes', t 
   assert.deepEqual(intentTree(target), before);
 });
 
-test('document mantém os artefatos de fixtures fora da evidência de aplicação', t => {
+test("document keeps fixture artifacts out of application evidence", t => {
   const { target, write, json } = guidanceFixture(t);
   const mock = 'tests/fixtures/mock';
   write(`${mock}/package.json`, '{"scripts":{"fixture-start":"node app.mjs"}}');
@@ -650,7 +690,7 @@ test('document mantém os artefatos de fixtures fora da evidência de aplicaçã
   assert.deepEqual(intentTree(target), before);
 });
 
-test('next documenta a rota antes e depois do init e inventário vazio explicita lacunas', {
+test("next documents the route before and after the init and empty inventory explains gaps", {
   timeout: process.platform === 'win32' ? 480000 : 180000,
 }, t => {
   const { target, write, json, git } = guidanceFixture(t);
@@ -682,7 +722,7 @@ test('next documenta a rota antes e depois do init e inventário vazio explicita
   assert.deepEqual(intentTree(target), installed);
 });
 
-test('document e init com propósito documental respeitam as barreiras de recuperação', t => {
+test("document and init for documentary purposes respect the barriers to recovery", t => {
   const { target, write, json, cliResult } = guidanceFixture(t);
   write('package.json', '{"name":"ADK_PRIVATE_PROJECT","scripts":{"start":"node server.js"}}');
   const tx = startProjectRecovery(target, []);
@@ -722,7 +762,7 @@ test('document e init com propósito documental respeitam as barreiras de recupe
   assert.deepEqual(intentTree(unreadable.target), before);
 });
 
-test('document markdown encaminha alvo inválido para stderr e mantém stdout vazio', t => {
+test("document markdown forwards invalid target to stderr and keeps stdout empty", t => {
   const { target, write, cliResult } = guidanceFixture(t);
   write('README.md', '# Bytes humanos\n');
   const before = intentTree(target);
@@ -733,7 +773,7 @@ test('document markdown encaminha alvo inválido para stderr e mantém stdout va
   assert.deepEqual(intentTree(target), before);
 });
 
-test('instalação 0.0.34 sem skill documental regular orienta atualização após o levantamento', async t => {
+test("installation 0.0.34 without regular document skill orients update after survey", async t => {
   const { target, write, json } = guidanceFixture(t);
   write('.pbai4devs/state/agentdevkit.json', JSON.stringify({
     schemaVersion: 1, version: '0.0.34', language: 'pt', clients: ['codex'], files: {}, blocks: {},
@@ -751,7 +791,7 @@ test('instalação 0.0.34 sem skill documental regular orienta atualização ap�
     assert.deepEqual(intentTree(target), before);
   }
   verify();
-  await t.test('diretório da skill é link para outra árvore', subtest => {
+  await t.test("skill directory is link to another tree", subtest => {
     const outside = guidanceFixture(subtest);
     outside.write('SKILL.md', '# Link para uma skill fora do projeto\n');
     const link = join(target, '.pbai4devs/skills/projeto/documentar-legado');
@@ -780,7 +820,7 @@ const integrationFixtures = {
 const privateFixtureText = 'ADK_INTEGRACAO_CONTEUDO_NAO_CONSULTAR';
 const integrationHint = /\bnext\b[^\r\n]*--integrations/;
 
-test('next identifica cinco estruturas de integração antes e depois da instalação sem escrever', {
+test("next identifies five integration structures before and after installation without writing", {
   timeout: process.platform === 'win32' ? 480000 : 180000,
 }, t => {
   const { target, write, json, cli, git } = guidanceFixture(t);
@@ -845,7 +885,7 @@ test('next identifica cinco estruturas de integração antes e depois da instala
   assert.deepEqual(intentTree(target), before);
 });
 
-test('next reconhece as estruturas alternativas sem abrir os arquivos de integração', async t => {
+test("next recognizes alternative structures without opening integration files", async t => {
   const { target, write, git, json } = guidanceFixture(t);
   const paths = [
     '_bmad/config.toml', '_bmad-output/planning-artifacts/plan.md',
@@ -882,7 +922,7 @@ test('next reconhece as estruturas alternativas sem abrir os arquivos de integra
   assert.deepEqual(intentTree(target), before);
 });
 
-test('next recusa estruturas incompletas e não segue diretórios de integração por link', t => {
+test("next refuses incomplete structures and does not follow link integration directories", t => {
   const { target, write, json } = guidanceFixture(t);
   const external = fixture(t, { withInspector: false });
   write('_bmad/config.toml', privateFixtureText);
@@ -913,7 +953,7 @@ test('next recusa estruturas incompletas e não segue diretórios de integraçã
   assert.deepEqual(intentTree(external.target), outside);
 });
 
-test('integrações são uma opção de next e o diagnóstico limpo encaminha sem escrever', {
+test("integrations are a next option and clean diagnosis forwards without writing", {
   timeout: process.platform === 'win32' ? 480000 : 180000,
 }, t => {
   const { target, write, json, git } = guidanceFixture(t);
@@ -955,7 +995,7 @@ test('integrações são uma opção de next e o diagnóstico limpo encaminha se
   assert.deepEqual(intentTree(target), missing);
 });
 
-test('intenção de execução mantém o foco na aplicação com uma spec aberta', t => {
+test("execution intention keeps focus on application with an open spec", t => {
   const { target, write } = fixture(t);
   state(write);
   write('package.json', '{"scripts":{"start":"node src/app.mjs"}}');
@@ -968,7 +1008,7 @@ test('intenção de execução mantém o foco na aplicação com uma spec aberta
   assert.equal(next('run').skill, 'preparar-dev');
 });
 
-test('next diferencia intenção de produto e execução sem alterar projeto ou Git', t => {
+test("next differentiates product intention and execution without changing project or Git", t => {
   const { target, write } = fixture(t);
   const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !/^GIT_|^NODE_OPTIONS$/i.test(name)));
   Object.assign(env, { GIT_CONFIG_GLOBAL: testGitConfig, GIT_CONFIG_NOSYSTEM: '1', GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0', LC_ALL: 'C' });
@@ -1004,7 +1044,7 @@ test('next diferencia intenção de produto e execução sem alterar projeto ou 
   assert.deepEqual(intentTree(target), before);
 });
 
-test('intenção de produto respeita projeto novo, estado mapeado e lacunas', t => {
+test("product intention respects new design, mapped state and gaps", t => {
   const { target, write } = fixture(t);
   const next = intent => getNextSteps({ command: 'next', target, installed: true, intent })[0];
   const notInstalled = getNextSteps({ command: 'next', target, installed: false, intent: 'product' })[0];
@@ -1027,7 +1067,7 @@ test('intenção de produto respeita projeto novo, estado mapeado e lacunas', t 
   next('product'); assert.deepEqual(intentTree(target), afterFixtureEdit);
 });
 
-test('intenção de produto identifica a primeira etapa pendente antes de fases não mapeadas', t => {
+test("product intention identifies the first pending step before unmapped phases", t => {
   const { target, write } = fixture(t);
   const stateFile = '.pbai4devs/state/configuracao/ESTADO.md';
   const next = () => getNextSteps({ command: 'next', target, installed: true, intent: 'product' })[0];
@@ -1054,7 +1094,7 @@ test('intenção de produto identifica a primeira etapa pendente antes de fases 
   assert.deepEqual(intentTree(target), before);
 });
 
-test('intenção de produto mantém inspeção conservadora quando inventário é truncado', t => {
+test("Product intent maintains conservative inspection when inventory is truncated", t => {
   const { target, write } = fixture(t), large = join(target, 'huge');
   mkdirSync(large); write('src/app.mjs', 'export const app = true;\n');
   write('docs/PRD.md', '# Documento existente\n');
@@ -1072,7 +1112,7 @@ test('intenção de produto mantém inspeção conservadora quando inventário �
   assert.doesNotMatch(step.instruction, /(?:não|nao) (?:há|ha|existem?|existe) (?:documentos|docs|prd|design)/i);
 });
 
-test('intenção de produto não escolhe etapa com inventário documental truncado', t => {
+test("product intention does not choose step with truncated documentary inventory", t => {
   const { target, write } = fixture(t);
   write('src/app.mjs', 'export const app = true;\n');
   state(write, { prd: 'rascunho' });
@@ -1090,7 +1130,7 @@ test('intenção de produto não escolhe etapa com inventário documental trunca
   }
 });
 
-test('intenção de produto pede inspeção quando o inventário documental tem avisos', t => {
+test("product intention asks for inspection when the documentary inventory has warnings", t => {
   const { target, write } = fixture(t);
   write('src/app.mjs', 'export const app = true;\n');
   state(write, { prd: 'rascunho' });
@@ -1129,7 +1169,7 @@ test('intenção de produto pede inspeção quando o inventário documental tem 
   assert.deepEqual(intentTree(target), before);
 });
 
-test('intenção de produto pede inspeção para link opaco', t => {
+test("Product intent asks inspection for opaque link", t => {
   const { target, write } = fixture(t);
   write('src/app.mjs', 'export const app = true;\n');
   state(write, { prd: 'rascunho' });
@@ -1149,7 +1189,7 @@ test('intenção de produto pede inspeção para link opaco', t => {
   assert.deepEqual(intentTree(target), before);
 });
 
-test('intenção de produto informa falha global de inspeção sem escolher etapa', t => {
+test("Product intent informs global inspection failure without choosing step", t => {
   const { target } = fixture(t), originalRealpath = fs.realpathSync;
   fs.realpathSync = (...args) => {
     if (String(args[0]) === target) throw Object.assign(new Error('fixture unreadable'), { code: 'EACCES' });
@@ -1170,7 +1210,7 @@ test('intenção de produto informa falha global de inspeção sem escolher etap
   } finally { fs.realpathSync = originalRealpath; }
 });
 
-test('CLI recusa intenção ausente, inválida, repetida ou em outro comando', t => {
+test("CLI refusal of intention, invalid, repeated or in another command", t => {
   const { target } = fixture(t), before = intentTree(target);
   for (const args of [
     ['next', '--intent'], ['next', '--intent', 'unknown'],
@@ -1187,7 +1227,7 @@ test('CLI recusa intenção ausente, inválida, repetida ou em outro comando', t
   assert.deepEqual(intentTree(target), before);
 });
 
-test('tools preserva argumentos --intent opacos após separador', t => {
+test("tools preserves arguments --intent opaque after separator", t => {
   const opaque = ['--', '--intent', 'unknown', '--intent', 'product'];
   const parsed = parseArgs(['tools', 'run', 'agent-browser', ...opaque]);
   assert.equal(parsed.command, 'tools');
@@ -1202,7 +1242,7 @@ test('tools preserva argumentos --intent opacos após separador', t => {
   assert.deepEqual(JSON.parse(response.toolOutput), ['run', 'agent-browser', ...opaque]);
 });
 
-test('help e version permanecem globais com intenção válida', t => {
+test("help and version remain global with valid intent", t => {
   const { target } = fixture(t), before = intentTree(target);
   for (const [flag, expected] of [['--help', 'help'], ['--version', 'version']]) {
     const args = ['next', '--intent', 'product', flag, '--json', '--target', target];

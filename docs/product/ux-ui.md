@@ -5,6 +5,8 @@ status: aprovado
 
 # UX da CLI
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 O produto usa uma CLI; não há interface web ou desktop nesta entrega.
 A experiência prioriza comandos curtos, resultados legíveis e continuidade.
 
@@ -49,3 +51,7 @@ a aprovação do desenho não substitui as evidências de funcionamento.
 
 [clients]: ../guides/installation.md#atualizar-e-escolher-agentes
 [plugins]: ../guides/plugins.md
+
+[reading-pt]: ux-ui.md
+[reading-en]: ../en/product/ux-ui.md
+[reading-es]: ../es/product/ux-ui.md

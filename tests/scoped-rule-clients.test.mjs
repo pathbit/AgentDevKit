@@ -41,7 +41,7 @@ function assertScopedPointer(root, path, key, expected) {
   assert.equal(posix.normalize(posix.join(posix.dirname(path), pointers[0][1])), source);
 }
 
-test('regra glob mantém escopo Claude e Copilot e preserva Git staged', { timeout: 240000 }, t => {
+test("glob rule maintains scope Claude and Copilot and preserves Git staged", { timeout: 240000 }, t => {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'adk-scoped-rule-')));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const run = (program, args) => spawnSync(program, args, { cwd: root, encoding: 'utf8', timeout: 180000, maxBuffer: 8 * 1024 * 1024 });

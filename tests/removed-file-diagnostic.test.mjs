@@ -13,7 +13,7 @@ import { main } from '../src/cli.mjs';
 import { synchronize } from '../.pbai4devs/scripts/sincronizar-agentes/SCRIPT.mjs';
 import { fixture, put, read, cli } from './fixtures/client-selection-helpers.mjs';
 
-test('doctor e checks identificam remoção sem entrada e preservam os dados', async t => {
+test("doctor and checks identify removal without input and preserve data", async t => {
   const root = fixture(t);
   put(root, '.gitignore', '# configuração do projeto\n');
   assert.equal(spawnSync('git', ['-C', root, 'add', '.gitignore']).status, 0);
@@ -103,7 +103,7 @@ test('doctor e checks identificam remoção sem entrada e preservam os dados', a
   assert.deepEqual(gitPaths.map(path => readFileSync(join(root, path))), gitBefore);
 });
 
-test('registro correlacionado não é marcado como remoção sem correspondência', t => {
+test("correlated record is not marked as removal without matching", t => {
   const root = fixture(t), path = '.codex/skills/exemplo/SKILL.md', digest = 'b'.repeat(64);
   put(root, '.pbai4devs/state/agentdevkit.json', JSON.stringify({ schemaVersion: 1, version: '0.0.21', language: 'pt', files: { [path]: digest }, blocks: {} }));
   put(root, '.pbai4devs/state/derived.json', JSON.stringify({ schemaVersion: 1, entries: {}, removedFiles: { [path]: digest } }));
@@ -112,7 +112,7 @@ test('registro correlacionado não é marcado como remoção sem correspondênci
   assert.throws(() => inspect(root), { code: 'E_STATE' });
 });
 
-test('diagnóstico mantém as duas ocorrências com alvo ausente e overlay posterior', t => {
+test("diagnosis keeps both occurrences with absent target and posterior overlay", t => {
   const root = fixture(t), first = '.codex/skills/um/SKILL.md', second = '.claude/skills/dois/SKILL.md';
   put(root, '.pbai4devs/state/agentdevkit.json', JSON.stringify({ schemaVersion: 1, version: '0.0.21', language: 'pt', files: {}, blocks: {} }));
   put(root, '.pbai4devs/state/derived.json', JSON.stringify({ schemaVersion: 1, entries: {}, files: { [second]: 'c'.repeat(64) }, removedFiles: { [first]: 'a'.repeat(64), [second]: 'b'.repeat(64) } }));

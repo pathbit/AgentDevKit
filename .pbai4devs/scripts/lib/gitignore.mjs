@@ -7,16 +7,16 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { applyLegacyExcludeMigration } from './legacy-exclude-write.mjs';
 
-// Atualiza apenas o bloco reservado; regras externas permanecem byte a byte.
+// Update only the reserved block; external rules remain byte a byte.
 export const ignoreBegin = '# BEGIN AGENT IGNORE';
 export const ignoreEnd = '# END AGENT IGNORE';
 
 const outputDirectories = new Set(['.git', '.agent-tests', '.cache', 'node_modules', '__pycache__', 'opencode-loop', 'sessions', 'logs', 'testresults', 'test-results', 'blob-report', 'tmp', 'temp']);
 const localFiles = new Set(['auth.json', 'credentials.json', 'history.jsonl', '.ds_store', 'thumbs.db', 'desktop.ini']);
-const acceptedVisibility = new Set(['artifact-unprotected', 'artifact-coverage-unverified', 'output-visible']);
+const acceptedVisibility = new Set(['artifact-unprotected', 'artifact-coverage-unverified', 'artifact-ignore-ambiguous', 'output-visible']);
 export const isBlockingLocalIgnore = item => !acceptedVisibility.has(item.code);
 
-// Mesmos nomes de saídas locais ignoradas; não exclui fixtures/cache nem arquivos .template.
+// Same name as ignored local outputs; does not delete fixtures/cache No .template files.
 export function isGeneratedOutput(path, directory = false) {
   const parts = path.replaceAll('\\', '/').split('/');
   const sharedSource = parts[0]?.toLowerCase() === '.pbai4devs';
@@ -304,6 +304,43 @@ function genericFileException(rule, file, root, clientRoots, artifacts) {
   return !scope.some((part, index) => isGeneratedOutput(part, true) || artifactPath(scope.slice(0, index + 1).join('/'), artifacts, true));
 }
 
+function literalGlobName(value) {
+  // An ASCII case pair such as [Pp] denotes one case-insensitive name.
+  const name = value.replace(/\[([a-z])\1\]/gi, '$1').toLowerCase();
+  return ordinaryGitComponent(name) ? name : null;
+}
+
+function directoryExceptionIssue(rule, finalRules, clientRoots, artifacts) {
+  if (!rule.endsWith('/')) return 'ignore-ambiguous';
+  const parts = rule.slice(0, -1).split('/');
+  const names = parts.filter((part, index) => part !== '**' || index === 0 || index === parts.length - 1)
+    .map(literalGlobName);
+  const artifactNames = artifacts.map(pattern => pattern.slice(3).replace(/\/$/, ''));
+  if (process.platform !== 'win32' && names.every(Boolean) && artifactNames.every(name => !name.includes('/'))) {
+    // An interior globstar varies the path, never the directory name opened
+    // by a rule such as Packages/build/ or src/**/build/.
+    // Keep exceptions scoped to a client or naming a private directory visible.
+    const disjoint = names.every(name => !clientRoots.includes(name) && name !== '.pbai4devs' && name !== 'cache'
+      && !isGeneratedOutput(name, true) && !isGeneratedOutput(name) && !artifactPath(name, artifacts, true));
+    return disjoint ? null : 'ignore-ambiguous';
+  }
+
+  // The Visual Studio rule requires at least one character before .cache,
+  // so it cannot open the private directory .cache itself. A prefix-glob
+  // artifact such as .playwright* still intersects. Report that overlap as an
+  // artifact warning. Visible private files remain blocking in Git's probes.
+  if (parts.length !== 1 || !parts[0].startsWith('?*.') || literalGlobName(parts[0].slice(3)) !== 'cache') return 'ignore-ambiguous';
+  const matchesCacheSuffix = name => name.length > '.cache'.length && name.endsWith('.cache');
+  const playwright = 'playwright'.replace(/[a-z]/g, letter => `[${letter.toUpperCase()}${letter}]`);
+  if (clientRoots.some(matchesCacheSuffix)) return 'ignore-ambiguous';
+  if (!finalRules.has(`**/.${playwright}*`) || !finalRules.has(`**/${playwright}*/`)) return 'artifact-ignore-ambiguous';
+  const covered = artifacts.every((pattern, index) => {
+    const name = literalGlobName(artifactNames[index]);
+    return Boolean(name && !matchesCacheSuffix(name)) || finalRules.has(pattern);
+  });
+  return covered ? null : 'artifact-ignore-ambiguous';
+}
+
 // Wildcard negations may expose files that do not exist yet. Inspect client
 // ignores directly, even when an old rule currently hides the entire client.
 function ambiguousExceptions(root, location, clientRoots, artifacts) {
@@ -339,6 +376,7 @@ function ambiguousExceptions(root, location, clientRoots, artifacts) {
     const item = localStat(file);
     if (!item?.isFile() || item.isSymbolicLink()) continue;
     const lines = readFileSync(file, 'utf8').replace(/^\uFEFF/, '').split(/\r?\n/);
+    const finalRules = new Set(lines.slice(lines.findLastIndex(line => line.startsWith('!')) + 1));
     for (const line of lines) {
       if (!line.startsWith('!')) continue;
       const rule = line.slice(1).replace(/^\/?(?:\*\*\/)?/, '');
@@ -350,11 +388,14 @@ function ambiguousExceptions(root, location, clientRoots, artifacts) {
         if (project.some((part, index) => parts[index] && !/[*?\[]/.test(parts[index]) && parts[index] !== part && parts.slice(0, index).every(value => value && !/[*?\[]/.test(value)))) continue;
       }
       if (!wildcard) {
-        if (file !== rootIgnore && isGeneratedOutput(portable(relative(root, join(dirname(file), rule))), rule.endsWith('/'))) conflicts.push(portable(relative(root, file)) + ': ' + line);
+        if (file !== rootIgnore && isGeneratedOutput(portable(relative(root, join(dirname(file), rule))), rule.endsWith('/'))) {
+          conflicts.push({ code: 'ignore-ambiguous', path: `${portable(relative(root, file))}: ${line}` });
+        }
         continue;
       }
       if (genericFileException(rule, file, root, clientRoots, artifacts)) continue;
-      conflicts.push(portable(relative(root, file)) + ': ' + line);
+      const code = file === rootIgnore ? directoryExceptionIssue(rule, finalRules, clientRoots, artifacts) : 'ignore-ambiguous';
+      if (code) conflicts.push({ code, path: `${portable(relative(root, file))}: ${line}` });
     }
   }
   return conflicts;
@@ -448,7 +489,7 @@ export function assertLegacyIgnoreMigration(plan) {
   }
 }
 
-// Os padrões vêm do hub; apenas os nomes concretos dos derivados são calculados.
+// The patterns come from the hub; only the concrete names of the derivatives are calculated.
 export function planLocalIgnore(root, { outputs = [], templateRoot } = {}) {
   assertUnredirectedGitEnvironment();
   const resolved = localRoot(root); root = resolved.root;
@@ -553,7 +594,7 @@ export function checkLocalIgnore(plan, { replacedBlocks = [] } = {}) {
       const match = privateChecks.matches.get(privateChecks.paths[index]);
       if (!match || match.pattern.startsWith('!')) pending.push({ code: 'private-file-visible', path });
     }
-    for (const path of ambiguousExceptions(plan.root, plan.worktreeLocation, plan.clientRoots, plan.artifacts)) pending.push({ code: 'ignore-ambiguous', path });
+    pending.push(...ambiguousExceptions(plan.root, plan.worktreeLocation, plan.clientRoots, plan.artifacts));
     const currentShared = localRead(checkedLocalPath(plan.worktreeLocation.exclude)) ?? '';
     if (/^# BEGIN AGENTDEVKIT LOCAL [a-f0-9]{16}\r?$/m.test(currentShared.replace(/^\uFEFF/, ''))) {
       const migration = planLegacyIgnoreMigration(plan.root);

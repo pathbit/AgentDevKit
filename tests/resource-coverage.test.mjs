@@ -31,8 +31,8 @@ function clientPath(source, kind, format) {
   return `${category}${folder}${ext}`;
 }
 
-// A referência explícita permanece no hub; não se contabiliza como espelho
-// nativo nem comprova que o cliente tenha lido a regra.
+// The explicit reference remains in the hub; it is not counted as mirror
+// Native doesn't even prove the client read the rule.
 function verifyClaudeOmission(root, source, destination, trigger, omissions) {
   assert.ok(['manual', 'model_decision'].includes(trigger));
   const original = readFileSync(join(root, source), 'utf8');
@@ -63,7 +63,7 @@ function verifyClaudeOmission(root, source, destination, trigger, omissions) {
   visit(join(root, '.claude/rules'));
 }
 
-test('cada recurso instalado aponta à origem em cada cliente selecionado', async t => {
+test("each installed feature points to the origin in each selected client", async t => {
   const base = join(sourceRoot, '.agent-tests'); mkdirSync(base, { recursive: true });
   const root = realpathSync(mkdtempSync(join(base, 'resource-coverage-')));
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -130,7 +130,7 @@ test('cada recurso instalado aponta à origem em cada cliente selecionado', asyn
   assert.equal(omissions.length, referenceOnly, 'Omissões extras ou duplicadas não contam como cobertura nativa');
 });
 
-test('verificação de omissão Claude rejeita arquivo, duplicidade, link alternativo e divergência de trigger', t => {
+test("Claude default check rejects file, duplicity, alternative link and trigger divergence", t => {
   const root = mkdtempSync(join(tmpdir(), 'adk-coverage-omission-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const source = '.pbai4devs/rules/demo/RULE.md', target = '.claude/rules/demo/RULE.md';
@@ -159,7 +159,7 @@ test('verificação de omissão Claude rejeita arquivo, duplicidade, link altern
   }
 });
 
-test('todas as combinações de clientes preservam dependências e seleção determinística', () => {
+test("all customer combinations preserve dependencies and deterministic selection", () => {
   const policy = JSON.parse(readFileSync(join(sourceRoot, '.pbai4devs/templates/clients/ADAPTERS.json'), 'utf8'));
   const ids = policy.adapters.map(adapter => adapter.id);
   assert.deepEqual(adapters.map(adapter => adapter.id), ids);

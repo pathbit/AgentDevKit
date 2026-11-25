@@ -11,7 +11,7 @@ import { compareInventory, destination, discovery, structural } from './native-c
 
 const skill = { id: 'projeto/criar-skill', name: 'criar-skill', path: '.pbai4devs/skills/projeto/criar-skill/SKILL.md' };
 const agent = { id: 'revisor', name: 'revisor', path: '.pbai4devs/agents/revisor/AGENT.md' };
-test('destinos são específicos por cliente e tipo', () => {
+test("destinations are specific by customer and type", () => {
   assert.equal(destination('claude', 'skills', skill), '.claude/skills/criar-skill/SKILL.md');
   assert.equal(destination('opencode', 'skills', skill), '.opencode/skills/projeto/criar-skill/SKILL.md');
   assert.equal(destination('claude', 'agents', agent), '.claude/agents/revisor.md');
@@ -22,7 +22,7 @@ test('destinos são específicos por cliente e tipo', () => {
   assert.equal(destination('zcode', 'agents', agent), '.zcode/agents/revisor.md');
   assert.throws(() => destination('outro', 'agents', agent));
 });
-test('estrutura exige origem e referência ao caminho correto', t => {
+test("structure requires origin and reference to the correct path", t => {
   const root = mkdtempSync(join(tmpdir(), 'native-test-')); t.after(() => rmSync(root, { recursive: true, force: true }));
   const target = join(root, destination('claude', 'skills', skill)); mkdirSync(dirname(target), { recursive: true });
   const wrapper = link => `---\nname: criar-skill\n---\n\n# Criar skill\n\n<!-- gerado: sincronizar-agentes -->\nLeia e siga ${link}.\n`;
@@ -36,7 +36,7 @@ test('estrutura exige origem e referência ao caminho correto', t => {
     writeFileSync(target, inert); assert.equal(structural(root, 'claude', 'skills', skill).status, 'failed', inert);
   }
 });
-test('Copilot exige skill habilitada e única na pasta do projeto', () => {
+test("Copilot requires skill enabled and unique in project folder", () => {
   const project = '/tmp/projeto-sintetico';
   const row = { name: 'criar-skill', source: 'project', enabled: true,
     path: join(project, '.github/skills/criar-skill') };
@@ -51,7 +51,7 @@ test('Copilot exige skill habilitada e única na pasta do projeto', () => {
   assert.equal(discovery('copilot', 'agents', agent, '[]', project), null);
 });
 
-test('inventário acusa faltas, extras e duplicatas mesmo com mesmo id', () => {
+test("inventory accuses faults, extras and duplicates even with same id", () => {
   const expected = { skills: [skill], agents: [agent] };
   const installed = { skills: [skill, { ...skill }], agents: [{ ...agent, path: '.pbai4devs/agents/outro/AGENT.md' }] };
   const result = compareInventory(expected, installed);
@@ -59,7 +59,7 @@ test('inventário acusa faltas, extras e duplicatas mesmo com mesmo id', () => {
   assert.equal(result.agents.missing.length, 1); assert.equal(result.agents.extra.length, 1);
   assert.throws(() => compareInventory(expected, { skills: [] }), /inválido/);
 });
-test('recusa links simbólicos na origem e no apontamento, inclusive ancestrais', t => {
+test("refuses symbolic links in origin and note, including ancestors", t => {
   const root = mkdtempSync(join(tmpdir(), 'native-symlink-')); t.after(() => rmSync(root, { recursive: true, force: true }));
   const source = join(root, skill.path), target = join(root, destination('claude', 'skills', skill));
   mkdirSync(dirname(source), { recursive: true }); mkdirSync(dirname(target), { recursive: true });
@@ -70,7 +70,7 @@ test('recusa links simbólicos na origem e no apontamento, inclusive ancestrais'
   rmSync(source); writeFileSync(source, 'source'); rmSync(target); symlinkSync(source, target); assert.equal(structural(root, 'claude', 'skills', skill).status, 'failed');
   rmSync(target); rmSync(dirname(target), { recursive: true }); symlinkSync(dirname(source), dirname(target), 'dir'); assert.equal(structural(root, 'claude', 'skills', skill).status, 'failed');
 });
-test('OpenCode exige conteúdo exato do perfil instalado para o mesmo id', t => {
+test("OpenCode requires exact profile content installed for the same id", t => {
   const project = mkdtempSync(join(tmpdir(), 'native-profile-')); t.after(() => rmSync(project, { recursive: true, force: true }));
   const file = join(project, destination('opencode', 'agents', agent)); mkdirSync(dirname(file), { recursive: true });
   const body = '# Revisor\n\nLeia [origem](../../.pbai4devs/agents/revisor/AGENT.md).';
@@ -87,7 +87,7 @@ test('OpenCode exige conteúdo exato do perfil instalado para o mesmo id', t => 
   assert.equal(v1('revisor-outro', body), false);
 });
 
-test('catálogo inválido produz relatório de erro', { skip: Number(process.versions.node.split('.')[0]) < 24 ? 'A matriz nativa requer Node.js 24 ou superior.' : false }, t => {
+test("invalid catalog produces error report", { skip: Number(process.versions.node.split('.')[0]) < 24 ? 'A matriz nativa requer Node.js 24 ou superior.' : false }, t => {
   const root = mkdtempSync(join(tmpdir(), 'native-invalid-')); t.after(() => rmSync(root, { recursive: true, force: true }));
   const pkg = join(root, 'package'); mkdirSync(join(pkg, 'bin'), { recursive: true });
   writeFileSync(join(pkg, 'package.json'), JSON.stringify({ name: '@pathbit/agentdevkit', version: '1.2.3' }));
@@ -97,7 +97,7 @@ test('catálogo inválido produz relatório de erro', { skip: Number(process.ver
   assert.equal(result.status, 1, result.stderr); const summary = JSON.parse(result.stdout), report = JSON.parse(readFileSync(summary.report));
   assert.equal(summary.failed, true); assert.match(report.error, /Política ou inventário das fontes/); assert.deepEqual(report.rows, []);
 });
-test('falhas de catálogo instalado e fixture produzem casos e todas as linhas', { skip: Number(process.versions.node.split('.')[0]) < 24 ? 'A matriz nativa requer Node.js 24 ou superior.' : false, timeout: 120000 }, t => {
+test("Installed and fixture catalog failures produce cases and all lines", { skip: Number(process.versions.node.split('.')[0]) < 24 ? 'A matriz nativa requer Node.js 24 ou superior.' : false, timeout: 120000 }, t => {
   const root = mkdtempSync(join(tmpdir(), 'native-errors-')); t.after(() => rmSync(root, { recursive: true, force: true }));
   const pkg = join(root, 'package'); mkdirSync(join(pkg, 'bin'), { recursive: true });
   const sourceRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -124,13 +124,13 @@ console.log(JSON.stringify({ok:true}));`;
   assert.ok(report.rows.find(item => item.client === 'claude' && item.type === 'skills').structure.path.startsWith('.claude-outra/'));
 });
 
-test('destino usa política do pacote em vez da política do checkout', () => {
+test("destination uses package policy instead of checkout policy", () => {
   const policy = [{ id: 'claude', root: '.claude-outra', formats: { skills: 'agrupado', agents: 'plano' } }];
   assert.equal(destination('claude', 'skills', skill, policy), '.claude-outra/skills/projeto/criar-skill/SKILL.md');
   assert.equal(destination('claude', 'agents', agent, policy), '.claude-outra/agents/revisor.md');
 });
 
-test('detecta adulteração dos bytes da origem instalada', t => {
+test("detects byte tampering of the installed origin", t => {
   const root = mkdtempSync(join(tmpdir(), 'native-source-')); t.after(() => rmSync(root, { recursive:true, force:true }));
   const project = join(root, 'project'), pkg = join(root, 'package'), source = join(project, skill.path), expected = join(pkg, skill.path);
   const target = join(project, destination('claude', 'skills', skill));

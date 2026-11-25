@@ -160,7 +160,7 @@ export function adapterManifest(root, { clients } = {}) {
   return adapterManifestHeader + rows.join('\n') + '\n';
 }
 
-// Somente configura a politica. O chamador decide quando planejar/aplicar o sync.
+// Only configures the policy. Caller decides when planejar/aplicar the sync.
 export function writeAdapterManifest(root, { clients } = {}) {
   const selection = resolveAdapters(clients);
   root = realpathSync(resolve(root));

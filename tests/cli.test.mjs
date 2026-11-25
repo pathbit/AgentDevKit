@@ -24,7 +24,7 @@ function fixture(t) {
 }
 const put = (root, path, value) => { const file = join(root, path); mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, value); };
 
-test('conflitos aparecem na saída humana mesmo sem alterações planejadas', () => {
+test("conflicts appear in the human exit even without planned changes", () => {
   const conflicts = ['.claude/rules/a/RULE.md', 'linha\nextra', 'c', 'd', 'e', 'f'];
   for (const [language, label] of [['pt', 'Conflitos'], ['en', 'Conflicts'], ['es', 'Conflictos']]) {
     let human = '';
@@ -48,7 +48,48 @@ function cli(root, args, expected = 0) {
   return value;
 }
 
-test('CLI consulta e resolve a geração pendente mesmo com estado parcial', { timeout: 120000 }, () => {
+test("init --local keeps the hub out of the files discovered by Git", { timeout: 120000 }, t => {
+  const root = fixture(t);
+  const git = (...args) => spawnSync('git', ['-C', root, ...args], { encoding: 'utf8' });
+  const files = {
+    '.gitignore': '# regras do repositório\n*.tmp\n',
+    'README.md': '# Projeto\n',
+    'AGENTS.md': 'Instruções da equipe.\n',
+    '.pbai4devs/.gitignore': '# regra local\r\n!/docs/\r\n',
+    '.pbai4devs/docs/LOCAL.md': '# Documento local\n',
+  };
+  for (const [path, value] of Object.entries(files)) put(root, path, value);
+  assert.equal(git('add', '--', '.gitignore', 'README.md').status, 0);
+  const preserved = ['.gitignore', 'README.md', '.git/index', '.git/config', '.git/info/exclude',
+    '.pbai4devs/docs/LOCAL.md'];
+  const bytes = () => preserved.map(path => readFileSync(join(root, path)));
+  const gitBefore = bytes();
+  const untracked = () => {
+    const result = git('ls-files', '--others', '--exclude-standard');
+    assert.equal(result.status, 0, result.stderr);
+    return result.stdout.split('\n');
+  };
+  assert.ok(untracked().includes('.pbai4devs/docs/LOCAL.md'));
+  const args = ['init', '--local', '--agents', 'none'];
+  const preview = cli(root, [...args, '--dry-run']);
+  assert.match(preview.next[0].command, /--local\b/);
+  assert.equal(readFileSync(join(root, '.pbai4devs/.gitignore'), 'utf8'), files['.pbai4devs/.gitignore']);
+  assert.deepEqual(bytes(), gitBefore);
+
+  cli(root, args);
+  assert.ok(!untracked().some(path => path.startsWith('.pbai4devs/')));
+  assert.ok(readFileSync(join(root, 'AGENTS.md'), 'utf8').startsWith(files['AGENTS.md']));
+  const ignore = join(root, '.pbai4devs/.gitignore');
+  assert.ok(readFileSync(ignore, 'utf8').startsWith(files['.pbai4devs/.gitignore']));
+  assert.equal(JSON.parse(readFileSync(join(root, '.pbai4devs/state/agentdevkit.json'), 'utf8')).local, true);
+  cli(root, ['update']);
+  assert.deepEqual(cli(root, ['sync', '--check']).plan, []);
+  assert.deepEqual(cli(root, ['doctor']).issues, []);
+  assert.ok(!untracked().some(path => path.startsWith('.pbai4devs/')));
+  assert.deepEqual(bytes(), gitBefore);
+});
+
+test("CLI query and resolves pending generation even with partial status", { timeout: 120000 }, () => {
   const proofs = join(project, 'tmp');
   mkdirSync(proofs, { recursive: true });
   const root = mkdtempSync(join(realpathSync(proofs), 'cli-recuperacao-'));
@@ -92,7 +133,7 @@ test('CLI consulta e resolve a geração pendente mesmo com estado parcial', { t
   assert.equal(cli(root, ['recovery']).recovery.status, 'ready');
 });
 
-test('CLI mantém consulta em diário inválido e não cria destino novo ao consultar', { timeout: 120000 }, () => {
+test("CLI keeps query in invalid diary and does not create new destination when consulting", { timeout: 120000 }, () => {
   const proofs = join(project, 'tmp');
   mkdirSync(proofs, { recursive: true });
   const root = mkdtempSync(join(realpathSync(proofs), 'cli-diario-invalido-'));
@@ -124,7 +165,7 @@ test('help, version e erros retornam JSON unico com proxima acao', t => {
   assert.equal(invalid.language, 'es'); assert.match(invalid.message, /Argumentos inválidos/);
 });
 
-test('tools preserva argumentos opacos após -- e opções globais antes dele', () => {
+test("tools preserves opaque arguments after -- and global options before it", () => {
   const opaque = ['--', '--json', '--lang', 'en', '--target', 'example.test', '--agents', 'all', '--help', '--version'];
   const options = parseArgs(['--json', '--lang', 'es', '--target', 'project', 'tools', 'run', 'agent-browser', ...opaque]);
   assert.equal(options.command, 'tools');
@@ -136,7 +177,7 @@ test('tools preserva argumentos opacos após -- e opções globais antes dele', 
   assert.equal(childOnly.target, null);
 });
 
-test('tools encaminha flags do processo filho sem mudar idioma ou destino da CLI', t => {
+test("tools forwards child process flags without changing language or destination of CLI", t => {
   const root = fixture(t);
   put(root, '.pbai4devs/state/agentdevkit.json', JSON.stringify({ schemaVersion: 1, version: packageInfo.version, language: 'pt', clients: ['codex'], files: {}, blocks: {} }));
   put(root, '.pbai4devs/scripts/preparar-ferramentas/SCRIPT.mjs', 'process.stdout.write(JSON.stringify(process.argv.slice(2)));\n');
@@ -175,7 +216,7 @@ for (const [language, wording] of [['pt', /pode ter deixado/i], ['en', /may have
   });
 }
 
-test('falha de saída após instalação concluída orienta revisar o estado', { timeout: 120000 }, async t => {
+test("output failure after installation completed orients review the state", { timeout: 120000 }, async t => {
   const root = fixture(t); let output = '', writes = 0;
   const writer = { isTTY: false, write: chunk => { if (++writes === 1) throw new Error('falha sintética de saída'); output += chunk; } };
   const status = await cliMain(['init', '--target', root, '--agents', 'codex', '--lang', 'pt', '--yes', '--json'], { cwd: root, stdout: writer, stderr: writer, stdin: { isTTY: false } });
@@ -187,7 +228,7 @@ test('falha de saída após instalação concluída orienta revisar o estado', {
   assert.equal(value.next[0].command, undefined); assert.match(value.next[0].label, /pode ter deixado/i);
 });
 
-test('help e version independem de cwd reservado, destino e estado do projeto', t => {
+test("help and version depend on cwd reserved, project destination and status", t => {
   const root = fixture(t), cwd = join(root, 'node_modules');
   mkdirSync(cwd);
   put(cwd, '.pbai4devs/state/agentdevkit.json', '{invalid');
@@ -203,7 +244,7 @@ test('help e version independem de cwd reservado, destino e estado do projeto', 
   assert.equal(readFileSync(join(cwd, '.pbai4devs/state/agentdevkit.json'), 'utf8'), '{invalid');
 });
 
-test('sem comando inicializa; dry-run nao cria destino; init e update sao idempotentes', t => {
+test("without command initializes; dry-run does not create destination; init and update are idempotent", t => {
   const root = fixture(t), target = join(root, 'new project');
   const preview = cli(target, ['init', '--dry-run', '--lang', 'en']);
   assert.ok(preview.plan.length); assert.equal(existsSync(target), false);
@@ -211,14 +252,17 @@ test('sem comando inicializa; dry-run nao cria destino; init e update sao idempo
   const state = JSON.parse(readFileSync(join(target, '.pbai4devs/state/agentdevkit.json')));
   assert.equal(state.language, 'en');
   for (const name of ['skills', 'agents', 'rules']) assert.ok(state.files[`.agents/${name}.json`]);
-  assert.match(readFileSync(join(target, 'README.md'), 'utf8'), /^---\ndescription: .+\nlanguage: en\n---\n\n# Project\n/);
+  const generatedReadme = readFileSync(join(target, 'README.md'), 'utf8');
+  assert.match(generatedReadme, /^---\ndescription: .+\nlanguage: en\n---\n\n# Project\n/);
+  assert.match(generatedReadme, /\n## Prerequisites\n/);
+  assert.match(generatedReadme, /https:\/\/nodejs\.org\/en\/download/);
   assert.equal(cli(target, ['init', '--yes']).changed, false);
   assert.equal(cli(target, ['update']).changed, false);
   assert.equal(cli(target, ['doctor']).ok, true);
   assert.equal(cli(target, ['sync', '--check']).ok, true);
 });
 
-test('preserva README, settings, workflow e skill nativa do usuario inclusive com force', t => {
+test("preserves README, settings, workflow and native user skill including with force", t => {
   const root = fixture(t);
   const custom = { 'README.md': '# Human project\n', '.vscode/settings.json': '{"human":true}', '.github/workflows/ci.yml': 'name: human\n', '.claude/skills/custom/SKILL.md': '# Human skill\n', 'AGENTS.md': '# Human rules\n\nKeep this.\n', '.gitignore': 'human-output/\n' };
   for (const [path, content] of Object.entries(custom)) put(root, path, content);
@@ -232,7 +276,7 @@ test('preserva README, settings, workflow e skill nativa do usuario inclusive co
   assert.equal(cli(root, ['doctor']).ok, true);
 });
 
-test('arquivo gerenciado com edição humana é preservado inclusive com force', t => {
+test("managed file with human edition is preserved even with force", t => {
   const root = fixture(t); cli(root, ['init', '--yes']);
   const path = '.pbai4devs/skills/projeto/criar-skill/SKILL.md';
   const custom = `${readFileSync(join(root, path), 'utf8')}\nCustomização humana.\n`; put(root, path, custom);
@@ -244,7 +288,7 @@ test('arquivo gerenciado com edição humana é preservado inclusive com force',
   }
 });
 
-test('migração preserva apontamentos sem ownership e limpa apenas o legado comprovado', t => {
+test("migration preserves notes without ownership and clears only the proven legacy", t => {
   const root = fixture(t); cli(root, ['init', '--yes', '--agents', 'codex']);
   const grouped = '.codex/skills/projeto/configurar-projeto/SKILL.md';
   const native = readFileSync(join(root, '.agents/skills/projeto/configurar-projeto/SKILL.md'), 'utf8');
@@ -269,7 +313,7 @@ test('migração preserva apontamentos sem ownership e limpa apenas o legado com
   assert.ok(existsSync(join(root, '.codex/skills/user-empty')));
 });
 
-test('idioma persiste sem traduzir documentos do usuario', t => {
+test("language persists without translating user documents", t => {
   const root = fixture(t); put(root, 'README.md', '# My product\n'); cli(root, ['init', '--yes']);
   assert.equal(cli(root, ['language', 'es']).language, 'es');
   assert.equal(cli(root, ['lang']).language, 'es');
@@ -285,7 +329,15 @@ test('link simbolico no destino nao e seguido', t => {
   assert.equal(nested.error.code, 'E_TARGET'); assert.equal(existsSync(join(outside, 'existing/new')), false);
 });
 
-test('variáveis de temporários não autorizam link humano no destino', t => {
+test('a file in the target route is reported as an invalid target', t => {
+  const root = fixture(t), existing = join(root, 'existing.txt');
+  writeFileSync(existing, 'project content\n');
+  const result = cli(join(existing, 'nested'), ['init', '--yes', '--dry-run'], 1);
+  assert.equal(result.error.code, 'E_TARGET');
+  assert.equal(readFileSync(existing, 'utf8'), 'project content\n');
+});
+
+test("temporary variables do not authorize human link in destination", t => {
   const root = fixture(t), real = join(root, 'real'), link = join(root, 'user-link');
   mkdirSync(join(real, 'existing'), { recursive: true });
   try { symlinkSync(real, link, process.platform === 'win32' ? 'junction' : 'dir'); }
@@ -306,7 +358,7 @@ test('variáveis de temporários não autorizam link humano no destino', t => {
   }
 });
 
-test('macOS aceita apenas alias temporário de sistema, preservando Git e recusando links internos', { skip: process.platform !== 'darwin' ? 'A fixture verifica os aliases físicos dos diretórios de sistema do macOS.' : false }, t => {
+test("macOS only accepts temporary system aliases, preserving Git and refusing internal links", { skip: process.platform !== 'darwin' ? 'A fixture verifica os aliases físicos dos diretórios de sistema do macOS.' : false }, t => {
   const root = mkdtempSync('/private/tmp/adk-system-alias-');
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const logical = join('/tmp', basename(root));
@@ -346,7 +398,7 @@ test('macOS aceita apenas alias temporário de sistema, preservando Git e recusa
   }
 });
 
-test('macOS recusa alias de sistema com proprietário ou destino inesperado', { skip: process.platform !== 'darwin' ? 'A fixture verifica os aliases físicos dos diretórios de sistema do macOS.' : false }, () => {
+test("macOS refuses system aliases with owner or unexpected destination", { skip: process.platform !== 'darwin' ? 'A fixture verifica os aliases físicos dos diretórios de sistema do macOS.' : false }, () => {
   const modulePath = join(project, 'src', 'install.mjs');
   const script = `
     import fs from 'node:fs';
@@ -376,7 +428,7 @@ test('macOS recusa alias de sistema com proprietário ou destino inesperado', { 
   }
 });
 
-test('destinos reservados sao rejeitados em qualquer caixa sem escrever no Git', t => {
+test("reserved destinations are rejected in any box without writing in Git", t => {
   const root = fixture(t);
   for (const name of ['.git', '.GIT', '.Git', 'node_modules', 'NODE_MODULES', 'Node_Modules', '.pbai4devs', '.PBAI4DEVS', '.PbAi4Devs']) {
     const existed = existsSync(join(root, name));
@@ -387,7 +439,7 @@ test('destinos reservados sao rejeitados em qualquer caixa sem escrever no Git',
   assert.throws(() => resolveTarget('existing/../.GIT', root), { code: 'E_TARGET' });
 });
 
-test('destinos ausentes sob a raiz mantêm nome e ordem sem criar diretórios', () => {
+test("Missing destinations under the root keep name and order without creating directories", () => {
   const root = parse(project).root, suffix = randomUUID();
   for (const name of [`adk-uncreated-probe-${suffix}`, `tmp-adk-uncreated-${suffix}`]) {
     const first = join(root, name), child = join(first, 'child'), nested = join(child, 'nested');
@@ -409,7 +461,7 @@ test('entrada CLI funciona por symlink npm sem executar ao ser importada', t => 
   assert.equal(imported.status, 0, imported.stderr); assert.equal(imported.stdout, '');
 });
 
-test('estado e catalogo excluem artefatos locais sem apagar arquivos preexistentes', t => {
+test("status and catalog delete local artifacts without deleting preexisting files", t => {
   const root = fixture(t), base = '.pbai4devs/scripts/preparar-ferramentas/tests';
   const artifacts = ['.playwright-mcp/trace.json', 'Playwright-report/index.html', 'sessions/active.json', 'logs/debug.log', 'tmp/result.txt', 'auth.json', 'credentials.json', 'history.jsonl', '.env.production'];
   for (const path of artifacts) put(root, `${base}/${path}`, 'local-only');
@@ -436,7 +488,7 @@ test('proximo passo em texto mostra a skill e a instrucao contextual', t => {
   }
 });
 
-test('saida humana resume alteracoes e limita o plano enquanto JSON permanece completo', t => {
+test("human output summarizes changes and limits the plan while JSON remains complete", t => {
   const root = fixture(t);
   const preview = spawnSync(process.execPath, [bin, 'init', '--dry-run', '--yes', '--target', root], { encoding: 'utf8', timeout: 180000 });
   assert.equal(preview.status, 0, `init --dry-run: ${preview.error?.stack || ''}\nsignal: ${preview.signal || 'none'}\n${preview.stdout || ''}${preview.stderr || ''}`);
@@ -452,7 +504,7 @@ test('saida humana resume alteracoes e limita o plano enquanto JSON permanece co
   assert.ok(installed.stdout.split('\n').length < 25);
 });
 
-test('bootstrap automatico preserva argumentos e status sem instalar ferramentas', async () => {
+test("automatic bootstrap preserves arguments and status without installing tools", async () => {
   const calls = []; const runtime = resolve(project, 'fake-node24');
   const code = await run(['init', '--target', 'a b', '--json'], { nodeVersion: '22.0.0', ensureRuntime: async options => { assert.equal(options.root, project); return { node: runtime }; }, spawn(file, args) { calls.push({ file, args }); return { status: 7 }; } });
   assert.equal(code, 7); assert.equal(calls[0].file, runtime);

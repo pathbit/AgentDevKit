@@ -5,6 +5,8 @@ status: aprovado
 
 # Diário de recuperação em disco
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 Este incremento implementa um componente isolado para publicar e inspecionar
 os [registros de recuperação](../registro-recuperacao/SPEC.md). Não o conecta à
 CLI, ao sync ou ao projeto consumidor e não corrige o rollback. A autorização
@@ -146,3 +148,7 @@ com os comandos do produto e o contrato de rollback são trabalhos separados.
 Os testes não aprovam integração, recuperação de projetos reais ou release.
 
 [testes-diario]: https://github.com/pathbit/AgentDevKit/blob/main/tests/recovery-store.test.mjs
+
+[reading-pt]: SPEC.md
+[reading-en]: ../../en/specs/diario-disco/SPEC.md
+[reading-es]: ../../es/specs/diario-disco/SPEC.md

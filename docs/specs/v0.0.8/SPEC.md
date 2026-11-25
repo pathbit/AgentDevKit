@@ -6,6 +6,8 @@ version: 0.0.8
 
 # Preservação e validação aprofundada
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 ## Objetivo e autorização
 
 Atender ao pedido de revisão profunda, corrigindo falhas comprovadas e
@@ -60,3 +62,7 @@ de revisão em `.agent-tests/`. Não prometer ausência universal de bugs.
 
 Atualizar referência da CLI, instalação, ferramentas, changelog, README,
 roadmap e índices. Não criar documentos de produto nos projetos consumidores.
+
+[reading-pt]: SPEC.md
+[reading-en]: ../../en/specs/v0.0.8/SPEC.md
+[reading-es]: ../../es/specs/v0.0.8/SPEC.md

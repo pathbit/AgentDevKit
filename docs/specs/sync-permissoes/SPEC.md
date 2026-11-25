@@ -5,6 +5,8 @@ status: aprovado
 
 # Permissões de temporários do sync
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 O sincronizador pode criar um temporário com permissões mais amplas que o
 arquivo existente antes de aplicar seu modo. A autorização geral de melhorias
 já concedida pelo usuário cobre esta correção. Este incremento complementa a
@@ -53,3 +55,7 @@ Atualizar o [roadmap](../../product/roadmap.md), testes e documentação de
 limites; registrar provas e revisão independente. A versão de release ainda
 não foi escolhida. A correção isolada não conclui os demais requisitos do
 objetivo nem autoriza uma publicação parcial.
+
+[reading-pt]: SPEC.md
+[reading-en]: ../../en/specs/sync-permissoes/SPEC.md
+[reading-es]: ../../es/specs/sync-permissoes/SPEC.md

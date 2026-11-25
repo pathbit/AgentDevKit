@@ -29,7 +29,7 @@ const status = (result, code) => {
   assert.equal(result.status, code, `${result.error?.message || ''}\n${result.stderr?.toString()}`);
 };
 
-test('raw preserva JSON e argumentos opacos apos nome do alvo nos dois fluxos', t => {
+test("Raw preserves JSON and opaque arguments after target name in both streams", t => {
   const f = fixture(t, 'process.stdout.write(JSON.stringify({args:process.argv.slice(2)})); process.stderr.write("TARGET-ERR\\n");');
   const args = ['--raw', '--plan', '--', '', 'espaço ☃', '$(nao-executar)', '--no-install'];
   for (const [entry, prefix] of [[f.selector, ['--raw']], [f.bootstrap, ['--executar', '--no-install', '--raw']]]) {
@@ -88,7 +88,7 @@ test('modo padrao continua misturando cabecalhos em stdout', t => {
   }
 });
 
-test('flags duplicadas falham antes do alvo; flags apos alvo sao opacas',t=>{
+test("duplicate flags fail before target; target flags are opaque",t=>{
  const f=fixture(t,`process.stdout.write(JSON.stringify(process.argv.slice(2)));`);
  for(const [entry,prefix] of [[f.selector,[]],[f.bootstrap,['--executar','--no-install']]]){
   const bad=f.run(entry,[...prefix,'--raw','--raw',f.target]);status(bad,entry===f.selector?2:1);assert.equal(bad.stdout.length,0);assert.match(bad.stderr.toString(),/duplicado/);
@@ -96,7 +96,7 @@ test('flags duplicadas falham antes do alvo; flags apos alvo sao opacas',t=>{
  }
 });
 
-test('raw nao silencia preloads: ambiente pode emitir stdout antes do kit', t => {
+test("raw does not silence preloads: environment can emit stdout before kit", t => {
   const f = fixture(t, `process.stdout.write('TARGET');`);
   const preload = join(f.root, 'fixtures/preload.cjs');
   writeFileSync(preload, `process.stdout.write('PRELOAD|');`);
@@ -107,8 +107,8 @@ test('raw nao silencia preloads: ambiente pode emitir stdout antes do kit', t =>
     const result = f.run(entry, args, env); status(result, 0);
     assert.equal(result.stdout.toString(), 'PRELOAD|');
   }
-  // O probe ignora stdout do preload síncrono, mas os processos principais
-  // ainda o emitem antes de o kit processar --raw.
+  // Probe ignores synchronous preload stdout, but the main processes
+  // they still issue it before the --raw processing kit.
   const plan = f.run(f.bootstrap, ['--executar', '--no-install', '--raw', '--plan', f.target], env);
   status(plan, 0); assert.equal(plan.stdout.toString(), 'PRELOAD|PRELOAD|');
   assert.match(plan.stderr.toString(), /runtime=node/);

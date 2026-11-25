@@ -5,6 +5,8 @@ status: vigente
 
 # Roadmap
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 O AgentDevKit compartilha recursos entre agentes e os instala em projetos
 novos ou existentes, preservando os arquivos da equipe. O trabalho segue
 produto, experiência, design, arquitetura, roadmap, spec, implementação e revisão.
@@ -1068,3 +1070,7 @@ que poderiam transformar metadados ambíguos em aprovação indevida.
 [claude-scope]: ../specs/escopo-regras-claude/SPEC.md
 [guided]: ../specs/experiencia-guiada/SPEC.md
 [legacy-doc]: ../specs/documentacao-legado/SPEC.md
+
+[reading-pt]: roadmap.md
+[reading-en]: ../en/product/roadmap.md
+[reading-es]: ../es/product/roadmap.md

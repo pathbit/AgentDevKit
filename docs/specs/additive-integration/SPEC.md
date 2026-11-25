@@ -6,6 +6,8 @@ version: 0.0.12
 
 # Integração sem substituição
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 > O contrato abaixo é histórico. A decisão posterior é não editar
 > `.git/info/exclude` nem criar ou alterar ignores na raiz ou nos clientes.
 > Os ignores existentes no hub também são preservados. A revisão dos critérios
@@ -63,3 +65,7 @@ Testes são versionados. Backups, snapshots e relatórios ficam ignorados em
 `.agent-tests/` ou `tmp/`; não alterar projetos consumidores nesta entrega.
 
 [migration]: ../../guides/installation.md#atualizar-e-escolher-agentes
+
+[reading-pt]: SPEC.md
+[reading-en]: ../../en/specs/additive-integration/SPEC.md
+[reading-es]: ../../es/specs/additive-integration/SPEC.md

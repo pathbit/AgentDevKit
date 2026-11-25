@@ -43,7 +43,7 @@ test('catalogo aceita somente origens permitidas, pins completos e metadados de 
   assert.throws(() => validateCatalog({ ...catalog, skills: [{ ...sample(), licenseSource: 'https://github.com/vendor/skills/blob/main/LICENSE' }] }), /mesma origem e pin/);
 });
 
-test('ajuda e listagem sao locais e nao criam estado', async t => {
+test("help and listing are local and do not create status", async t => {
   const { manager, state, local } = fixture(t);
   await main([], manager); await main(['list'], manager);
   assert.equal(state.calls.length, 0); assert.equal(existsSync(local), false);
@@ -51,7 +51,7 @@ test('ajuda e listagem sao locais e nao criam estado', async t => {
   await assert.rejects(main(['install', 'vendor-demo', 'extra'], manager), /unico id/);
 });
 
-test('candidatos nao sao instalados; descoberta usa somente origem fixada sem importar', async t => {
+test("candidates are not installed; discovery uses only fixed source without import", async t => {
   const { manager, entry, state, local } = fixture(t); entry.status = 'candidate';
   await assert.rejects(manager.install(entry.id), /Revise origem/); assert.equal(existsSync(local), false);
   const result = await manager.discover(entry.id); assert.equal(result, 'demo: Fixture.');
@@ -60,7 +60,7 @@ test('candidatos nao sao instalados; descoberta usa somente origem fixada sem im
   assert.throws(() => manager.read(entry.id), /Revise origem/);
 });
 
-test('instala por CLI com copy universal e preserva referencias/licenca em origem isolada', async t => {
+test("install by CLI with universal copy and preserves referencias/licenca in isolated origin", async t => {
   const { manager, entry, state, root } = fixture(t);
   const installed = await manager.install(entry.id); assert.equal(installed.changed, true);
   assert.deepEqual(state.calls[0].args, skillsArguments(entry));
@@ -113,14 +113,14 @@ test('locks impedem duas instalacoes simultaneas sem remover lock alheio', async
   assert.equal(state.calls.length, 1); assert.deepEqual(readdirSync(local), [entry.id]);
 });
 
-test('estado simbolico nao redireciona escrita para outra pasta', async t => {
+test("symbolic state does not redirect writing to another folder", async t => {
   const { manager, state, local, root } = fixture(t); const outside = join(root, 'outside'); mkdirSync(outside);
   try { symlinkSync(outside, local, 'dir'); } catch (error) { if (['EPERM', 'EACCES'].includes(error.code)) { t.skip('Sistema sem permissao para symlinks.'); return; } throw error; }
   assert.throws(() => safePath(manager.home, '.local'), /simbolico/);
   await assert.rejects(manager.install('vendor-demo'), /simbolico/); assert.equal(state.calls.length, 0); assert.deepEqual(readdirSync(outside), []);
 });
 
-test('CLI skills real copia fixture local sem escrita nas origens canonicas ou globais', async t => {
+test("CLI real skills copy fixture site without writing in canonic or global origins", async t => {
   if (!existsSync(join(projectRoot, '.pbai4devs/tools/skills/.local/CURRENT.json'))) { t.skip('CLI skills ainda nao preparado.'); return; }
   const { root } = fixture(t); const name = `external-proof-${process.pid}`; const source = join(root, 'source'); const target = join(root, 'target'); mkdirSync(target);
   const entry = { ...sample(), name }; write(join(source, 'SKILL.md'), contents(entry)); write(join(source, 'LICENSE.txt'), 'MIT fixture\n');

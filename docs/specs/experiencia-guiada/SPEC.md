@@ -5,6 +5,8 @@ status: rascunho
 
 # Experiência guiada no terminal
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 Ao adotar o kit, a equipe precisa saber o que verificar e qual recurso usar a
 seguir. Em um projeto existente, ela também precisa aproveitar os documentos
 que já orientam o trabalho.
@@ -22,3 +24,7 @@ que já orientam o trabalho.
   Tech Leads Club ou Dotcontext.
 - **AC-004** O pacote passa pelas matrizes de compatibilidade e atualização.
   A validação em uma cópia do Talquee compara arquivos próprios e índice Git.
+
+[reading-pt]: SPEC.md
+[reading-en]: ../../en/specs/experiencia-guiada/SPEC.md
+[reading-es]: ../../es/specs/experiencia-guiada/SPEC.md

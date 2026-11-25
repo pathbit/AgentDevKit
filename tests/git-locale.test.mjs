@@ -36,7 +36,7 @@ function run(root, program, args) {
   return childProcess.spawnSync(program, args, { cwd: root, encoding: 'utf8', timeout: 120000, maxBuffer: 8 * 1024 * 1024 });
 }
 
-test('locale do usuário não impede consulta em projeto sem Git', t => {
+test("user locale does not prevent project query without Git", t => {
   withFrenchLocale(t);
   const root = fixture(t), file = join(root, 'human.txt'), before = readFileSync(file);
   const plan = planLocalIgnore(root);
@@ -51,7 +51,7 @@ test('locale do usuário não impede consulta em projeto sem Git', t => {
   assert.equal(process.env.LC_ALL, 'C.UTF-8');
 });
 
-test('init sem Git funciona com locale externo e não altera conteúdo humano', { skip: !runtimeSupported ? 'A CLI do kit requer Node.js 24 ou superior nesta fixture.' : false, timeout: 120000 }, t => {
+test("init without Git works with external locale and does not change human content", { skip: !runtimeSupported ? 'A CLI do kit requer Node.js 24 ou superior nesta fixture.' : false, timeout: 120000 }, t => {
   withFrenchLocale(t);
   const root = fixture(t), file = join(root, 'human.txt'), before = readFileSync(file);
   const result = run(root, process.execPath, [cli, 'init', '--target', root, '--agents', 'codex', '--yes', '--json']);
@@ -62,7 +62,7 @@ test('init sem Git funciona com locale externo e não altera conteúdo humano', 
   assert.equal(existsSync(join(root, '.git')), false);
 });
 
-test('erro operacional de configuração Git não vira projeto sem Git', t => {
+test("Git configuration operating error does not turn project without Git", t => {
   withFrenchLocale(t);
   const root = fixture(t), gitDir = join(root, '.git');
   const initialized = run(root, 'git', ['init', '--quiet']);
@@ -77,7 +77,7 @@ test('erro operacional de configuração Git não vira projeto sem Git', t => {
   assert.deepEqual(readFileSync(join(root, 'human.txt')), human);
 });
 
-test('erro operacional de configuração global não vira projeto sem Git', t => {
+test("global configuration operating error does not turn project without Git", t => {
   withFrenchLocale(t);
   const root = fixture(t), file = join(root, 'human.txt'), human = readFileSync(file);
   const badConfig = join(root, 'git-config-inválida');
@@ -91,7 +91,7 @@ test('erro operacional de configuração global não vira projeto sem Git', t =>
   assert.equal(existsSync(join(root, '.git')), false);
 });
 
-test('init recusa configuração Git global inválida antes de alterar o projeto', { skip: !runtimeSupported ? 'A CLI do kit requer Node.js 24 ou superior nesta fixture.' : false, timeout: 120000 }, t => {
+test("init refuses invalid global Git configuration before changing project", { skip: !runtimeSupported ? 'A CLI do kit requer Node.js 24 ou superior nesta fixture.' : false, timeout: 120000 }, t => {
   withFrenchLocale(t);
   const root = fixture(t), human = readFileSync(join(root, 'human.txt'));
   const badConfig = join(root, 'git-config-inválida');
@@ -112,7 +112,7 @@ test('init recusa configuração Git global inválida antes de alterar o projeto
   assert.deepEqual(readFileSync(badConfig), config);
 });
 
-test('classificação de consulta Git exige ausência comprovada e recusa sinais', t => {
+test("Git query classification requires proven absence and refusal of signals", t => {
   const root = fixture(t);
   const absent = { status: 128, signal: null, stderr: Buffer.from('fatal: not a git repository\n') };
   const unavailable = { status: null, signal: null, error: Object.assign(new Error('Git indisponível'), { code: 'ENOENT' }) };
@@ -128,7 +128,7 @@ test('classificação de consulta Git exige ausência comprovada e recusa sinais
   assert.equal(noGitRepository(nested, unavailable), false);
 });
 
-test('aplicação recusa configuração Git inválida e preserva o projeto', { skip: !runtimeSupported ? 'A CLI do kit requer Node.js 24 ou superior nesta fixture.' : false, timeout: 120000 }, t => {
+test("application refuses invalid Git configuration and preserves project", { skip: !runtimeSupported ? 'A CLI do kit requer Node.js 24 ou superior nesta fixture.' : false, timeout: 120000 }, t => {
   withFrenchLocale(t);
   const root = fixture(t), human = readFileSync(join(root, 'human.txt'));
   const badConfig = join(root, 'git-config-inválida');
@@ -145,7 +145,7 @@ test('aplicação recusa configuração Git inválida e preserva o projeto', { s
   assert.deepEqual(readFileSync(badConfig), config);
 });
 
-test('init sem executável Git recusa marcador ancestral e preserva índice', { skip: !runtimeSupported ? 'A CLI do kit requer Node.js 24 ou superior nesta fixture.' : false, timeout: 120000 }, t => {
+test("init without executable Git refuses ancestral marker and preserves index", { skip: !runtimeSupported ? 'A CLI do kit requer Node.js 24 ou superior nesta fixture.' : false, timeout: 120000 }, t => {
   const root = fixture(t), nested = join(root, 'nested');
   for (const args of [['init', '--quiet'], ['add', '--', 'human.txt']]) {
     const result = run(root, 'git', args);
@@ -165,7 +165,7 @@ test('init sem executável Git recusa marcador ancestral e preserva índice', { 
   assert.deepEqual(readFileSync(join(root, '.git', 'index')), index);
 });
 
-test('locale externo preserva índice e exclusões de repositório válido', t => {
+test("external locale preserves index and valid repository exclusions", t => {
   withFrenchLocale(t);
   const root = fixture(t), human = readFileSync(join(root, 'human.txt'));
   for (const args of [['init', '--quiet'], ['add', '--', 'human.txt']]) {

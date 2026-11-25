@@ -1,4 +1,4 @@
-// Ponto de entrada da instalação para a CLI e para os testes.
+// Input point of the installation to the CLI And for the tests.
 export { resolveTarget, safePath } from './installation/filesystem.mjs';
 export { diagnosePreservedDerivedToml } from './installation/ownership.mjs';
 export { loadState, inspectRemovalHistory, inspect } from './installation/state.mjs';

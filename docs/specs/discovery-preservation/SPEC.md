@@ -4,6 +4,8 @@ description: Descoberta de skills e preservação em projetos existentes.
 
 # Descoberta e preservação
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 As integrações devem disponibilizar os recursos sem duplicar skills geradas
 para o Codex e sem substituir configurações ou alterações próprias do projeto.
 
@@ -24,3 +26,7 @@ para o Codex e sem substituir configurações ou alterações próprias do proje
 
 Descoberta e validação estrutural não demonstram execução completa de todas as
 skills e perfis em cada cliente. Registre os limites das provas realizadas.
+
+[reading-pt]: SPEC.md
+[reading-en]: ../../en/specs/discovery-preservation/SPEC.md
+[reading-es]: ../../es/specs/discovery-preservation/SPEC.md

@@ -6,7 +6,7 @@ import { mergeTomlContent } from './fixtures/legacy-toml-writer.mjs';
 const body = '@{.pbai4devs/commands/demo/COMMAND.md}\n\n{{args}}';
 const source = 'description = "humano"\nprompt = "texto humano"\n';
 
-test('digest composto permite criação, repetição, atualização e remoção', () => {
+test("compound digest allows creation, repetition, update and removal", () => {
   const first = mergeTomlContent(source, body);
   assert.equal(first.sha256, tomlManagedBlockDigest(first.text));
   const repeated = mergeTomlContent(first.text, body, { expectedHash: first.sha256 });
@@ -17,14 +17,14 @@ test('digest composto permite criação, repetição, atualização e remoção'
   assert.equal(stripTomlContent(updated.text, updated.sha256), source);
 });
 
-test('comentário alterado ou registro ausente recusam alteração', () => {
+test("comment changed or missing record refuse change", () => {
   const first = mergeTomlContent(source, body);
   const edited = first.text.replace('# ADK-TOML-META-V3 ', '# ADK-TOML-META-V3 X');
   assert.throws(() => mergeTomlContent(edited, body, { expectedHash: first.sha256 }));
   assert.throws(() => stripTomlContent(first.text));
 });
 
-test('registro sem bloco e metadado JSON nulo são recusados', () => {
+test("record without block and metadata JSON null are refused", () => {
   const first = mergeTomlContent(source, body);
   assert.throws(() => stripTomlContent(source, first.sha256), { code: 'E_MANAGED_BLOCK' });
   const marker = Buffer.from('null').toString('base64url');
@@ -37,7 +37,7 @@ test('registro existente com bloco ausente impede novo merge', () => {
   assert.throws(() => mergeTomlContent(source, body, { expectedHash: first.sha256 }), { code: 'E_MANAGED_BLOCK' });
 });
 
-test('digest recusa documento com campo humano inválido ou duplicado', () => {
+test("digest refuses document with invalid or duplicated human field", () => {
   const first = mergeTomlContent(source, body);
   for (const invalid of [`${first.text}outro = ???\n`, `${first.text}description = "duplicado"\n`]) {
     assert.throws(() => tomlManagedBlockDigest(invalid), { code: 'E_MANAGED_BLOCK' });
@@ -45,7 +45,7 @@ test('digest recusa documento com campo humano inválido ou duplicado', () => {
   }
 });
 
-test('inteiros grandes fora do prompt são preservados', () => {
+test("large integers outside the prompt are preserved", () => {
   for (const value of ['9007199254740992', '9223372036854775807', '-9223372036854775808']) {
     const original = `${source}limite = ${value}\n`;
     const first = mergeTomlContent(original, body);

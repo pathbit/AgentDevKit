@@ -5,6 +5,8 @@ status: aprovado
 
 # Backup e manifesto de recuperação
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 Este componente isolado prepara cópias do snapshot fornecido pelo chamador e
 entrega o hash do manifesto para o [diário](../diario-disco/SPEC.md). A
 autorização geral do usuário cobre o incremento. Não altera CLI, sync ou
@@ -126,3 +128,7 @@ conservadora. [Resolução no diário][resolucao] ·
   `.agent-tests/manifesto-recuperacao/`.
 
 [case-folding]: https://www.unicode.org/faq/casemap_charprop.html
+
+[reading-pt]: SPEC.md
+[reading-en]: ../../en/specs/manifesto-recuperacao/SPEC.md
+[reading-es]: ../../es/specs/manifesto-recuperacao/SPEC.md

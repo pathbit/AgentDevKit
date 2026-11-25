@@ -378,7 +378,7 @@ async function downloadDatabase(root, cache, ecosystem, fetcher) {
     if (existsSync(target)) { renameSync(target, previous); moved = true; }
     if (existsSync(receipt)) { renameSync(receipt, previousReceipt); movedReceipt = true; }
     renameSync(staged, target); promoted = true; renameSync(stagedReceipt, receipt);
-    try { rmSync(previous, { force: true }); } catch { /* Versao antiga ignorada pode ser limpa depois. */ }
+    try { rmSync(previous, { force: true }); } catch { /* Old version ignored can be cleaned later. */ }
     try { rmSync(previousReceipt, { force: true }); } catch { /* Nao desfazer a promocao por falha de limpeza. */ }
     return data;
   } catch (error) {

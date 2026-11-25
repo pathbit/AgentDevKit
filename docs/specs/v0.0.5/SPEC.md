@@ -6,6 +6,8 @@ version: 0.0.5
 
 # Instalação pelo registro
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 ## Objetivo
 
 Instalar o pacote publicado no npm público por nome e versão, sem login.
@@ -40,3 +42,7 @@ Evidências em `.agent-tests/registry-installation/`. A CLI e os arquivos são
 o escopo; não há interface web ou desktop para validar nesta mudança.
 
 [Specs](../README.md) · [Pacote npm](../../maintainers/packages.md)
+
+[reading-pt]: SPEC.md
+[reading-en]: ../../en/specs/v0.0.5/SPEC.md
+[reading-es]: ../../es/specs/v0.0.5/SPEC.md

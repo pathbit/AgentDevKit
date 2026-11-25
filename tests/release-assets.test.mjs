@@ -68,7 +68,7 @@ function entries(archive) {
   return files;
 }
 
-test('release produz quatro arquivos e checksum dos bytes reais do pacote', async t => {
+test("release produces four files and checksum of the actual bytes of the package", async t => {
   for (const refType of ['branch', 'tag']) await t.test(refType, subtest => {
     const { root, output, temporary } = fixture(subtest);
     const result = execute(root, { refType, refName: refType === 'tag' ? `v${version}` : 'master' });
@@ -114,7 +114,7 @@ test('release produz quatro arquivos e checksum dos bytes reais do pacote', asyn
   });
 });
 
-test('README do npm remove frontmatter e adapta apenas links Markdown fora de código', t => {
+test("README npm removes frontmatter and adapts only Markdown links out of code", t => {
   const { root, output, temporary } = fixture(t);
   const readme = [
     '---', 'description: Fonte preservada.', 'language: pt', '---', '', '# Release fixture', '',
@@ -156,7 +156,7 @@ test('README do npm remove frontmatter e adapta apenas links Markdown fora de c�
   assert.deepEqual(readdirSync(temporary), []);
 });
 
-test('README, licença e metadados ausentes ou vazios impedem qualquer pacote', async t => {
+test("README, license and missing or empty metadata prevent any package", async t => {
   const changes = [
     { label: 'README ausente', file: 'README.md', remove: true, message: /README/ },
     { label: 'LICENSE ausente', file: 'LICENSE', remove: true, message: /LICENSE/ },
@@ -209,7 +209,7 @@ test('notas incluem os dois destinos e respeitam a prioridade GitHub configurada
   assert.doesNotMatch(notes, /releases\/download|--package=https|--scope=@/);
 });
 
-test('tag inválida ou divergente falha antes de criar artefatos', async t => {
+test("invalid or divergent tag fails before creating artifacts", async t => {
   for (const refName of ['v9.9.9', 'v1.2.3-rc.1', 'v1.2.3/../../outside', '']) await t.test(refName || 'vazia', subtest => {
     const { root } = fixture(subtest);
     const result = execute(root, { refType: 'tag', refName });
@@ -219,7 +219,7 @@ test('tag inválida ou divergente falha antes de criar artefatos', async t => {
   });
 });
 
-test('pacote novo exige núcleo e exclui testes, release e exemplos', async t => {
+test("new package requires core and deletes tests, release and examples", async t => {
   for (const path of ['tests/fixture.mjs', 'scripts/release/fixture.mjs', 'examples/.claude/skills/example/SKILL.md']) await t.test(path, subtest => {
     const { root } = fixture(subtest);
     const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
@@ -238,7 +238,7 @@ test('pacote novo exige núcleo e exclui testes, release e exemplos', async t =>
   assert.match(result.stderr, /núcleo/);
 });
 
-test('versão não estável e versões inconsistentes do lock não geram pacote', async t => {
+test("unstable version and inconsistent versions of lock do not generate package", async t => {
   const cases = [
     { label: 'prerelease', options: { packageVersion: '1.2.3-rc.1' }, message: /estável/i },
     { label: 'lock.version', options: { lockVersion: '9.9.9' }, message: /lockfile/i },
@@ -255,7 +255,7 @@ test('versão não estável e versões inconsistentes do lock não geram pacote'
 });
 
 // These fixtures exercise assembly and staging; a simulated full profile does not prove the test suites ran.
-test('build, marcação e repetição preservam saída e criam provas novas isoladas', t => {
+test("build, mark and repeat preserve exit and create new evidence isolated", t => {
   const {root,output,temporary}=fixture(t),runner=mkdtempSync(join(project,'.agent-tests','runner-repeat-'));
   t.after(()=>rmSync(runner,{recursive:true,force:true}));
   const first=execute(root);assert.equal(first.status,0,first.stdout+first.stderr);
@@ -275,7 +275,7 @@ test('build, marcação e repetição preservam saída e criam provas novas isol
   assert.deepEqual(readdirSync(temporary),[]);
 });
 
-test('saída antiga marcada só é reutilizada se for idêntica fora de verification', t => {
+test("old marked output is only reused if it is identical out of verification", t => {
   const {root,output}=fixture(t),first=execute(root);assert.equal(first.status,0,first.stdout+first.stderr);
   const file=join(output,'package-manifest.json'),manifest=JSON.parse(readFileSync(file));
   manifest.verification={status:'passed',profile:'full',sourceCommit:manifest.sourceCommit,checkedAt:'2026-11-16T00:00:00.000Z'};
@@ -291,7 +291,7 @@ test('saída antiga marcada só é reutilizada se for idêntica fora de verifica
   assert.deepEqual(readFileSync(file),before);
 });
 
-test('saída anterior divergente é preservada em vez de reescrita', async t => {
+test("previous divergent output is preserved instead of rewritten", async t => {
   for(const kind of ['archive','checksum','notes','extra','bad-verification','extra-verification','duplicate-key']) await t.test(kind,sub=>{
     const {root,output,temporary}=fixture(sub), first=execute(root);assert.equal(first.status,0,first.stdout+first.stderr);
     const manifestPath=join(output,'package-manifest.json');
@@ -315,7 +315,7 @@ test('saída anterior divergente é preservada em vez de reescrita', async t => 
   });
 });
 
-test('perfil completo simulado repete build e expõe caminho novo sem alterar índice ou saída', t => {
+test("Full simulated profile repeats build and exposes new path without changing index or output", t => {
   const {root,output}=fixture(t),runner=mkdtempSync(join(project,'.agent-tests','runner-full-'));
   t.after(()=>rmSync(runner,{recursive:true,force:true}));
   const tests=join(root,'tests');mkdirSync(tests);
@@ -355,7 +355,7 @@ test('perfil completo simulado repete build e expõe caminho novo sem alterar í
   assert.deepEqual(readFileSync(indexPath),indexBefore);
 });
 
-test('links em pastas de release são recusados sem escrever no destino', async t => {
+test("links in release folders are refused without writing in destination", async t => {
   for(const item of ['.agent-tests','.agent-tests/release']) await t.test(item,sub=>{
     const {root,temporary}=fixture(sub), external=mkdtempSync(join(project,'.agent-tests','release-external-'));
     sub.after(()=>rmSync(external,{recursive:true,force:true}));
@@ -373,7 +373,7 @@ test('links em pastas de release são recusados sem escrever no destino', async 
   });
 });
 
-test('erro de npm e falha de limpeza preservam as duas causas e informam áreas temporárias', t => {
+test("npm error and cleaning failure preserve both causes and report temporary areas", t => {
   const {root,output,temporary}=fixture(t),hook=join(root,'cleanup-failure.mjs');
   writeFileSync(hook,[
     "import fs from 'node:fs'; import {syncBuiltinESMExports} from 'node:module';",
@@ -391,7 +391,7 @@ test('erro de npm e falha de limpeza preservam as duas causas e informam áreas 
   assert.equal(existsSync(output),false);assert.deepEqual(readFileSync(join(root,'README.md')),before);
 });
 
-test('falha ao copiar verificação e falha de limpeza mantêm causa e caminho da cópia', t => {
+test("failure to copy verification and cleaning failure maintain cause and copy path", t => {
   const {root,output}=fixture(t),first=execute(root);assert.equal(first.status,0,first.stdout+first.stderr);
   const runner=mkdtempSync(join(project,'.agent-tests','runner-cleanup-'));
   t.after(()=>rmSync(runner,{recursive:true,force:true}));

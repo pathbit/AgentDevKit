@@ -1,7 +1,7 @@
-// Planejamento isolado: não lê nem altera arquivos e não comprova equivalência
-// com globs de outros clientes. A sintaxe aceita é um subconjunto de YAML.
-// YAML inválido no Claude pode ativar uma regra globalmente: em caso de dúvida,
-// este módulo bloqueia a geração ou conserva a referência de leitura explícita.
+// Insulated planning: does not read or change files and does not prove equivalence
+// with other customers' globs. The accepted syntax is a subset of YAML.
+// YAML invalid in Claude can activate a rule globally: in case of doubt,
+// this module blocks the generation or preserves the explicit reading reference.
 
 const invalid = reason => ({ ok: false, reason });
 
@@ -13,13 +13,13 @@ function quoted(value) {
   return null;
 }
 
-// Restrição deliberada: não interpretar vírgulas, chaves, classes ou escapes
-// como glob Claude. São válidos em alguns dialetos, mas não foram comprovados
-// por este planejador; nunca se tenta dividi-los ou convertê-los implicitamente.
+// Deliberate restriction: do not interpret commas, keys, classes or escapes
+// They are valid in some dialects, but have not been proven.
+// by this planner; never try to divide them or convert them implicitly.
 function safePattern(value) {
   if (typeof value !== 'string' || !value.trim() || value !== value.trim()) return false;
   // JSON aceita surrogates isolados que alguns parsers YAML rejeitam. Claude
-  // poderia então ignorar o frontmatter e carregar a regra globalmente.
+  // could then ignore the frontmatter and charge the rule globally.
   for (let i = 0; i < value.length; i++) {
     const code = value.charCodeAt(i);
     if (code >= 0xd800 && code <= 0xdbff) {
@@ -32,7 +32,7 @@ function safePattern(value) {
   return Boolean(relative) && relative.split('/').every(part => part && part !== '.' && part !== '..');
 }
 
-/** Lê somente frontmatter de paths com lista JSON ou lista de strings citadas. */
+/** Reads path frontmatter only with list JSON or list of quoted strings. */
 export function parseClaudePaths(text, { metadataOnly = true, allowGlobal = false } = {}) {
   if (typeof text !== 'string') return invalid('metadata-not-text');
   if (Buffer.byteLength(text, 'utf8') > 4 * 1024 * 1024) return invalid('metadata-too-large');
@@ -81,9 +81,9 @@ export function serializeClaudePaths(paths) {
 }
 
 /**
- * Planeja somente a ativação; não grava nem reconhece propriedade por conteúdo.
- * nativeMetadata é YAML explícito do Claude, não a lista glob de outro cliente.
- * humanFile, quando fornecido, é sempre preservado mesmo se o escopo coincidir.
+ * Plans only activation; does not record or recognize property by content.
+ * Native Metadata is YAML Claude's explicit, not another client's global list.
+ * HumanFile, when provided, is always preserved even if the scope coincides.
  */
 export function planClaudeRule({ trigger, nativeMetadata, humanFile } = {}) {
   const hasHuman = humanFile !== undefined;

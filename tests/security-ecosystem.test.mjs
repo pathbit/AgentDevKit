@@ -24,7 +24,7 @@ async function cli(root, args) {
   return JSON.parse(output);
 }
 
-test('instalacao leva o ecossistema de seguranca sem baixar scanners nem sobrescrever recursos humanos', async t => {
+test("installation takes the safety ecosystem without downloading scanners or overwriting human resources", async t => {
   const root = fixture(t);
   const custom = '.claude/skills/revisar-seguranca/SKILL.md';
   const own = '# Procedimento de seguranca do projeto\n\nPreserve esta regra.\n';

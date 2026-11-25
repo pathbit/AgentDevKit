@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { resolve, join } from 'node:path';
-import { createInterface } from 'node:readline/promises';
+import { createInterface } from 'node:readline';
 import { spawnSync } from 'node:child_process';
 import { packageInfo, statePath, legacyStatePath } from '../config.mjs';
 import { text, normalizeLanguage, explainError } from '../i18n.mjs';
@@ -17,9 +17,26 @@ import { usage, selectedClients, purposes, parseArgs } from './arguments.mjs';
 import { worktreeWarning, linuxXattrWarning, claudeInspectionWarning, retainedClaudeWarning, claudeScopeWarning } from './warnings.mjs';
 import { print } from './output.mjs';
 import { recoverySummary, publishedOperation, recoveryReport } from './recovery-report.mjs';
+import { cancelledPrompt, canShowClientMenu, selectClientsFromMenu } from './client-menu.mjs';
+
+async function askLine(input, output, question) {
+  const prompt = createInterface({ input, output });
+  try {
+    return await new Promise((answer, reject) => {
+      const cancel = () => reject(cancelledPrompt());
+      prompt.once('close', cancel);
+      prompt.once('SIGINT', cancel);
+      prompt.once('error', reject);
+      prompt.question(question, answer);
+    });
+  } finally {
+    prompt.close();
+  }
+}
 
 export async function main(argv = process.argv.slice(2), context = {}) {
   const output = context.stdout || process.stdout, input = context.stdin || process.stdin, errorOutput = context.stderr || process.stderr;
+  const promptOutput = errorOutput.isTTY ? errorOutput : output;
   const separator = argv.indexOf('--'), globalArgs = separator < 0 ? argv : argv.slice(0, separator);
   let options = { json: globalArgs.includes('--json'), markdown: globalArgs.includes('document') && globalArgs.includes('--markdown') };
   let language = normalizeLanguage(globalArgs[globalArgs.indexOf('--lang') + 1]) || 'pt', target = resolve(context.cwd || process.cwd()), clients = ['none'], operationUncertain = false, removalBeforePlan = [];
@@ -58,23 +75,30 @@ export async function main(argv = process.argv.slice(2), context = {}) {
     }
     language = options.language || normalizeLanguage(previous?.language) || 'pt';
     clients = options.clients ?? (previous ? previous.clients ?? ['all'] : ['none']);
+    const menu = () => selectClientsFromMenu({ input, output: promptOutput, language, initial: clients,
+      choices: availableClients.filter(client => !['all', 'none'].includes(client.id)) });
+    if (options.command === 'agents' && options.select) {
+      if (!previous) throw Object.assign(new Error(text(language, 'missing')), { code: 'E_MISSING' });
+      if (!canShowClientMenu(input, promptOutput)) throw Object.assign(new Error('Agent selection requires an interactive terminal.'), { code: 'E_TTY', exitCode: 2 });
+      clients = options.clients = await menu();
+    }
     if (options.command === 'init' && !previous && !options.yes && !options.json && !options.dryRun && input.isTTY && output.isTTY && (!options.language || options.clients === undefined)) {
-      const prompt = context.ask ? null : createInterface({ input, output: errorOutput });
-      const ask = context.ask || (question => prompt.question(question));
-      try {
-        if (!options.language) language = normalizeLanguage((await ask(text(language, 'select'))).trim() || 'pt') || 'pt';
-        if (options.clients === undefined) {
+      const ask = context.ask || (question => askLine(input, promptOutput, question));
+      if (!options.language) language = normalizeLanguage((await ask(text(language, 'select'))).trim() || 'pt') || 'pt';
+      if (options.clients === undefined) {
+        if (!context.ask && canShowClientMenu(input, promptOutput)) clients = await menu();
+        else {
           const ids = availableClients.map(client => client.id).join(', ');
           clients = selectedClients((await ask(`${text(language, 'clientsAvailable')}: ${ids}\n${text(language, 'clientsSelect')}`)).trim() || 'none');
-          options.clients = clients;
         }
-        if (options.purpose === undefined) {
-          const value = (await ask(text(language, 'purposeSelect'))).trim();
-          const purpose = /^[1-4]$/.test(value) ? purposes[Number(value) - 1] : value || 'agents';
-          if (!purposes.includes(purpose)) usage('Choose 1, 2, 3 or 4.');
-          options.purpose = purpose;
-        }
-      } finally { prompt?.close(); }
+        options.clients = clients;
+      }
+      if (options.purpose === undefined) {
+        const value = (await ask(text(language, 'purposeSelect'))).trim();
+        const purpose = /^[1-4]$/.test(value) ? purposes[Number(value) - 1] : value || 'agents';
+        if (!purposes.includes(purpose)) usage('Choose 1, 2, 3 or 4.');
+        options.purpose = purpose;
+      }
     }
     const result = { ok: true, command: options.command, version: packageInfo.version, language, ...(['help', 'version'].includes(options.command) ? {} : { clients }), target, message: '', next: [] };
     let installed = Boolean(previous), planCanApply;
@@ -211,7 +235,7 @@ export async function main(argv = process.argv.slice(2), context = {}) {
       if (options.command === 'sync' && options.check && previous) removalBeforePlan = inspectRemovalHistory(target);
       const clientChange = options.command === 'agents' && options.positionals.length === 2
         ? options.positionals[0] : undefined;
-      const plan = preparePlan({ target, language, mode: options.command, force: options.force, clients: options.clients, clientChange });
+      const plan = preparePlan({ target, language, mode: options.command, force: options.force, clients: options.clients, clientChange, local: options.local });
       result.clients = plan.clients;
       planCanApply = plan.canApply;
       result.preserved = plan.preserved;
@@ -268,6 +292,10 @@ export async function main(argv = process.argv.slice(2), context = {}) {
       || getNextSteps({ command: options.command, language, target, installed, intent: options.intent });
     print(result, options, output); return exitCode;
   } catch (error) {
+    if (error.code === 'E_CANCELLED') {
+      promptOutput.write(`${text(language, 'clientMenuCancelled')}\n`);
+      return error.exitCode;
+    }
     const diagnostics = collectErrorDiagnostics(error);
     const primary = primaryDiagnosticError(error), code = error.code || primary?.code || 'E_OPERATION';
     const precondition = ['E_UPGRADE', 'E_CLIENTS_RETIRED'].includes(code);

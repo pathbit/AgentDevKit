@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Auditoria de coerência de artefatos; não autentica relatórios nem os reexecuta.
+// Artifact coherence audit; does not authenticate reports or reexecut them.
 import { createHash } from 'node:crypto';
 import { constants, closeSync, fstatSync, lstatSync, openSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
 import path from 'node:path';
@@ -21,8 +21,8 @@ function selectionPool(selections) {
   for(let size=1;size<=4;size++)choose([],0,size);
   return all;
 }
-// Recalcula independentemente os motivos publicados pelo runner. Alterações no
-// contrato exigem revisão explícita desta função; não importa o runner.
+// Independently recalculate the reasons published by the runner.
+// contract require explicit revision of this function; no matter the runner.
 function coverageAssessment(operations) {
   const reasons=[];
   for(const label of expected) {
@@ -40,8 +40,8 @@ function coverageAssessment(operations) {
 const json = bytes => JSON.parse(bytes.toString('utf8'));
 const isObject = x => x !== null && typeof x === 'object' && !Array.isArray(x);
 
-// Não segue links em componentes internos na checagem observada. Não é openat:
-// substituições simultâneas entre checagem e abertura estão fora do contrato.
+// Do not follow links in internal components in the observed check. It is not openat:
+// Simultaneous substitutions between check and opening are out of contract.
 function regularFile(root, parts) {
   let current = root, before;
   if (lstatSync(root).isSymbolicLink()) fail('Raiz da auditoria é link simbólico.');
@@ -251,7 +251,7 @@ function checkRuleScopes(scopes, selection, reply, provenance, sourceDetails) {
         fail('Escopo de regra Cursor inválido.');
       }
       const sidecarKey = `${sidecarPrefix}${metadata}`;
-      // Inventário preserva a caixa do nome real, enquanto o registro usa o nome da política.
+      // Inventory preserves the actual name box, while the record uses the name of the policy.
       const keys = Object.hasOwn(provenance, sidecarKey) ? [sidecarKey]
         : Object.keys(provenance).filter(key => path.posix.dirname(key) === path.posix.dirname(sidecarKey)
           && path.posix.basename(key).toLowerCase() === metadataName.toLowerCase());

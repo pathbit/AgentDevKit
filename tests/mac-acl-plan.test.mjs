@@ -31,7 +31,7 @@ function snapshots(root, target) {
     inode: info.ino, device: info.dev, mode: info.mode, acl: acl.stdout.split('\n').filter(line => /^\s*\d+: /.test(line)) };
 }
 
-test('plano e dry-run aceitam ACL preservável sem alterar a consulta', { timeout: 120000, skip: macOnly }, t => {
+test("plan and dry-run accept ACL preserveable without changing the query", { timeout: 120000, skip: macOnly }, t => {
   const root = fixture(t), path = 'AGENTS.md', target = join(root, path);
   put(root, path, '# Instruções humanas\n');
   assert.equal(spawnSync('/bin/chmod', ['+a', 'everyone allow read', target]).status, 0);
@@ -49,7 +49,7 @@ test('plano e dry-run aceitam ACL preservável sem alterar a consulta', { timeou
   assert.deepEqual(after.files.slice(0, 5), before.files.slice(0, 5), 'índice e configuração Git devem permanecer intactos');
 });
 
-test('check direto informa ACL apenas no arquivo que precisa mudar', { timeout: 120000, skip: macOnly }, t => {
+test("direct check informs ACL only in the file that needs to change", { timeout: 120000, skip: macOnly }, t => {
   const root = fixture(t), source = '.pbai4devs/skills/demo/SKILL.md', path = '.claude/skills/demo/SKILL.md';
   put(root, '.pbai4devs/espelhos.conf', 'agente|.claude|plano\n');
   for (const name of ['agents.ignore', 'shared.ignore', 'local.ignore', 'clients.json']) put(root, `.pbai4devs/templates/gitignore/${name}`, fs.readFileSync(new URL(`../.pbai4devs/templates/gitignore/${name}`, import.meta.url)));
@@ -69,7 +69,7 @@ test('check direto informa ACL apenas no arquivo que precisa mudar', { timeout: 
   assert.deepEqual(after.files.slice(0, 5), before.files.slice(0, 5), 'índice e configuração Git devem permanecer intactos');
 });
 
-test('ACL adicionada após o plano é recusada na aplicação', { timeout: 120000, skip: macOnly }, t => {
+test("ACL added after plan is refused in application", { timeout: 120000, skip: macOnly }, t => {
   const root = fixture(t), path = 'AGENTS.md', target = join(root, path);
   put(root, path, '# Instruções humanas\n');
   const plan = planInstallation({ target: root, mode: 'init', clients: ['codex'] });
@@ -80,7 +80,7 @@ test('ACL adicionada após o plano é recusada na aplicação', { timeout: 12000
   assert.deepEqual(snapshots(root, path), before); assert.equal(fs.statSync(target, { bigint: true }).ino, identity.ino);
 });
 
-test('plano distingue consulta de ACL inconclusiva sem expor saída', { timeout: 120000, skip: macOnly }, async t => {
+test("plan distinguishes consultation from ACL inconclusive without exposing exit", { timeout: 120000, skip: macOnly }, async t => {
   const root = fixture(t), path = 'AGENTS.md', target = join(root, path);
   put(root, path, '# Instruções humanas\n'); const before = snapshots(root, path);
   const spawn = childProcess.spawnSync; let injected = false;
@@ -103,7 +103,7 @@ test('plano distingue consulta de ACL inconclusiva sem expor saída', { timeout:
   t.mock.restoreAll(); syncBuiltinESMExports(); assert.deepEqual(snapshots(root, path), before);
 });
 
-test('ACL preservável não oculta o bloqueio por hardlink', { timeout: 120000, skip: macOnly }, t => {
+test("ACL Preservable does not hide hardlink lock", { timeout: 120000, skip: macOnly }, t => {
   const root = fixture(t), path = 'AGENTS.md', target = join(root, path), other = join(root, 'link-humano.md');
   put(root, path, '# Instruções humanas\n');
   assert.equal(spawnSync('/bin/chmod', ['+a', 'everyone allow read', target]).status, 0);
@@ -120,7 +120,7 @@ test('ACL preservável não oculta o bloqueio por hardlink', { timeout: 120000, 
   assert.deepEqual(snapshots(root, path), before); assert.equal(fs.statSync(other, { bigint: true }).ino, fs.statSync(target, { bigint: true }).ino);
 });
 
-test('conflito humano mantém prioridade e ACL preservável não gera falso bloqueio', { timeout: 240000, skip: macOnly }, t => {
+test("human conflict keeps priority and ACL Preservable does not generate false lock", { timeout: 240000, skip: macOnly }, t => {
   const root = fixture(t), cli = fileURLToPath(new URL('../bin/agentdevkit.mjs', import.meta.url));
   const run = args => spawnSync(process.execPath, [cli, ...args], { cwd: root, encoding: 'utf8', timeout: 120000, maxBuffer: 8 * 1024 * 1024 });
   const init = run(['init', '--target', root, '--agents', 'claude', '--yes', '--json']);

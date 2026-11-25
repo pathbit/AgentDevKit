@@ -5,6 +5,8 @@ status: aprovado
 
 # Design técnico
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 O repositório contém o gerador. A instalação produz a estrutura usada pelos
 agentes em outro projeto. [PRD](prd.md) e [specs](../specs/README.md) definem os
 contratos de cada entrega.
@@ -134,3 +136,7 @@ referência não comprova a execução da skill.
 
 [clients]: ../../.pbai4devs/templates/clients/ADAPTERS.json
 [additive]: ../specs/additive-integration/SPEC.md
+
+[reading-pt]: design.md
+[reading-en]: ../en/product/design.md
+[reading-es]: ../es/product/design.md

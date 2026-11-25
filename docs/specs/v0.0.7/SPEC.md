@@ -6,6 +6,8 @@ version: 0.0.7
 
 # Compatibilidade com projetos existentes
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 ## Objetivo e autorização
 
 Atender ao pedido de testar o pacote publicado em projetos open source com
@@ -57,3 +59,7 @@ Não concluir compatibilidade universal a partir desta matriz.
 
 Atualizar instalação, testes, changelog, índices e roadmap. Documentar a
 proteção de artefatos locais e os limites de configurações preexistentes.
+
+[reading-pt]: SPEC.md
+[reading-en]: ../../en/specs/v0.0.7/SPEC.md
+[reading-es]: ../../es/specs/v0.0.7/SPEC.md

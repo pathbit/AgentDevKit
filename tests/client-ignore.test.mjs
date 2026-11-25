@@ -61,7 +61,7 @@ function ignored(root, path, extraEnv = {}) {
   return result.status === 0;
 }
 
-test('backup de conteúdo humano pode ficar visível sem alterar ignores ou índice do projeto', t => {
+test("backup of human content can be visible without changing ignores or project index", t => {
   const root = fixture(t), human = '# Instruções humanas\n\nMarcador sintético de conteúdo privado.\n', ignore = '# Regras próprias do projeto\n';
   put(root, 'AGENTS.md', human); put(root, '.gitignore', ignore);
   chmodSync(join(root, 'AGENTS.md'), 0o640);
@@ -81,7 +81,7 @@ test('backup de conteúdo humano pode ficar visível sem alterar ignores ou índ
   assert.deepEqual(readFileSync(join(root, '.git/info/exclude')), beforeExclude);
 });
 
-test('clientes existentes permanecem visíveis e staged é preservado em todo o ciclo', t => {
+test("existing customers remain visible and staged is preserved throughout the cycle", t => {
   const root = fixture(t);
   const ignore = '# Regras da equipe\n/build/\n';
   const original = '{"team":"staged"}\n';
@@ -137,7 +137,7 @@ test('clientes existentes permanecem visíveis e staged é preservado em todo o 
   }
 });
 
-test('allowlist opcional do Copilot libera configurações compartilhadas sem expor o ajuste local', t => {
+test("optional Copilot allowlist releases shared settings without exposing local setting", t => {
   const root = fixture(t);
   const dir = join(repository, '.pbai4devs/templates/gitignore');
   const clients = JSON.parse(readFileSync(join(dir, 'clients.json'), 'utf8'));
@@ -149,7 +149,7 @@ test('allowlist opcional do Copilot libera configurações compartilhadas sem ex
   assert.equal(ignored(root, '.github/copilot/Settings.Local.JSON'), true);
 });
 
-test('seleção de um arquivo exige reabrir pais e regras posteriores prevalecem', t => {
+test("file selection requires reopening parents and later rules prevail", t => {
   const root = fixture(t);
   const selected = '.claude/skills/configurar-projeto/SKILL.md';
   const other = '.claude/skills/criar-skill/SKILL.md';
@@ -157,13 +157,13 @@ test('seleção de um arquivo exige reabrir pais e regras posteriores prevalecem
   assert.equal(cli(root, ['init', '--agents', 'claude']).ok, true);
   assert.ok(existsSync(join(root, selected)) && existsSync(join(root, other)));
 
-  // Git não reabre um arquivo cujo diretório pai continua ignorado.
+  // Git does not reopen a file whose parent directory remains ignored.
   put(root, '.gitignore', `# Projeto\n!/${selected}\n`);
   assert.equal(ignored(root, selected), false);
   assert.equal(cli(root, ['sync']).ok, true);
 
-  // Reabrir os ancestrais e fechar os demais irmãos permite escolher apenas
-  // uma saída; não libera credenciais nem outros arquivos do cliente.
+  // Reopening the ancestors and closing the other brothers allows you to choose only
+  // an output; does not release client credentials or other files.
   const selective = [
     '# Projeto', '!/.claude/', '/.claude/*', '!/.claude/skills/',
     '/.claude/skills/*', '!/.claude/skills/configurar-projeto/',
@@ -186,7 +186,7 @@ test('seleção de um arquivo exige reabrir pais e regras posteriores prevalecem
     assert.equal(ignored(root, '.claude/.env'), true);
   }
 
-  // A última regra volta a ocultar a pasta, mas não altera o conteúdo staged.
+  // The last rule hides the folder again, but does not change the contents staged.
   const closed = `${selective}/.claude/\n`;
   put(root, '.gitignore', closed);
   assert.equal(ignored(root, selected), true);
@@ -196,7 +196,7 @@ test('seleção de um arquivo exige reabrir pais e regras posteriores prevalecem
   assert.equal(command(root, ['ls-files', '--stage', '-z']), entries);
 });
 
-test('credenciais expostas são diagnosticadas e regras humanas são preservadas', t => {
+test("exposed credentials are diagnosed and human rules are preserved", t => {
   const root = fixture(t);
   put(root, '.gitignore', '# Regras próprias\n');
   put(root, '.github/auth.json', '{"placeholder":true}\n');
@@ -206,8 +206,8 @@ test('credenciais expostas são diagnosticadas e regras humanas são preservadas
   assert.equal(ignored(root, '.github/auth.json'), false);
   assert.equal(ignored(root, '.github/playwright-report/index.html'), false);
 
-  // A negação ampla do usuário tem precedência sobre info/exclude e expõe
-  // privados: o kit deve informar o conflito antes de mudar qualquer estado.
+  // The user's broad denial takes precedence over info/exclude and exposes
+  // private: the kit must inform the conflict before changing any state.
   const human = '# Regras próprias\n!/.github/\n!/.github/**\n';
   put(root, '.gitignore', human);
   assert.equal(ignored(root, '.github/auth.json'), false);
@@ -228,7 +228,7 @@ test('credenciais expostas são diagnosticadas e regras humanas são preservadas
   }
 });
 
-test('projeto sem Git mantém regras existentes após git init e sync', t => {
+test("project without Git keeps existing rules after git init and sync", t => {
   const root = fixture(t, { git: false });
   const ignore = '# Ignore da equipe\n/dist/\n';
   put(root, '.gitignore', ignore);
@@ -245,7 +245,7 @@ test('projeto sem Git mantém regras existentes após git init e sync', t => {
   assert.equal(ignored(root, '.github/workflows/team.yml'), false);
 });
 
-test('projeto aninhado respeita o escopo Git e exceções do seu próprio ignore', t => {
+test("nested project respects the scope of Git and exceptions of its own ignore", t => {
   const root = fixture(t), target = join(root, 'apps', 'nested');
   put(root, '.claude/settings.json', '{"parent":true}\n');
   put(root, 'apps/nested/.gitignore', '# Projeto aninhado\n!/.claude/\n');
@@ -263,7 +263,7 @@ test('projeto aninhado respeita o escopo Git e exceções do seu próprio ignore
   assert.deepEqual(index(root), before);
 });
 
-test('projeto aninhado em ancestral ignorado preserva regras e conteúdo humano', t => {
+test("project nestled in ignored ancestor preserves human rules and content", t => {
   const root = fixture(t), target = join(root, '.github', 'project');
   put(root, '.gitignore', '# Projeto pai\n/.github/\n');
   command(root, ['add', '--', '.gitignore']);
@@ -290,7 +290,7 @@ test('projeto aninhado em ancestral ignorado preserva regras e conteúdo humano'
   }
 });
 
-test('exclusão global temporária de ancestral é preservada', t => {
+test("temporary global exclusion of ancestor is preserved", t => {
   const root = fixture(t), target = join(root, 'apps', 'project');
   const configFile = join(root, 'fixture-global.gitconfig');
   const globalIgnore = join(root, 'fixture-global.ignore');

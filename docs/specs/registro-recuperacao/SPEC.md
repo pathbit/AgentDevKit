@@ -5,6 +5,8 @@ status: aprovado
 
 # Registro de recuperação
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 Primeiro componente da [recuperação conservadora](../recuperacao-conservadora/SPEC.md).
 Este incremento é uma função pura: não lê ou escreve arquivos, não altera
 instalação ou sync e ainda não protege projetos. A autorização geral do usuário
@@ -89,3 +91,7 @@ com Node 24+. Salve logs
 em `.agent-tests/registro-recuperacao/`. Testes, spec e código são versionáveis;
 resultados e fixtures ficam fora do Git. A release depende da integração,
 revisão e provas completas, inclusive dos testes estritos de rollback.
+
+[reading-pt]: SPEC.md
+[reading-en]: ../../en/specs/registro-recuperacao/SPEC.md
+[reading-es]: ../../es/specs/registro-recuperacao/SPEC.md

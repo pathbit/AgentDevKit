@@ -211,6 +211,19 @@ export function checkMarkdown(root, files, { virtualPaths = new Set() } = {}) {
   }
 }
 
+function checkDocumentationLanguages(root, files) {
+  if (!existsSync(join(root, 'docs/maintainers/languages.md'))) return;
+  const paths = new Set(files.map(file => normalize(relative(root, file))));
+  for (const source of paths) {
+    if (source === 'README.en.md' || source === 'README.es.md' || /^docs\/(en|es)\//.test(source)) continue;
+    for (const language of ['en', 'es']) {
+      const translated = source === 'README.md' ? `README.${language}.md`
+        : `docs/${language}/${source.replace(/^docs\//, '').replace(/^\.pbai4devs\//, 'kit/').replace(/^\.github\//, 'github/')}`;
+      if (!paths.has(translated)) fail(`Missing ${language} documentation for ${source}: ${translated}`);
+    }
+  }
+}
+
 export function resourcePaths(text) {
   const result = new Set();
   for (const match of text.matchAll(/(?<![\w/.-])\.pbai4devs\/(?:scripts|tools|commands|templates)\/[^\s`'"\[\])]+/g)) {
@@ -269,11 +282,23 @@ export function checkLint(root, files, run = spawnSync) {
   const legacy = join(root, '.pbai4devs/tools/markdownlint-cli2/CURRENT.json');
   if (!existsSync(current) && !existsSync(legacy)) return ['markdownlint-cli2=missing; verificacao nativa de estrutura e links executada.'];
   const script = join(root, '.pbai4devs/scripts/preparar-ferramentas/SCRIPT.mjs');
-  const result = run(process.execPath, [script, 'run', 'markdownlint-cli2', ...files], { cwd: root, encoding: 'utf8', timeout: 60000 });
-  if (result.error) throw result.error;
-  const output = [result.stdout, result.stderr].filter(Boolean).join('\n').trim();
-  if (result.status !== 0) fail(output.split('\n').filter(line => !line.startsWith('Finding:')).join('\n') || 'Markdown lint falhou.');
-  return output.split('\n').filter(line => /^(?:Linting:|Summary:)/.test(line));
+  const batches = [[]];
+  let size = 0;
+  for (const file of files) {
+    if (process.platform === 'win32' && size && size + file.length + 3 > 12000) {
+      batches.push([]);
+      size = 0;
+    }
+    batches.at(-1).push(file);
+    size += file.length + 3;
+  }
+  return batches.flatMap(batch => {
+    const result = run(process.execPath, [script, 'run', 'markdownlint-cli2', ...batch], { cwd: root, encoding: 'utf8', timeout: 60000 });
+    if (result.error) throw result.error;
+    const output = [result.stdout, result.stderr].filter(Boolean).join('\n').trim();
+    if (result.status !== 0) fail(output.split('\n').filter(line => !line.startsWith('Finding:')).join('\n') || 'Markdown lint failed.');
+    return output.split('\n').filter(line => /^(?:Linting:|Summary:)/.test(line));
+  });
 }
 
 export function verifyResources({ root = projectRoot, sourceOnly = false, synchronize = checkSynchronization, lint = checkLint, catalogCheck = checkCatalog } = {}) {
@@ -285,6 +310,7 @@ export function verifyResources({ root = projectRoot, sourceOnly = false, synchr
   const files = collectMarkdown(root, registry, { installed });
   const virtualPaths = new Set(sourceOnly ? [...built.outputs.keys(), '.pbai4devs/espelhos.conf'] : []);
   checkMarkdown(root, files, { virtualPaths });
+  if (sourceOnly) checkDocumentationLanguages(root, files);
   if (installed) checkManagedBlocks(root, installed.blocks);
   checkResourceReferences(root, files);
   checkAgentExtras(root, registry.agents, { installed });

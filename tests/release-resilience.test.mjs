@@ -16,7 +16,7 @@ const run = { id: 42, run_attempt: 1, head_sha: commit, head_branch: 'master', e
   path: resolution.workflowPath, repository: { full_name: repository }, head_repository: { full_name: repository } };
 const artifact = { id: 50, name: `agentdevkit-${commit}-1`, expired: false };
 
-test('release automática exige o commit original mesmo se a tag for movida', async () => {
+test("Automatic release requires the original commit even if the tag is moved", async () => {
   let calls = 0;
   const request = async (_method, path) => {
     calls++;
@@ -44,7 +44,7 @@ function fixture(t) {
   return directory;
 }
 
-test('release aguarda CI pendente por mais de 17 minutos sem aceitar CI sem sucesso', async () => {
+test("release awaits IC pending for more than 17 minutes without accepting IC unsuccessful", async () => {
   let clock = 0, polls = 0;
   const request = async (_method, path) => {
     if (path.includes('/git/ref/')) return { object: { type: 'commit', sha: commit } };
@@ -61,7 +61,7 @@ test('release aguarda CI pendente por mais de 17 minutos sem aceitar CI sem suce
   assert.equal(found.artifactId, 50);
 });
 
-test('CI falha ou rerun sem artefato da tentativa atual bloqueia a release', async t => {
+test("CI failure or rerun without artifact of current attempt blocks release", async t => {
   for (const scenario of [
     { name: 'falha', run: { ...run, status: 'completed', conclusion: 'failure' }, artifacts: [artifact] },
     { name: 'artefato antigo', run: { ...run, run_attempt: 2, status: 'completed', conclusion: 'success' }, artifacts: [artifact] },
@@ -78,7 +78,7 @@ test('CI falha ou rerun sem artefato da tentativa atual bloqueia a release', asy
   });
 });
 
-test('CI que não termina interrompe a espera no prazo sem publicar', async () => {
+test("IC that does not end interrupts waiting within the deadline without publishing", async () => {
   let clock = 0;
   const request = async (method, path) => {
     assert.equal(method, 'GET');
@@ -90,7 +90,7 @@ test('CI que não termina interrompe a espera no prazo sem publicar', async () =
   assert.equal(clock, 65 * 60000);
 });
 
-test('limites dos jobs dão margem à espera do CI e aos dois registries', () => {
+test("job limits give room for the IC and the two registers", () => {
   const workflow = readFileSync(join(root, '.github/workflows/release.yml'), 'utf8');
   const ci = readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8');
   const verify = ci.split(/^  verify:\s*$/m)[1]?.split(/^  [\w-]+:\s*$/m)[0];
@@ -104,7 +104,7 @@ test('limites dos jobs dão margem à espera do CI e aos dois registries', () =>
   assert.ok(publishMinutes >= 50);
 });
 
-test('falhas de subprocesso são identificadas sem imprimir dados privados', async t => {
+test("subprocess failures are identified without printing private data", async t => {
   const secret = 'ESECRET_PRIVATE_DATA';
   const cases = [
     { name: 'timeout', result: { status: null, signal: 'SIGTERM', error: { code: 'ETIMEDOUT', message: secret } }, matches: ['ETIMEDOUT', 'SIGTERM'] },
@@ -130,7 +130,7 @@ test('falhas de subprocesso são identificadas sem imprimir dados privados', asy
   });
 });
 
-test('processo interrompido não é tratado como versão ausente ou propagação', async t => {
+test("interrupted process is not treated as missing version or propagation", async t => {
   for (const scenario of [
     { action: 'view', code: 'E404' },
     { action: 'cache', code: 'ETARGET' },

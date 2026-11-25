@@ -13,7 +13,7 @@ import { text } from '../i18n.mjs';
 import { buildRecoveryEntries } from '../../.pbai4devs/scripts/lib/recovery-entries.mjs';
 import { createPrivateRecoveryDirectory } from '../../.pbai4devs/scripts/lib/recovery-privacy.mjs';
 import { assertRecoveryStageVolume, completeProjectRecovery, inspectProjectRecovery, startProjectRecovery } from '../../.pbai4devs/scripts/lib/project-recovery.mjs';
-import { hash, portable, fail, stat, safePath, nativeOutputBoundary, read } from './filesystem.mjs';
+import { hash, portable, fail, stat, safePath, nativeOutputBoundary, read, assertTargetUnchanged } from './filesystem.mjs';
 import { stagedDivergences, stagedContains } from './git-index.mjs';
 import { publishPlannedFile } from './publish-file.mjs';
 import { allowsStagedBlock, allowedManaged } from './ownership.mjs';
@@ -29,6 +29,8 @@ function xattrProtectionError(path, metadataReason) {
 
 export function applyPlan(plan) {
   assertUnredirectedGitEnvironment();
+  const { target, targetSnapshot } = plan;
+  assertTargetUnchanged(target, targetSnapshot);
   const pending = inspectProjectRecovery(plan.target);
   if (pending.status !== 'ready') {
     throw Object.assign(new Error('Inspect the project recovery record before continuing.'), {
@@ -100,7 +102,6 @@ export function applyPlan(plan) {
     }
   };
   assertLocalIgnoreUnchanged(plan.localIgnore);
-  const { target } = plan;
   // These were real inputs to private-stage decisions, even if not outputs.
   const assertStageDependencies = () => {
     if (plan.stageDependencies !== undefined && !Array.isArray(plan.stageDependencies)) fail('E_PLAN', 'Invalid stage dependencies.');
@@ -260,16 +261,19 @@ export function applyPlan(plan) {
     ]),
   ];
   if (!plannedActions.length && !directories.length) {
+    assertTargetUnchanged(target, targetSnapshot);
     const ignored = applyLocalIgnore(plan.localIgnore, { migrateLegacy: true });
     return { changed: Boolean(ignored.changed), backup: null, localIgnorePending: ignored.pending, localIgnoreMigration: ignored.migration };
   }
   const entries = buildRecoveryEntries(target, plannedActions.map(([path, action]) => ({
     path, action, before: before.get(path) === null ? null : { data: before.get(path), mode: beforeModes.get(path) },
   })), directories);
+  assertTargetUnchanged(target, targetSnapshot);
   const transaction = startProjectRecovery(target, entries);
   let backup = null;
   const attemptedPaths = new Set();
   try {
+    assertTargetUnchanged(target, targetSnapshot);
     for (const [path, action] of plannedActions) {
       if (action === 'update') assertRecoveryStageVolume(transaction, safePath(target, path), path);
     }
@@ -338,6 +342,7 @@ export function applyPlan(plan) {
     assertStaticContents('E_CHANGED');
     assertPrunePlanUnchanged();
     assertMigrationDirectories();
+    assertTargetUnchanged(target, targetSnapshot);
     for (const change of plan.changes) assertOriginal(change.path);
     for (let index = 0; index < plannedActions.length; index++) {
       if (!Array.isArray(plan.changes) || plan.changes.length !== plannedActions.length) fail('E_CHANGED', 'The installation actions changed during application.');

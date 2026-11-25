@@ -6,6 +6,8 @@ version: 0.0.1
 
 # Distribuição v0.0.1
 
+[Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
+
 ## Objetivo e escopo
 
 Distribuir o kit independente, instalável em projetos novos e existentes,
@@ -55,3 +57,7 @@ Escopo autorizado pela solicitação atual de criação do AgentDevKit.
 Critérios mantidos exigem prova aprovada na revisão antes de concluir a release.
 
 [Todas as specs](../README.md) · [Wiki](../../README.md)
+
+[reading-pt]: SPEC.md
+[reading-en]: ../../en/specs/v0.0.1/SPEC.md
+[reading-es]: ../../es/specs/v0.0.1/SPEC.md

@@ -2,8 +2,8 @@ import { createHash } from 'node:crypto';
 import { posix } from 'node:path';
 import { parseClaudePaths, serializeClaudePaths } from './claude-rule-scope.mjs';
 
-// Impressões dos apontamentos agrupados produzidos pelo pacote npm 0.0.21.
-// Exija também o registro do projeto: bytes publicados não provam propriedade.
+// Prints of the grouped notes produced by the package npm 0.0.21.
+// Also require project registration: bytes published do not prove property.
 const publishedLegacy = new Map([
   ['ambiente-local', '3542912aa258ff8bbcb2ac00eca03f818a0a3ff09f8e483549738acb281ac1f5'],
   ['documentacao', '6ba43da42ad690b30013b5c2abb09948a690c33cf9271979eee12e6054d8e9bf'],
@@ -58,8 +58,8 @@ export function canMigrateClaudeReference({ target, current, replacement, record
   return Boolean(prior && prior.source === next.source && prior.scope === next.scope);
 }
 
-// Subconjunto conservador: duas chaves, ordem/espacos/LF fixos e descrição YAML
-// simples restrita. Não tenta reconhecer YAML geral nem demonstra autoria.
+// Conservative subset: two keys, ordem/espacos/LF fixed and description YAML
+// Just restricted. Don't try to recognize YAML It doesn't even show authorship.
 export function isLegacyExact(sourceBytes, wrapperBytes, generatedBytes, name) {
   if (!Buffer.isBuffer(sourceBytes) || !Buffer.isBuffer(wrapperBytes) || !Buffer.isBuffer(generatedBytes) || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name)) return false;
   const source = sourceBytes.toString('utf8');

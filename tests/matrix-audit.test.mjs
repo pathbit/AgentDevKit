@@ -72,86 +72,86 @@ function fixture(t, status='passed', windows=false, round=1) {
   save();return {parent,dir,origin,caseDir:entries[0].caseDir,result:entries[0].result,report,save};
 }
 test('passed coerente',t=>{let f=fixture(t);let a=audit(f.dir,f.origin);assert.equal(a.matrixStatus,'passed');assert.equal(a.projects,40);});
-test('not-verified não é promovido',t=>{let f=fixture(t,'not-verified');let a=audit(f.dir,f.origin);assert.equal(a.matrixStatus,'not-verified');assert.equal(a.notVerified,1);});
+test("not-verified is not promoted",t=>{let f=fixture(t,'not-verified');let a=audit(f.dir,f.origin);assert.equal(a.matrixStatus,'not-verified');assert.equal(a.notVerified,1);});
 test('falha bem formada permanece falha',t=>{let f=fixture(t,'failed');assert.equal(audit(f.dir,f.origin).matrixStatus,'failed');});
 test('contagem divergente',t=>{let f=fixture(t);f.report.passed=0;f.save();assert.throws(()=>audit(f.dir,f.origin),/Contagens/);});
 test('status global divergente',t=>{let f=fixture(t,'not-verified');f.report.status='passed';f.save();assert.throws(()=>audit(f.dir,f.origin),/Status global/);});
 test('hash de log divergente',t=>{let f=fixture(t);writeFileSync(join(f.caseDir,'init.stdout.log'),'alterado');assert.throws(()=>audit(f.dir,f.origin),/Hash/);});
-test('log fora da saída',t=>{let f=fixture(t);f.result.operations.find(o=>o.label==='init').stdout='/source/outside';f.save();assert.throws(()=>audit(f.dir,f.origin),/fora do caso/);});
+test("log out of output",t=>{let f=fixture(t);f.result.operations.find(o=>o.label==='init').stdout='/source/outside';f.save();assert.throws(()=>audit(f.dir,f.origin),/fora do caso/);});
 test('link interno recusado',t=>{let f=fixture(t);const log=join(f.caseDir,'init.stdout.log'),target=join(f.parent,'other.log');writeFileSync(target,readFileSync(log));rmSync(log);try{symlinkSync(target,log,'file');}catch(e){if(process.platform==='win32'&&['EPERM','EACCES'].includes(e.code)){t.skip('Privilégio de symlink indisponível');return;}throw e;}assert.throws(()=>audit(f.dir,f.origin),/Link simbólico/);});
 test('raiz symlink recusada',t=>{let f=fixture(t);const link=join(f.parent,'root-link');try{symlinkSync(f.dir,link,'dir');}catch(e){if(process.platform==='win32'&&['EPERM','EACCES'].includes(e.code)){t.skip('Privilégio de symlink indisponível');return;}throw e;}assert.throws(()=>audit(link,f.origin),/Raiz.*link/);});
 test('caso individual divergente',t=>{let f=fixture(t);writeFileSync(join(f.caseDir,'RESULT.json'),'{}');assert.throws(()=>audit(f.dir,f.origin),/individual divergente/);});
 test('identificador duplicado',t=>{let f=fixture(t);f.report.results[1].number=1;f.save();assert.throws(()=>audit(f.dir,f.origin),/Caso inválido/);});
 test('caminhos Windows gravados',t=>{let f=fixture(t,'passed',true);assert.equal(audit(f.dir,f.origin).matrixStatus,'passed');});
 test('zero resultados recusados',t=>{let f=fixture(t);f.report.results=[];f.report.projects=0;f.report.passed=0;f.save();assert.throws(()=>audit(f.dir,f.origin),/cardinalidade/);});
-test('rounds inválido',t=>{let f=fixture(t);f.report.rounds=2;f.save();assert.throws(()=>audit(f.dir,f.origin),/cardinalidade/);});
+test("invalid rounds",t=>{let f=fixture(t);f.report.rounds=2;f.save();assert.throws(()=>audit(f.dir,f.origin),/cardinalidade/);});
 test('startRound e IDs divergentes',t=>{let f=fixture(t);f.report.startRound=2;f.save();assert.throws(()=>audit(f.dir,f.origin),/IDs/);});
-test('proveniência incompleta',t=>{let f=fixture(t);delete f.report.provenance.before.managedToml;f.save();assert.throws(()=>audit(f.dir,f.origin),/proveniência/);});
+test("incomplete provenance",t=>{let f=fixture(t);delete f.report.provenance.before.managedToml;f.save();assert.throws(()=>audit(f.dir,f.origin),/proveniência/);});
 test('coverage ausente',t=>{let f=fixture(t);f.result.coverage=null;f.save();assert.throws(()=>audit(f.dir,f.origin),/Coverage/);});
 test('coverage desconhecida',t=>{let f=fixture(t);f.result.coverage.status='unknown';f.save();assert.throws(()=>audit(f.dir,f.origin),/Coverage|Status individual/);});
-test('coverage verificada com motivo não verificado',t=>{let f=fixture(t);f.result.coverage.notVerified=['não verificado'];f.save();assert.throws(()=>audit(f.dir,f.origin),/Coverage|Status individual/);});
-test('ok falso na operação',t=>{let f=fixture(t);f.result.operations.find(o=>o.label==='init').ok=false;f.save();assert.throws(()=>audit(f.dir,f.origin),/Resposta/);});
-test('versão divergente na operação',t=>{let f=fixture(t);f.result.operations.find(o=>o.label==='init').version='1.0.0';f.save();assert.throws(()=>audit(f.dir,f.origin),/Resposta/);});
-test('snapshot intermediário contraditório',t=>{let f=fixture(t);writeFileSync(join(f.caseDir,'init.snapshot.json'),JSON.stringify({status:'verified',unchanged:false,documentsPreserved:true}));assert.throws(()=>audit(f.dir,f.origin),/Snapshot intermediário/);});
-test('snapshot final contraditório',t=>{let f=fixture(t);writeFileSync(join(f.caseDir,'AFTER.json'),'{}');assert.throws(()=>audit(f.dir,f.origin),/Snapshot final/);});
+test("verified cover with unchecked motive",t=>{let f=fixture(t);f.result.coverage.notVerified=['não verificado'];f.save();assert.throws(()=>audit(f.dir,f.origin),/Coverage|Status individual/);});
+test("fake ok in operation",t=>{let f=fixture(t);f.result.operations.find(o=>o.label==='init').ok=false;f.save();assert.throws(()=>audit(f.dir,f.origin),/Resposta/);});
+test("divergent version in operation",t=>{let f=fixture(t);f.result.operations.find(o=>o.label==='init').version='1.0.0';f.save();assert.throws(()=>audit(f.dir,f.origin),/Resposta/);});
+test("contradictory intermediate snapshot",t=>{let f=fixture(t);writeFileSync(join(f.caseDir,'init.snapshot.json'),JSON.stringify({status:'verified',unchanged:false,documentsPreserved:true}));assert.throws(()=>audit(f.dir,f.origin),/Snapshot intermediário/);});
+test("contradictory final snapshot",t=>{let f=fixture(t);writeFileSync(join(f.caseDir,'AFTER.json'),'{}');assert.throws(()=>audit(f.dir,f.origin),/Snapshot final/);});
 
 test('dados do snapshot contradizem indicador',t=>{let f=fixture(t);const file=join(f.caseDir,'init.snapshot.json');const snap=JSON.parse(readFileSync(file));snap.after.human.sha256='b'.repeat(64);writeFileSync(file,JSON.stringify(snap));assert.throws(()=>audit(f.dir,f.origin),/Dados do snapshot/);});
-test('JSON de operação com hash consistente mas comando incorreto',t=>{let f=fixture(t);const op=f.result.operations.find(o=>o.label==='init'), body=JSON.stringify({ok:true,version:'0.0.30',command:'outro'})+'\n';writeFileSync(join(f.caseDir,'init.stdout.log'),body);op.stdoutSha256=hash(body);f.save();assert.throws(()=>audit(f.dir,f.origin),/JSON de operação/);});
-test('proveniência de cinco arquivos mudou, resultado permanece failed',t=>{let f=fixture(t,'failed');f.report.provenance.after={...f.report.provenance.before,runner:{...f.report.provenance.before.runner,sha256:'b'.repeat(64)}};f.report.provenance.passed=false;f.save();assert.equal(audit(f.dir,f.origin).matrixStatus,'failed');});
-test('seleção duplicada dentro da rodada',t=>{let f=fixture(t);f.report.results[2].selection=f.report.results[0].selection;f.report.results[3].selection=f.report.results[0].selection;f.save();assert.throws(()=>audit(f.dir,f.origin),/Seleção não corresponde/);});
+test("JSON operation with consistent hash but incorrect command",t=>{let f=fixture(t);const op=f.result.operations.find(o=>o.label==='init'), body=JSON.stringify({ok:true,version:'0.0.30',command:'outro'})+'\n';writeFileSync(join(f.caseDir,'init.stdout.log'),body);op.stdoutSha256=hash(body);f.save();assert.throws(()=>audit(f.dir,f.origin),/JSON de operação/);});
+test("provenance of five files changed, result remains failed",t=>{let f=fixture(t,'failed');f.report.provenance.after={...f.report.provenance.before,runner:{...f.report.provenance.before.runner,sha256:'b'.repeat(64)}};f.report.provenance.passed=false;f.save();assert.equal(audit(f.dir,f.origin).matrixStatus,'failed');});
+test("Double selection within the round",t=>{let f=fixture(t);f.report.results[2].selection=f.report.results[0].selection;f.report.results[3].selection=f.report.results[0].selection;f.save();assert.throws(()=>audit(f.dir,f.origin),/Seleção não corresponde/);});
 function unverified(f, label, reason) {
   f.result.status='not-verified';f.result.passed=false;
   f.result.coverageAssessment={status:'not-verified',reasons:[`${label}: ${reason}`]};
   f.report.passed=39;f.report.notVerified=1;f.report.status='not-verified';
 }
-test('novo: coverage de init ausente é not-verified coerente',t=>{let f=fixture(t);delete f.result.operations.find(o=>o.label==='init').installation.coverage;unverified(f,'init','cobertura ausente ou inválida');f.save();assert.equal(audit(f.dir,f.origin).matrixStatus,'not-verified');});
-test('novo: coverage final ausente é not-verified coerente',t=>{let f=fixture(t);delete f.result.operations.find(o=>o.label==='sync-check').installation.coverage;f.result.coverage=null;unverified(f,'sync-check','cobertura ausente ou inválida');f.save();assert.equal(audit(f.dir,f.origin).matrixStatus,'not-verified');});
-test('novo: cobertura desconhecida é not-verified coerente',t=>{let f=fixture(t);f.result.operations.find(o=>o.label==='init').installation.coverage={...f.result.coverage,status:'unknown'};unverified(f,'init','status de cobertura desconhecido');f.save();assert.equal(audit(f.dir,f.origin).matrixStatus,'not-verified');});
-test('novo: instalação ausente não comprova inventário',t=>{let f=fixture(t);delete f.result.operations.find(o=>o.label==='init').installation;unverified(f,'init','cobertura ausente ou inválida');f.save();assert.throws(()=>audit(f.dir,f.origin),/Inventário/);});
+test("new: cover of absent init is not-verified coherent",t=>{let f=fixture(t);delete f.result.operations.find(o=>o.label==='init').installation.coverage;unverified(f,'init','cobertura ausente ou inválida');f.save();assert.equal(audit(f.dir,f.origin).matrixStatus,'not-verified');});
+test("new: missing final cover is not-verified coherent",t=>{let f=fixture(t);delete f.result.operations.find(o=>o.label==='sync-check').installation.coverage;f.result.coverage=null;unverified(f,'sync-check','cobertura ausente ou inválida');f.save();assert.equal(audit(f.dir,f.origin).matrixStatus,'not-verified');});
+test("new: unknown coverage is not-verified coherent",t=>{let f=fixture(t);f.result.operations.find(o=>o.label==='init').installation.coverage={...f.result.coverage,status:'unknown'};unverified(f,'init','status de cobertura desconhecido');f.save();assert.equal(audit(f.dir,f.origin).matrixStatus,'not-verified');});
+test("new: missing installation does not prove inventory",t=>{let f=fixture(t);delete f.result.operations.find(o=>o.label==='init').installation;unverified(f,'init','cobertura ausente ou inválida');f.save();assert.throws(()=>audit(f.dir,f.origin),/Inventário/);});
 test('novo: verified com motivos gera not-verified',t=>{let f=fixture(t);f.result.operations.find(o=>o.label==='init').installation.coverage={...f.result.coverage,notVerified:['não foi verificado']};unverified(f,'init','cobertura não verificada: não foi verificado');f.save();assert.equal(audit(f.dir,f.origin).matrixStatus,'not-verified');});
-test('novo: motivos inexatos são recusados',t=>{let f=fixture(t);delete f.result.operations.find(o=>o.label==='init').installation.coverage;unverified(f,'init','outra razão');f.save();assert.throws(()=>audit(f.dir,f.origin),/Motivos/);});
+test("new: inaccurate reasons are refused",t=>{let f=fixture(t);delete f.result.operations.find(o=>o.label==='init').installation.coverage;unverified(f,'init','outra razão');f.save();assert.throws(()=>audit(f.dir,f.origin),/Motivos/);});
 test('novo: cobertura ausente nunca gera passed',t=>{let f=fixture(t);delete f.result.operations.find(o=>o.label==='init').installation.coverage;f.result.coverageAssessment={status:'not-verified',reasons:['init: cobertura ausente ou inválida']};f.save();assert.throws(()=>audit(f.dir,f.origin),/Status individual/);});
-test('novo: assessment falso recusado mesmo se o status é not-verified',t=>{let f=fixture(t);delete f.result.operations.find(o=>o.label==='init').installation.coverage;unverified(f,'init','cobertura ausente ou inválida');f.result.coverageAssessment.status='verified';f.save();assert.throws(()=>audit(f.dir,f.origin),/Motivos/);});
+test("new: false assessment refused even if status is not-verified",t=>{let f=fixture(t);delete f.result.operations.find(o=>o.label==='init').installation.coverage;unverified(f,'init','cobertura ausente ou inválida');f.result.coverageAssessment.status='verified';f.save();assert.throws(()=>audit(f.dir,f.origin),/Motivos/);});
 test('novo: assessment verified coerente permanece passed',t=>{let f=fixture(t);f.result.coverageAssessment={status:'verified',reasons:[]};f.save();assert.equal(audit(f.dir,f.origin).matrixStatus,'passed');});
-test('índice Git ausente no baseline é recusado',t=>{let f=fixture(t);const file=join(f.caseDir,'BEFORE.json'), b=JSON.parse(readFileSync(file));delete b.unchanged['.git/index'];writeFileSync(file,JSON.stringify(b));assert.throws(()=>audit(f.dir,f.origin),/Arquivos mínimos/);});
-test('baseline sem arquivos mínimos é recusado',t=>{let f=fixture(t);const file=join(f.caseDir,'BEFORE.json'), b=JSON.parse(readFileSync(file));b.unchanged={};writeFileSync(file,JSON.stringify(b));assert.throws(()=>audit(f.dir,f.origin),/Arquivos mínimos/);});
-test('seleção sintética não planejada é recusada',t=>{let f=fixture(t);f.report.results[0].selection='agente-ficticio';f.report.results[1].selection='agente-ficticio';f.save();assert.throws(()=>audit(f.dir,f.origin),/Seleção não corresponde/);});
-test('rodada cinco aceita IDs e seleções planejadas',t=>{let f=fixture(t,'passed',false,5);const selection='codex,vscode|codex,copilot|codex,cursor|codex,kimi|codex,minimax|codex,deepseek|codex,antigravity|codex,antigravity-legacy|codex,zcode|codex,kimi-legacy|codex,mimo|claude,opencode|claude,vscode|claude,copilot|claude,cursor|claude,kimi|claude,minimax|claude,deepseek|claude,antigravity-legacy|claude,zcode'.split('|');f.report.results.forEach((x,i)=>{x.selection=selection[Math.floor(i/2)];x.operations.find(o=>o.label==='init').args[3]=x.selection;});f.save();assert.equal(audit(f.dir,f.origin).matrixStatus,'passed');});
+test("Git index absent on baseline is refused",t=>{let f=fixture(t);const file=join(f.caseDir,'BEFORE.json'), b=JSON.parse(readFileSync(file));delete b.unchanged['.git/index'];writeFileSync(file,JSON.stringify(b));assert.throws(()=>audit(f.dir,f.origin),/Arquivos mínimos/);});
+test("baseline without minimum files is refused",t=>{let f=fixture(t);const file=join(f.caseDir,'BEFORE.json'), b=JSON.parse(readFileSync(file));b.unchanged={};writeFileSync(file,JSON.stringify(b));assert.throws(()=>audit(f.dir,f.origin),/Arquivos mínimos/);});
+test("Unplanned synthetic selection is refused",t=>{let f=fixture(t);f.report.results[0].selection='agente-ficticio';f.report.results[1].selection='agente-ficticio';f.save();assert.throws(()=>audit(f.dir,f.origin),/Seleção não corresponde/);});
+test("round five accepts planned IDs and selections",t=>{let f=fixture(t,'passed',false,5);const selection='codex,vscode|codex,copilot|codex,cursor|codex,kimi|codex,minimax|codex,deepseek|codex,antigravity|codex,antigravity-legacy|codex,zcode|codex,kimi-legacy|codex,mimo|claude,opencode|claude,vscode|claude,copilot|claude,cursor|claude,kimi|claude,minimax|claude,deepseek|claude,antigravity-legacy|claude,zcode'.split('|');f.report.results.forEach((x,i)=>{x.selection=selection[Math.floor(i/2)];x.operations.find(o=>o.label==='init').args[3]=x.selection;});f.save();assert.equal(audit(f.dir,f.origin).matrixStatus,'passed');});
 function mutateBaseline(f, caseName, change){const file=join(f.dir,caseName,'BEFORE.json'),value=JSON.parse(readFileSync(file));change(value);writeFileSync(file,JSON.stringify(value));}
-test('referências vazias são recusadas',t=>{let f=fixture(t);mutateBaseline(f,'01-new',b=>{b.refs={};});assert.throws(()=>audit(f.dir,f.origin),/Diretórios de refs/);});
-test('ref heads obrigatória é recusada quando removida',t=>{let f=fixture(t);mutateBaseline(f,'01-new',b=>{delete b.refs['.git/refs/heads'];});assert.throws(()=>audit(f.dir,f.origin),/Diretórios de refs/);});
-test('refs opcionais vazias são recusadas',t=>{let f=fixture(t);mutateBaseline(f,'01-new',b=>{b.optional={};});assert.throws(()=>audit(f.dir,f.origin),/Refs opcionais/);});
-test('ref de HEAD ausente é recusada',t=>{let f=fixture(t);mutateBaseline(f,'01-new',b=>{delete b.optional['.git/refs/heads/main'];});assert.throws(()=>audit(f.dir,f.origin),/Ref de HEAD ausente/);});
+test("empty references are refused",t=>{let f=fixture(t);mutateBaseline(f,'01-new',b=>{b.refs={};});assert.throws(()=>audit(f.dir,f.origin),/Diretórios de refs/);});
+test("mandatory ref heads is refused when removed",t=>{let f=fixture(t);mutateBaseline(f,'01-new',b=>{delete b.refs['.git/refs/heads'];});assert.throws(()=>audit(f.dir,f.origin),/Diretórios de refs/);});
+test("optional empty refs are refused",t=>{let f=fixture(t);mutateBaseline(f,'01-new',b=>{b.optional={};});assert.throws(()=>audit(f.dir,f.origin),/Refs opcionais/);});
+test("ref of HEAD absent is refused",t=>{let f=fixture(t);mutateBaseline(f,'01-new',b=>{delete b.optional['.git/refs/heads/main'];});assert.throws(()=>audit(f.dir,f.origin),/Ref de HEAD ausente/);});
 test('ref de projeto existente deve estar presente',t=>{let f=fixture(t);mutateBaseline(f,'02-existing',b=>{b.optional['.git/refs/heads/main']=null;});assert.throws(()=>audit(f.dir,f.origin),/Ref do projeto existente ausente/);});
-test('árvore de refs e ref de HEAD devem coincidir',t=>{let f=fixture(t);mutateBaseline(f,'02-existing',b=>{b.refs['.git/refs/heads/main'].sha256='b'.repeat(64);});assert.throws(()=>audit(f.dir,f.origin),/Ref de HEAD divergente/);});
-test('documentos vazios são recusados em existente',t=>{let f=fixture(t);mutateBaseline(f,'02-existing',b=>{b.documents={};});assert.throws(()=>audit(f.dir,f.origin),/Documentos humanos obrigatórios/);});
-test('cada documento humano é obrigatório em existente',t=>{let f=fixture(t);mutateBaseline(f,'02-existing',b=>{delete b.documents['CLAUDE.md'];});assert.throws(()=>audit(f.dir,f.origin),/Documentos humanos obrigatórios/);});
-test('arquivos humanos do kit são obrigatórios em existente',t=>{let f=fixture(t);mutateBaseline(f,'02-existing',b=>{delete b.unchanged['.pbai4devs/skills/projeto/criar-skill/SKILL.md'];});assert.throws(()=>audit(f.dir,f.origin),/Arquivos mínimos/);});
+test("ref tree and ref of HEAD must match",t=>{let f=fixture(t);mutateBaseline(f,'02-existing',b=>{b.refs['.git/refs/heads/main'].sha256='b'.repeat(64);});assert.throws(()=>audit(f.dir,f.origin),/Ref de HEAD divergente/);});
+test("empty documents are refused in existing",t=>{let f=fixture(t);mutateBaseline(f,'02-existing',b=>{b.documents={};});assert.throws(()=>audit(f.dir,f.origin),/Documentos humanos obrigatórios/);});
+test("Each human document is mandatory in existing",t=>{let f=fixture(t);mutateBaseline(f,'02-existing',b=>{delete b.documents['CLAUDE.md'];});assert.throws(()=>audit(f.dir,f.origin),/Documentos humanos obrigatórios/);});
+test("Kit human files are required in existing",t=>{let f=fixture(t);mutateBaseline(f,'02-existing',b=>{delete b.unchanged['.pbai4devs/skills/projeto/criar-skill/SKILL.md'];});assert.throws(()=>audit(f.dir,f.origin),/Arquivos mínimos/);});
 test('variante 1 exige regra Cursor para existente',t=>{let f=fixture(t,'passed',false,2);assert.equal(audit(f.dir,f.origin).matrixStatus,'passed');mutateBaseline(f,'42-existing',b=>{delete b.unchanged['.cursor/rules/equipe.mdc'];});assert.throws(()=>audit(f.dir,f.origin),/Arquivos mínimos/);});
 test('variante 2 exige comando TOML humano em projeto existente',t=>{let f=fixture(t,'passed',false,3);assert.equal(audit(f.dir,f.origin).matrixStatus,'passed');mutateBaseline(f,'82-existing',b=>{delete b.unchanged['.gemini/commands/equipe.toml'];});assert.throws(()=>audit(f.dir,f.origin),/Arquivos mínimos/);});
-test('variante 3 exige skill humana de colisão no novo',t=>{let f=fixture(t,'passed',false,4);assert.equal(audit(f.dir,f.origin).matrixStatus,'passed');mutateBaseline(f,'121-new',b=>{delete b.documents['.agents/skills/projeto/criar-skill/SKILL.md'];});assert.throws(()=>audit(f.dir,f.origin),/Documentos humanos obrigatórios/);});
-test('documentos com modo contraditório não são aprovados',t=>{let f=fixture(t);const file=join(f.dir,'02-existing','init.snapshot.json'),snapshot=JSON.parse(readFileSync(file));snapshot.documents['AGENTS.md'].after.mode=0;writeFileSync(file,JSON.stringify(snapshot));assert.throws(()=>audit(f.dir,f.origin),/Dados do snapshot/);});
+test("variant 3 requires human crash skill in the new",t=>{let f=fixture(t,'passed',false,4);assert.equal(audit(f.dir,f.origin).matrixStatus,'passed');mutateBaseline(f,'121-new',b=>{delete b.documents['.agents/skills/projeto/criar-skill/SKILL.md'];});assert.throws(()=>audit(f.dir,f.origin),/Documentos humanos obrigatórios/);});
+test("documents with contradictory mode are not approved",t=>{let f=fixture(t);const file=join(f.dir,'02-existing','init.snapshot.json'),snapshot=JSON.parse(readFileSync(file));snapshot.documents['AGENTS.md'].after.mode=0;writeFileSync(file,JSON.stringify(snapshot));assert.throws(()=>audit(f.dir,f.origin),/Dados do snapshot/);});
 
-test('hash do HEAD deve corresponder à ref opcional',t=>{let f=fixture(t);mutateBaseline(f,'01-new',b=>{b.unchanged['.git/HEAD'].sha256='f'.repeat(64);});assert.throws(()=>audit(f.dir,f.origin),/HEAD não corresponde/);});
-test('ancestrais vazios em índice Git não comprovam diretórios',t=>{let f=fixture(t);mutateBaseline(f,'01-new',b=>{b.unchanged['.git/index'].directories={};});assert.throws(()=>audit(f.dir,f.origin),/Arquivos mínimos/);});
-test('ancestral de documento ausente é recusado',t=>{let f=fixture(t);mutateBaseline(f,'02-existing',b=>{delete b.documents['.claude/skills/criar-skill/SKILL.md'].directories['.claude/skills'];});assert.throws(()=>audit(f.dir,f.origin),/Documentos humanos obrigatórios/);});
-test('ancestral da ref opcional ausente é recusado',t=>{let f=fixture(t);mutateBaseline(f,'02-existing',b=>{delete b.optional['.git/refs/heads/main'].directories['.git/refs'];});assert.throws(()=>audit(f.dir,f.origin),/Snapshot de refs opcionais inválido/);});
-test('AFTER e resultado idênticos mas diferentes do último snapshot são recusados',t=>{let f=fixture(t);const file=join(f.caseDir,'AFTER.json'),value=JSON.parse(readFileSync(file));value.after.human.sha256='f'.repeat(64);writeFileSync(file,JSON.stringify(value));f.result.preservation=value;f.save();assert.throws(()=>audit(f.dir,f.origin),/Snapshot final divergente/);});
-test('preparação git-init ausente não gera passado',t=>{let f=fixture(t);f.result.operations=f.result.operations.filter(o=>o.label!=='git-init');f.save();assert.throws(()=>audit(f.dir,f.origin),/Preparação Git/);});
-test('preparação git-add-base ausente em projeto existente é recusada',t=>{let f=fixture(t);const x=f.report.results[1];x.operations=x.operations.filter(o=>o.label!=='git-add-base');f.save();assert.throws(()=>audit(f.dir,f.origin),/Preparação Git/);});
-test('git-add com status de falha não gera passado',t=>{let f=fixture(t);f.result.operations.find(o=>o.label==='git-add').status=1;f.save();assert.throws(()=>audit(f.dir,f.origin),/Preparação Git/);});
-test('preparações Git fora de ordem são recusadas',t=>{let f=fixture(t);[f.result.operations[0],f.result.operations[1]]=[f.result.operations[1],f.result.operations[0]];f.save();assert.throws(()=>audit(f.dir,f.origin),/Preparação Git/);});
-test('fingerprint ausente não comprova inventário',t=>{let f=fixture(t);delete f.result.operations.find(o=>o.label==='init').installation.fingerprint;f.save();assert.throws(()=>audit(f.dir,f.origin),/Inventário/);});
-test('git init com argumentos ausentes é recusado',t=>{let f=fixture(t);delete f.result.operations.find(o=>o.label==='git-init').args;f.save();assert.throws(()=>audit(f.dir,f.origin),/Argumentos registrados/);});
+test("hash of HEAD must correspond to optional ref",t=>{let f=fixture(t);mutateBaseline(f,'01-new',b=>{b.unchanged['.git/HEAD'].sha256='f'.repeat(64);});assert.throws(()=>audit(f.dir,f.origin),/HEAD não corresponde/);});
+test("empty ancestors in Git index do not confirm directories",t=>{let f=fixture(t);mutateBaseline(f,'01-new',b=>{b.unchanged['.git/index'].directories={};});assert.throws(()=>audit(f.dir,f.origin),/Arquivos mínimos/);});
+test("missing document ancestor is refused",t=>{let f=fixture(t);mutateBaseline(f,'02-existing',b=>{delete b.documents['.claude/skills/criar-skill/SKILL.md'].directories['.claude/skills'];});assert.throws(()=>audit(f.dir,f.origin),/Documentos humanos obrigatórios/);});
+test("optional absent ref ancestor is refused",t=>{let f=fixture(t);mutateBaseline(f,'02-existing',b=>{delete b.optional['.git/refs/heads/main'].directories['.git/refs'];});assert.throws(()=>audit(f.dir,f.origin),/Snapshot de refs opcionais inválido/);});
+test("AFTER and result identical but different from the last snapshot are refused",t=>{let f=fixture(t);const file=join(f.caseDir,'AFTER.json'),value=JSON.parse(readFileSync(file));value.after.human.sha256='f'.repeat(64);writeFileSync(file,JSON.stringify(value));f.result.preservation=value;f.save();assert.throws(()=>audit(f.dir,f.origin),/Snapshot final divergente/);});
+test("Git-init preparation missing does not generate past",t=>{let f=fixture(t);f.result.operations=f.result.operations.filter(o=>o.label!=='git-init');f.save();assert.throws(()=>audit(f.dir,f.origin),/Preparação Git/);});
+test("git-add-base preparation absent in existing project is refused",t=>{let f=fixture(t);const x=f.report.results[1];x.operations=x.operations.filter(o=>o.label!=='git-add-base');f.save();assert.throws(()=>audit(f.dir,f.origin),/Preparação Git/);});
+test("git-add with failure status does not generate past",t=>{let f=fixture(t);f.result.operations.find(o=>o.label==='git-add').status=1;f.save();assert.throws(()=>audit(f.dir,f.origin),/Preparação Git/);});
+test("Git preparations out of order are refused",t=>{let f=fixture(t);[f.result.operations[0],f.result.operations[1]]=[f.result.operations[1],f.result.operations[0]];f.save();assert.throws(()=>audit(f.dir,f.origin),/Preparação Git/);});
+test("missing fingerprint does not prove inventory",t=>{let f=fixture(t);delete f.result.operations.find(o=>o.label==='init').installation.fingerprint;f.save();assert.throws(()=>audit(f.dir,f.origin),/Inventário/);});
+test("git init with absent arguments is rejected",t=>{let f=fixture(t);delete f.result.operations.find(o=>o.label==='git-init').args;f.save();assert.throws(()=>audit(f.dir,f.origin),/Argumentos registrados/);});
 test('git add deve incluir o arquivo staged humano',t=>{let f=fixture(t);f.result.operations.find(o=>o.label==='git-add').args.pop();f.save();assert.throws(()=>audit(f.dir,f.origin),/Argumentos registrados/);});
 test('git add-base deve incluir AGENTS.md',t=>{let f=fixture(t);const op=f.report.results[1].operations.find(o=>o.label==='git-add-base');op.args=op.args.filter(x=>x!=='AGENTS.md');f.save();assert.throws(()=>audit(f.dir,f.origin),/Argumentos registrados/);});
-test('git commit deve registrar identidade sintética esperada',t=>{let f=fixture(t);const op=f.report.results[1].operations.find(o=>o.label==='git-commit-base');op.args[1]='user.name=Outro';f.save();assert.throws(()=>audit(f.dir,f.origin),/Argumentos registrados/);});
+test("git commit should register expected synthetic identity",t=>{let f=fixture(t);const op=f.report.results[1].operations.find(o=>o.label==='git-commit-base');op.args[1]='user.name=Outro';f.save();assert.throws(()=>audit(f.dir,f.origin),/Argumentos registrados/);});
 test('fixture 1 adiciona sentinela humana ao git add',t=>{let f=fixture(t,'passed',false,2);f.result.operations.find(o=>o.label==='git-add').args.pop();f.save();assert.throws(()=>audit(f.dir,f.origin),/Argumentos registrados/);});
-test('fixture 3 adiciona colisão nativa ao git add-base',t=>{let f=fixture(t,'passed',false,4);f.report.results[1].operations.find(o=>o.label==='git-add-base').args.pop();f.save();assert.throws(()=>audit(f.dir,f.origin),/Argumentos registrados/);});
-test('init deve informar seleção planejada',t=>{let f=fixture(t);f.result.operations.find(o=>o.label==='init').args[3]='outro';f.save();assert.throws(()=>audit(f.dir,f.origin),/Argumentos registrados/);});
+test("fixture 3 adds native collision to git add-base",t=>{let f=fixture(t,'passed',false,4);f.report.results[1].operations.find(o=>o.label==='git-add-base').args.pop();f.save();assert.throws(()=>audit(f.dir,f.origin),/Argumentos registrados/);});
+test("init should inform planned selection",t=>{let f=fixture(t);f.result.operations.find(o=>o.label==='init').args[3]='outro';f.save();assert.throws(()=>audit(f.dir,f.origin),/Argumentos registrados/);});
 test('sync deve registrar --check',t=>{let f=fixture(t);const o=f.result.operations.find(o=>o.label==='sync-check');o.args=o.args.filter(a=>a!=='--check');f.save();assert.throws(()=>audit(f.dir,f.origin),/Argumentos registrados/);});
-test('alvo da operação deve ser a própria fixture',t=>{let f=fixture(t);const o=f.result.operations.find(o=>o.label==='init');o.args[o.args.indexOf('--target')+1]='/outro';f.save();assert.throws(()=>audit(f.dir,f.origin),/Argumentos registrados/);});
-test('root registrado deve ser o diretório project do caso',t=>{let f=fixture(t);f.result.root='/outra-pasta';f.save();assert.throws(()=>audit(f.dir,f.origin),/Raiz registrada/);});
+test("target of the operation must be the fixture itself",t=>{let f=fixture(t);const o=f.result.operations.find(o=>o.label==='init');o.args[o.args.indexOf('--target')+1]='/outro';f.save();assert.throws(()=>audit(f.dir,f.origin),/Argumentos registrados/);});
+test("registered root should be the case project directory",t=>{let f=fixture(t);f.result.root='/outra-pasta';f.save();assert.throws(()=>audit(f.dir,f.origin),/Raiz registrada/);});
 
 function currentProvenance(t, { windows = false, sidecars = true } = {}) {
   const f = fixture(t, 'passed', windows);
@@ -195,7 +195,7 @@ function currentProvenance(t, { windows = false, sidecars = true } = {}) {
   return { ...f, sources, sidecarFile, sidecarKey, policyFile, recordedPackage };
 }
 
-test('proveniência atual confere oito arquivos e sidecars de fontes locais remapeadas', t => {
+test("current provenance confers eight files and sidecars from remapped local sources", t => {
   const f = currentProvenance(t);
   const verified = audit(f.dir, f.origin, f.sources);
   assert.equal(verified.provenanceRecorded, true);
@@ -203,31 +203,31 @@ test('proveniência atual confere oito arquivos e sidecars de fontes locais rema
   assert.equal(verified.matrixStatus, 'passed');
 });
 
-test('proveniência atual de Windows é verificável no host atual', t => {
+test("current Windows provenance is verifiable in current host", t => {
   const f = currentProvenance(t, { windows: true });
   assert.equal(audit(f.dir, f.origin, f.sources).provenanceSourcesVerified, true);
 });
 
-test('proveniência estável exige as raízes fornecidas pelo auditor', t => {
+test("Stable provenance requires the roots provided by the auditor", t => {
   const f = currentProvenance(t);
   assert.throws(() => audit(f.dir, f.origin), /--package e --runner-root/);
   assert.throws(() => audit(f.dir, f.origin, { packageRoot: f.sources.packageRoot }), /--package e --runner-root/);
 });
 
-test('proveniência legada é coerência histórica e não substitui a conferência de fontes', t => {
+test("legacy is historical coherence and does not replace the conference of sources", t => {
   const f = fixture(t);
   assert.equal(audit(f.dir, f.origin).provenanceSourcesVerified, false);
   assert.throws(() => audit(f.dir, f.origin, { runnerRoot: f.parent, packageRoot: f.parent }), /Formato legado/);
 });
 
-test('proveniência atual verifica inventário sem sidecars quando o pacote não contém nenhum', t => {
+test("Current provenance checks inventory without sidecars when package does not contain any", t => {
   const f = currentProvenance(t, { sidecars: false });
   assert.equal(audit(f.dir, f.origin, f.sources).provenanceSourcesVerified, true);
   writeFileSync(f.sidecarFile, 'adicionado depois');
   assert.throws(() => audit(f.dir, f.origin, f.sources), /Inventário ou hash de sidecars/);
 });
 
-test('sidecar omitido dos dois snapshots e sidecar adulterado são recusados', t => {
+test("sidecar omitted from the two snapshots and sidecar tampered are refused", t => {
   const f = currentProvenance(t);
   writeFileSync(f.sidecarFile, 'conteúdo modificado');
   assert.throws(() => audit(f.dir, f.origin, f.sources), /Inventário ou hash de sidecars/);
@@ -236,7 +236,7 @@ test('sidecar omitido dos dois snapshots e sidecar adulterado são recusados', t
   assert.throws(() => audit(f.dir, f.origin, f.sources), /Inventário ou hash de sidecars/);
 });
 
-test('hash de fonte fixa falso e política trocada são recusados mesmo em snapshots iguais', t => {
+test("false fixed source hash and exchanged policy are refused even in equal snapshots", t => {
   const f = currentProvenance(t);
   const p = f.report.provenance;
   for (const entries of [p.before, p.after]) entries.packageCatalog.sha256 = 'a'.repeat(64);
@@ -248,7 +248,7 @@ test('hash de fonte fixa falso e política trocada são recusados mesmo em snaps
   assert.throws(() => audit(f.dir, f.origin, f.sources), /Hash da fonte.*packageAdapterPolicy/);
 });
 
-test('origens de proveniência não podem redirecionar arquivos fixos nem sidecars', t => {
+test("provenance sources cannot redirect fixed files or sidecars", t => {
   const f = currentProvenance(t);
   const snapshots = [f.report.provenance.before, f.report.provenance.after];
   for (const entries of snapshots) entries.packageCli.path = '/outra/origem/agentdevkit.mjs';
@@ -262,13 +262,13 @@ test('origens de proveniência não podem redirecionar arquivos fixos nem sideca
   assert.throws(() => audit(f.dir, f.origin, f.sources), /Chave de proveniência Cursor/);
 });
 
-test('inventário recusa diretório com nome de sidecar', t => {
+test("inventory refuses directory with sidecar name", t => {
   const f = currentProvenance(t, { sidecars: false });
   mkdirSync(f.sidecarFile);
   assert.throws(() => audit(f.dir, f.origin, f.sources), /arquivo regular/);
 });
 
-test('inventário recusa links em ancestrais', t => {
+test("inventory refuses links in ancestors", t => {
   const f = currentProvenance(t, { sidecars: false });
   const outside = join(f.parent, 'outside');
   mkdirSync(outside);
@@ -281,7 +281,7 @@ test('inventário recusa links em ancestrais', t => {
   assert.throws(() => audit(f.dir, f.origin, f.sources), /Link simbólico em inventário/);
 });
 
-test('proveniência alterada ou incompleta em execução nunca é promovida', t => {
+test("Amended or incomplete provenance in execution is never promoted", t => {
   const f = currentProvenance(t);
   const p = f.report.provenance;
   delete p.after[f.sidecarKey];
@@ -317,7 +317,7 @@ function rewriteReply(fixture, operation, update) {
   operation.stdoutSha256 = hash(bytes);
 }
 
-test('audita omissão Claude e modo Cursor em relatório com fontes verificadas', t => {
+test("Claude and Cursor mode in report with verified sources", t => {
   const f = currentProvenance(t);
   const claude = caseFor(f, 'claude'), cursor = caseFor(f, 'cursor');
   claude.coverage.ruleScopes = [claudeScope];
@@ -329,7 +329,7 @@ test('audita omissão Claude e modo Cursor em relatório com fontes verificadas'
   assert.equal(audit(f.dir, f.origin, f.sources).matrixStatus, 'passed');
 });
 
-test('recusa omissões Claude ausentes, contraditórias, parciais ou ambíguas', t => {
+test("absent, contradictory, partial or ambiguous omissions Claude", t => {
   const f = currentProvenance(t);
   const claude = caseFor(f, 'claude');
   const init = claude.operations.find(op => op.label === 'init');
@@ -343,7 +343,7 @@ test('recusa omissões Claude ausentes, contraditórias, parciais ou ambíguas',
   }
 });
 
-test('recusa escopo Cursor sem sidecar, modo incompatível, destino divergente ou duplicata', t => {
+test("refusal scope Cursor without sidecar, incompatible mode, divergent destination or duplicate", t => {
   const f = currentProvenance(t);
   const cursor = caseFor(f, 'cursor');
   const invalid = [
@@ -362,7 +362,7 @@ test('recusa escopo Cursor sem sidecar, modo incompatível, destino divergente o
   }
 });
 
-test('recusa escopo de cliente ausente da seleção ou declarado somente na cobertura final', t => {
+test("refusal of client scope absent from selection or declared only in final coverage", t => {
   const f = currentProvenance(t);
   const codex = caseFor(f, 'codex'), cursor = caseFor(f, 'cursor');
   codex.coverage.ruleScopes = [cursorScope];
@@ -391,7 +391,7 @@ test('recusa uso de stdout de outro caso e de stderr de outra etapa, mesmo com h
   assert.throws(() => audit(f.dir, f.origin), /Caminho de stderr fora do caso/);
 });
 
-test('recusa JSON copiado para o log canônico se o alvo registrado pertence a outro caso', t => {
+test("refusal JSON copied to the canonical log if the registered target belongs to another case", t => {
   const f = fixture(t);
   const init = f.result.operations.find(op => op.label === 'init');
   rewriteReply(f, init, reply => { reply.target = f.report.results[1].root; });
