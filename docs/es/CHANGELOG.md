@@ -7,6 +7,10 @@ language: es
 
 [Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
 
+## 0.0.40
+
+- La integración y la publicación pasan por la rama `main`.
+
 ## 0.0.39
 
 - El asistente de instalación muestra una lista marcable de agentes. Use `agents

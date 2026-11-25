@@ -121,9 +121,9 @@ permiten comprobar el paquete publicado en [ambos registros][packages].
 
 ## Contributing and Branch Protection
 
-Abre un pull request desde tu fork hacia `develop`. Los cambios revisados pasan
-a `main` para la publicación. Consulta la [guía de contribución][contributing]
-para ejecutar las comprobaciones antes de enviarlo.
+Abre un pull request desde tu fork hacia `main`. Consulta la
+[guía de contribución][contributing] para ejecutar las comprobaciones antes
+de enviarlo.
 
 ¿Encontraste un problema o tienes una idea? [Abre una issue][issues] con los
 formularios. Consulta [cómo participar](docs/es/maintainers/community.md).

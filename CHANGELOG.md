@@ -6,6 +6,10 @@ description: Alterações verificáveis por versão do AgentDevKit.
 
 [Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
 
+## 0.0.40
+
+- O CI de integração e a publicação passam pela branch `main`.
+
 ## 0.0.39
 
 - O assistente de instalação exibe uma lista marcável de agentes. Use

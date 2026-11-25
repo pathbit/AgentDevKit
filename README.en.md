@@ -121,9 +121,9 @@ published to [both registries][packages].
 
 ## Contributing and Branch Protection
 
-Open a pull request from your fork targeting `develop`. Reviewed changes move
-to `main` for release. See the [contributing guide](docs/en/CONTRIBUTING.md)
-for the checks to run before submitting.
+Open a pull request from your fork targeting `main`. See the
+[contributing guide](docs/en/CONTRIBUTING.md) for the checks to run before
+submitting.
 
 Found a bug or have an idea? [Open an issue][issues] using the contribution
 forms. See [how to participate](docs/en/maintainers/community.md).

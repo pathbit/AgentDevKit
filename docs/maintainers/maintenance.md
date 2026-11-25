@@ -120,8 +120,8 @@ informe `--from-version <versão publicada> --to-tarball <arquivo>` a
    checkout candidato nas provas de instalação, compatibilidade e matriz.
    Para a prova de atualização, comece na última versão publicada e termine
    no mesmo tarball candidato.
-3. Valide o commit em `develop` e promova-o à `main`. Acompanhe o CI da
-   `main` e, quando a versão mudar, o workflow de release.
+3. Integre a mudança à `main` e acompanhe o CI. Quando a versão mudar,
+   acompanhe também o workflow de publicação.
 
 O perfil completo exige os testes estritos de recuperação concorrente. Se algum
 falhar, o pacote permanece sem aprovação para publicação. Consulte o

@@ -129,9 +129,9 @@ As ferramentas locais têm instalação separada. Os artefatos e as somas da
 
 ## Contributing and Branch Protection
 
-Envie o pull request do seu fork para `develop`. As mudanças revisadas seguem
-para `main` na publicação. Consulte o [guia de contribuição](CONTRIBUTING.md)
-para rodar as verificações antes de enviar.
+Envie o pull request do seu fork para `main`. Consulte o
+[guia de contribuição](CONTRIBUTING.md) para rodar as
+verificações antes de enviar.
 
 Encontrou um problema ou tem uma ideia? [Abra uma issue][issues] pelos
 [formulários de contribuição](docs/maintainers/community.md).

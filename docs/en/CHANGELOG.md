@@ -7,6 +7,10 @@ language: en
 
 [Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
 
+## 0.0.40
+
+- Integration CI and publishing run from `main`.
+
 ## 0.0.39
 
 - The installation wizard displays a markable list of agents. Use `agents

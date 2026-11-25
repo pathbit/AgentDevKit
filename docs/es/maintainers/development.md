@@ -12,15 +12,14 @@ instalar; preserve cualquier contenido local de esta carpeta. En la raíz del
 checkout:
 
 ```console
-git switch develop
 npm ci --ignore-scripts
 npm run check
 npm test
 ```
 
-`develop` recibe los cambios en la integración. `main` es la branch estándar y
-origen de las releases. Ambas ejecutan el CI. La automatización de publicación
-depende del push aprobado en `main` y la versión del paquete.
+La rama `main` recibe los cambios y es el origen de las versiones. La
+publicación automática requiere CI aprobado en `main` y usa la versión del
+paquete.
 
 `npm run check` confiere estructura y enlaces. Para incluir lint Markdown,
 prepare `markdownlint-cli2` el [script de

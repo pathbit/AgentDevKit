@@ -124,8 +124,8 @@ test:upgrade --`. Regístrate SHA-256 del candidato con las pruebas.
    del checkout candidato en las pruebas de instalación, compatibilidad y
    matriz. Para la prueba de actualización, comience en la última versión
    publicada y termine en el mismo tarball candidato.
-3. Valide commit em `develop` y promoverlo a `main`. Siga el CI de `main` y
-   cuando la versión cambia, el workflow de release.
+3. Integra el cambio en `main` y sigue el CI. Cuando cambie la versión,
+   sigue también el flujo de publicación.
 
 El perfil completo requiere las pruebas estrictas de recuperación concurrente.
 Si falla, el paquete permanece sin aprobación para publicación. Consulte

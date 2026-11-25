@@ -11,15 +11,13 @@ Start with Git, Node.js 24+ and npm. `npm ci` remove `node_modules` before
 installing; preserve any local contents of this folder. At the root of checkout:
 
 ```console
-git switch develop
 npm ci --ignore-scripts
 npm run check
 npm test
 ```
 
-`develop` receives the changes in integration. `main` is the standard branch and
-source of releases. Both execute the IC. Publication automation depends on the
-push approved in the `main` and the package version.
+The `main` branch receives changes and is the source of releases. Automatic
+publication requires successful CI on `main` and uses the package version.
 
 `npm run check` gives structure and links. To include the Markdown lint, prepare
 `markdownlint-cli2` for [tool

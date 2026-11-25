@@ -17,7 +17,6 @@ Use Git and Node.js 24+ with npm:
 ```console
 git clone https://github.com/pathbit/AgentDevKit.git
 cd AgentDevKit
-git switch develop
 npm ci --ignore-scripts
 npm run check
 ```
@@ -27,9 +26,9 @@ folder outside Git, informed by the command. To choose an ignored local
 destination, see the tab in
 [`examples/`](examples/README.md).
 
-This repository keeps only `develop` for integration and `main` for the public
-version. At kit checkout, change branch with `git switch`. Forks contributions
-point to `develop`. A [maintainer][release] describes the promotion of `main`.
+The `main` branch receives changes and is the source of releases. Open pull
+requests from your fork targeting `main`. The [maintenance guide][release]
+explains publication.
 
 ## Choose the origin of the change
 

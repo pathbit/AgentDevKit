@@ -17,7 +17,6 @@ Use Git y Node.js 24+ con npm:
 ```console
 git clone https://github.com/pathbit/AgentDevKit.git
 cd AgentDevKit
-git switch develop
 npm ci --ignore-scripts
 npm run check
 ```
@@ -27,10 +26,9 @@ agentes en una carpeta temporal fuera de Git, informada por la orden. Para
 elegir un destino local ignorado, consulte la guía en
 [`examples/`](examples/README.md).
 
-Este repositorio solo mantiene `develop` para la integración y `main` para la
-versión pública. En el checkout del kit, troque de branch con `git switch`.
-Contribuciones de forks apuntan para `develop`. A [mantenimiento][release]
-describe la promoción a `main`.
+La rama `main` recibe los cambios y es el origen de las versiones. Abre pull
+requests desde tu fork hacia `main`. La [guía de mantenimiento][release]
+explica la publicación.
 
 ## Elegir el origen del cambio
 

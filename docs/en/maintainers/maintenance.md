@@ -120,8 +120,8 @@ SHA- 256 of the candidate with the evidence.
    checkout tarball in the installation, compatibility, and matrix tests. For
    the update test, start in the latest published version and finish in the same
    candidate tarball.
-3. Validate commit in `develop` and promote it to `main`. Follow the IC of
-   `main` And when the version changes, the release workflow.
+3. Merge the change into `main` and follow CI. When the version changes,
+   follow the release workflow as well.
 
 The full profile requires strict concurrent recovery tests. If any fails, the
 package remains unapproved for publication. [roadmap](../product/roadmap.md) and

@@ -3,7 +3,7 @@ name: Security tools smoke
 on:
   workflow_dispatch:
   push:
-    branches: [main, develop]
+    branches: [main]
     paths:
       - '.pbai4devs/scripts/auditar-seguranca/**'
       - '.pbai4devs/scripts/preparar-ferramentas/**'
