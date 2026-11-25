@@ -204,6 +204,15 @@ suportados; falhas detectadas durante a cópia interrompem a publicação. No
 macOS, ACLs legíveis e xattrs são mantidos; ACLs que negam escrita, flags de
 proteção ou consultas inconclusivas bloqueiam a alteração. A verificação não
 cobre ACLs de diretórios ou todos os filesystems.
+
+No macOS, a remoção de um arquivo com atributos estendidos pode retornar
+`E_PROTECTED_METADATA` com `metadataReason: xattr-present`. No macOS ARM,
+esse bloqueio foi reproduzido na atualização de 0.0.36 para 0.0.37 e ao
+executar `agents remove` após uma instalação nova da 0.0.37. Os arquivos
+gerados tinham o atributo `com.apple.provenance`. Use `xattr "<caminho>"`
+para listar os atributos do arquivo informado no erro. Preserve os arquivos
+e os atributos durante a revisão.
+
 No Linux, a cópia pede ao `cp` que preserve xattrs e o verificador compara os
 atributos quando `getfattr` está disponível. Sem essa ferramenta, a cópia pode
 prosseguir com aviso, mas a preservação de xattrs não foi verificada de forma
