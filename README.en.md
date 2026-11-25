@@ -88,18 +88,27 @@ Detailed guides are in Portuguese. Local tools have a separate installation
 step. The [release artifacts and checksums][release] let you verify the package
 published to [both registries][packages].
 
-## License and authorship
-
-Maintained by [PathBit](https://www.pathbit.com.br),
-under the [MIT license](LICENSE).
-Installation includes the kit license in `.pbai4devs/LICENSE` and preserves
-your project's license and files.
-
 [Changelog](CHANGELOG.md) · [Roadmap](docs/product/roadmap.md)
 · [Plugins and credits](docs/guides/plugins.md)
 
-Found a bug or have an idea? [Open an issue][issues] using the contribution
-forms. See [how to participate](docs/maintainers/community.md).
+---
+
+## Contributing and Branch Protection
+
+- Submit contributions through pull requests targeting `develop` and check that CI passes before requesting review. The `main` branch is used for public releases. See the [contribution guide](CONTRIBUTING.md).
+- Found a bug or have an idea? [Open an issue][issues] using the contribution
+  forms. See [how to participate](docs/maintainers/community.md).
+
+---
+
+## 📄 License
+
+The project uses the MIT License. Read the full text in [LICENSE](LICENSE).
+
+You may use, modify, and distribute the software, including commercially, provided that copies include the copyright and license notices. The software comes without warranty.
+
+Installation includes the kit license in `.pbai4devs/LICENSE` and preserves
+your project's license and files.
 
 [clients]: .pbai4devs/COMPATIBILIDADE.md
 [release]: https://github.com/pathbit/AgentDevKit/releases/latest
@@ -119,3 +128,7 @@ forms. See [how to participate](docs/maintainers/community.md).
 [plugins]: docs/guides/plugins.md
 [comparison]: docs/guides/comparacao.md
 [github-install]: docs/guides/installation.md#github-packages
+
+---
+
+Developed with ❤️ by [Pathbit](https://pathbit.co/)

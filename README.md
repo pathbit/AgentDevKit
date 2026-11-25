@@ -99,18 +99,27 @@ As ferramentas locais têm instalação separada. Os artefatos e as somas da
 [release][release] permitem conferir o pacote publicado nos
 [dois registries][packages].
 
-## Licença e autoria
-
-Mantido pela [PathBit](https://www.pathbit.com.br),
-sob a licença [MIT](LICENSE).
-A instalação inclui a licença do kit em `.pbai4devs/LICENSE` e preserva
-a licença e os arquivos próprios do seu projeto.
-
 [Changelog](CHANGELOG.md) · [Roadmap](docs/product/roadmap.md)
 · [Plugins e créditos](docs/guides/plugins.md)
 
-Encontrou um problema ou tem uma ideia? [Abra uma issue][issues] pelos
-[formulários de contribuição](docs/maintainers/community.md).
+---
+
+## Contribuições e proteção de branches
+
+- Envie contribuições por pull request para `develop` e confira a CI antes de pedir revisão. A branch `main` recebe as versões públicas. Veja o [guia de contribuição](CONTRIBUTING.md).
+- Encontrou um problema ou tem uma ideia? [Abra uma issue][issues] pelos
+  [formulários de contribuição](docs/maintainers/community.md).
+
+---
+
+## 📄 Licença
+
+O projeto usa a Licença MIT. Leia o texto completo em [LICENSE](LICENSE).
+
+A licença permite usar, modificar e distribuir o software, inclusive para fins comerciais, desde que os avisos de direitos autorais e da licença acompanhem as cópias. O software é fornecido sem garantia.
+
+A instalação inclui a licença do kit em `.pbai4devs/LICENSE` e preserva
+a licença e os arquivos próprios do seu projeto.
 
 [tests]: docs/guides/tools-and-testing.md
 [cli]: docs/guides/cli.md
@@ -128,3 +137,7 @@ Encontrou um problema ou tem uma ideia? [Abra uma issue][issues] pelos
 [npm-badge]: https://img.shields.io/npm/v/%40pathbit%2Fagentdevkit
 [license-badge]: https://img.shields.io/badge/license-MIT-blue
 [github-install]: docs/guides/installation.md#github-packages
+
+---
+
+Developed with ❤️ by [Pathbit](https://pathbit.co/)
