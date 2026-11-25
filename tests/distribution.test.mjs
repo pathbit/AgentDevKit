@@ -168,8 +168,12 @@ test("real package installs, preserves projects and offers next steps", { timeou
       '.pbai4devs/scripts/testar-maturidade/tests/TEST.mjs',
     ]) {
       assert.ok(existsSync(join(target, path)), `Suíte instalada ausente: ${path}`);
-      const filters = path.includes('/testar-maturidade/')
-        ? ['--test-name-pattern=entradas simbólicas humanas|fixture ignora artefatos locais'] : [];
+      const symlinkFixture = 'human symbolic inputs are preserved and informed without following destiny';
+      const fixtureNames = path.includes('/testar-maturidade/') ? [
+        symlinkFixture,
+        'fixture ignores local artifacts without changing the origin gitignore',
+      ] : [];
+      const filters = fixtureNames.length ? [`--test-name-pattern=^(?:${fixtureNames.join('|')})$`] : [];
       const result = spawnSync(process.execPath, ['--test', '--test-reporter=tap', ...filters, join(target, path)], {
         cwd: target, env: testEnvironment, encoding: 'utf8', timeout: 180000, maxBuffer: 8 * 1024 * 1024,
       });
@@ -178,6 +182,13 @@ test("real package installs, preserves projects and offers next steps", { timeou
       assert.match(result.stdout, /^# tests [1-9][0-9]*\s*$/m, `${path}: nenhuma prova executada`);
       assert.match(result.stdout, /^# pass [1-9][0-9]*\s*$/m, `${path}: nenhuma prova aprovada`);
       assert.match(result.stdout, /^# fail 0\s*$/m, `${path}: resumo de falhas ausente`);
+      const output = result.stdout.split(/\r?\n/);
+      for (const [index, name] of fixtureNames.entries()) {
+        const passed = `ok ${index + 1} - ${name}`;
+        const skipWithoutSymlinks = process.platform === 'win32' && name === symlinkFixture
+          && output.includes(`${passed} # SKIP Sem permissão para criar links.`);
+        assert.ok(output.includes(passed) || skipWithoutSymlinks, `${path}: evidência ausente para ${name}\n${result.stdout}`);
+      }
     }
   });
 

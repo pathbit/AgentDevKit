@@ -162,8 +162,9 @@ test("Git rule on Cursor uses relevance and keeps bytes of fixture index", t => 
   assert.match(source, /não adicione coautoria/);
   assert.match(source, /não execute a consulta e informe a limitação/);
   assert.match(source, /Se a identidade do usuário não estiver clara, pergunte/);
-  assert.match(source, /Não altere a\s+configuração ou a assinatura criptográfica automaticamente/);
-  assert.match(source, /não reescreva\s+autores humanos existentes/);
+  assert.match(source, /Não altere a\s+configuração Git nem reescreva autores humanos existentes/);
+  assert.match(source, /Agentes de código\s+jamais assinam commits por GPG, SSH ou trailer/);
+  assert.match(source, /assinatura criptográfica\s+for exigida, o responsável humano deve realizá-la/);
   assert.deepEqual(readFileSync(join(root, '.git/index')), index);
 });
 

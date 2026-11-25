@@ -44,7 +44,7 @@ test("full prepares the CLI de skills before gate and the matrix executes native
 
 test("the infrastructure gate requires complete execution of the tests of the current platform", () => {
   const skip = {
-    name: 'ACL herdada no diretório de logs interrompe antes de executar suítes',
+    name: 'ACL inherited in log directory interrupts before running suites',
     file: '.pbai4devs/scripts/testar-infraestrutura/tests/TEST.mjs',
     kind: 'test', event: 'test:pass',
     reason: 'Requer macOS para verificar ACLs e atributos nativos.',
@@ -84,7 +84,7 @@ test("Gate requires suites and confers evidence even when status is approved", (
 });
 
 test('a matriz nativa recusa skip do alias Windows delegado pelo perfil completo', () => {
-  const name = 'Windows normaliza o alias temporário 8.3 antes de comparar a raiz Git';
+  const name = 'Windows normalizes temporary aliases 8.3 before comparing the Git root';
   const run = skipped => (_node, args) => {
     assert.equal(args.at(-1), '.pbai4devs/scripts/sincronizar-agentes/tests/LOCAL_IGNORE.mjs');
     return { status: 0, stdout: `ok 1 - ${name}${skipped ? ' # SKIP' : ''}\n# tests 1\n# pass ${1 - skipped}\n# fail 0\n# cancelled 0\n# skipped ${skipped}\n# todo 0\n` };

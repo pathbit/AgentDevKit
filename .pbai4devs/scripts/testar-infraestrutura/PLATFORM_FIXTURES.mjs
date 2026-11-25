@@ -11,7 +11,7 @@ export const platformFixtures = [
     platforms: ['linux', 'darwin'],
     suite: 'sincronizar-agentes',
     file: 'LOCAL_IGNORE.mjs',
-    names: ['Windows normaliza o alias temporário 8.3 antes de comparar a raiz Git'],
+    names: ['Windows normalizes temporary aliases 8.3 before comparing the Git root'],
   },
   {
     native: 'darwin',
@@ -26,9 +26,9 @@ export const platformFixtures = [
     suite: 'testar-infraestrutura',
     file: 'TEST.mjs',
     names: [
-      'ACL herdada no diretório de logs interrompe antes de executar suítes',
-      'ACL de logs não verificável interrompe sem expor diagnóstico',
-      'ACL de logs não verificável após a suíte impede gravar saída',
+      'ACL inherited in log directory interrupts before running suites',
+      'ACL non-verifiable log interrupts without exposing diagnosis',
+      'ACL log uncheckable after suite prevents recording output',
     ],
   },
   {
@@ -37,9 +37,9 @@ export const platformFixtures = [
     suite: 'sincronizar-agentes',
     file: 'PRESERVATION.mjs',
     names: [
-      'sync preserva atributo Linux ao atualizar referência CRLF ou recusa sem alterar',
-      'sync preserva atributo Linux em atualização comum ou recusa sem alterar',
-      'sync avisa quando metadados Linux não foram verificados',
+      'sync preserves Linux attribute when updating reference CRLF or refusal without change',
+      'sync preserves Linux attribute in common update or refusal without changing',
+      'sync warns when Linux metadata have not been verified',
     ],
   },
 ];

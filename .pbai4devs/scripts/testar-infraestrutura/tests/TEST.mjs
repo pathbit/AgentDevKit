@@ -269,7 +269,7 @@ test("report identifies skips without exposing absolute paths", t => {
 
 test('skip de alias Windows exige identidade restrita e motivo exato', () => {
   const skipped = {
-    name: 'Windows normaliza o alias temporário 8.3 antes de comparar a raiz Git',
+    name: 'Windows normalizes temporary aliases 8.3 before comparing the Git root',
     file: '.pbai4devs/scripts/sincronizar-agentes/tests/LOCAL_IGNORE.mjs',
     reason: 'Requer Windows para verificar a resolução de alias 8.3.',
     kind: 'test', event: 'test:pass', booleanSkip: false, todo: false,

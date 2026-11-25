@@ -276,7 +276,8 @@ test("local output accepts repository with space at the end of name", t => {
   assert.ok(existsSync(join(target, '.gitignore')));
 });
 
-test("index with alias Unicode case folding unknown block output", t => {
+const unicodeAliasTest = 'Git index blocks output with an ambiguous Unicode case alias';
+test(unicodeAliasTest, t => {
   const { root } = fixture(t);
   let result = spawnSync('git', ['init', '--quiet', '--template=', root], { encoding: 'utf8' }); assert.equal(result.status, 0, result.stderr);
   writeFileSync(join(root, '.gitignore'), '/tmp/\n');
@@ -327,9 +328,10 @@ test("fixtures isolate external Git even when the suite receives contaminated en
   const gitDir = join(external, '.git'), before = gitFixtureSnapshot(gitDir);
   const env = { ...process.env, GIT_DIR: gitDir, GIT_WORK_TREE: external, GIT_INDEX_FILE: join(gitDir, 'index'), GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'core.bare', GIT_CONFIG_VALUE_0: 'true' };
   delete env.NODE_TEST_CONTEXT;
-  result = spawnSync(process.execPath, ['--test', '--test-name-pattern=índice com alias Unicode de case folding desconhecido', join(projectRoot, '.pbai4devs/scripts/testar-maturidade/tests/TEST.mjs')], { env, encoding: 'utf8', timeout: 30000 });
+  const runner = join(projectRoot, '.pbai4devs/scripts/testar-maturidade/tests/TEST.mjs');
+  result = spawnSync(process.execPath, ['--test', '--test-reporter=tap', `--test-name-pattern=^${unicodeAliasTest}$`, runner], { env, encoding: 'utf8', timeout: 30000 });
   assert.ifError(result.error); assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.match(result.stdout, /pass 1/);
+  assert.ok(result.stdout.split(/\r?\n/).includes(`ok 1 - ${unicodeAliasTest}`), result.stdout);
   assert.deepEqual(gitFixtureSnapshot(gitDir), before, 'Suíte alterou o Git externo.');
 });
 
