@@ -119,7 +119,7 @@ permiten comprobar el paquete publicado en [ambos registros][packages].
 
 ---
 
-## Contributing and Branch Protection
+## Contribuciones y protección de ramas
 
 Abre un pull request desde tu fork hacia `develop`. Los cambios revisados pasan
 a `main` para la publicación. Consulta la [guía de contribución][contributing]
@@ -130,7 +130,7 @@ formularios. Consulta [cómo participar](docs/es/maintainers/community.md).
 
 ---
 
-## 📄 License
+## 📄 Licencia
 
 Distribuido bajo la [licencia MIT](LICENSE).
 La instalación incluye la licencia del kit en `.pbai4devs/LICENSE` y conserva
@@ -163,4 +163,4 @@ la licencia y los archivos propios de tu proyecto.
 
 ---
 
-Developed with ❤️ by [Pathbit](https://www.pathbit.com.br/)
+Developed with ❤️ by [Pathbit](https://pathbit.co/)

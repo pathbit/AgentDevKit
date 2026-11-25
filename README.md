@@ -127,7 +127,7 @@ As ferramentas locais têm instalação separada. Os artefatos e as somas da
 
 ---
 
-## Contributing and Branch Protection
+## Contribuições e proteção de branches
 
 Envie o pull request do seu fork para `develop`. As mudanças revisadas seguem
 para `main` na publicação. Consulte o [guia de contribuição](CONTRIBUTING.md)
@@ -138,7 +138,7 @@ Encontrou um problema ou tem uma ideia? [Abra uma issue][issues] pelos
 
 ---
 
-## 📄 License
+## 📄 Licença
 
 Distribuído sob a [licença MIT](LICENSE).
 A instalação inclui a licença do kit em `.pbai4devs/LICENSE` e preserva
@@ -170,4 +170,4 @@ a licença e os arquivos próprios do seu projeto.
 
 ---
 
-Developed with ❤️ by [Pathbit](https://www.pathbit.com.br/)
+Developed with ❤️ by [Pathbit](https://pathbit.co/)
