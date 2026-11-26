@@ -36,7 +36,7 @@ para executar sempre a mesma versão.
 
 ```console
 npx --yes @pathbit/agentdevkit@latest init --lang pt --purpose agents
-npx --yes @pathbit/agentdevkit@0.0.39 init --lang pt --purpose agents
+npx --yes @pathbit/agentdevkit@0.0.40 init --lang pt --purpose agents
 ```
 
 No assistente, use as setas para navegar e **Espaço** para marcar cada
@@ -79,7 +79,7 @@ ele bastam.
 <!-- markdownlint-disable MD013 -->
 
 ```console
-npx --yes --allow-remote=root https://github.com/pathbit/AgentDevKit/releases/download/v0.0.39/agentdevkit-0.0.39.tgz init --lang pt --purpose agents
+npx --yes --allow-remote=root https://github.com/pathbit/AgentDevKit/releases/download/v0.0.40/agentdevkit-0.0.40.tgz init --lang pt --purpose agents
 ```
 
 <!-- markdownlint-enable MD013 -->
