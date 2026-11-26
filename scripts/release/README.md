@@ -67,10 +67,9 @@ e verifica a CLI instalada por cada registro. O consumo do npm é anônimo;
 no GitHub, autenticado. O modo manual `package_only` atende tags já publicadas
 sem recriar a release. Veja [os dois registries](../../docs/maintainers/packages.md).
 
-O workflow prioriza o secret `NPMJS_TOKEN`, recebido como `NPM_TOKEN` na
-publicação npm; sem ele, usa OIDC. GitHub Packages usa seu próprio token do
-workflow, sem compartilhar credenciais entre os hosts. Nenhum segredo ou
-resultado é versionado.
+A publicação no npm usa OIDC quando `NPMJS_AUTH_MODE=oidc` ou quando o
+segredo `NPMJS_TOKEN` está ausente. O GitHub Packages usa seu próprio token.
+O workflow confirma `latest` no npm antes e depois de publicar.
 Veja [manutenção](../../docs/maintainers/maintenance.md).
 
 O build prepara os arquivos em área temporária e preserva uma saída anterior

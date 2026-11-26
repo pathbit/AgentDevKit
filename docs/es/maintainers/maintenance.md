@@ -185,10 +185,10 @@ release existente, incluso en borrador. Elimina solamente el borrador incompleto
 de ese intento después de conferir el origen; nunca apague una release publicada
 para repetir el flujo.
 
-Si la releasis todavía no existe, use **Re-run failed jobs** o `gh workflow run
-release.yml --ref vX.Y.Z` La publicación prioriza el secreto `NPMJS_TOKEN` del
-repositorio; sin él, usa OIDC, conforme [publicación](packages.md). Si la
-creación de la etiqueta o el accionamiento falla, consulte la ejecución
+Para usar el flujo actual con una etiqueta existente, ejecuta
+`gh workflow run release.yml --ref main -f tag=vX.Y.Z` con la etiqueta real.
+Una reejecución usa el flujo original. Consulta la [guía](packages.md).
+Si la creación de la etiqueta o el accionamiento falla, consulta la ejecución
 **Autorelease tag**. Una etiqueta en el commit correcto puede ser retomada sin
 moverla; si apunta a otro commit, investigue antes de cualquier publicación.
 

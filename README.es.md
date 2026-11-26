@@ -69,6 +69,10 @@ Consulta la selección con `npx @pathbit/agentdevkit agents`.
 
 ## Otras formas de ejecutar
 
+En npm 12 o posterior, estos comandos permiten solo la fuente indicada.
+En npm 11 o anterior, omite `--allow-remote=root` o `--allow-git=root`.
+[Opciones oficiales de npm][npm-source-options].
+
 ### Desde un lanzamiento de GitHub
 
 Ejecuta el archivo `.tgz` de una versión publicada. Basta con Node.js y el
@@ -77,7 +81,7 @@ Ejecuta el archivo `.tgz` de una versión publicada. Basta con Node.js y el
 <!-- markdownlint-disable MD013 -->
 
 ```console
-npx --yes https://github.com/pathbit/AgentDevKit/releases/download/v0.0.39/agentdevkit-0.0.39.tgz init --lang es --purpose agents
+npx --yes --allow-remote=root https://github.com/pathbit/AgentDevKit/releases/download/v0.0.39/agentdevkit-0.0.39.tgz init --lang es --purpose agents
 ```
 
 <!-- markdownlint-enable MD013 -->
@@ -90,7 +94,7 @@ la rama `main`.
 <!-- markdownlint-disable MD013 -->
 
 ```console
-npx --yes "git+https://github.com/pathbit/AgentDevKit.git#main" init --lang es --purpose agents
+npx --yes --allow-git=root "git+https://github.com/pathbit/AgentDevKit.git#main" init --lang es --purpose agents
 ```
 
 <!-- markdownlint-enable MD013 -->
@@ -171,6 +175,7 @@ la licencia y los archivos propios de tu proyecto.
 [clients]: docs/es/kit/COMPATIBILIDADE.md
 [release]: https://github.com/pathbit/AgentDevKit/releases/latest
 [github-releases]: https://github.com/pathbit/AgentDevKit/releases
+[npm-source-options]: https://docs.npmjs.com/cli/v12/commands/npm-install/#allow-remote
 [npm-package]: https://www.npmjs.com/package/@pathbit/agentdevkit
 [npm-badge]: https://img.shields.io/npm/v/%40pathbit%2Fagentdevkit
 [license-badge]: https://img.shields.io/badge/license-MIT-blue

@@ -68,28 +68,17 @@ workflow confiere versión, origen e integridad; una versión existente sólo es
 aceptada cuando contiene los mismos bytes. No reempacote ni reempacote una
 versión publicada.
 
-El workflow prioriza el secreto del repositorio `NPMJS_TOKEN`, recibido por la
-variable interna `NPM_TOKEN` Solo en la publicación. El token necesita permitir
-publicar en el alcance `@pathbit`; credenciales nunca entran en los archivos
-versionados.
+[Trusted Publishing de npm][trusted-publishing] usa OIDC y genera
+procedencia automáticamente. Registra `pathbit/AgentDevKit` con el flujo
+`release.yml`, deja el entorno vacío y habilita **Allow npm publish**.
 
-El paso de GitHub Packages usa `GITHUB_TOKEN` com `packages: write` y confirma
-la visibilidad pública. Tokens de un registry no se envían al otro. El npm
-continúa usando `NPMJS_TOKEN` o OIDC, con prueba de consumo anónimo; las pruebas
-de GitHub usan autenticación propia.
+Tras registrar la relación en npm, configura la variable del repositorio
+`NPMJS_AUTH_MODE=oidc` en GitHub. Sin la variable, el flujo usa
+`NPMJS_TOKEN` cuando está disponible. OIDC usa `id-token: write`,
+npm 11.5.1+ y Node.js 22.14+. El runner usa Node.js 24.
 
-Sin este secreto, el workflow usa OIDC. Configure **Trusted Publisher** npm:
-
-| Campo | Valor |
-| --- | --- |
-| Organization or user | `pathbit` |
-| Repository | `AgentDevKit` |
-| Workflow filename | `release.yml` |
-| Allowed action | Publicación directa con `npm publish` |
-
-El fallback recibe `id-token: write`. El npm exige CLI 11.5.1+ y Node 22.14+; el
-proyecto usa Node 24. Configure la relación de confianza después de que el
-paquete exista; la primera publicación puede utilizar el secreto `NPMJS_TOKEN`.
+GitHub Packages usa `GITHUB_TOKEN` con `packages: write`. El job de npm
+verifica la descarga pública sin credenciales.
 
 Por defecto, una etiqueta publica en los dos destinos. Para completar GitHub
 Packages de una etiqueta existente, sustituya `vX.Y.Z` por la etiqueta deseada:
@@ -104,17 +93,12 @@ commit exacto apuntado por la etiqueta. `registry` acepta `both`, `npm` o
 rechaza versiones con bytes diferentes y pula la publicación si la misma versión
 ya está correcta.
 
-Después del envío a npm, job consulta el nombre y la versión publicada y baja el
-tarball sin credenciales, en caché inicialmente vacío. Confiere el SHA-256 de
-los bytes descargados con el artefacto aprobado y reutiliza el caché aislado
-para ejecutar `--version`, `init`, `doctor` e `sync --check` offline a partir
-del tarball verificado. La resolución por nombre y ejecución son pruebas
-separadas. Compruebe también que `latest` apunta para la versión estable y que
-el tarball es bable; metadatos visibles solos no comprueban una instalación
-funcional. Si el registro todavía no proporciona el paquete, espere la
-verificación sin republicar automáticamente la misma versión. Durante la
-propagación, `E404` e `ETARGET` La descarga de tarball se repite dentro de la
-misma ventana limitada.
+El job descarga el tarball desde npmjs sin credenciales, comprueba sus bytes
+y prueba `--version`, `init`, `doctor` y `sync --check` en una caché aislada.
+Comprueba que `latest` apunta a la versión publicada o a una versión estable
+posterior. Una versión anterior puede verificarse si ya existen los mismos
+bytes. Durante la propagación, el job espera la disponibilidad del tarball
+sin intentar volver a publicarlo.
 
 GitHub Packages verifica las mismas órdenes con autenticación. Metadados deben
 indicar visibilidad pública y asociación al repositorio correcto. Un fallo
@@ -124,6 +108,7 @@ nunca recluyé una versión publicada con otro contenido.
 [Wiki](../README.md) · [Mantenimiento](maintenance.md) ·
 [Instalación](../guides/installation.md)
 
+[trusted-publishing]: https://docs.npmjs.com/trusted-publishers/
 [package]: https://www.npmjs.com/package/@pathbit/agentdevkit
 [github]: https://github.com/pathbit/AgentDevKit/pkgs/npm/agentdevkit
 [github-auth]: https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-npm-registry

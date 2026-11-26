@@ -113,7 +113,8 @@ test("workflow keeps records separate and allows you to complete a tag without r
   assert.match(workflow, /options: \[both, npm, github\]/);
   assert.match(workflow, /packages: write/);
   assert.match(npm, /inputs\.registry != 'github'/);
-  assert.match(npm, /NPM_TOKEN: \$\{\{ secrets\.NPMJS_TOKEN \}\}/);
+  assert.match(npm, /NPM_TOKEN: \$\{\{ vars\.NPMJS_AUTH_MODE != 'oidc' && secrets\.NPMJS_TOKEN \|\| '' \}\}/);
+  assert.match(workflow, /group: agentdevkit-release-publication\n  queue: max/);
   assert.doesNotMatch(npm, /GITHUB_PACKAGES_TOKEN/);
   assert.match(github, /inputs\.registry != 'npm'/);
   assert.match(github, /GITHUB_PACKAGES_TOKEN: \$\{\{ github\.token \}\}/);

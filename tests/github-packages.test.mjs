@@ -48,14 +48,26 @@ const failure = code => ({ status: 1, stdout: JSON.stringify({ error: { code, su
 function mock(fixture, options = {}) {
   const calls = [], sleeps = [], views = [...(options.views || [null, { integrity: fixture.integrity }])];
   const downloads = [...(options.downloads || [true])];
+  const tags = [...(options.tags || [options.views?.[0] ? options.metadata?.version || version : '0.0.0', options.metadata?.version || version])];
+  let metadataAvailable = false;
   const execute = async (command, args, config) => {
     const action = args[1];
     calls.push({ command, args, config });
     if (action === '--version') return success(options.npmVersion || '11.6.2');
     if (action === 'pack') return success([{ name: packageName, version, integrity: fixture.integrity, ...options.metadata }]);
+    if (action === 'view' && args[3] === 'versions') {
+      if (options.availableVersions === null) return failure('E404');
+      return success(options.availableVersions || [tags[0], metadataAvailable && (options.metadata?.version || version)].filter(Boolean));
+    }
     if (action === 'view') {
       const result = views.length > 1 ? views.shift() : views[0];
+      metadataAvailable = typeof result === 'object' && result !== null;
       return result === null ? failure('E404') : typeof result === 'string' ? failure(result) : success(result);
+    }
+    if (action === 'dist-tag') {
+      const latest = tags.length > 1 ? tags.shift() : tags[0];
+      if (latest === 'E401') return failure(latest);
+      return latest === null ? failure('E404') : success(`latest: ${latest}\n`);
     }
     if (action === 'cache') {
       const result = downloads.length > 1 ? downloads.shift() : downloads[0];
@@ -78,6 +90,9 @@ function mock(fixture, options = {}) {
     sleep: async milliseconds => sleeps.push(milliseconds), maxAttempts: 3, pollMs: 1 } };
 }
 
+const withoutVersionLists = calls => calls.filter(call => call.args[3] !== 'versions');
+const exactLookups = calls => calls.filter(call => call.args[1] === 'view' && call.args[3] === 'dist');
+
 test("publishes TGZ approved and proof installation by registry in new cache", async t => {
   const f = fixture(t), m = mock(f);
   const result = await publishRegistryPackage(m.options);
@@ -85,28 +100,29 @@ test("publishes TGZ approved and proof installation by registry in new cache", a
   assert.deepEqual(result.probe, { status: 'passed', version, commands: ['version', 'init', 'doctor', 'sync --check'], anonymous: true, namedSelector: true });
   assert.equal(result.url, 'https://www.npmjs.com/package/@pathbit/agentdevkit');
   assert.equal(result.authentication, 'token');
-  assert.deepEqual(m.calls.map(call => call.args[1]), ['pack', 'view', 'publish', 'view', 'cache', 'exec', 'exec', 'exec', 'exec', 'exec']);
-  assert.deepEqual(m.calls[0].args.slice(1), ['pack', f.path, '--dry-run', '--ignore-scripts', '--json']);
-  assert.deepEqual(m.calls[2].args.slice(1), ['publish', f.path, '--registry=https://registry.npmjs.org', '--access=public', '--ignore-scripts', '--json']);
-  assert.deepEqual(m.calls[4].args.slice(1), ['cache', 'add', `${packageName}@${version}`, '--registry=https://registry.npmjs.org', '--ignore-scripts', '--json']);
-  const cachedPath = join(dirname(m.calls[5].config.cwd), 'registry-verified.tgz');
-  assert.deepEqual(m.calls[5].args.slice(1), ['exec', '--yes', '--ignore-scripts', '--registry=https://registry.npmjs.org', `--package=${cachedPath}`, '--', 'agentdevkit', '--version', '--json']);
-  const target = join(dirname(m.calls[5].config.cwd), 'consumer');
-  assert.deepEqual(m.calls[6].args.slice(8), ['init', '--target', target, '--agents', 'codex,claude', '--lang', 'en', '--yes', '--json']);
-  assert.deepEqual(m.calls[7].args.slice(8), ['doctor', '--target', target, '--json']);
-  assert.deepEqual(m.calls[8].args.slice(8), ['sync', '--check', '--target', target, '--json']);
-  for (const call of m.calls.slice(5)) {
-    assert.equal(call.config.cwd, m.calls[5].config.cwd);
-    assert.equal(call.config.env.npm_config_cache, m.calls[5].config.env.npm_config_cache);
+  const calls = withoutVersionLists(m.calls);
+  assert.deepEqual(calls.map(call => call.args[1]), ['pack', 'view', 'dist-tag', 'publish', 'view', 'dist-tag', 'cache', 'exec', 'exec', 'exec', 'exec', 'exec']);
+  assert.deepEqual(calls[0].args.slice(1), ['pack', f.path, '--dry-run', '--ignore-scripts', '--json']);
+  assert.deepEqual(calls[3].args.slice(1), ['publish', f.path, '--registry=https://registry.npmjs.org', '--access=public', '--tag=latest', '--ignore-scripts', '--json']);
+  assert.deepEqual(calls[6].args.slice(1), ['cache', 'add', `${packageName}@${version}`, '--registry=https://registry.npmjs.org', '--ignore-scripts', '--json']);
+  const cachedPath = join(dirname(calls[7].config.cwd), 'registry-verified.tgz');
+  assert.deepEqual(calls[7].args.slice(1), ['exec', '--yes', '--ignore-scripts', '--registry=https://registry.npmjs.org', `--package=${cachedPath}`, '--', 'agentdevkit', '--version', '--json']);
+  const target = join(dirname(calls[7].config.cwd), 'consumer');
+  assert.deepEqual(calls[8].args.slice(8), ['init', '--target', target, '--agents', 'codex,claude', '--lang', 'en', '--yes', '--json']);
+  assert.deepEqual(calls[9].args.slice(8), ['doctor', '--target', target, '--json']);
+  assert.deepEqual(calls[10].args.slice(8), ['sync', '--check', '--target', target, '--json']);
+  for (const call of calls.slice(7)) {
+    assert.equal(call.config.cwd, calls[7].config.cwd);
+    assert.equal(call.config.env.npm_config_cache, calls[7].config.env.npm_config_cache);
     assert.equal(call.config.shell, false);
   }
-  assert.notEqual(m.calls[0].config.env.npm_config_cache, m.calls[5].config.env.npm_config_cache);
-  assert.equal(m.calls[4].config.env.npm_config_cache, m.calls[5].config.env.npm_config_cache);
-  assert.equal(m.calls[5].config.env.npm_config_offline, 'true');
-  assert.equal(m.calls[9].config.env.npm_config_offline, 'false');
-  assert.ok(m.calls[9].args.includes(`--package=${packageName}@${version}`));
-  assert.deepEqual(m.calls[9].args.slice(-3), ['--', 'echo', 'AGENTDEVKIT_SELECTOR_OK']);
-  assert.ok(!existsSync(m.calls[0].config.cwd));
+  assert.notEqual(calls[0].config.env.npm_config_cache, calls[7].config.env.npm_config_cache);
+  assert.equal(calls[6].config.env.npm_config_cache, calls[7].config.env.npm_config_cache);
+  assert.equal(calls[7].config.env.npm_config_offline, 'true');
+  assert.equal(calls[11].config.env.npm_config_offline, 'false');
+  assert.ok(calls[11].args.includes(`--package=${packageName}@${version}`));
+  assert.deepEqual(calls[11].args.slice(-3), ['--', 'echo', 'AGENTDEVKIT_SELECTOR_OK']);
+  assert.ok(!existsSync(calls[0].config.cwd));
   assert.deepEqual(readFileSync(f.path), f.archive);
 });
 
@@ -116,7 +132,45 @@ test("version already published with the same bytes is idempotent and still prov
   const result = await publishRegistryPackage(m.options);
   assert.equal(result.status, 'skipped');
   assert.equal(result.authentication, 'not-needed');
-  assert.deepEqual(m.calls.map(call => call.args[1]), ['pack', 'view', 'cache', 'exec', 'exec', 'exec', 'exec', 'exec']);
+  assert.deepEqual(withoutVersionLists(m.calls).map(call => call.args[1]), ['pack', 'view', 'dist-tag', 'cache', 'exec', 'exec', 'exec', 'exec', 'exec']);
+});
+
+test("a delayed release cannot move latest to an older version", async t => {
+  const f = fixture(t), m = mock(f, { views: [null], tags: ['1.2.10'] });
+  await assert.rejects(publishRegistryPackage(m.options), /anterior a uma versão estável/);
+  assert.ok(!m.calls.some(call => call.args[1] === 'publish'));
+});
+
+test("a stale latest tag cannot hide a newer published stable version", async t => {
+  const f = fixture(t), m = mock(f, { views: [null], tags: ['1.2.2'], availableVersions: ['1.2.2', '1.2.10'] });
+  await assert.rejects(publishRegistryPackage(m.options), /anterior a uma versão estável/);
+  assert.ok(!m.calls.some(call => call.args[1] === 'publish'));
+});
+
+test("a missing scoped package can be bootstrapped without ignoring an auth error on an existing package", async t => {
+  const f = fixture(t), fresh = mock(f, { views: [null], availableVersions: null, tags: ['E401'] });
+  fresh.options.maxAttempts = 1;
+  await assert.rejects(publishRegistryPackage(fresh.options), /Publicação aceita/);
+  assert.equal(fresh.calls.filter(call => call.args[1] === 'publish').length, 1);
+  const existing = mock(f, { views: [null], availableVersions: ['1.2.2'], tags: ['E401'] });
+  await assert.rejects(publishRegistryPackage(existing.options), /dist-tag falhou \(E401\)/);
+  assert.ok(!existing.calls.some(call => call.args[1] === 'publish'));
+});
+
+test("an accepted version awaiting npm scanning is checked without another publish", async t => {
+  const f = fixture(t), m = mock(f, { views: [null, null, { integrity: f.integrity }], tags: [version] });
+  const result = await publishRegistryPackage(m.options);
+  assert.equal(result.status, 'skipped');
+  assert.deepEqual(m.sleeps, [1]);
+  assert.ok(!m.calls.some(call => call.args[1] === 'publish'));
+});
+
+test("registry availability includes the current latest tag", async t => {
+  const f = fixture(t), m = mock(f, { views: [{ integrity: f.integrity }], tags: ['1.2.2', version] });
+  const result = await publishRegistryPackage(m.options);
+  assert.equal(result.status, 'skipped');
+  assert.deepEqual(m.sleeps, [1]);
+  assert.equal(m.calls.filter(call => call.args[1] === 'cache').length, 1);
 });
 
 test("Tarball downloaded divergent never runs", async t => {
@@ -189,7 +243,7 @@ test("visibility after publication has limited retentions", async t => {
   assert.deepEqual(m.sleeps, [1, 1]);
   const timeout = mock(f, { views: [null] });
   await assert.rejects(publishRegistryPackage(timeout.options), /Publicação aceita; disponibilidade pendente/);
-  assert.equal(timeout.calls.filter(call => call.args[1] === 'view').length, 4);
+  assert.equal(exactLookups(timeout.calls).length, 4);
   assert.equal(timeout.calls.filter(call => call.args[1] === 'publish').length, 1);
   assert.deepEqual(timeout.sleeps, [1, 1]);
 });
@@ -205,7 +259,7 @@ test("standard window tolerates twenty minutes of analysis with a single publica
   assert.equal(m.sleeps.length, 120);
   assert.ok(m.sleeps.every(milliseconds => milliseconds === 10000));
   assert.equal(m.calls.filter(call => call.args[1] === 'publish').length, 1);
-  const lookups = m.calls.filter(call => call.args[1] === 'view');
+  const lookups = exactLookups(m.calls);
   assert.equal(lookups.length, 122);
   for (const call of lookups) assert.deepEqual(Object.keys(call.config.env).filter(key => /token|secret|password|(?:^|_)auth(?:_|$)/i.test(key)), []);
   assert.equal(result.probe.anonymous, true);
@@ -223,7 +277,7 @@ test("expired default window informs pending and never tries to publish again", 
   });
   assert.equal(elapsed, 20 * 60 * 1000);
   assert.equal(m.calls.filter(call => call.args[1] === 'publish').length, 1);
-  assert.equal(m.calls.filter(call => call.args[1] === 'view').length, 122);
+  assert.equal(exactLookups(m.calls).length, 122);
   assert.ok(!m.calls.some(call => call.args[1] === 'exec'));
   assert.ok(!existsSync(m.calls[0].config.cwd));
   assert.deepEqual(readFileSync(f.path), f.archive);
@@ -256,7 +310,7 @@ test("existing version without tarball uses the same default window and recogniz
   });
   assert.equal(elapsed, 20 * 60 * 1000);
   assert.equal(m.calls.filter(call => call.args[1] === 'cache').length, 121);
-  assert.equal(m.calls.filter(call => call.args[1] === 'view').length, 121);
+  assert.equal(exactLookups(m.calls).length, 121);
   assert.equal(m.calls.filter(call => call.args[1] === 'publish').length, 0);
   assert.ok(!m.calls.some(call => call.args[1] === 'exec'));
   assert.ok(!existsSync(m.calls[0].config.cwd));
@@ -266,7 +320,7 @@ test("Metadata and tarball delay shares attempts after a post", async t => {
   const f = fixture(t), m = mock(f, { views: [null, null, { integrity: f.integrity }], downloads: [false, true] });
   assert.equal((await publishRegistryPackage(m.options)).status, 'published');
   assert.deepEqual(m.sleeps, [1, 1]);
-  assert.equal(m.calls.filter(call => call.args[1] === 'view').length, 4);
+  assert.equal(exactLookups(m.calls).length, 4);
   assert.equal(m.calls.filter(call => call.args[1] === 'cache').length, 2);
   assert.equal(m.calls.filter(call => call.args[1] === 'publish').length, 1);
 });
@@ -299,10 +353,10 @@ test('erro textual diferente de E404 no download interrompe sem expor credenciai
 test("publication failure or post-publication integrity interrupts the proof of execution", async t => {
   const f = fixture(t), rejected = mock(f, { publishResult: failure('E403') });
   await assert.rejects(publishRegistryPackage(rejected.options), /E403/);
-  assert.equal(rejected.calls.length, 3);
+  assert.deepEqual(withoutVersionLists(rejected.calls).map(call => call.args[1]), ['pack', 'view', 'dist-tag', 'publish']);
   const mismatch = mock(f, { views: [null, { integrity: 'sha512-other' }] });
   await assert.rejects(publishRegistryPackage(mismatch.options), /tarball diferente/);
-  assert.equal(mismatch.calls.length, 4);
+  assert.deepEqual(withoutVersionLists(mismatch.calls).map(call => call.args[1]), ['pack', 'view', 'dist-tag', 'publish', 'view']);
 });
 
 test("exec needs to inform success and the same version, even when already published", async t => {
@@ -514,7 +568,7 @@ test('GitHub publica os mesmos bytes e autentica consultas e consumo somente nes
   assert.equal(result.probe.anonymous, false);
   assert.deepEqual(result.probe.commands, ['version', 'init', 'doctor', 'sync --check']);
   assert.deepEqual(m.calls.find(c => c.args[1] === 'publish').args.slice(1),
-    ['publish', f.path, '--registry=https://npm.pkg.github.com', '--access=public', '--ignore-scripts', '--json']);
+    ['publish', f.path, '--registry=https://npm.pkg.github.com', '--access=public', '--tag=latest', '--ignore-scripts', '--json']);
   assert.ok(m.requests.some(r => r.path === '/orgs/pathbit/packages/npm/agentdevkit'));
   assert.ok(!m.calls.some(c => c.args[1] === '--version'));
   assert.ok(configs.length > 4); assert.ok(!existsSync(m.calls[0].config.cwd));

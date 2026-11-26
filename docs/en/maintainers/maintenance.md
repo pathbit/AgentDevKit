@@ -178,10 +178,10 @@ trying again: the publisher does not replace an existing release, even in draft.
 Remove only the incomplete draft of this attempt after checking the source;
 never delete a published release to repeat the stream.
 
-If you don't release it yet, use **Re-run failed jobs** or `gh workflow run
-release.yml --ref vX.Y.Z` with the actual tag. Publication prioritizes the
-secret `NPMJS_TOKEN` repository; without it, use OIDC,
-[publication](packages.md). If tag creation or trigger fails, see execution
+To use the current workflow for an existing tag, run
+`gh workflow run release.yml --ref main -f tag=vX.Y.Z` with the actual tag.
+A rerun uses the original workflow. See the [publishing guide](packages.md).
+If tag creation or trigger fails, see execution
 **Automatic release tag**. A tag in the correct commit can be resumed without
 moving it; if it points to another commit, investigate before any publication.
 

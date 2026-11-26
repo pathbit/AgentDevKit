@@ -5,23 +5,17 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { setTimeout as pause } from 'node:timers/promises';
 import { githubRequest } from './publish.mjs';
+import { stableVersion, versionLessThan } from './versions.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const invalid = message => { throw new Error(message); };
 const shaPattern = /^[a-f0-9]{40}$/;
-const versionPattern = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/;
 const expectedName = '@pathbit/agentdevkit';
 const ciPath = '.github/workflows/ci.yml';
 
 function checkedPackage(pkg) {
-  if (pkg?.name !== expectedName || !versionPattern.test(pkg.version || '')) invalid('Nome ou versão do pacote inválido.');
+  if (pkg?.name !== expectedName || !stableVersion.test(pkg.version || '')) invalid('Nome ou versão do pacote inválido.');
   return pkg.version;
-}
-
-function versionLessThan(left, right) {
-  const a = left.split('.').map(BigInt), b = right.split('.').map(BigInt);
-  for (let i = 0; i < 3; i++) if (a[i] !== b[i]) return a[i] < b[i];
-  return false;
 }
 
 function trustedRun(run, { repository, branch, sha, id, attempt }) {
@@ -65,7 +59,7 @@ async function ensureNotOlderThanTags(prefix, version, request) {
   if (!Array.isArray(refs)) invalid('Não foi possível conferir as versões já marcadas.');
   for (const entry of refs) {
     const candidate = typeof entry?.ref === 'string' && entry.ref.startsWith('refs/tags/v') ? entry.ref.slice(11) : '';
-    if (versionPattern.test(candidate) && versionLessThan(version, candidate)) invalid('Versão inferior a uma tag existente não será publicada automaticamente.');
+    if (stableVersion.test(candidate) && versionLessThan(version, candidate)) invalid('Versão inferior a uma tag existente não será publicada automaticamente.');
   }
 }
 

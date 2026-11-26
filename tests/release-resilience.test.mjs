@@ -142,7 +142,9 @@ test("interrupted process is not treated as missing version or propagation", asy
       if (action === scenario.action) return { status: null, signal: 'SIGKILL', error: null,
         stdout: '', stderr: `npm error code ${scenario.code}` };
       if (action === 'pack') return { status: 0, stdout: JSON.stringify([{ name: '@pathbit/agentdevkit', version, integrity }]) };
+      if (action === 'view' && args[3] === 'versions') return { status: 0, stdout: JSON.stringify([version]) };
       if (action === 'view') return { status: 0, stdout: JSON.stringify({ integrity }) };
+      if (action === 'dist-tag') return { status: 0, stdout: `latest: ${version}\n` };
       assert.fail(`Não deveria executar npm ${action}`);
     };
     const request = async (_method, path) => path.includes('/actions/runs/')

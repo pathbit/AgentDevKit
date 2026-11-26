@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { npmExecutable, releaseRoot, sha256 } from './assets.mjs';
 import { assertApprovedSource, githubRequest, verifyDistribution } from './publish.mjs';
+import { stableVersion, versionLessThan } from './versions.mjs';
 
 const registries = Object.freeze({
   npm: Object.freeze({ registry: 'https://registry.npmjs.org', url: 'https://www.npmjs.com/package/@pathbit/agentdevkit' }),
@@ -141,7 +142,7 @@ export async function publishRegistryPackage({ directory, resolution, env = proc
     const npm = npmExecutable(env);
     const cacheReader = readCache ?? cacheReaderFactory(npm);
     if (typeof cacheReader !== 'function') invalid('O npm instalado não disponibiliza cacache para verificar o pacote.');
-    const invoke = async (args, { cwd = temporary, cache, allowMissing = false, environment = consumerEnvironment } = {}) => {
+    const invoke = async (args, { cwd = temporary, cache, allowMissing = false, unpublishedPackage = false, environment = consumerEnvironment } = {}) => {
       let result;
       try {
         result = await execute(process.execPath, [npm, ...args], {
@@ -156,7 +157,8 @@ export async function publishRegistryPackage({ directory, resolution, env = proc
         // operation, without treating other npm failures as propagation.
         const exitedNormally = !result?.error && Number.isInteger(result?.status) && result.status > 0
           && (result.signal === null || result.signal === undefined);
-        if (allowMissing && exitedNormally && (code === 'E404' || code === 'ETARGET' && args[0] === 'cache' && args[1] === 'add')) return null;
+        if (allowMissing && exitedNormally && (code === 'E404' || code === 'ETARGET' && args[0] === 'cache' && args[1] === 'add'
+          || unpublishedPackage && args[0] === 'dist-tag' && code === 'E401')) return null;
         invalid(`npm ${args[0]} falhou ${npmFailure(result || {})}.`);
       }
       return result.stdout;
@@ -182,8 +184,26 @@ export async function publishRegistryPackage({ directory, resolution, env = proc
     const api = request || githubRequest({ token: env.GH_TOKEN || env.GITHUB_TOKEN });
     await assertApprovedSource(resolution, api);
     const existing = await lookup();
+    const readLatest = async () => {
+      const available = await invoke(['view', packageName, 'versions', '--json', `--registry=${registry}`], { allowMissing: true });
+      const versions = available === null ? [] : json(available);
+      if (!Array.isArray(versions)) invalid('O npm não retornou uma lista válida de versões.');
+      const stable = versions.filter(candidate => typeof candidate === 'string' && stableVersion.test(candidate));
+      const tags = await invoke(['dist-tag', 'ls', packageName, `--registry=${registry}`],
+        { allowMissing: true, unpublishedPackage: available === null });
+      if (tags === null) return { latest: null, stable };
+      const latest = /^latest: ([^\s]+)$/m.exec(tags)?.[1];
+      if (!stableVersion.test(latest || '')) invalid('O registry não retornou um marcador latest estável.');
+      return { latest, stable };
+    };
+    // Reading the dist-tag endpoint detects accepted releases still being scanned.
+    const before = !existing && target === 'npm' ? await readLatest() : { latest: null, stable: [] };
+    if ([before.latest, ...before.stable].some(candidate => candidate && versionLessThan(resolution.version, candidate))) {
+      invalid('A versão é anterior a uma versão estável do npm; a publicação não foi iniciada.');
+    }
+    const awaitingAvailability = before.latest === resolution.version || before.stable.includes(resolution.version);
     let authentication = 'not-needed';
-    if (!existing) {
+    if (!existing && !awaitingAvailability) {
       const oidc = target === 'npm' && !env.NPM_TOKEN && env.GITHUB_ACTIONS === 'true'
         && Boolean(env.ACTIONS_ID_TOKEN_REQUEST_URL && env.ACTIONS_ID_TOKEN_REQUEST_TOKEN);
       if (oidc && !supportsOidc((await invoke(['--version'])).trim())) {
@@ -192,7 +212,7 @@ export async function publishRegistryPackage({ directory, resolution, env = proc
       const publishing = target === 'github' ? consumerEnvironment : publicationEnvironment(env, isolated, temporary, oidc, registry);
       authentication = target === 'github' ? 'github-token' : oidc ? 'oidc' : 'token';
       assertArchive();
-      await invoke(['publish', archivePath, `--registry=${registry}`, '--access=public', '--ignore-scripts', '--json'], { environment: publishing });
+      await invoke(['publish', archivePath, `--registry=${registry}`, '--access=public', '--tag=latest', '--ignore-scripts', '--json'], { environment: publishing });
     }
     let available = false;
     const availabilityCache = join(temporary, 'availability-cache');
@@ -200,13 +220,18 @@ export async function publishRegistryPackage({ directory, resolution, env = proc
     // https://github.blog/changelog/2026-07-28-npm-publish-time-malware-scanning-and-dual-use-metadata/
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       const metadata = attempt === 0 && existing ? existing : await lookup();
-      if (metadata && await invoke(['cache', 'add', spec, `--registry=${registry}`, '--ignore-scripts', '--json'], { cache: availabilityCache, allowMissing: true }) !== null) {
-        available = true;
-        break;
+      if (metadata) {
+        const { latest, stable } = target === 'npm' ? await readLatest() : { latest: resolution.version, stable: [resolution.version] };
+        if (latest && stable.includes(latest) && !versionLessThan(latest, resolution.version)
+          && !stable.some(candidate => versionLessThan(latest, candidate))
+          && await invoke(['cache', 'add', spec, `--registry=${registry}`, '--ignore-scripts', '--json'], { cache: availabilityCache, allowMissing: true }) !== null) {
+          available = true;
+          break;
+        }
       }
       if (attempt + 1 < maxAttempts) await sleep(pollMs);
     }
-    if (!available) invalid(`${existing ? 'Pacote já registrado' : 'Publicação aceita'}; disponibilidade pendente para ${spec}. Confira o status no npm e consulte a mesma versão; não republique automaticamente.`);
+    if (!available) invalid(`${existing || awaitingAvailability ? 'Pacote já registrado' : 'Publicação aceita'}; disponibilidade pendente para ${spec}. Confira o status no npm e consulte a mesma versão; não republique automaticamente.`);
     const cached = await cacheReader({ cache: availabilityCache, integrity });
     if (!Buffer.isBuffer(cached) || sha256(cached) !== verified.manifest.sha256) invalid('Tarball baixado do registry diverge do artefato aprovado.');
     const cachedPath = join(temporary, 'registry-verified.tgz');
@@ -244,7 +269,7 @@ export async function publishRegistryPackage({ directory, resolution, env = proc
       `--package=${spec}`, '--', 'echo', 'AGENTDEVKIT_SELECTOR_OK'], { cwd: probe, cache, environment: namedEnvironment });
     if (named.trim() !== 'AGENTDEVKIT_SELECTOR_OK') invalid('A prova do seletor npm não confirmou a instalação.');
     return { packageName, version: resolution.version, registry, url,
-      status: existing ? 'skipped' : 'published', sha256: verified.manifest.sha256,
+      status: existing || awaitingAvailability ? 'skipped' : 'published', sha256: verified.manifest.sha256,
       integrity, authentication: target === 'github' && existing ? 'github-token' : authentication,
       ...(githubPackage ? { githubPackage } : {}),
       probe: { status: 'passed', version: resolution.version, commands, anonymous: target === 'npm', namedSelector: true } };
