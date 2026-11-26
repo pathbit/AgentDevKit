@@ -7,6 +7,15 @@ language: es
 
 [Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
 
+## 0.0.41
+
+- Los archivos README en portugués, inglés y español usan esta versión en
+  los ejemplos de npmjs y GitHub Release.
+- El verificador de publicación acepta la respuesta de metadatos de npm 12
+  y comprueba el tarball con la integridad aprobada por CI.
+- La documentación presenta npmjs como la vía principal de instalación y
+  explica las opciones de GitHub.
+
 ## 0.0.40
 
 - La integración y la publicación pasan por la rama `main`.

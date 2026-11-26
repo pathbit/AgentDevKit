@@ -38,7 +38,7 @@ para ejecutar siempre la misma versión.
 
 ```console
 npx --yes @pathbit/agentdevkit@latest init --lang es --purpose agents
-npx --yes @pathbit/agentdevkit@0.0.40 init --lang es --purpose agents
+npx --yes @pathbit/agentdevkit@0.0.41 init --lang es --purpose agents
 ```
 
 En el asistente, usa las flechas para navegar y **Espacio** para marcar cada
@@ -81,7 +81,7 @@ Ejecuta el archivo `.tgz` de una versión publicada. Basta con Node.js y el
 <!-- markdownlint-disable MD013 -->
 
 ```console
-npx --yes --allow-remote=root https://github.com/pathbit/AgentDevKit/releases/download/v0.0.40/agentdevkit-0.0.40.tgz init --lang es --purpose agents
+npx --yes --allow-remote=root https://github.com/pathbit/AgentDevKit/releases/download/v0.0.41/agentdevkit-0.0.41.tgz init --lang es --purpose agents
 ```
 
 <!-- markdownlint-enable MD013 -->
