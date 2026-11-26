@@ -177,7 +177,9 @@ export async function publishRegistryPackage({ directory, resolution, env = proc
     const lookup = async () => {
       const output = await invoke(['view', spec, 'dist', '--json', `--registry=${registry}`], { allowMissing: true });
       if (output === null) return null;
-      const dist = json(output);
+      const metadata = json(output);
+      // npm 12 wraps a single matching version's dist object in an array.
+      const dist = Array.isArray(metadata) && metadata.length === 1 ? metadata[0] : metadata;
       if (!dist || !sameIntegrity(dist.integrity, integrity)) invalid('A versão no registry contém um tarball diferente.');
       return dist;
     };

@@ -135,6 +135,26 @@ test("version already published with the same bytes is idempotent and still prov
   assert.deepEqual(withoutVersionLists(m.calls).map(call => call.args[1]), ['pack', 'view', 'dist-tag', 'cache', 'exec', 'exec', 'exec', 'exec', 'exec']);
 });
 
+test('npm 12 single-version dist metadata verifies an already published tarball', async t => {
+  const f = fixture(t);
+  const m = mock(f, { views: [[{ integrity: f.integrity }]] });
+  const result = await publishRegistryPackage(m.options);
+  assert.equal(result.status, 'skipped');
+  assert.equal(result.sha256, sha256(f.archive));
+  assert.ok(m.calls.some(call => call.args[1] === 'cache'));
+  assert.ok(!m.calls.some(call => call.args[1] === 'publish'));
+});
+
+test('npm 12 dist metadata rejects ambiguous or mismatched integrity', async t => {
+  const f = fixture(t);
+  const valid = { integrity: f.integrity };
+  for (const dist of [[], [valid, valid], [{ integrity: 'sha512-different' }]]) {
+    const m = mock(f, { views: [dist] });
+    await assert.rejects(publishRegistryPackage(m.options), /tarball diferente/);
+    assert.ok(!m.calls.some(call => ['publish', 'cache', 'exec'].includes(call.args[1])));
+  }
+});
+
 test("a delayed release cannot move latest to an older version", async t => {
   const f = fixture(t), m = mock(f, { views: [null], tags: ['1.2.10'] });
   await assert.rejects(publishRegistryPackage(m.options), /anterior a uma versão estável/);
