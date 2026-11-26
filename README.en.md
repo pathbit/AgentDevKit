@@ -37,7 +37,7 @@ to run the same version every time.
 
 ```console
 npx --yes @pathbit/agentdevkit@latest init --lang en --purpose agents
-npx --yes @pathbit/agentdevkit@0.0.40 init --lang en --purpose agents
+npx --yes @pathbit/agentdevkit@0.0.41 init --lang en --purpose agents
 ```
 
 In the setup wizard, use the arrow keys to move and **Space** to mark each
@@ -79,7 +79,7 @@ Run the `.tgz` for a published version. It requires Node.js and its bundled `npx
 <!-- markdownlint-disable MD013 -->
 
 ```console
-npx --yes --allow-remote=root https://github.com/pathbit/AgentDevKit/releases/download/v0.0.40/agentdevkit-0.0.40.tgz init --lang en --purpose agents
+npx --yes --allow-remote=root https://github.com/pathbit/AgentDevKit/releases/download/v0.0.41/agentdevkit-0.0.41.tgz init --lang en --purpose agents
 ```
 
 <!-- markdownlint-enable MD013 -->

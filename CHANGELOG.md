@@ -6,6 +6,15 @@ description: Alterações verificáveis por versão do AgentDevKit.
 
 [Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
 
+## 0.0.41
+
+- Os comandos dos READMEs em português, inglês e espanhol usam esta versão
+  nos exemplos do npmjs e do GitHub Release.
+- O verificador de publicação aceita a resposta de metadados do npm 12
+  e confere o tarball com a integridade aprovada no CI.
+- A documentação apresenta o npmjs como caminho principal e explica
+  as opções de instalação pelo GitHub.
+
 ## 0.0.40
 
 - O CI de integração e a publicação passam pela branch `main`.

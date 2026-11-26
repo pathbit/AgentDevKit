@@ -7,6 +7,15 @@ language: en
 
 [Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
 
+## 0.0.41
+
+- The Portuguese, English, and Spanish READMEs use this version in the npmjs
+  and GitHub Release examples.
+- The publication verifier accepts the npm 12 metadata response and checks
+  the tarball against the integrity approved by CI.
+- The documentation introduces npmjs as the primary installation path and
+  explains the GitHub options.
+
 ## 0.0.40
 
 - Integration CI and publishing run from `main`.
