@@ -6,6 +6,12 @@ description: Alterações verificáveis por versão do AgentDevKit.
 
 [Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
 
+## 0.0.42
+
+- O `init` e o `update` no macOS aceitam a proveniência que o sistema adiciona
+  a um arquivo novo. A CLI continua verificando ACLs, flags e atributos
+  presentes na origem.
+
 ## 0.0.41
 
 - Os comandos dos READMEs em português, inglês e espanhol usam esta versão
