@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { sameDistributionInputs } from './distribution-inputs.mjs';
 import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -65,7 +66,7 @@ async function ensureNotOlderThanTags(prefix, version, request) {
 
 // The completed CI and its exact artifact are revalidated before any writes.
 // Never wait for the dispatched release from this workflow.
-export async function autoTagRelease({ event, environment = process.env, checkoutCommit, packageInfo, lock, request, sleep = pause }) {
+export async function autoTagRelease({ event, environment = process.env, checkoutCommit, packageInfo, lock, request, sleep = pause, sourcesMatch = () => false }) {
   const context = checkedContext(event, environment, checkoutCommit);
   const { repository, branch, sha, id, attempt } = context;
   if (typeof request !== 'function') invalid('Cliente da API do GitHub ausente.');
@@ -80,7 +81,7 @@ export async function autoTagRelease({ event, environment = process.env, checkou
   if (!Array.isArray(artifacts?.artifacts) || !artifacts.artifacts.some(item => item.name === expectedArtifact && item.expired === false && Number.isSafeInteger(item.id) && item.id > 0)) invalid('Artefato do CI aprovado ausente ou expirado.');
   const branchRef = await request('GET', `${prefix}/git/ref/heads/${encodeURIComponent(branch)}`);
   if (branchRef?.object?.type !== 'commit' || !shaPattern.test(branchRef.object.sha || '')) invalid('HEAD remoto do branch inválido.');
-  if (branchRef.object.sha !== sha) return { status: 'skipped', reason: 'branch-advanced', tag, sourceCommit: sha };
+  if (branchRef.object.sha !== sha && !sourcesMatch(sha, branchRef.object.sha)) return { status: 'skipped', reason: 'branch-advanced', tag, sourceCommit: sha };
   const commit = await request('GET', `${prefix}/commits/${sha}`);
   const parent = commit?.parents?.[0]?.sha;
   if (commit?.sha !== sha || !shaPattern.test(parent || '')) invalid('Commit anterior indisponível; não será criada uma tag.');
@@ -143,6 +144,8 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     const lock = JSON.parse(readFileSync(join(root, 'package-lock.json'), 'utf8'));
     const checkoutCommit = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
     const request = githubRequest({ token: process.env.GH_TOKEN || process.env.GITHUB_TOKEN });
-    console.log(JSON.stringify(await autoTagRelease({ event, checkoutCommit, packageInfo, lock, request })));
+    console.log(JSON.stringify(await autoTagRelease({ event, checkoutCommit, packageInfo, lock, request,
+      sourcesMatch: (approved, current) => sameDistributionInputs(root, approved, current),
+    })));
   } catch (error) { console.error(error.message); process.exitCode = 1; }
 }

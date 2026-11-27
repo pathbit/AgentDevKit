@@ -7,14 +7,60 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.event_name == 'push' && github.sha || github.ref }}
   cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
+  distribution:
+    name: Distribution inputs
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.scope.outputs.build }}
+      validate: ${{ steps.scope.outputs.validate }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: scope
+        name: Compare changes with the build inputs
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          build=true
+          validate=true
+          if [[ -n "$BASE_SHA" && "$BASE_SHA" != 0000000000000000000000000000000000000000 ]]; then
+            path_list="$(cat .github/distribution-paths)"
+            if [[ "$GITHUB_EVENT_NAME" == pull_request ]] && git cat-file -e "$BASE_SHA:.github/distribution-paths" 2>/dev/null; then
+              path_list="$(git show "$BASE_SHA:.github/distribution-paths")"
+            fi
+            test -n "$path_list"
+            paths=()
+            while IFS= read -r path; do
+              test -n "$path"
+              paths+=("$path")
+            done <<< "$path_list"
+            runtime_changes="$(git diff --name-only --no-renames "$BASE_SHA" HEAD -- "${paths[@]}")"
+            test_changes="$(git diff --name-only --no-renames "$BASE_SHA" HEAD -- tests/ scripts/ ':(glob).pbai4devs/**/tests/**')"
+            if [[ -z "$runtime_changes" ]]; then
+              build=false
+              if [[ -z "$test_changes" ]]; then
+                validate=false
+              fi
+            fi
+          fi
+          printf 'build=%s\nvalidate=%s\n' "$build" "$validate" >> "$GITHUB_OUTPUT"
+      - name: Skip distribution build
+        if: steps.scope.outputs.build == 'false'
+        run: echo "No distribution inputs changed."
+
   minimum-runtime:
+    needs: distribution
+    if: needs.distribution.outputs.validate == 'true'
     name: ${{ matrix.label }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
@@ -49,6 +95,8 @@ jobs:
         run: node --test tests/runtime-minimum.test.mjs
 
   verify:
+    needs: distribution
+    if: needs.distribution.outputs.validate == 'true'
     name: ${{ matrix.label }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
@@ -328,11 +376,12 @@ jobs:
       - name: Verify the selected profile
         env:
           NODE_OPTIONS: ''
+          ADK_BUILD_DISTRIBUTION: ${{ needs.distribution.outputs.build }}
           ADK_REQUIRE_LINUX_XATTR: ${{ runner.os == 'Linux' && matrix.profile == 'full' && '1' || '0' }}
         run: node scripts/release/pipeline.mjs ${{ matrix.profile }} --github-output
         id: verify
       - name: Store the verified package
-        if: matrix.profile == 'full'
+        if: matrix.profile == 'full' && needs.distribution.outputs.build == 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: agentdevkit-${{ github.sha }}-${{ github.run_attempt }}

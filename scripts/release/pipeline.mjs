@@ -283,6 +283,10 @@ export function runPipeline(profile, { root = releaseRoot, env = process.env, ru
     if (process.platform === 'linux') run(root, ['scripts/release/infrastructure.mjs', '--native'], strictEnv);
     run(root, [`${hub}/scripts/preparar-ferramentas/SCRIPT.mjs`, 'install', 'markdownlint-cli2'], strictEnv);
     check(strictEnv);
+    if (env.ADK_BUILD_DISTRIBUTION === 'false') {
+      console.log('Package build skipped. The distribution inputs are unchanged.');
+      return;
+    }
     const artifact = buildRelease(root, { env: strictEnv });
     run(root, ['--test', `${tests}/distribution.test.mjs`], { ...strictEnv, AGENTDEVKIT_TARBALL: artifact.file });
     const staged = markVerified(artifact.directory, strictEnv);
