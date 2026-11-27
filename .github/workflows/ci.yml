@@ -20,6 +20,7 @@ jobs:
     outputs:
       build: ${{ steps.scope.outputs.build }}
       validate: ${{ steps.scope.outputs.validate }}
+      documentation: ${{ steps.scope.outputs.documentation }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -33,6 +34,7 @@ jobs:
         run: |
           build=true
           validate=true
+          documentation=false
           if [[ -n "$BASE_SHA" && "$BASE_SHA" != 0000000000000000000000000000000000000000 ]]; then
             path_list="$(cat .github/distribution-paths)"
             if [[ "$GITHUB_EVENT_NAME" == pull_request ]] && git cat-file -e "$BASE_SHA:.github/distribution-paths" 2>/dev/null; then
@@ -46,6 +48,10 @@ jobs:
             done <<< "$path_list"
             runtime_changes="$(git diff --name-only --no-renames "$BASE_SHA" HEAD -- "${paths[@]}")"
             test_changes="$(git diff --name-only --no-renames "$BASE_SHA" HEAD -- tests/ scripts/ ':(glob).pbai4devs/**/tests/**')"
+            documentation_changes="$(git diff --name-only --no-renames "$BASE_SHA" HEAD -- docs/ '*.md')"
+            if [[ -n "$documentation_changes" ]]; then
+              documentation=true
+            fi
             if [[ -z "$runtime_changes" ]]; then
               build=false
               if [[ -z "$test_changes" ]]; then
@@ -53,10 +59,25 @@ jobs:
               fi
             fi
           fi
-          printf 'build=%s\nvalidate=%s\n' "$build" "$validate" >> "$GITHUB_OUTPUT"
+          printf 'build=%s\nvalidate=%s\ndocumentation=%s\n' "$build" "$validate" "$documentation" >> "$GITHUB_OUTPUT"
       - name: Skip distribution build
         if: steps.scope.outputs.build == 'false'
         run: echo "No distribution inputs changed."
+
+  documentation:
+    name: Validate documentation
+    needs: distribution
+    if: needs.distribution.outputs.documentation == 'true' && needs.distribution.outputs.validate == 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+      - run: node .pbai4devs/scripts/preparar-ferramentas/SCRIPT.mjs install markdownlint-cli2
+      - run: npm run check
 
   minimum-runtime:
     needs: distribution
