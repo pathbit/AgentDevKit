@@ -27,14 +27,33 @@ jobs:
       contents: write
       actions: write
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Check whether CI built a distribution
+        id: scope
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CI_RUN_ID: ${{ github.event.workflow_run.id }}
+          CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+        run: |
+          skipped="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CI_RUN_ID/attempts/$CI_ATTEMPT/jobs?per_page=100" \
+            --jq 'any(.jobs[]; .name == "Distribution inputs" and .conclusion == "success" and any(.steps[]; .name == "Skip distribution build" and .conclusion == "success"))')"
+          if [[ "$skipped" == true ]]; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.scope.outputs.publish == 'true'
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
+          fetch-depth: 0
           ref: ${{ github.event.workflow_run.head_sha }}
           persist-credentials: false
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+      - if: steps.scope.outputs.publish == 'true'
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 24
       - name: Create version tag and dispatch release
+        if: steps.scope.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: node scripts/release/auto-tag.mjs
