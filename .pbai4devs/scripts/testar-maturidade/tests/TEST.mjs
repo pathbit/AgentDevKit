@@ -1431,7 +1431,10 @@ test("refuses source and output links, including broken", t => {
   assert.throws(() => prepareExamples({ sourceRoot: root, outputRoot, scenarios: [SCENARIOS[0]], initializeGit: false }), /não pode ser link/);
 });
 
-test("two project generator uses local package offline and keeps out of Git", { timeout: 240000 }, t => {
+const exampleWorkflowTimeout = process.platform === 'win32' ? 300000 : 180000;
+const exampleFixtureTimeout = process.platform === 'win32' ? 420000 : 240000;
+
+test("two project generator uses local package offline and keeps out of Git", { timeout: exampleFixtureTimeout }, t => {
   const runner = join(projectRoot, 'tests/example-workflows.mjs'), packageFile = join(projectRoot, 'package.json');
   if (!existsSync(runner) || !existsSync(packageFile)) { t.skip('Runner de desenvolvimento não é distribuído no pacote.'); return; }
   const npm = findNpmCli(); assert.ok(npm, 'npm CLI é necessário.');
@@ -1449,7 +1452,7 @@ test("two project generator uses local package offline and keeps out of Git", { 
   externalGit = spawnSync('git', ['-C', external, 'add', '--', 'human.txt'], { env, encoding: 'utf8' }); assert.equal(externalGit.status, 0, externalGit.stderr);
   const externalDir = join(external, '.git'), externalBefore = gitFixtureSnapshot(externalDir);
   const contaminatedEnv = { ...env, GIT_DIR: externalDir, GIT_WORK_TREE: external, GIT_INDEX_FILE: join(externalDir, 'index') };
-  const r = spawnSync(process.execPath, [runner, version, '--tarball', tar, '--output', target], { cwd: projectRoot, env: contaminatedEnv, encoding: 'utf8', timeout: 180000, maxBuffer: 16 * 1024 * 1024 });
+  const r = spawnSync(process.execPath, [runner, version, '--tarball', tar, '--output', target], { cwd: projectRoot, env: contaminatedEnv, encoding: 'utf8', timeout: exampleWorkflowTimeout, maxBuffer: 16 * 1024 * 1024 });
   assert.ifError(r.error); assert.equal(r.status, 0, `${r.stderr}\n${r.stdout}`);
   assert.deepEqual(gitFixtureSnapshot(externalDir), externalBefore, 'Runner alterou Git externo.');
   const report = JSON.parse(readFileSync(join(target, 'REPORT.json'), 'utf8'));
