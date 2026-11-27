@@ -16,7 +16,9 @@ for (const [name, sourceAttributes, copyAttributes, allowed] of [
   ['rejects a changed user attribute', sharedAttributes, { [userAttribute]: 'changed value', [provenance]: 'system value' }, false],
   ['preserves an existing provenance attribute', { [provenance]: 'existing value' }, { [provenance]: 'changed value' }, false],
 ]) {
-  test(`macOS metadata verification ${name}`, { skip: process.platform !== 'darwin' }, t => {
+  test(`macOS metadata verification ${name}`, {
+    skip: process.platform !== 'darwin' && 'The fixture verifies macOS extended attributes.',
+  }, t => {
     const root = fs.mkdtempSync(join(tmpdir(), 'adk-mac-provenance-'));
     t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); fs.rmSync(root, { recursive: true, force: true }); });
     const source = join(root, 'source'), destination = join(root, 'destination');
