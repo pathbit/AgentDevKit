@@ -7,6 +7,12 @@ language: es
 
 [Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
 
+## 0.0.42
+
+- En macOS, `init` y `update` aceptan la procedencia que el sistema añade a un
+  archivo nuevo. La CLI sigue comprobando las ACL, las marcas y los atributos
+  presentes en el archivo de origen.
+
 ## 0.0.41
 
 - Los archivos README en portugués, inglés y español usan esta versión en

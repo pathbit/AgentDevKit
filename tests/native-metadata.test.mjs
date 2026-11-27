@@ -8,6 +8,43 @@ import { join } from 'node:path';
 import { copyFileWithNativeMetadata, stageReplacementWithNativeMetadata } from '../.pbai4devs/scripts/lib/native-metadata.mjs';
 import { inspectLinuxXattr } from '../.pbai4devs/scripts/lib/xattr-probe.mjs';
 
+const provenance = 'com.apple.provenance';
+const userAttribute = 'com.pathbit.agentdevkit.test';
+const sharedAttributes = { [userAttribute]: 'existing value' };
+for (const [name, sourceAttributes, copyAttributes, allowed] of [
+  ['accepts a new system provenance attribute', sharedAttributes, { ...sharedAttributes, [provenance]: 'system value' }, true],
+  ['rejects a changed user attribute', sharedAttributes, { [userAttribute]: 'changed value', [provenance]: 'system value' }, false],
+  ['preserves an existing provenance attribute', { [provenance]: 'existing value' }, { [provenance]: 'changed value' }, false],
+]) {
+  test(`macOS metadata verification ${name}`, { skip: process.platform !== 'darwin' }, t => {
+    const root = fs.mkdtempSync(join(tmpdir(), 'adk-mac-provenance-'));
+    t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); fs.rmSync(root, { recursive: true, force: true }); });
+    const source = join(root, 'source'), destination = join(root, 'destination');
+    fs.writeFileSync(source, 'original\n', { mode: 0o600 });
+    fs.writeFileSync(destination, '', { mode: 0o600 });
+    const spawn = childProcess.spawnSync;
+    t.mock.method(childProcess, 'spawnSync', (command, args, options) => {
+      const path = args.at(-1);
+      if (command !== '/usr/bin/xattr' || ![source, destination].includes(path)) return spawn(command, args, options);
+      const attrs = path === source ? sourceAttributes : copyAttributes;
+      const stdout = args[0] === '-p' ? Buffer.from(attrs[args[1]]) : Object.keys(attrs).join('\n');
+      return { status: 0, stdout };
+    });
+    syncBuiltinESMExports();
+
+    if (allowed) {
+      copyFileWithNativeMetadata(source, destination);
+      assert.equal(fs.readFileSync(destination, 'utf8'), 'original\n');
+      stageReplacementWithNativeMetadata(source, destination, 'updated\n', 0o600);
+      assert.equal(fs.readFileSync(destination, 'utf8'), 'updated\n');
+    } else {
+      assert.throws(() => copyFileWithNativeMetadata(source, destination), { code: 'E_METADATA_COPY' });
+      assert.throws(() => stageReplacementWithNativeMetadata(source, destination, 'updated\n', 0o600), { code: 'E_METADATA_COPY' });
+    }
+    assert.equal(fs.readFileSync(source, 'utf8'), 'original\n');
+  });
+}
+
 test("simultaneous writing and closing failures preserve the primary error code", { skip: !['darwin', 'linux'].includes(process.platform) && 'A escrita e o fechamento usam a implementação POSIX de macOS e Linux.' }, t => {
   const root = fs.mkdtempSync(join(tmpdir(), 'adk-native-metadata-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));

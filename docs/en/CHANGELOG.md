@@ -7,6 +7,12 @@ language: en
 
 [Português (Brasil)][reading-pt] · [English][reading-en] · [Español][reading-es]
 
+## 0.0.42
+
+- On macOS, `init` and `update` accept the provenance added by the operating
+  system to a new file. The CLI still verifies ACLs, flags and attributes
+  present on the source file.
+
 ## 0.0.41
 
 - The Portuguese, English, and Spanish READMEs use this version in the npmjs
